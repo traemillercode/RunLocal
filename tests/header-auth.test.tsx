@@ -5,6 +5,13 @@
  * the REAL component markup — the guest header "Log in" CTA, the clickable
  * logo home link, and the guest account menu rows — not just the menu model.
  *
+ * The account menu opens as a top-anchored popup under the header avatar
+ * (`Popover`), so the popup tests render the extracted presentational pieces
+ * (`Popover` with `open`, `AccountMenuContent`) exactly like the bottom-sheet
+ * tests did before the swap. Login navigation is covered at the model layer
+ * (`profileMenuEntries` routes guest Log in → /login); the live click-through
+ * is verified in the browser at a mobile viewport.
+ *
  * Only `useAccount` is mocked (hoisted, no outer refs); react-router-dom is
  * real, wrapped in a MemoryRouter. Auth stays honest: these tests only assert
  * what guests/signed-in users see, never client-side role powers.
@@ -14,7 +21,9 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { AccountMenuContent } from "../src/components/AccountMenu";
 import { Header } from "../src/components/Header";
+import { Popover } from "../src/components/ui";
 import { CITIES } from "../src/data/cities";
+import { profileMenuEntries } from "../src/lib/accountMenu";
 import type { Me, PublicAccount } from "../src/lib/accounts";
 
 const { useAccountMock } = vi.hoisted(() => ({ useAccountMock: vi.fn() }));
@@ -96,6 +105,60 @@ describe("guest account menu (UI)", () => {
   });
 });
 
+describe("account popup menu (UI)", () => {
+  it("opens a top-anchored popup near the header with guest Sign up + Log in rows", () => {
+    const html = renderToStaticMarkup(
+      <Popover open onClose={noop} title="Run Local account" align="right">
+        <AccountMenuContent me={null} backendAvailable onNavigate={noop} onLogout={noop} />
+      </Popover>,
+    );
+    // Accessible dialog labeling on the popup itself.
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-modal="true"');
+    expect(html).toContain('aria-label="Run Local account"');
+    // Anchored just below the sticky header, right-aligned under the avatar —
+    // not a bottom sheet (no items-end / sheet-up slide).
+    expect(html).toContain("top-16");
+    expect(html).toContain("right-2");
+    expect(html).not.toContain("items-end");
+    expect(html).not.toContain("animate-sheet-up");
+    // Backdrop button closes on outside click.
+    expect(html).toContain('aria-label="Close menu"');
+    // Guest rows — Sign up first, then Log in.
+    expect(html).toContain("Sign up");
+    expect(html).toContain("Log in");
+    expect(html.indexOf("Log in")).toBeGreaterThan(html.indexOf("Sign up"));
+  });
+
+  it("renders nothing while the popup is closed", () => {
+    const html = renderToStaticMarkup(
+      <Popover open={false} onClose={noop} title="Run Local account">
+        <AccountMenuContent me={null} backendAvailable onNavigate={noop} onLogout={noop} />
+      </Popover>,
+    );
+    expect(html).toBe("");
+  });
+
+  it("guest login action routes to /login from the popup model", () => {
+    const guest = profileMenuEntries({ status: "guest" });
+    const login = guest.entries.find((e) => e.key === "login");
+    expect(login?.label).toBe("Log in");
+    expect(login?.to).toBe("/login");
+    const signup = guest.entries.find((e) => e.key === "signup");
+    expect(signup?.to).toBe("/verify");
+  });
+
+  it("keeps the guest Sign up / Log in rows and 44px targets in the popup", () => {
+    const html = renderToStaticMarkup(
+      <Popover open onClose={noop} title="Run Local account">
+        <AccountMenuContent me={null} backendAvailable onNavigate={noop} onLogout={noop} />
+      </Popover>,
+    );
+    // Each row is a min-h-11 (44px) touch target.
+    expect(html.match(/min-h-11/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+});
+
 describe("header auth UI", () => {
   it("shows an always-visible Log in CTA and a clickable logo home link for guests", () => {
     guestAuth();
@@ -125,5 +188,20 @@ describe("header auth UI", () => {
     expect(html).toContain("Account menu — signed in as Taylor Runner");
     // Logo home link stays.
     expect(html).toContain('href="/"');
+  });
+
+  it("avatar is a popup trigger: aria-haspopup + aria-expanded, no dialog until opened", () => {
+    guestAuth();
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <Header city={CITIES[0]} onOpenCitySheet={noop} />
+      </MemoryRouter>,
+    );
+    expect(html).toContain('aria-label="Account menu — sign up or log in"');
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).toContain('aria-expanded="false"');
+    // Popup stays out of the DOM while closed (no bottom sheet either).
+    expect(html).not.toContain('role="dialog"');
+    expect(html).not.toContain("animate-sheet-up");
   });
 });
