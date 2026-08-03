@@ -28,6 +28,13 @@ export interface AccountRecord {
   id: string;
   name: string;
   email: string;
+  /**
+   * Unique public handle, normalized lowercase (see `src/lib/username.ts`).
+   * `null` for legacy accounts created before usernames existed — they remain
+   * fully functional and can claim one via /api/profile/username. Uniqueness
+   * is enforced server-side on the normalized form (case-insensitive).
+   */
+  username: string | null;
   status: AccountStatus;
   /** Funnel stage; only meaningful while status === "pending". */
   phase: VerifyPhase;

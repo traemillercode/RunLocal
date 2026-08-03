@@ -35,6 +35,27 @@ City → groups[] (RunGroup: name + admin-assigned groupType label)
 
 Adding a city = adding one `City` entry with its own seed data. No code changes required.
 
+
+## Usernames
+
+Every new account picks a **username** at signup (legacy accounts created before
+usernames existed stay fully functional and can claim one from their profile at
+any time — it's never required retroactively).
+
+- **Allowed characters:** 3–24 characters; must start with a letter, then
+  lowercase letters, digits, underscore (`_`) or hyphen (`-`):
+  `^[a-z][a-z0-9_-]{2,23}$`
+- **Case behavior:** usernames are **case-insensitive** and stored normalized
+  to lowercase — `JordanLee` and `jordanlee` are the same name, so the second
+  claim is rejected as a duplicate.
+- **Uniqueness:** enforced **server-side** on the normalized form (signup and
+  profile updates). The client never decides uniqueness; it only surfaces the
+  server's verdict. Duplicate claims return `409 username_taken` with a clear
+  message.
+- **Privacy:** the username is public profile identity (like name/email) and
+  appears in the public account payload — no phone, selfie, IP, or verification
+  data ever travels with it.
+
 ## Scripts
 
 ```bash

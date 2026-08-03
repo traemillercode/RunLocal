@@ -34,6 +34,7 @@ function verifiedAccount(patch: Partial<PublicAccount> = {}): PublicAccount {
     id: "acc_1",
     name: "Taylor Runner",
     email: "taylor@example.com",
+    username: "taylor_runs",
     status: "verified",
     phase: null,
     badge: "verified",

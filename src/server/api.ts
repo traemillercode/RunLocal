@@ -10,6 +10,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Db, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPublicAccount, MIN_AGE } from "./store";
 import type { AccountRecord } from "./types";
+import { normalizeUsername, USERNAME_HINT } from "../lib/username";
 import { supabaseConfig, verifySupabaseToken, applySupabaseIdentity } from "./supabase";
 import {
   adminConfigured,
@@ -266,7 +267,7 @@ async function handleApi(
   // without a valid Supabase session. The account links to the verified
   // Supabase identity on the user's first confirmed login (/api/login/check).
   if (method === "POST" && url.pathname === "/api/accounts") {
-    const body = (await readJson(req)) as { name?: unknown; email?: unknown; phone?: unknown; birthdate?: unknown; requestedRole?: unknown; noSession?: unknown };
+    const body = (await readJson(req)) as { name?: unknown; username?: unknown; email?: unknown; phone?: unknown; birthdate?: unknown; requestedRole?: unknown; noSession?: unknown };
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const phone = typeof body.phone === "string" ? normalizePhone(body.phone) : null;
@@ -277,13 +278,28 @@ async function handleApi(
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) {
       return err(res, { status: 400, error: "invalid_email" }), true;
     }
+    // Username is REQUIRED for new signups and validated/normalized here —
+    // the server is authoritative, never the client. Legacy accounts without
+    // a username stay valid and claim one via /api/profile/username instead.
+    const username = normalizeUsername(typeof body.username === "string" ? body.username : "");
+    if (!username) {
+      return err(res, { status: 400, error: "invalid_username", message: `Choose a valid username. ${USERNAME_HINT}` }), true;
+    }
     const existing = db.getAccountByEmail(email);
     if (existing && !existing.deletedAt) return err(res, { status: 409, error: "email_taken" }), true;
+    // Duplicate usernames are rejected deterministically on the normalized,
+    // case-insensitive form. The check + create run in one synchronous turn of
+    // the single-threaded store, so a concurrent request can never interleave
+    // between them (see tests/username-api.test.ts for the race test).
+    const taken = db.getAccountByUsername(username);
+    if (taken && !taken.deletedAt) {
+      return err(res, { status: 409, error: "username_taken", message: "That username is already taken — try another." }), true;
+    }
     if (typeof body.phone === "string" && !phone) return err(res, { status: 400, error: "invalid_phone" }), true;
     // Role requests are label-only and strictly validated server-side; the
     // owner/operator assigns the real role at approval time.
     const requestedRole = body.requestedRole === "group_leader" ? "group_leader" : body.requestedRole === "runner" ? "runner" : null;
-    const rec = db.createAccount({ name, email, phone, birthdate, requestedRole });
+    const rec = db.createAccount({ name, username, email, phone, birthdate, requestedRole });
     rec.signupIp = ip;
     rec.signupAt = now.toISOString();
     db.appendLoginIp(rec.id, ip, now);
@@ -395,6 +411,34 @@ async function handleApi(
     if (prev && prev !== filename) void db.deletePublicUpload(prev);
     await db.persist();
     return ok(res, { photoUrl: `/uploads/public/${filename}` }), true;
+  }
+
+  // ---- username (public handle) --------------------------------------------
+  // Signed-in users set or change their unique public handle. Validation and
+  // normalization happen HERE (server-authoritative, see src/lib/username.ts
+  // for the allowed characters and case behavior); duplicates are rejected
+  // deterministically on the normalized case-insensitive form. The check +
+  // write run in one synchronous turn of the single-threaded store, so a
+  // concurrent request can never claim the same name in between.
+  if (method === "POST" && url.pathname === "/api/profile/username") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { username?: unknown };
+    const rec = db.getAccount(sess.accountId);
+    if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const username = normalizeUsername(typeof body.username === "string" ? body.username : "");
+    if (!username) {
+      return err(res, { status: 400, error: "invalid_username", message: `Choose a valid username. ${USERNAME_HINT}` }), true;
+    }
+    // Re-submitting your own current username is a harmless no-op (still
+    // validated + normalized); any OTHER account holding the name is a 409.
+    const taken = db.getAccountByUsername(username);
+    if (taken && taken.id !== rec.id) {
+      return err(res, { status: 409, error: "username_taken", message: "That username is already taken — try another." }), true;
+    }
+    db.updateAccount(rec.id, { username, lastActivityAt: now.toISOString() });
+    await db.persist();
+    return ok(res, { account: toPublicAccount(db.getAccount(rec.id)!, isOwnerEmail(rec.email)) }), true;
   }
 
   // ---- sign in with email verification (honest: no passwords, no fake SSO) --------

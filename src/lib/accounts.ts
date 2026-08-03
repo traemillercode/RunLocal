@@ -30,6 +30,12 @@ export interface PublicAccount {
   id: string;
   name: string;
   email: string;
+  /**
+   * Unique public handle, normalized to lowercase (see `src/lib/username.ts`).
+   * `null` for legacy accounts created before usernames existed — they stay
+   * fully functional and can claim one from their profile at any time.
+   */
+  username: string | null;
   status: "pending" | "verified" | "rejected";
   /** Funnel stage for pending accounts: email | code | selfie | pending_review. */
   phase: "email" | "code" | "selfie" | "pending_review" | null;
