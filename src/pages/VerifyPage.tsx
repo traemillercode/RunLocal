@@ -15,10 +15,11 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CameraCapture } from "../components/CameraCapture";
+import { CodeEntry } from "../components/CodeEntry";
 import { Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
 import { validateBirthdate } from "../lib/birthdate";
-import { CODE_LENGTH, applyBackspace, applyDigit, applyPaste, codeValue, emptyCodeState, isComplete, setFocus, type CodeState } from "../lib/numericCode";
+import { CODE_LENGTH, emptyCodeState, type CodeState } from "../lib/numericCode";
 import { canOpenCamera, initialState, verifyReducer } from "../lib/verificationFlow";
 import { useAccount } from "../state/account";
 
@@ -83,81 +84,6 @@ function Notice({ tone, children }: { tone: "amber" | "sky" | "emerald" | "red";
   return <p className={`flex items-start gap-2 rounded-xl p-3.5 text-[13px] leading-relaxed ${tones[tone]}`}>{children}</p>;
 }
 
-// ------------------------------------------------------------- code entry
-function CodeEntry({
-  value,
-  onChange,
-  onComplete,
-  disabled,
-}: {
-  value: CodeState;
-  onChange: (s: CodeState) => void;
-  onComplete: (code: string) => void;
-  disabled?: boolean;
-}) {
-  const refs = useRef<(HTMLInputElement | null)[]>([]);
-  const completedRef = useRef(false);
-
-  const commit = useCallback(
-    (next: CodeState) => {
-      onChange(next);
-      const el = refs.current[next.focus];
-      if (el && document.activeElement !== el) el.focus();
-      if (isComplete(next)) {
-        if (!completedRef.current) {
-          completedRef.current = true;
-          onComplete(codeValue(next));
-        }
-      } else {
-        completedRef.current = false;
-      }
-    },
-    [onChange, onComplete],
-  );
-
-  return (
-    <div className="flex justify-between gap-2" role="group" aria-label="6-digit verification code">
-      {value.digits.map((d, i) => (
-        <input
-          key={i}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
-          type="text"
-          inputMode="numeric"
-          autoComplete={i === 0 ? "one-time-code" : "off"}
-          maxLength={1}
-          disabled={disabled}
-          aria-label={`Digit ${i + 1}`}
-          value={d}
-          onChange={(e) => {
-            const ch = e.target.value.slice(-1);
-            if (ch === "") return;
-            commit(applyDigit(value, ch));
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Backspace") {
-              e.preventDefault();
-              commit(applyBackspace(value));
-            }
-          }}
-          onPaste={(e) => {
-            e.preventDefault();
-            const text = e.clipboardData.getData("text");
-            if (text) commit(applyPaste(value, text));
-          }}
-          onFocus={() => {
-            const next = setFocus(value, i);
-            if (next.focus !== value.focus) onChange(next);
-            refs.current[i]?.select();
-          }}
-          className="h-14 w-11 rounded-xl border border-slate-300 bg-white text-center text-xl font-bold text-slate-900 outline-none focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60 sm:w-12"
-        />
-      ))}
-    </div>
-  );
-}
-
 // ------------------------------------------------------------------- page
 export function VerifyPage() {
   const navigate = useNavigate();
@@ -175,6 +101,9 @@ export function VerifyPage() {
   // profile contact fields
   const [birthdate, setBirthdate] = useState("");
   const [birthdateError, setBirthdateError] = useState<string | null>(null);
+  // Optional role request (label only — the owner assigns the real role at
+  // approval; requesting never grants anything by itself).
+  const [requestedRole, setRequestedRole] = useState<"runner" | "group_leader" | null>(null);
   const [emailUnconfigured, setEmailUnconfigured] = useState(false);
   const [emailSendFailed, setEmailSendFailed] = useState<string | null>(null);
 
@@ -241,7 +170,7 @@ export function VerifyPage() {
     }
     setBirthdateError(null);
     setBusy(true);
-    const created = await api.createAccount({ name: name.trim(), email: email.trim(), birthdate });
+    const created = await api.createAccount({ name: name.trim(), email: email.trim(), birthdate, requestedRole: requestedRole ?? undefined });
     if (!created.ok) {
       setBusy(false);
       setError(
@@ -416,6 +345,19 @@ export function VerifyPage() {
                   {birthdateError}
                 </p>
               ) : null}
+            </Field>
+            <Field label="I'd like to join as">
+              <select
+                value={requestedRole ?? "runner"}
+                onChange={(e) => setRequestedRole(e.target.value === "group_leader" ? "group_leader" : null)}
+                className={inputCls}
+              >
+                <option value="runner">A runner (default)</option>
+                <option value="group_leader">A group leader — I run a club or group</option>
+              </select>
+              <span className="mt-1 block text-[11px] leading-relaxed text-slate-400">
+                Just a request — the owner confirms roles at approval. Everyone verifies the same way.
+              </span>
             </Field>
             <Field label="Profile photo (shown on your public profile)">
               <div className="flex items-center gap-3">

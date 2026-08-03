@@ -35,6 +35,14 @@ export interface PublicAccount {
   phase: "email" | "code" | "selfie" | "pending_review" | null;
   /** The only verification artifact shown publicly. */
   badge: "verified" | null;
+  /** Assigned runner role — a label only, never a power source. */
+  role: "runner" | "group_leader";
+  /**
+   * Super-admin flag, computed SERVER-side (account email vs
+   * RUN_LOCAL_OWNER_EMAIL). The client renders this boolean and can never
+   * self-assign the role — never derive it from the email client-side.
+   */
+  isOwner: boolean;
   profilePhotoUrl: string | null;
 }
 
@@ -71,4 +79,9 @@ export function phaseLabel(phase: PublicAccount["phase"]): string {
     default:
       return "In progress";
   }
+}
+
+/** Human-readable label for the assigned runner role. */
+export function roleLabel(role: PublicAccount["role"]): string {
+  return role === "group_leader" ? "Group Leader" : "Verified Runner";
 }

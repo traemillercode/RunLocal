@@ -9,12 +9,14 @@ import { AccountProvider } from "./state/account";
 import { AdminPage } from "./pages/AdminPage";
 import { EventsPage } from "./pages/EventsPage";
 import { ForumPage } from "./pages/ForumPage";
+import { LoginPage } from "./pages/LoginPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { RacesPage } from "./pages/RacesPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { VerifyPage } from "./pages/VerifyPage";
 
 /** Routes that get a chrome-free wizard layout (no bottom nav). */
-const NO_NAV_PATHS = new Set(["/verify", "/admin"]);
+const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login"]);
 
 function Shell() {
   const store = useAppState();
@@ -31,6 +33,8 @@ function Shell() {
           <Route path="/races" element={<RacesPage city={city} />} />
           <Route path="/forum" element={<ForumPage city={city} />} />
           <Route path="/profile" element={<ProfilePage city={city} store={store} />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/login" element={<LoginPage />} />
           <Route path="/verify" element={<VerifyPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

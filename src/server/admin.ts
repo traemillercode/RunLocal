@@ -7,16 +7,22 @@
  *    cookie. The key itself is never stored client-side.
  *  - `RUN_LOCAL_ADMIN_EMAIL` (env, non-secret) names the admin for the audit
  *    log (default "admin@runlocal.app").
+ *  - The OWNER (see `owner.ts`, `RUN_LOCAL_OWNER_EMAIL`, default
+ *    traemiller.email@gmail.com) is additionally authorized through their
+ *    normal signed-in user session — server-side email rule, never a
+ *    client-supplied role. The owner is the only identity that may use the
+ *    pending-user control center.
  *  - Every lookup/export/approve/reject/delete/purge requires BOTH an admin
- *    session AND a free-form reason (5–500 chars). Every access is appended
- *    to the audit log with admin/timestamp/reason/action.
+ *    session (key OR owner) AND a free-form reason (5–500 chars). Every access
+ *    is appended to the audit log with admin/timestamp/reason/action.
  *
  * Handlers are pure functions over (Db, ctx) so authorization and audit
  * behavior are unit-testable without HTTP.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
-import type { AccountRecord, AdminAction } from "./types";
+import type { AccountRecord, AccountRole, AdminAction } from "./types";
 import type { Db } from "./store";
+import { isOwnerEmail, ownerEmail } from "./owner";
 
 export const ADMIN_KEY_VAR = "RUN_LOCAL_ADMIN_KEY";
 export const ADMIN_EMAIL_VAR = "RUN_LOCAL_ADMIN_EMAIL";
@@ -24,14 +30,18 @@ export const REASON_MIN = 5;
 export const REASON_MAX = 500;
 
 export interface AdminCtx {
-  /** Admin session id from the HttpOnly cookie, or null. */
+  /** Admin session id from the HttpOnly cookie (key-based), or null. */
   adminSessionId: string | null;
+  /** The signed-in user's session id (owner super-admin path), or null. */
+  userSessionId?: string | null;
   /** The reason header supplied with the request, or undefined. */
   reason?: string;
   ip: string;
 }
 
-export type AdminResult<T> = { ok: true; data: T } | { ok: false; error: string; status: number };
+export type AdminResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string; status: number; message?: string };
 
 export function adminConfigured(env: Record<string, string | undefined> = process.env): boolean {
   return Boolean(env[ADMIN_KEY_VAR]);
@@ -54,6 +64,11 @@ export function keyMatches(input: string, expected: string): boolean {
 /**
  * Authorize an admin *action* (not login). Returns the admin email on success
  * and appends the audit entry. All sensitive actions go through this.
+ *
+ * Two acceptable identities:
+ *  1. A key-based admin session (`runlocal_admin` cookie, account "__admin__").
+ *  2. The owner's signed-in user session — server-side email rule against
+ *     RUN_LOCAL_OWNER_EMAIL. Group Leaders / Verified Runners can never pass.
  */
 export function authorizeAdmin(
   db: Db,
@@ -62,17 +77,6 @@ export function authorizeAdmin(
   targetId: string | null,
   now = new Date(),
 ): AdminResult<{ admin: string }> {
-  if (!adminConfigured()) {
-    return {
-      ok: false,
-      status: 503,
-      error: "admin_unconfigured",
-    };
-  }
-  const session = ctx.adminSessionId ? db.getSession(ctx.adminSessionId) : undefined;
-  if (!session || session.accountId !== "__admin__") {
-    return { ok: false, status: 401, error: "unauthorized" };
-  }
   if (!validReason(ctx.reason)) {
     return {
       ok: false,
@@ -80,7 +84,75 @@ export function authorizeAdmin(
       error: "reason_required",
     };
   }
-  const admin = adminEmail();
+  const adminSession = ctx.adminSessionId ? db.getSession(ctx.adminSessionId) : undefined;
+  if (adminSession && adminSession.accountId === "__admin__") {
+    if (!adminConfigured()) {
+      return { ok: false, status: 503, error: "admin_unconfigured" };
+    }
+    const admin = adminEmail();
+    db.appendAudit(
+      {
+        admin,
+        action,
+        reason: ctx.reason!.trim().slice(0, REASON_MAX),
+        targetId,
+        ip: ctx.ip,
+      },
+      now,
+    );
+    return { ok: true, data: { admin } };
+  }
+  const owner = ownerSessionAccount(db, ctx);
+  if (owner) {
+    const admin = ownerEmail();
+    db.appendAudit(
+      {
+        admin,
+        action,
+        reason: ctx.reason!.trim().slice(0, REASON_MAX),
+        targetId,
+        ip: ctx.ip,
+      },
+      now,
+    );
+    return { ok: true, data: { admin } };
+  }
+  if (!adminConfigured()) {
+    return { ok: false, status: 503, error: "admin_unconfigured" };
+  }
+  return { ok: false, status: 401, error: "unauthorized" };
+}
+
+/**
+ * Resolve the owner's user session, if any. The owner is authorized through
+ * their normal signed-in session whose account email matches
+ * RUN_LOCAL_OWNER_EMAIL. This is the ONLY way the pending-user control center
+ * can be reached — key-based admin sessions cannot.
+ */
+export function ownerSessionAccount(db: Db, ctx: AdminCtx): AccountRecord | null {
+  if (!ctx.userSessionId) return null;
+  const session = db.getSession(ctx.userSessionId);
+  if (!session || session.accountId === "__admin__") return null;
+  const rec = db.getAccount(session.accountId);
+  if (!rec || rec.deletedAt) return null;
+  return isOwnerEmail(rec.email) ? rec : null;
+}
+
+/** Owner-only variant of authorizeAdmin (key sessions are rejected). */
+export function authorizeOwner(
+  db: Db,
+  ctx: AdminCtx,
+  action: AdminAction,
+  targetId: string | null,
+  now = new Date(),
+): AdminResult<{ admin: string }> {
+  if (!validReason(ctx.reason)) {
+    return { ok: false, status: 400, error: "reason_required" };
+  }
+  if (!ownerSessionAccount(db, ctx)) {
+    return { ok: false, status: 401, error: "unauthorized" };
+  }
+  const admin = ownerEmail();
   db.appendAudit(
     {
       admin,
@@ -154,6 +226,41 @@ export function adminSearch(
     .filter((a) => !a.deletedAt && (a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q)))
     .slice(0, 25)
     .map(searchRow);
+  return { ok: true, data: rows };
+}
+
+/** One row of the owner-only pending queue — redacted, never sensitive. */
+export interface PendingQueueRow {
+  id: string;
+  name: string;
+  email: string;
+  phase: AccountRecord["phase"];
+  /** Role the user requested at signup, if any. */
+  requestedRole: AccountRecord["role"] | null;
+  signupAt: string;
+}
+
+/**
+ * Pending-user control center queue. OWNER-ONLY (key-based admin sessions are
+ * rejected — see authorizeOwner). Rows expose only redacted public fields:
+ * name, email, funnel phase, requested role, signup time. No phone, no selfie
+ * reference, no IPs, no timestamps beyond signup.
+ */
+export function adminPending(db: Db, ctx: AdminCtx, now = new Date()): AdminResult<PendingQueueRow[]> {
+  const auth = authorizeOwner(db, ctx, "admin.pending_list", null, now);
+  if (!auth.ok) return auth;
+  const rows = db
+    .listAccounts()
+    .filter((a) => !a.deletedAt && a.status === "pending")
+    .sort((a, b) => a.signupAt.localeCompare(b.signupAt))
+    .map((rec) => ({
+      id: rec.id,
+      name: rec.name,
+      email: rec.email,
+      phase: rec.phase,
+      requestedRole: rec.requestedRole,
+      signupAt: rec.signupAt,
+    }));
   return { ok: true, data: rows };
 }
 
@@ -234,15 +341,27 @@ export function adminSetStatus(
   id: string,
   status: "verified" | "rejected",
   now = new Date(),
+  role: AccountRole = "runner",
 ): AdminResult<AccountRecord> {
   const auth = authorizeAdmin(db, ctx, status === "verified" ? "admin.approve" : "admin.reject", id, now);
   if (!auth.ok) return auth;
   const rec = db.getAccount(id);
   if (!rec) return { ok: false, status: 404, error: "not_found" };
   if (rec.deletedAt) return { ok: false, status: 409, error: "account_deleted" };
+  if (status === "verified") {
+    // Honesty gate: an account can only be approved as Verified after the
+    // email code AND live selfie steps completed (phase "pending_review" is
+    // set exclusively by the selfie endpoint, after the image was stored).
+    // There is no approval without the required verification state.
+    if (rec.phase !== "pending_review" || !rec.selfieRef) {
+      return { ok: false, status: 409, error: "verification_incomplete", message: "This user has not completed email + selfie verification yet — approval requires the pending_review state." };
+    }
+    if (role !== "runner" && role !== "group_leader") role = "runner";
+  }
   const updated = db.updateAccount(id, {
     status,
     verifiedAt: status === "verified" ? now.toISOString() : rec.verifiedAt,
+    role: status === "verified" ? role : rec.role,
     lastActivityAt: now.toISOString(),
   })!;
   void db.persist();

@@ -1,12 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { Chip, Icon, PillButton } from "../components/ui";
 import type { City } from "../types";
 import { resolveWeekEvents } from "../lib/dates";
-import { phaseLabel } from "../lib/accounts";
+import { phaseLabel, roleLabel } from "../lib/accounts";
 import type { AppStore } from "../lib/store";
-import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
 
 function initials(name: string): string {
@@ -20,10 +19,7 @@ function initials(name: string): string {
 
 export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
   const navigate = useNavigate();
-  const toast = useToast();
-  const { me, backendAvailable, signOut, deleteMyAccount } = useAccount();
-  const [notificationsOn, setNotificationsOn] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const { me, backendAvailable } = useAccount();
 
   const rsvps = useMemo(() => {
     const all = resolveWeekEvents(city.events, new Date());
@@ -34,20 +30,6 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
   const name = signedIn?.name ?? "Guest runner";
   const photo = signedIn?.profilePhotoUrl ?? null;
   const verified = signedIn?.status === "verified";
-
-  const doDelete = async () => {
-    if (!confirmingDelete) {
-      setConfirmingDelete(true);
-      return;
-    }
-    const result = await deleteMyAccount();
-    if (result.ok) {
-      toast("Your profile was deleted — verification data (phone, selfie, photo) was removed.", "success");
-    } else {
-      toast("Could not delete your profile. Try again.", "neutral");
-    }
-    setConfirmingDelete(false);
-  };
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
@@ -88,6 +70,16 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
                   <Icon name="users" className="h-3 w-3" /> Guest
                 </Chip>
               )}
+              {signedIn && signedIn.role === "group_leader" ? (
+                <Chip tone="outline">
+                  <Icon name="flag" className="h-3 w-3" /> {roleLabel(signedIn.role)}
+                </Chip>
+              ) : null}
+              {signedIn?.isOwner ? (
+                <Chip tone="brand">
+                  <Icon name="lock" className="h-3 w-3" /> Super Admin
+                </Chip>
+              ) : null}
             </div>
           </div>
         </div>
@@ -167,56 +159,22 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
 
       {/* Settings */}
       <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
-        <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Settings</h2>
-        <ul className="divide-y divide-slate-100">
-          <li className="flex items-center justify-between gap-3 px-5 py-3.5">
-            <span className="text-[14px] font-medium text-slate-700">City</span>
-            <span className="text-[14px] text-slate-500">
-              {city.name}, {city.state}
+        <button
+          type="button"
+          onClick={() => navigate("/settings")}
+          className="flex min-h-14 w-full items-center justify-between gap-3 px-5 text-left active:bg-slate-50"
+        >
+          <span className="flex items-center gap-3">
+            <span className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-slate-600">
+              <Icon name="sort" className="h-4.5 w-4.5" />
             </span>
-          </li>
-          <li>
-            <button
-              type="button"
-              onClick={() => setNotificationsOn((v) => !v)}
-              className="flex w-full items-center justify-between gap-3 px-5 py-3.5 text-left active:bg-slate-50"
-            >
-              <span className="text-[14px] font-medium text-slate-700">Reminders & notifications</span>
-              <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${notificationsOn ? "bg-[#0b2b22]" : "bg-slate-300"}`}>
-                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${notificationsOn ? "left-6" : "left-1"}`} />
-              </span>
-            </button>
-          </li>
-          {signedIn ? (
-            <li>
-              <button
-                type="button"
-                onClick={() => void signOut().then(() => toast("Signed out.", "neutral"))}
-                className="w-full px-5 py-3.5 text-left text-[14px] font-semibold text-slate-700 active:bg-slate-50"
-              >
-                Sign out
-              </button>
-            </li>
-          ) : null}
-          {signedIn ? (
-            <li>
-              <button
-                type="button"
-                onClick={() => void doDelete()}
-                className={`w-full px-5 py-3.5 text-left text-[14px] font-semibold ${confirmingDelete ? "text-red-700" : "text-red-600"} active:bg-red-50`}
-              >
-                {confirmingDelete ? "Tap again to confirm — deletes phone, selfie & photo" : "Delete my profile"}
-              </button>
-            </li>
-          ) : null}
-          <li className="px-5 py-3.5">
-            <p className="text-[11px] leading-relaxed text-slate-400">
-              Verification records (phone, selfie, timestamps, IP history) are stored securely, retained up to 3 years
-              after your last activity, and deleted immediately when you delete your account. Only a Verified badge is
-              ever shown publicly.
-            </p>
-          </li>
-        </ul>
+            <span>
+              <span className="block text-[14px] font-semibold text-slate-800">Settings</span>
+              <span className="block text-xs text-slate-500">Account, preferences & owner tools</span>
+            </span>
+          </span>
+          <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-slate-300" />
+        </button>
       </section>
     </div>
   );

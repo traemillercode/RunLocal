@@ -1,11 +1,12 @@
 import type { City } from "../types";
+import { AccountMenuButton } from "./AccountMenu";
 import { Chip, Icon } from "./ui";
 import { Sheet } from "./ui";
 
 export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet: () => void }) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b2b22] text-white shadow-sm">
-      <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between gap-3 px-4">
+      <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between gap-2 px-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#c8f169] text-[#0b2b22]">
             <Icon name="pin" className="h-5 w-5" />
@@ -14,17 +15,20 @@ export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet:
             Run <span className="text-[#c8f169]">Local</span>
           </span>
         </div>
-        <button
-          type="button"
-          onClick={onOpenCitySheet}
-          aria-label={`Change city — current: ${city.name}, ${city.state}`}
-          className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-white/10 pl-3.5 pr-2 text-sm font-semibold ring-1 ring-white/20 active:bg-white/20"
-        >
-          <span className="max-w-28 truncate">
-            {city.name}, {city.state}
-          </span>
-          <Icon name="chevronDown" className="h-4 w-4 text-[#c8f169]" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onOpenCitySheet}
+            aria-label={`Change city — current: ${city.name}, ${city.state}`}
+            className="flex h-11 items-center gap-1.5 rounded-full bg-white/10 pl-3 pr-2 text-sm font-semibold ring-1 ring-white/20 active:bg-white/20"
+          >
+            <span className="max-w-24 truncate">
+              {city.name}, {city.state}
+            </span>
+            <Icon name="chevronDown" className="h-4 w-4 text-[#c8f169]" />
+          </button>
+          <AccountMenuButton />
+        </div>
       </div>
     </header>
   );

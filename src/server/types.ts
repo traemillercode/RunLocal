@@ -15,6 +15,14 @@
 export type AccountStatus = "pending" | "verified" | "rejected";
 /** Server-tracked stage of the verification funnel. */
 export type VerifyPhase = "email" | "code" | "selfie" | "pending_review";
+/**
+ * Runner role, assigned by the owner/operator at approval time. `runner` is the
+ * default (a "Verified Runner"); `group_leader` is a label role for people who
+ * run a club/group. Neither role carries admin or moderation powers — the
+ * owner/super-admin identity is derived server-side from RUN_LOCAL_OWNER_EMAIL,
+ * never from a client-supplied role.
+ */
+export type AccountRole = "runner" | "group_leader";
 
 export interface AccountRecord {
   id: string;
@@ -23,6 +31,10 @@ export interface AccountRecord {
   status: AccountStatus;
   /** Funnel stage; only meaningful while status === "pending". */
   phase: VerifyPhase;
+  /** Assigned runner role (set at approval; defaults to "runner"). */
+  role: AccountRole;
+  /** Optional role requested at signup (admin-assigned role wins). */
+  requestedRole: AccountRole | null;
   /** Filename in uploads/public — the user's chosen public profile photo. */
   profilePhotoRef: string | null;
   /** Plain signup/profile phone, unverified and server-side only. */
@@ -80,6 +92,7 @@ export type AdminAction =
   | "admin.export"
   | "admin.audit"
   | "admin.purge"
+  | "admin.pending_list"
   | "account.delete";
 
 export interface AuditEntry {

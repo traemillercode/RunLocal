@@ -18,6 +18,7 @@ import {
   adminDeleteAccount,
   adminGetRecord,
   adminLogin,
+  adminPending,
   adminSearch,
   adminSetStatus,
   adminViewSelfie,
@@ -25,6 +26,7 @@ import {
   validReason,
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
+import { isOwnerEmail } from "./owner";
 
 export const SESSION_COOKIE = "runlocal_sid";
 export const ADMIN_COOKIE = "runlocal_admin";
@@ -209,7 +211,9 @@ async function handleApi(
     }
     const session = db.getSession(sess.sessionId);
     if (session) session.lastSeenAt = now.toISOString();
-    return ok(res, { status: "signed_in", account: toPublicAccount(rec) }), true;
+    // isOwner is a SERVER-side role rule (account email vs RUN_LOCAL_OWNER_EMAIL).
+    // The client renders the boolean; it can never self-assign the role.
+    return ok(res, { status: "signed_in", account: toPublicAccount(rec, isOwnerEmail(rec.email)) }), true;
   }
 
   if (method === "POST" && !originAllowed(req)) {
@@ -218,7 +222,7 @@ async function handleApi(
 
   // ---- account creation (signup completion) ------------------------------
   if (method === "POST" && url.pathname === "/api/accounts") {
-    const body = (await readJson(req)) as { name?: unknown; email?: unknown; phone?: unknown; birthdate?: unknown };
+    const body = (await readJson(req)) as { name?: unknown; email?: unknown; phone?: unknown; birthdate?: unknown; requestedRole?: unknown };
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const phone = typeof body.phone === "string" ? normalizePhone(body.phone) : null;
@@ -232,14 +236,17 @@ async function handleApi(
     const existing = db.getAccountByEmail(email);
     if (existing && !existing.deletedAt) return err(res, { status: 409, error: "email_taken" }), true;
     if (typeof body.phone === "string" && !phone) return err(res, { status: 400, error: "invalid_phone" }), true;
-    const rec = db.createAccount({ name, email, phone, birthdate });
+    // Role requests are label-only and strictly validated server-side; the
+    // owner/operator assigns the real role at approval time.
+    const requestedRole = body.requestedRole === "group_leader" ? "group_leader" : body.requestedRole === "runner" ? "runner" : null;
+    const rec = db.createAccount({ name, email, phone, birthdate, requestedRole });
     rec.signupIp = ip;
     rec.signupAt = now.toISOString();
     db.appendLoginIp(rec.id, ip, now);
     const session = db.createSession(rec.id, ip, now);
     setCookie(res, SESSION_COOKIE, session.id, secure, 60 * 60 * 24 * 30);
     await db.persist();
-    return ok(res, { account: toPublicAccount(rec) }), true;
+    return ok(res, { account: toPublicAccount(rec, isOwnerEmail(rec.email)) }), true;
   }
 
   // ---- send email code ----------------------------------------------------
@@ -323,6 +330,76 @@ async function handleApi(
     return ok(res, { photoUrl: `/uploads/public/${filename}` }), true;
   }
 
+  // ---- sign in with email code (honest: no passwords, no fake SSO) -------
+  // Guests with an existing account sign in by requesting a fresh 6-digit
+  // code to their email. Every failure is explicit: unknown email, rejected
+  // account, unconfigured provider, wrong/expired code. Sessions are the
+  // server-issued HttpOnly cookies used everywhere else.
+  if (method === "POST" && url.pathname === "/api/login/start") {
+    const body = (await readJson(req)) as { email?: unknown };
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) {
+      return err(res, { status: 400, error: "invalid_email" }), true;
+    }
+    const rec = db.getAccountByEmail(email);
+    if (!rec || rec.deletedAt) {
+      return err(res, { status: 404, error: "no_account", message: "No Run Local account found for that email — you can sign up instead." }), true;
+    }
+    if (rec.status === "rejected") {
+      return err(res, { status: 403, error: "account_rejected", message: "This account was rejected and can't sign in. Contact the owner if you believe this is a mistake." }), true;
+    }
+    const emailStatus = emailConfig();
+    if (!emailStatus.configured) {
+      return err(res, {
+        status: 503,
+        error: "email_unconfigured",
+        message: `Email provider is not configured (${emailStatus.missing.join(", ")}). No code was sent.`,
+      }), true;
+    }
+    if (rateLimited(emailSendLog, rec.email, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, now.getTime())) {
+      return err(res, { status: 429, error: "rate_limited" }), true;
+    }
+    const { code } = db.createCode(rec.id, rec.email, now);
+    const sent = await sendVerificationEmail(rec.email, code);
+    if (!sent.ok) {
+      db.deleteCode(rec.id);
+      return err(res, { status: sent.kind === "unconfigured" ? 503 : 502, error: sent.kind === "unconfigured" ? "email_unconfigured" : "email_send_failed", message: sent.message }), true;
+    }
+    db.touchActivity(rec.id, now);
+    await db.persist();
+    return ok(res, { status: "code_sent", resendInSec: 30 }), true;
+  }
+
+  if (method === "POST" && url.pathname === "/api/login/check") {
+    const body = (await readJson(req)) as { email?: unknown; code?: unknown };
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const code = typeof body.code === "string" ? body.code.replace(/\D/g, "") : "";
+    const rec = db.getAccountByEmail(email);
+    if (!rec || rec.deletedAt) return err(res, { status: 404, error: "no_account" }), true;
+    if (rec.status === "rejected") return err(res, { status: 403, error: "account_rejected" }), true;
+    const codeRec = db.getCode(rec.id);
+    if (!codeRec || new Date(codeRec.expiresAt).getTime() < now.getTime()) {
+      return err(res, { status: 410, error: "code_expired", message: "That code expired. Request a new one below." }), true;
+    }
+    codeRec.attempts += 1;
+    if (codeRec.attempts > MAX_CODE_ATTEMPTS) {
+      db.deleteCode(rec.id);
+      await db.persist();
+      return err(res, { status: 429, error: "too_many_attempts", message: "Too many wrong attempts. Request a new code." }), true;
+    }
+    if (!codesEqual(hashCode(code, codeRec.salt), codeRec.hash)) {
+      await db.persist();
+      return err(res, { status: 401, error: "invalid_code", message: "That code wasn't right — check the email and try again." }), true;
+    }
+    db.deleteCode(rec.id);
+    db.appendLoginIp(rec.id, ip, now);
+    db.touchActivity(rec.id, now);
+    const session = db.createSession(rec.id, ip, now);
+    setCookie(res, SESSION_COOKIE, session.id, secure, 60 * 60 * 24 * 30);
+    await db.persist();
+    return ok(res, { status: "signed_in", account: toPublicAccount(rec, isOwnerEmail(rec.email)) }), true;
+  }
+
   // ---- logout -------------------------------------------------------------
   if (method === "POST" && url.pathname === "/api/logout") {
     const sid = cookies[SESSION_COOKIE];
@@ -369,9 +446,11 @@ async function handleAdmin(
   now: Date,
 ): Promise<boolean> {
   const adminSessionId = cookies[ADMIN_COOKIE] ?? null;
+  const userSessionId = cookies[SESSION_COOKIE] ?? null;
   const reason = req.headers["x-audit-reason"];
-  const ctx = { adminSessionId, reason: typeof reason === "string" ? reason : undefined, ip };
-  const sendErr = (r: { ok: false; error: string; status: number }) => err(res, { status: r.status, error: r.error });
+  const ctx = { adminSessionId, userSessionId, reason: typeof reason === "string" ? reason : undefined, ip };
+  const sendErr = (r: { ok: false; error: string; status: number; message?: string }) =>
+    err(res, { status: r.status, error: r.error, message: r.message });
 
   // POST /api/admin/login
   if (method === "POST" && url.pathname === "/api/admin/login") {
@@ -394,6 +473,14 @@ async function handleAdmin(
     if (adminSessionId) db.deleteSession(adminSessionId);
     clearCookie(res, ADMIN_COOKIE, secure);
     return ok(res, { ok: true }), true;
+  }
+
+  // GET /api/admin/pending — owner-only pending-user queue (redacted rows)
+  if (method === "GET" && url.pathname === "/api/admin/pending") {
+    const result = adminPending(db, ctx, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { results: result.data }), true;
   }
 
   // GET /api/admin/search?q=
@@ -439,10 +526,12 @@ async function handleAdmin(
       await db.persist();
       return ok(res, { ok: true, deleted: result.data.id }), true;
     }
-    const result = adminSetStatus(db, ctx, id, action as "verified" | "rejected", now);
+    // Role to assign on approval (owner/operator picks in the control center).
+    const role = url.searchParams.get("role") === "group_leader" ? "group_leader" : "runner";
+    const result = adminSetStatus(db, ctx, id, action as "verified" | "rejected", now, role);
     if (!result.ok) return sendErr(result), true;
     await db.persist();
-    return ok(res, { ok: true, account: toPublicAccount(result.data) }), true;
+    return ok(res, { ok: true, account: toPublicAccount(result.data, isOwnerEmail(result.data.email)) }), true;
   }
 
   // GET /api/admin/export.csv?q=
