@@ -222,13 +222,13 @@ describe("profile menu states", () => {
   });
 
   it("verified users see the verified status entry", () => {
-    const { entries } = profileMenuEntries(me({ account: { status: "verified", phase: null, badge: "verified" } }));
+    const { entries } = profileMenuEntries(me({ status: "verified", phase: null, badge: "verified" }));
     expect(entries.map((e) => e.label)).toContain("My verification status");
     expect(entries.find((e) => e.key === "status")?.hint).toContain("Verified");
   });
 
   it("owner sees the Admin / Super Admin entry", () => {
-    const { entries } = profileMenuEntries(me({ account: { isOwner: true } }));
+    const { entries } = profileMenuEntries(me({ isOwner: true }));
     const admin = entries.find((e) => e.key === "admin");
     expect(admin).toBeDefined();
     expect(admin?.label).toBe("Admin control center");
