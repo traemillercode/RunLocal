@@ -36,7 +36,7 @@ export function VerifiedGateSheet({
           ) : (
             <span>
               <span className="font-semibold">{actionLabel} requires a verified runner profile.</span> Verification
-              takes about two minutes: a phone code, then a live selfie — reviewed by a person, never shown publicly.
+              uses an email code, then a live selfie — reviewed by a person, never shown publicly.
             </span>
           )}
         </p>
