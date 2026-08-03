@@ -38,6 +38,20 @@ describe("API payload contract — sensitive data never leaves the server", () =
   });
 });
 
+describe("authenticated phone contract", () => {
+  it("keeps the collected phone unverified server-side while omitting it from public payloads", () => {
+    const db = createMemoryStore();
+    const rec = db.createAccount({ name: "Runner", email: "runner@example.com", phone: "+15735550123" });
+    expect(rec.phone).toBe("+15735550123");
+    expect(rec.phoneVerified).toBe(false);
+    expect(rec.phoneVerifiedAt).toBeNull();
+    const publicPayload = toPublicAccount(rec);
+    expect(publicPayload).not.toHaveProperty("phone");
+    expect(publicPayload).not.toHaveProperty("phoneVerified");
+    expect(JSON.stringify(publicPayload)).not.toContain("573555");
+  });
+});
+
 describe("phone normalization (E.164)", () => {
   it("normalizes US 10-digit numbers to +1", () => {
     expect(normalizePhone("(573) 555-0123")).toBe("+15735550123");

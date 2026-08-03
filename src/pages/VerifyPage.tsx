@@ -1,10 +1,10 @@
 /**
  * Verification flow — mobile-first wizard.
  *
- * profile → phone → code → consent → camera → submitted
+ * profile → email code → consent → camera → submitted
  *
  * Honesty rules baked in:
- *  - Phone uses type="tel" + inputMode="numeric".
+ *  - Phone is collected as an optional, unverified profile field only.
  *  - Code uses auto-advancing numeric digit boxes (inputMode="numeric").
  *  - The camera opens ONLY after explicit consent (state machine enforced).
  *  - Selfie capture is getUserMedia-only; no gallery/file input.
@@ -169,7 +169,7 @@ export function VerifyPage() {
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
-  // phone step
+  // profile contact fields
   const [phone, setPhone] = useState("");
   const [birthdate, setBirthdate] = useState("");
   const [emailUnconfigured, setEmailUnconfigured] = useState(false);
@@ -376,8 +376,8 @@ export function VerifyPage() {
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <StepBadge step={1} total={4} label="Create your runner profile" />
           <p className="mb-4 text-[13px] leading-relaxed text-slate-600">
-            Your name, email, and a profile photo start your account. Next you'll add your phone and complete a live
-            selfie check — all from this phone.
+            Your name and email start your account. You may also add a phone number as an unverified
+            profile field, then complete a live selfie check — all from this phone.
           </p>
           <div className="space-y-4">
             <Field label="Name">
@@ -478,7 +478,7 @@ export function VerifyPage() {
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <StepBadge step={3} total={4} label="Enter the code" />
           <p className="mb-4 text-[13px] leading-relaxed text-slate-600">
-            We emailed a {CODE_LENGTH}-digit code to your phone. It auto-advances as you type.
+            We emailed a {CODE_LENGTH}-digit code to your email. It auto-advances as you type.
           </p>
           <CodeEntry value={code} onChange={setCode} onComplete={(c) => void submitCode(c)} disabled={busy} />
           {codeError ? <div className="mt-3"><Notice tone="red">{codeError}</Notice></div> : null}

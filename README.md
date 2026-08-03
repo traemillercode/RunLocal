@@ -2,21 +2,21 @@
 
 Mobile-first, installable web app for city-scoped running communities. **Launch city: Columbia, MO.**
 
-This is the **MVP + identity/safety layer**: core browsing and navigation, plus an explicit Guest → Pending Verification → Verified account model with phone + live-selfie verification (Twilio), an admin-only safety tool (audited), and a 3-year retention purge. See `docs/VERIFICATION.md` for the full contract and env vars.
+This is the **MVP + identity/safety layer**: core browsing and navigation, plus an explicit Guest → Pending Verification → Verified account model with email-first verification and live-selfie review, an admin-only safety tool (audited), and a 3-year retention purge. See `docs/VERIFICATION.md` for the full contract and env vars.
 
 ## What's here
 
 - **Home / Events** — this week's group runs, chronological, with date, time, location, host, invitation label, RSVP affordance, and external-link affordance. Includes a search box (`type="search"`).
 - **Races** — seeded race cards with external registration links.
 - **Forum** — three distinct sections (Announcements / Community / Q&A) with Q&A sorting controls (Newest / Unanswered / Top). Guests browse; posting & replying are gated behind sign-in/verification messaging.
-- **Profile** — guest / pending / verified presentation with the real verification flow (`#/verify`): phone code → explicit consent → live selfie (getUserMedia), reviewed manually by an admin. Only a Verified badge is public.
+- **Profile** — guest / pending / verified presentation with the email-first verification flow (`#/verify`): email code → explicit consent → live selfie (getUserMedia), reviewed manually by an admin. Phone is collected only as an unverified field; SMS verification is a future upgrade. Only a Verified badge is public.
 - **City switcher** — Columbia, MO is the live launch city; future cities are data-model placeholders ("Coming soon").
 - **PWA shell** — web manifest, service worker (offline shell), generated PNG icons, theme colors, standalone display.
 - **App-like interactions** — no full page reloads (SPA), bottom sheets, toasts, RSVP/sign-in feedback, gated create-sheets.
 
 Explicitly **not** included (per plan): training plans, pace calculators, nutrition, direct messaging, follower graphs, algorithmic feeds, and unverified official/RRCA claims. Group types render only the two allowed labels: **"RRCA-Chartered Club"** (admin-assigned in the seed data) and **"Community Run Group"**.
 
-> **Truthfulness note:** all events/races/posts are locally seeded *sample* content, not a live community feed. External links point at real organizers' sites where they exist. No account is created; "verification" is explicitly communicated as coming in a later phase.
+> **Truthfulness note:** all events/races/posts are locally seeded *sample* content, not a live community feed. External links point at real organizers' sites where they exist. Email verification and selfie review are implemented; no biometric match or automated approval is claimed.
 
 ## Stack
 
@@ -67,4 +67,4 @@ serve.ts / publish.sh     # static hosting for the team's public port 3000
 
 ## Roadmap (later phases — not in this MVP)
 
-Runner sign-in + phone verification, verified badges, RSVP syncing, event/race submission and admin workflows, organizer dashboards, more cities.
+Runner sign-in, verified badges, RSVP syncing, event/race submission and admin workflows, organizer dashboards, more cities.
