@@ -130,6 +130,9 @@ describe("pending-user admin actions", () => {
 
   function ownerCtx(db: ReturnType<typeof createMemoryStore>, reason = "pending queue review"): AdminCtx {
     const owner = db.createAccount({ name: "Owner", email: DEFAULT_OWNER_EMAIL });
+    // The owner is a fully verified signed-in user in reality — keep them out
+    // of the pending queue so fixtures control exactly which accounts it shows.
+    db.updateAccount(owner.id, { status: "verified", verifiedAt: T0.toISOString() });
     const session = db.createSession(owner.id, "198.51.100.7", T0);
     return ctx(null, session.id, reason);
   }
