@@ -117,18 +117,29 @@ function isSecure(req: IncomingMessage): boolean {
   return encrypted || req.headers["x-forwarded-proto"] === "https";
 }
 
-/** CSRF guard: if a browser Origin/Referer is present it must match our host. */
-function originAllowed(req: IncomingMessage): boolean {
-  const origin = req.headers.origin;
+/**
+ * CSRF guard. The app is commonly behind a TLS-terminating proxy, so the
+ * origin's public host cannot be compared only with the origin server's
+ * internal Host header. Keep the production origin explicit and allow
+ * same-host requests for local/custom deployments; never accept arbitrary
+ * origins or forwarded host values as an allow-list.
+ */
+export function isAllowedOrigin(origin: string | undefined, requestHost: string | undefined): boolean {
   if (!origin) return true; // non-browser clients (curl, tests) are fine
   try {
-    const host = req.headers.host;
-    if (!host) return false;
-    const o = new URL(origin);
-    return o.host === host;
+    const parsed = new URL(origin);
+    if (parsed.origin === "https://runlocal.ctonew.app") return true;
+    if (!requestHost) return false;
+    return parsed.host === requestHost;
   } catch {
     return false;
   }
+}
+
+function originAllowed(req: IncomingMessage): boolean {
+  const origin = req.headers.origin;
+  const host = req.headers.host;
+  return isAllowedOrigin(typeof origin === "string" ? origin : undefined, typeof host === "string" ? host : undefined);
 }
 
 function rateLimited(map: Map<string, number[]>, key: string, limit: number, windowMs: number, now: number): boolean {
