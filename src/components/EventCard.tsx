@@ -8,9 +8,19 @@ interface EventCardProps {
   /** Verified runners only. When false the button opens the verified gate. */
   canRsvp: boolean;
   onRsvp: () => void;
+  /** Server-driven owner highlights (featured/pinned). */
+  featured?: boolean;
+  pinned?: boolean;
+  /**
+   * Server-driven RRCA badge state for the group. When undefined the seeded
+   * groupType label is used (backend unreachable / not yet loaded).
+   */
+  groupBadge?: boolean;
 }
-export function EventCard({ event, city, rsvped, canRsvp, onRsvp }: EventCardProps) {
+export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = false, pinned = false, groupBadge }: EventCardProps) {
   const group = city.groups.find((g) => g.id === event.groupId);
+  const rrca = groupBadge ?? group?.groupType === "rrca-chartered";
+  const label = group ? (rrca ? GROUP_TYPE_LABELS["rrca-chartered"] : GROUP_TYPE_LABELS.community) : null;
   return (
     <article
       className={`overflow-hidden rounded-2xl bg-white shadow-sm ring-1 transition-shadow ${
@@ -58,11 +68,21 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp }: EventCardPro
           </p>
           <p className="mt-1.5 text-[13px] font-medium text-slate-500">
             {group ? group.name : "Local group"}
-            {group ? (
-              <span className="ml-1.5 font-normal text-slate-400">· {GROUP_TYPE_LABELS[group.groupType]}</span>
+            {label ? (
+              <span className="ml-1.5 font-normal text-slate-400">· {label}</span>
             ) : null}
           </p>
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            {featured ? (
+              <Chip tone="volt">
+                <Icon name="spark" className="h-3 w-3" /> Featured
+              </Chip>
+            ) : null}
+            {pinned ? (
+              <Chip tone="amber">
+                <Icon name="pin" className="h-3 w-3" /> Pinned
+              </Chip>
+            ) : null}
             <Chip tone={event.invite === "Open to all" ? "emerald" : "amber"}>{event.invite}</Chip>
             <Chip tone="outline">
               <Icon name="flag" className="h-3 w-3" /> {event.distanceLabel}

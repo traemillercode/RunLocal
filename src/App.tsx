@@ -6,6 +6,7 @@ import { CITIES } from "./data/cities";
 import { ToastProvider } from "./lib/toast";
 import { useAppState } from "./lib/store";
 import { AccountProvider } from "./state/account";
+import { ModeratedProvider } from "./state/moderated";
 import { AdminPage } from "./pages/AdminPage";
 import { EventsPage } from "./pages/EventsPage";
 import { ForumPage } from "./pages/ForumPage";
@@ -41,18 +42,20 @@ function Shell() {
     <div className="min-h-dvh bg-[#f5f6f2] text-slate-900">
       <Header city={city} onOpenCitySheet={() => setCityOpen(true)} />
       <main key={location.pathname}>
-        <Routes>
-          <Route path="/" element={<EventsPage city={city} store={store} />} />
-          <Route path="/races" element={<RacesPage city={city} />} />
-          <Route path="/forum" element={<ForumPage city={city} />} />
-          <Route path="/profile" element={<ProfilePage city={city} store={store} />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/recovery" element={<RecoveryPage sessionError={recoveryError} />} />
-          <Route path="/verify" element={<VerifyPage />} />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <ModeratedProvider cityId={city.id}>
+          <Routes>
+            <Route path="/" element={<EventsPage city={city} store={store} />} />
+            <Route path="/races" element={<RacesPage city={city} />} />
+            <Route path="/forum" element={<ForumPage city={city} />} />
+            <Route path="/profile" element={<ProfilePage city={city} store={store} />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/recovery" element={<RecoveryPage sessionError={recoveryError} />} />
+            <Route path="/verify" element={<VerifyPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </ModeratedProvider>
       </main>
       {!noNav ? <BottomNav /> : null}
       <CitySheet

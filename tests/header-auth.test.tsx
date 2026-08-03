@@ -39,6 +39,7 @@ function verifiedAccount(patch: Partial<PublicAccount> = {}): PublicAccount {
     badge: "verified",
     role: "runner",
     isOwner: false,
+    suspended: false,
     profilePhotoUrl: null,
     ...patch,
   };

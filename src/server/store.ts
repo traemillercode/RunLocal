@@ -16,6 +16,9 @@ import type {
   AccountRecord,
   AuditEntry,
   CodeRecord,
+  ContentRecord,
+  FlagRecord,
+  GroupModRecord,
   PersistedDb,
   SessionRecord,
   VerifyPhase,
@@ -76,10 +79,33 @@ export interface PublicAccount {
   role: AccountRecord["role"];
   /** Server-derived super-admin flag (from RUN_LOCAL_OWNER_EMAIL). */
   isOwner: boolean;
+  /**
+   * Posting-blocking suspension, computed server-side against the current
+   * time. The client may only ever see this boolean — never the expiry or the
+   * reason (moderation data stays owner-only).
+   */
+  suspended: boolean;
   profilePhotoUrl: string | null;
 }
 
-export function toPublicAccount(rec: AccountRecord, isOwner = false): PublicAccount {
+/**
+ * True while the account's posting rights are suspended. `suspendedUntil`
+ * null means indefinite (until lifted); past timestamps are treated as
+ * expired.
+ */
+export function isSuspended(rec: AccountRecord, now = new Date()): boolean {
+  if (rec.deletedAt || !rec.suspended) return false;
+  if (rec.suspendedUntil === null) return true; // indefinite
+  return new Date(rec.suspendedUntil).getTime() > now.getTime();
+}
+
+/** Posting gate used by the client payload and (in future) posting endpoints. */
+export function canPost(rec: AccountRecord, now = new Date()): { ok: boolean; reason?: string } {
+  if (!isSuspended(rec, now)) return { ok: true };
+  return { ok: false, reason: "suspended" };
+}
+
+export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new Date()): PublicAccount {
   return {
     id: rec.id,
     name: rec.name,
@@ -89,6 +115,7 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false): PublicAcco
     badge: rec.status === "verified" ? "verified" : null,
     role: rec.role,
     isOwner,
+    suspended: isSuspended(rec, now),
     profilePhotoUrl: rec.profilePhotoRef ? `/uploads/public/${rec.profilePhotoRef}` : null,
   };
 }
@@ -107,6 +134,9 @@ export class Db {
   private sessions = new Map<string, SessionRecord>();
   private codes = new Map<string, CodeRecord>();
   private audits: AuditEntry[] = [];
+  private content = new Map<string, ContentRecord>();
+  private groups = new Map<string, GroupModRecord>();
+  private flags: FlagRecord[] = [];
   private loaded = false;
 
   constructor(opts: DbOptions = {}) {
@@ -131,6 +161,9 @@ export class Db {
       for (const s of parsed.sessions ?? []) this.sessions.set(s.id, s);
       for (const c of parsed.codes ?? []) this.codes.set(c.accountId, c);
       this.audits = parsed.audits ?? [];
+      for (const r of parsed.content ?? []) this.content.set(r.id, r);
+      for (const g of parsed.groups ?? []) this.groups.set(g.id, g);
+      this.flags = parsed.flags ?? [];
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -144,6 +177,9 @@ export class Db {
       sessions: [...this.sessions.values()],
       codes: [...this.codes.values()],
       audits: this.audits,
+      content: [...this.content.values()],
+      groups: [...this.groups.values()],
+      flags: this.flags,
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -194,6 +230,9 @@ export class Db {
       purgeAt: null,
       purgedAt: null,
       retentionYears: this.retentionYears,
+      suspended: false,
+      suspendedUntil: null,
+      suspensionReason: null,
     };
     this.accounts.set(rec.id, rec);
     return rec;
@@ -300,6 +339,68 @@ export class Db {
     const before = this.audits.length;
     this.audits = this.audits.filter((a) => new Date(a.at).getTime() >= cutoff);
     return before - this.audits.length;
+  }
+
+  // ------------------------------------------- owner-dashboard registry
+  listContent(): ContentRecord[] {
+    return [...this.content.values()];
+  }
+  getContent(id: string): ContentRecord | undefined {
+    return this.content.get(id);
+  }
+  /**
+   * Upsert a registry record, applying the FULL incoming state. Moderation
+   * callers pass the complete record (hidden/featured/pinned included);
+   * re-seeding never touches existing records (see contentSeed.ts) so owner
+   * decisions are preserved.
+   */
+  upsertContent(rec: ContentRecord): ContentRecord {
+    const prev = this.content.get(rec.id);
+    const next = prev ? { ...prev, ...rec } : rec;
+    this.content.set(rec.id, next);
+    return next;
+  }
+  listGroups(): GroupModRecord[] {
+    return [...this.groups.values()];
+  }
+  getGroup(id: string): GroupModRecord | undefined {
+    return this.groups.get(id);
+  }
+  upsertGroup(rec: GroupModRecord): GroupModRecord {
+    const prev = this.groups.get(rec.id);
+    if (prev) {
+      // Preserve owner-managed badge state and notes across re-seeds.
+      const next = { ...prev, cityId: rec.cityId, name: rec.name };
+      this.groups.set(rec.id, next);
+      return next;
+    }
+    this.groups.set(rec.id, rec);
+    return rec;
+  }
+  updateGroup(id: string, patch: Partial<GroupModRecord>): GroupModRecord | undefined {
+    const rec = this.groups.get(id);
+    if (!rec) return undefined;
+    const next = { ...rec, ...patch };
+    this.groups.set(id, next);
+    return next;
+  }
+  listFlags(): FlagRecord[] {
+    return [...this.flags];
+  }
+  getFlag(id: string): FlagRecord | undefined {
+    return this.flags.find((f) => f.id === id);
+  }
+  appendFlag(flag: Omit<FlagRecord, "id" | "createdAt">, now = new Date()): FlagRecord {
+    const rec: FlagRecord = { ...flag, id: newId(), createdAt: nowIso(now) };
+    this.flags.push(rec);
+    return rec;
+  }
+  updateFlag(id: string, patch: Partial<FlagRecord>): FlagRecord | undefined {
+    const idx = this.flags.findIndex((f) => f.id === id);
+    if (idx === -1) return undefined;
+    const next = { ...this.flags[idx], ...patch };
+    this.flags[idx] = next;
+    return next;
   }
 
   // ---------------------------------------------------------------- uploads

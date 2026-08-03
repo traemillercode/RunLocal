@@ -23,8 +23,8 @@ describe("permission gating (canDo)", () => {
 describe("roleOf", () => {
   it("maps guest / pending / verified me payloads to roles", () => {
     const guest: Me = { status: "guest" };
-    const pending: Me = { status: "signed_in", account: { id: "a", name: "N", email: "n@x.com", status: "pending", phase: "pending_review", badge: null, role: "runner", isOwner: false, profilePhotoUrl: null } };
-    const verified: Me = { status: "signed_in", account: { id: "b", name: "V", email: "v@x.com", status: "verified", phase: null, badge: "verified", role: "runner", isOwner: false, profilePhotoUrl: null } };
+    const pending: Me = { status: "signed_in", account: { id: "a", name: "N", email: "n@x.com", status: "pending", phase: "pending_review", badge: null, role: "runner", isOwner: false, suspended: false, profilePhotoUrl: null } };
+    const verified: Me = { status: "signed_in", account: { id: "b", name: "V", email: "v@x.com", status: "verified", phase: null, badge: "verified", role: "runner", isOwner: false, suspended: false, profilePhotoUrl: null } };
     expect(roleOf(guest)).toBe("guest");
     expect(roleOf(pending)).toBe("pending");
     expect(roleOf(verified)).toBe("verified");
@@ -68,7 +68,8 @@ describe("public payloads never leak sensitive verification data", () => {
     expect(json).not.toContain("signupIp");
     expect(json).not.toContain("purgeAt");
     expect(json).not.toContain("verifiedAt");
-    // Only the badge, role label, and server-computed owner flag are exposed.
-    expect(Object.keys(pub).sort()).toEqual(["badge", "email", "id", "isOwner", "name", "phase", "profilePhotoUrl", "role", "status"].sort());
+    // Only the badge, role label, server-computed owner flag, and suspension
+    // boolean are exposed.
+    expect(Object.keys(pub).sort()).toEqual(["badge", "email", "id", "isOwner", "name", "phase", "profilePhotoUrl", "role", "status", "suspended"].sort());
   });
 });

@@ -71,6 +71,15 @@ export interface AccountRecord {
   purgeAt: string | null;
   purgedAt: string | null;
   retentionYears: number;
+  /**
+   * Posting-blocking suspension (owner-imposed, audited). `suspended` is the
+   * state; `suspendedUntil` is the expiry (`null` = indefinite until lifted)
+   * and `suspensionReason` records why. Past expiry dates are treated as
+   * expired (not suspended) and never shipped to the client.
+   */
+  suspended: boolean;
+  suspendedUntil: string | null;
+  suspensionReason: string | null;
 }
 
 export interface SessionRecord {
@@ -106,6 +115,14 @@ export type AdminAction =
   | "admin.audit"
   | "admin.purge"
   | "admin.pending_list"
+  | "admin.dashboard"
+  | "admin.flag_dismiss"
+  | "admin.flag_hide"
+  | "admin.content_unhide"
+  | "admin.suspend"
+  | "admin.unsuspend"
+  | "admin.group_rrca"
+  | "admin.content_highlight"
   | "account.delete";
 
 export interface AuditEntry {
@@ -126,4 +143,70 @@ export interface PersistedDb {
   sessions: SessionRecord[];
   codes: CodeRecord[];
   audits: AuditEntry[];
+  /**
+   * Owner-dashboard registry: seeded public content (events/races/forum posts)
+   * mirrored server-side so moderation state (hidden/featured/pinned) survives
+   * per city. Content details stay in the client seed; this registry holds
+   * ONLY ids, titles, and moderation flags — no sensitive data.
+   */
+  content: ContentRecord[];
+  /** Owner-dashboard group records: RRCA badge state + internal note. */
+  groups: GroupModRecord[];
+  /** Content flags (reports). Reasons are owner-only, never public. */
+  flags: FlagRecord[];
+}
+
+/** What kind of seeded content a moderation record refers to. */
+export type ContentKind = "event" | "race" | "post";
+
+export interface ContentRecord {
+  /** Registry id — `${kind}:${refId}` (e.g. "event:mon-social"). */
+  id: string;
+  cityId: string;
+  kind: ContentKind;
+  /** The seed-data id (e.g. "mon-social", "r1", "p4"). */
+  refId: string;
+  title: string;
+  /** Display label of the author (posts) / organizer — dashboard context only. */
+  authorLabel: string | null;
+  /** Set when the content belongs to a real signed-in account (none in MVP seed). */
+  authorAccountId: string | null;
+  /** Owner-highlight toggles — independent of each other. */
+  featured: boolean;
+  pinned: boolean;
+  /** Hidden by an owner moderation action; excluded from public rendering. */
+  hidden: boolean;
+  hiddenAt: string | null;
+}
+
+export interface GroupModRecord {
+  /** Seed group id (e.g. "ctc"). */
+  id: string;
+  cityId: string;
+  name: string;
+  /** Whether the public "RRCA-Chartered Club" label is warranted (owner-set). */
+  rrcaBadge: boolean;
+  /** Internal (owner-only) note explaining the charter/badge, e.g. "Charter #…". */
+  rrcaNote: string | null;
+  rrcaNoteUpdatedAt: string | null;
+}
+
+export type FlagStatus = "open" | "dismissed" | "hidden";
+
+export interface FlagRecord {
+  id: string;
+  cityId: string;
+  contentId: string;
+  kind: ContentKind;
+  refId: string;
+  title: string;
+  /** The reporter's stated reason — owner-only, never in a public payload. */
+  reason: string;
+  /** Reporter display name (or "Sample report (preview data)" for seeded flags). */
+  reporterName: string;
+  reporterAccountId: string | null;
+  createdAt: string;
+  status: FlagStatus;
+  resolvedAt: string | null;
+  resolvedAction: "dismiss" | "hide" | null;
 }

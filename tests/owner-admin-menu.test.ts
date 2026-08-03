@@ -203,6 +203,7 @@ describe("profile menu states", () => {
         badge: null,
         role: "runner",
         isOwner: false,
+        suspended: false,
         profilePhotoUrl: null,
         ...accountPatch,
       },

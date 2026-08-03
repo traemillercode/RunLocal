@@ -7,10 +7,12 @@ import { canDo } from "../lib/accounts";
 import type { AppStore } from "../lib/store";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
+import { useModerated } from "../state/moderated";
 import type { City } from "../types";
 export function EventsPage({ city, store }: { city: City; store: AppStore }) {
   const toast = useToast();
   const { role } = useAccount();
+  const { hidden, highlights, groupBadges } = useModerated();
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
@@ -18,7 +20,17 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
   const canRsvp = canDo(role, "rsvp");
 
   const events = useMemo(() => {
-    const resolved = resolveWeekEvents(city.events, new Date());
+    const resolved = resolveWeekEvents(city.events, new Date())
+      // Owner-hidden content is excluded from public rendering.
+      .filter((e) => !hidden.has(`event:${e.id}`))
+      // Featured first, then pinned — server-driven ordering facts.
+      .sort((a, b) => {
+        const ha = highlights.get(`event:${a.id}`);
+        const hb = highlights.get(`event:${b.id}`);
+        const ra = Number(!!ha?.featured) * 2 + Number(!!ha?.pinned);
+        const rb = Number(!!hb?.featured) * 2 + Number(!!hb?.pinned);
+        return rb - ra;
+      });
     const q = query.trim().toLowerCase();
     if (!q) return resolved;
     return resolved.filter(
@@ -27,7 +39,7 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
         e.location.toLowerCase().includes(q) ||
         (city.groups.find((g) => g.id === e.groupId)?.name.toLowerCase() ?? "").includes(q),
     );
-  }, [city, query]);
+  }, [city, query, hidden, highlights]);
 
   // Group by resolved date for day headers.
   const groups = useMemo(() => {
@@ -90,17 +102,23 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
               {list[0].dayAbbrev} · {new Date(key).getMonth() + 1}/{new Date(key).getDate()}
             </h2>
             <ul className="space-y-3">
-              {list.map((e) => (
-                <li key={e.id}>
-                  <EventCard
-                    event={e}
-                    city={city}
-                    rsvped={!!store.state.rsvped[e.id]}
-                    canRsvp={canRsvp}
-                    onRsvp={() => onRsvp(e.id, e.title)}
-                  />
-                </li>
-              ))}
+              {list.map((e) => {
+                const hl = highlights.get(`event:${e.id}`);
+                return (
+                  <li key={e.id}>
+                    <EventCard
+                      event={e}
+                      city={city}
+                      rsvped={!!store.state.rsvped[e.id]}
+                      canRsvp={canRsvp}
+                      onRsvp={() => onRsvp(e.id, e.title)}
+                      featured={hl?.featured}
+                      pinned={hl?.pinned}
+                      groupBadge={groupBadges.get(e.groupId)}
+                    />
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ))
