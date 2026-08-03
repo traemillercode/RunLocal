@@ -54,6 +54,58 @@ export function Sheet({ open, onClose, title, subtitle, children }: SheetProps) 
   );
 }
 
+interface PopoverProps {
+  open: boolean;
+  onClose: () => void;
+  /** Accessible name announced for the popup (dialog label). */
+  title: string;
+  /** Which side of the viewport the popup hugs. */
+  align?: "left" | "right";
+  children: ReactNode;
+}
+
+/**
+ * Top-anchored popup menu/dialog. Renders a transparent full-screen backdrop
+ * (click anywhere outside closes it) plus a panel that appears just below the
+ * sticky header, right-aligned so it sits under the top-right avatar. Closes on
+ * Escape too. Sized to stay inside the viewport on mobile and never sits under
+ * the fixed bottom navigation (z-[70] > bottom nav z-40, top-anchored).
+ */
+export function Popover({ open, onClose, title, align = "right", children }: PopoverProps) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label={title}>
+      <button
+        type="button"
+        aria-label="Close menu"
+        onClick={onClose}
+        className="absolute inset-0 h-full w-full cursor-default"
+      />
+      <div
+        className={`absolute top-16 max-h-[min(70dvh,34rem)] w-[min(20rem,calc(100vw-1rem))] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl animate-pop-in ${
+          align === "left" ? "left-2" : "right-2"
+        }`}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 const PATHS: Record<string, ReactNode> = {
   close: <path d="M6 6l12 12M18 6L6 18" />,
   chevronDown: <path d="M6 9l6 6 6-6" />,

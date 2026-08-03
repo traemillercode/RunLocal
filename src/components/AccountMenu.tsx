@@ -6,6 +6,10 @@
  * Admin control center. Every row is a 44px touch target. The owner flag comes
  * from the server's `/api/me` payload — nothing here inspects emails or roles.
  *
+ * The menu opens as a top-anchored popup under the header avatar (not a bottom
+ * sheet): it closes on outside click / Escape and is sized to stay inside the
+ * viewport on mobile, clear of the fixed bottom navigation.
+ *
  * `AccountMenuContent` is the pure presentational body (no hooks) so UI tests
  * can render the real guest menu markup with react-dom/server.
  */
@@ -15,7 +19,7 @@ import { profileMenuEntries, type MenuEntry } from "../lib/accountMenu";
 import { phaseLabel, roleLabel } from "../lib/accounts";
 import type { Me } from "../lib/accounts";
 import { useAccount } from "../state/account";
-import { Icon, Sheet } from "./ui";
+import { Icon, Popover } from "./ui";
 
 export function initials(name: string): string {
   return (
@@ -135,6 +139,7 @@ export function AccountMenuButton() {
         onClick={() => setOpen(true)}
         aria-label={account ? `Account menu — signed in as ${account.name}` : "Account menu — sign up or log in"}
         aria-haspopup="dialog"
+        aria-expanded={open}
         className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-white ring-1 ring-white/25 active:bg-white/20"
       >
         {photo ? (
@@ -156,11 +161,11 @@ export function AccountMenuButton() {
         )}
       </button>
 
-      <Sheet
+      <Popover
         open={open}
         onClose={() => setOpen(false)}
         title={account ? "Account" : "Run Local account"}
-        subtitle={account ? account.name : "Sign up or log in to verify and participate"}
+        align="right"
       >
         <AccountMenuContent
           me={me}
@@ -175,7 +180,7 @@ export function AccountMenuButton() {
             navigate("/");
           }}
         />
-      </Sheet>
+      </Popover>
     </>
   );
 }
