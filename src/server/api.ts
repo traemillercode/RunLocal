@@ -9,6 +9,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Db, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPublicAccount, MIN_AGE } from "./store";
+import type { AccountRecord } from "./types";
 import { supabaseConfig, verifySupabaseToken, applySupabaseIdentity } from "./supabase";
 import {
   adminConfigured,
@@ -112,6 +113,23 @@ function getIp(req: IncomingMessage): string {
   const fwd = req.headers["x-forwarded-for"];
   if (typeof fwd === "string" && fwd) return fwd.split(",")[0].trim();
   return req.socket.remoteAddress ?? "unknown";
+}
+
+/**
+ * Placeholder display name derived from an email local-part for accounts
+ * auto-created by /api/login/check from a verified Supabase identity (the
+ * repair path for "Supabase user exists, local account missing"). It is a
+ * neutral label, not a fabricated claim — no birthdate/phone are invented.
+ */
+export function displayNameFromEmail(email: string): string {
+  const local = email.split("@")[0] ?? "";
+  const words = local
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => (w[0] ?? "").toUpperCase() + w.slice(1));
+  return (words.join(" ") || "Runner").slice(0, 60);
 }
 
 function isSecure(req: IncomingMessage): boolean {
@@ -219,8 +237,16 @@ async function handleApi(
   }
 
   // ---- account creation (signup completion) ------------------------------
+  // Used by the password signup flow AFTER Supabase created the auth user:
+  // the local Pending profile carries only profile metadata (name, email,
+  // birthdate, optional phone) — the password NEVER reaches Run Local.
+  // `noSession: true` is for the email-confirmation-required path, where
+  // Supabase returns no session: the pending account is created but NO Run
+  // Local session cookie is issued, so nothing claims signed-in status
+  // without a valid Supabase session. The account links to the verified
+  // Supabase identity on the user's first confirmed login (/api/login/check).
   if (method === "POST" && url.pathname === "/api/accounts") {
-    const body = (await readJson(req)) as { name?: unknown; email?: unknown; phone?: unknown; birthdate?: unknown; requestedRole?: unknown };
+    const body = (await readJson(req)) as { name?: unknown; email?: unknown; phone?: unknown; birthdate?: unknown; requestedRole?: unknown; noSession?: unknown };
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const phone = typeof body.phone === "string" ? normalizePhone(body.phone) : null;
@@ -241,8 +267,10 @@ async function handleApi(
     rec.signupIp = ip;
     rec.signupAt = now.toISOString();
     db.appendLoginIp(rec.id, ip, now);
-    const session = db.createSession(rec.id, ip, now);
-    setCookie(res, SESSION_COOKIE, session.id, secure, 60 * 60 * 24 * 30);
+    if (body.noSession !== true) {
+      const session = db.createSession(rec.id, ip, now);
+      setCookie(res, SESSION_COOKIE, session.id, secure, 60 * 60 * 24 * 30);
+    }
     await db.persist();
     return ok(res, { account: toPublicAccount(rec, isOwnerEmail(rec.email)) }), true;
   }
@@ -397,9 +425,19 @@ async function handleApi(
     }
     // The authenticated email comes from the VERIFIED token, never from the
     // client request body — the client cannot choose whose account to sign in
-    // to.
-    const rec = db.getAccountByEmail(verified.email);
-    if (!rec || rec.deletedAt) return err(res, { status: 404, error: "no_account", message: "No Run Local account found for that email — you can sign up instead." }), true;
+    // to. If no local account exists yet (e.g. Supabase auth.user was created
+    // by an earlier signup whose local profile never completed), create the
+    // matching Pending account from the verified identity alone. Name is
+    // derived from the email local-part as a placeholder (never fabricated
+    // claims — no birthdate/phone are invented); the normal signup-metadata
+    // path collects the real profile on a fresh signup. This is what fixes
+    // "auth.users exists but Run Local has no account → no_account".
+    let rec = db.getAccountByEmail(verified.email);
+    if (!rec || rec.deletedAt) {
+      rec = db.createAccount({ name: displayNameFromEmail(verified.email), email: verified.email });
+      rec.signupIp = ip;
+      rec.signupAt = now.toISOString();
+    }
     if (rec.status === "rejected") return err(res, { status: 403, error: "account_rejected" }), true;
     const linked = applySupabaseIdentity(rec, verified);
     if (!linked.ok) {
@@ -407,9 +445,15 @@ async function handleApi(
       return err(res, { status, error: linked.code, message: linked.message }), true;
     }
     // Link the Supabase identity if this is a legacy account that predates the
-    // bridge (email ownership was just proven by Supabase OTP, so linking is
-    // legitimate); a mismatch with an existing link is rejected above.
-    if (!rec.supabaseAuthId) db.updateAccount(rec.id, linked.patch);
+    // bridge (email ownership was just proven by a successful Supabase
+    // password login / confirmation link, so linking is legitimate); a
+    // mismatch with an existing link is rejected above. A successful login
+    // also proves email ownership, so a pending account still on the
+    // email-code stage advances straight to the selfie step — the primary
+    // flow never shows a six-digit code after the confirmation link.
+    const patch: Partial<AccountRecord> = { ...linked.patch, lastActivityAt: now.toISOString() };
+    if (rec.phase === "email" || rec.phase === "code") patch.phase = "selfie";
+    db.updateAccount(rec.id, patch);
     db.deleteCode(rec.id);
     db.appendLoginIp(rec.id, ip, now);
     db.touchActivity(rec.id, now);

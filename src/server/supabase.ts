@@ -89,7 +89,7 @@ export async function verifySupabaseToken(token: string, opts: TokenVerifyOption
         Authorization: `Bearer ${token}`,
       },
     });
-    if (res.status === 401) {
+    if (res.status === 401 || res.status === 403) {
       return { ok: false, reason: "rejected", message: "The Supabase session token was rejected. Request a new code and try again." };
     }
     if (!res.ok) {

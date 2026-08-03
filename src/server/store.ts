@@ -166,7 +166,7 @@ export class Db {
     name: string;
     email: string;
     phone?: string | null;
-    birthdate?: string;
+    birthdate?: string | null;
     requestedRole?: "runner" | "group_leader" | null;
   }): AccountRecord {
     const rec: AccountRecord = {
@@ -182,7 +182,7 @@ export class Db {
       phone: input.phone ?? null,
       phoneVerified: false,
       phoneVerifiedAt: null,
-      birthdate: input.birthdate ?? "1970-01-01",
+      birthdate: input.birthdate ?? null,
       selfieRef: null,
       selfieCapturedAt: null,
       signupIp: null,

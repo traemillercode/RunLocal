@@ -151,17 +151,30 @@ describe("applySupabaseIdentity (secure bridge rules)", () => {
 const { createClientMock } = vi.hoisted(() => ({ createClientMock: vi.fn() }));
 vi.mock("@supabase/supabase-js", () => ({ createClient: createClientMock }));
 
-import { sendOtp, supabaseClientConfig, verifyOtp, type SupabaseAuthLike } from "../src/lib/supabase";
+import { sendOtp, signInWithPassword, signUp, resetPasswordForEmail, setRecoverySession, supabaseClientConfig, updatePassword, verifyOtp, type SupabaseAuthLike } from "../src/lib/supabase";
 
 const CLIENT_ENV = {
   VITE_SUPABASE_URL: "https://abcd1234.supabase.co",
   VITE_SUPABASE_ANON_KEY: "anon-key-for-browser",
 };
 
-function authStub(): SupabaseAuthLike & { signInWithOtp: ReturnType<typeof vi.fn>; verifyOtp: ReturnType<typeof vi.fn> } {
+function authStub(): SupabaseAuthLike & {
+  signInWithOtp: ReturnType<typeof vi.fn>;
+  verifyOtp: ReturnType<typeof vi.fn>;
+  signUp: ReturnType<typeof vi.fn>;
+  signInWithPassword: ReturnType<typeof vi.fn>;
+  resetPasswordForEmail: ReturnType<typeof vi.fn>;
+  updateUser: ReturnType<typeof vi.fn>;
+  setSession: ReturnType<typeof vi.fn>;
+} {
   return {
     signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null }),
     verifyOtp: vi.fn().mockResolvedValue({ data: { session: { access_token: "tok-abc" } }, error: null }),
+    signUp: vi.fn().mockResolvedValue({ data: { session: { access_token: "tok-abc" } }, error: null }),
+    signInWithPassword: vi.fn().mockResolvedValue({ data: { session: { access_token: "tok-abc" } }, error: null }),
+    resetPasswordForEmail: vi.fn().mockResolvedValue({ data: {}, error: null }),
+    updateUser: vi.fn().mockResolvedValue({ data: { user: {} }, error: null }),
+    setSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
   };
 }
 
@@ -254,5 +267,128 @@ describe("verifyOtp (browser adapter)", () => {
     auth.verifyOtp.mockResolvedValue({ data: { session: null }, error: null });
     const result = await verifyOtp("runner@example.com", "123456", { env: CLIENT_ENV, auth });
     expect(result).toMatchObject({ ok: false, code: "verify_failed" });
+  });
+});
+
+// --------------------------------------------- password auth (primary flow)
+describe("signUp (browser adapter)", () => {
+  it("returns an explicit unconfigured state and never builds a client", async () => {
+    createClientMock.mockClear();
+    const result = await signUp("runner@example.com", "s3cret-pass", { env: {} });
+    expect(result).toMatchObject({ ok: false, code: "unconfigured" });
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  it("creates the Supabase auth user with email+password and returns the session token", async () => {
+    const auth = authStub();
+    createClientMock.mockReturnValue({ auth });
+    const result = await signUp("runner@example.com", "s3cret-pass", { env: CLIENT_ENV, auth });
+    expect(result).toEqual({ ok: true, accessToken: "tok-abc", emailConfirmationRequired: false });
+    expect(auth.signUp).toHaveBeenCalledWith({ email: "runner@example.com", password: "s3cret-pass" });
+  });
+
+  it("reports email-confirmation-required when Supabase returns no session", async () => {
+    const auth = authStub();
+    auth.signUp.mockResolvedValue({ data: { session: null, user: { id: "u1" } }, error: null });
+    const result = await signUp("runner@example.com", "s3cret-pass", { env: CLIENT_ENV, auth });
+    expect(result).toEqual({ ok: true, accessToken: null, emailConfirmationRequired: true });
+  });
+
+  it("maps an already-registered email to email_taken", async () => {
+    const auth = authStub();
+    auth.signUp.mockResolvedValue({ data: { session: null }, error: { message: "User already registered" } });
+    const result = await signUp("runner@example.com", "s3cret-pass", { env: CLIENT_ENV, auth });
+    expect(result).toMatchObject({ ok: false, code: "email_taken" });
+  });
+});
+
+describe("signInWithPassword (browser adapter)", () => {
+  it("returns the session token on a valid password login", async () => {
+    const auth = authStub();
+    createClientMock.mockReturnValue({ auth });
+    const result = await signInWithPassword("runner@example.com", "s3cret-pass", { env: CLIENT_ENV, auth });
+    expect(result).toEqual({ ok: true, accessToken: "tok-abc", emailConfirmationRequired: false });
+    expect(auth.signInWithPassword).toHaveBeenCalledWith({ email: "runner@example.com", password: "s3cret-pass" });
+  });
+
+  it("maps an unconfirmed email to an explicit email_not_confirmed error", async () => {
+    const auth = authStub();
+    auth.signInWithPassword.mockResolvedValue({ data: { session: null }, error: { message: "Email not confirmed" } });
+    const result = await signInWithPassword("runner@example.com", "s3cret-pass", { env: CLIENT_ENV, auth });
+    expect(result).toMatchObject({ ok: false, code: "email_not_confirmed" });
+  });
+
+  it("maps bad credentials to a generic invalid_credentials error (never echoes the password)", async () => {
+    const auth = authStub();
+    auth.signInWithPassword.mockResolvedValue({ data: { session: null }, error: { message: "Invalid login credentials" } });
+    const result = await signInWithPassword("runner@example.com", "wrong-pass", { env: CLIENT_ENV, auth });
+    expect(result).toMatchObject({ ok: false, code: "invalid_credentials" });
+    if (!result.ok) expect(result.message).not.toContain("wrong-pass");
+  });
+});
+
+describe("resetPasswordForEmail (browser adapter)", () => {
+  it("requests a reset with the public origin as the recovery redirect", async () => {
+    const auth = authStub();
+    createClientMock.mockReturnValue({ auth });
+    const result = await resetPasswordForEmail("runner@example.com", { env: CLIENT_ENV, auth });
+    expect(result).toEqual({ ok: true });
+    expect(auth.resetPasswordForEmail).toHaveBeenCalledWith("runner@example.com", {
+      redirectTo: "https://runlocal.ctonew.app",
+    });
+  });
+
+  it("fails closed as unconfigured and never calls the provider", async () => {
+    createClientMock.mockClear();
+    const result = await resetPasswordForEmail("runner@example.com", { env: {} });
+    expect(result).toMatchObject({ ok: false, code: "unconfigured" });
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  it("maps a provider error to an explicit send-failure message", async () => {
+    const auth = authStub();
+    auth.resetPasswordForEmail.mockResolvedValue({ data: {}, error: { message: "rate limit" } });
+    const result = await resetPasswordForEmail("runner@example.com", { env: CLIENT_ENV, auth });
+    expect(result).toMatchObject({ ok: false, code: "failed" });
+  });
+});
+
+describe("recovery session + updatePassword (browser adapter)", () => {
+  it("setRecoverySession restores the session from the link tokens", async () => {
+    const auth = authStub();
+    createClientMock.mockReturnValue({ auth });
+    const result = await setRecoverySession("at-1", "rt-1", { env: CLIENT_ENV, auth });
+    expect(result).toEqual({ ok: true });
+    expect(auth.setSession).toHaveBeenCalledWith({ access_token: "at-1", refresh_token: "rt-1" });
+  });
+
+  it("setRecoverySession maps a rejected token to an explicit expired-link error", async () => {
+    const auth = authStub();
+    auth.setSession.mockResolvedValue({ data: { session: null }, error: { message: "invalid jwt" } });
+    const result = await setRecoverySession("at-1", "rt-1", { env: CLIENT_ENV, auth });
+    expect(result).toMatchObject({ ok: false, code: "failed" });
+  });
+
+  it("updatePassword calls updateUser with the new password only", async () => {
+    const auth = authStub();
+    createClientMock.mockReturnValue({ auth });
+    const result = await updatePassword("new-s3cret", { env: CLIENT_ENV, auth });
+    expect(result).toEqual({ ok: true });
+    expect(auth.updateUser).toHaveBeenCalledWith({ password: "new-s3cret" });
+  });
+
+  it("updatePassword maps a provider error to an explicit failure", async () => {
+    const auth = authStub();
+    auth.updateUser.mockResolvedValue({ data: {}, error: { message: "jwt expired" } });
+    const result = await updatePassword("new-s3cret", { env: CLIENT_ENV, auth });
+    expect(result).toMatchObject({ ok: false, code: "failed" });
+    if (!result.ok) expect(result.message).toMatch(/expired|update/i);
+  });
+
+  it("both helpers fail closed as unconfigured and never build a client", async () => {
+    createClientMock.mockClear();
+    expect(await setRecoverySession("a", "b", { env: {} })).toMatchObject({ ok: false, code: "unconfigured" });
+    expect(await updatePassword("x", { env: {} })).toMatchObject({ ok: false, code: "unconfigured" });
+    expect(createClientMock).not.toHaveBeenCalled();
   });
 });

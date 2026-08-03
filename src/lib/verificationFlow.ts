@@ -8,7 +8,7 @@
  * tests in tests/verificationFlow.test.ts.
  */
 
-export type FlowPhase = "profile" | "email" | "code" | "consent" | "camera" | "submitted";
+export type FlowPhase = "login" | "profile" | "email" | "code" | "consent" | "camera" | "submitted";
 
 export interface FlowState {
   phase: FlowPhase;
@@ -32,18 +32,25 @@ export function initialState(): FlowState {
   return { phase: "profile", consentGiven: false, cameraOpen: false, selfieCaptured: false, serverPhase: null };
 }
 
-/** Map the server-reported phase to the first UI step the user must complete. */
+/**
+ * Map the server-reported phase to the first UI step the user must complete.
+ *
+ * Email ownership is now proven by the Supabase password login / confirmation
+ * link itself, so a pending account still marked "email"/"code" is first sent
+ * to log in (which links the identity and advances the phase server-side);
+ * the primary flow never shows a six-digit code step.
+ */
 export function stepForServerPhase(serverPhase: FlowState["serverPhase"]): FlowPhase {
   switch (serverPhase) {
     case "email":
     case "code":
-      return "email";
+      return "login";
     case "selfie":
       return "consent";
     case "pending_review":
       return "submitted";
     default:
-      return "profile";
+      return "login";
   }
 }
 
