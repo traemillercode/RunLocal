@@ -69,6 +69,6 @@ describe("public payloads never leak sensitive verification data", () => {
     expect(json).not.toContain("purgeAt");
     expect(json).not.toContain("verifiedAt");
     // Only the badge is exposed.
-    expect(Object.keys(pub).sort()).toEqual(["badge", "email", "id", "name", "phase", "phoneVerified", "profilePhotoUrl", "status"].sort());
+    expect(Object.keys(pub).sort()).toEqual(["badge", "email", "id", "name", "phase", "profilePhotoUrl", "status"].sort());
   });
 });

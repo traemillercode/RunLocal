@@ -64,27 +64,13 @@ describe("code hashing", () => {
 });
 
 describe("email provider configuration detection", () => {
-  it("reports unconfigured when required env vars are missing", () => {
-    const cfg = smsConfig({});
-    expect(cfg.configured).toBe(false);
-    expect(cfg.missing).toEqual(["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"]);
+  it("reports unconfigured when Resend vars are missing", async () => {
+    const { emailConfig } = await import("../src/server/email");
+    expect(emailConfig({}).configured).toBe(false);
+    expect(emailConfig({}).missing).toEqual(["RESEND_API_KEY", "RUN_LOCAL_EMAIL_FROM"]);
   });
-  it("reports configured when all three Twilio vars are present", () => {
-    const cfg = smsConfig({
-      TWILIO_ACCOUNT_SID: "ACxxx",
-      TWILIO_AUTH_TOKEN: "tok",
-      TWILIO_PHONE_NUMBER: "+15735550123",
-    });
-    expect(cfg.configured).toBe(true);
-    expect(cfg.missing).toEqual([]);
-  });
-  it("log mode is explicit and dev-only", () => {
-    const cfg = smsConfig({ RUN_LOCAL_SMS_MODE: "log" });
-    expect(cfg.mode).toBe("log");
-    expect(cfg.configured).toBe(true);
-  });
-  it("maskPhone never exposes the full number", () => {
-    expect(maskPhone("+15735550123")).toBe("+******0123");
-    expect(maskPhone("12")).toBe("****");
+  it("reports configured with both Resend vars", async () => {
+    const { emailConfig } = await import("../src/server/email");
+    expect(emailConfig({ RESEND_API_KEY: "key", RUN_LOCAL_EMAIL_FROM: "Run Local <v@example.com>" }).configured).toBe(true);
   });
 });
