@@ -235,3 +235,113 @@ export async function adminExportCsv(query: string, reason: string): Promise<Api
     return { ok: false, error: new ApiError(0, "network_error", "Could not reach the Run Local server.") };
   }
 }
+
+// ------------------------------------------------------------- moderated
+/**
+ * Public-safe moderation state for one city: hidden content ids, featured/
+ * pinned highlights, and RRCA badge state. Deliberately contains no flag
+ * reasons, reporters, suspension details, or sensitive records.
+ */
+export interface ModeratedHighlights {
+  id: string;
+  kind: "event" | "race" | "post";
+  refId: string;
+  featured: boolean;
+  pinned: boolean;
+}
+export interface ModeratedState {
+  cityId: string;
+  hidden: string[];
+  highlights: ModeratedHighlights[];
+  groups: { id: string; rrcaBadge: boolean }[];
+}
+export function getModerated(cityId: string): Promise<ApiResult<ModeratedState>> {
+  return request(`/api/moderated?city=${encodeURIComponent(cityId)}`);
+}
+
+// -------------------------------------------------- owner dashboard (admin)
+export interface DashboardFlagView {
+  id: string;
+  cityId: string;
+  contentId: string;
+  kind: "event" | "race" | "post";
+  refId: string;
+  title: string;
+  reason: string;
+  reporterName: string;
+  createdAt: string;
+  status: "open" | "dismissed" | "hidden";
+  resolvedAt: string | null;
+  resolvedAction: "dismiss" | "hide" | null;
+  authorAccountId: string | null;
+}
+export interface DashboardContentView {
+  id: string;
+  refId: string;
+  kind: "event" | "race" | "post";
+  title: string;
+  featured: boolean;
+  pinned: boolean;
+  hidden: boolean;
+}
+export interface DashboardGroupView {
+  id: string;
+  name: string;
+  rrcaBadge: boolean;
+  rrcaNote: string | null;
+  rrcaNoteUpdatedAt: string | null;
+}
+export interface DashboardSuspensionView {
+  accountId: string;
+  name: string;
+  email: string;
+  status: string;
+  phase: string | null;
+  role: string;
+  suspendedUntil: string | null;
+  suspensionReason: string | null;
+}
+export interface DashboardView {
+  cityId: string;
+  flags: DashboardFlagView[];
+  events: DashboardContentView[];
+  races: DashboardContentView[];
+  posts: DashboardContentView[];
+  groups: DashboardGroupView[];
+  suspensions: DashboardSuspensionView[];
+}
+
+/** Owner-only: full dashboard overview for a city (reason required, audited). */
+export function adminDashboard(cityId: string, reason: string): Promise<ApiResult<DashboardView>> {
+  return adminRequest(`/api/admin/dashboard?city=${encodeURIComponent(cityId)}`, reason);
+}
+
+/** Owner-only: dismiss (keep visible) or hide a flagged item. */
+export function adminModerateFlag(flagId: string, action: "dismiss" | "hide", reason: string): Promise<ApiResult<{ ok: true; flag: DashboardFlagView }>> {
+  return adminRequest(`/api/admin/moderate/flag/${flagId}`, reason, { method: "POST", body: JSON.stringify({ action }) });
+}
+
+/** Owner-only: reverse a hide (content visible again). */
+export function adminUnhideContent(contentId: string, reason: string): Promise<ApiResult<{ ok: true; content: DashboardContentView }>> {
+  return adminRequest(`/api/admin/moderate/unhide/${contentId}`, reason, { method: "POST", body: JSON.stringify({}) });
+}
+
+/** Owner-only: posting-blocking suspension. days null = indefinite. */
+export function adminSuspendAccount(accountId: string, days: number | null, reason: string): Promise<ApiResult<{ ok: true; account: DashboardSuspensionView }>> {
+  return adminRequest(`/api/admin/suspend/${accountId}`, reason, { method: "POST", body: JSON.stringify({ days }) });
+}
+
+/** Owner-only: lift a suspension. */
+export function adminLiftSuspension(accountId: string, reason: string): Promise<ApiResult<{ ok: true; account: DashboardSuspensionView }>> {
+  return adminRequest(`/api/admin/lift/${accountId}`, reason, { method: "POST", body: JSON.stringify({}) });
+}
+
+/** Owner-only: RRCA badge + internal note for a group. */
+export function adminSetGroupRrca(groupId: string, badge: boolean, note: string, reason: string): Promise<ApiResult<{ ok: true; group: DashboardGroupView }>> {
+  return adminRequest(`/api/admin/group/${groupId}/rrca`, reason, { method: "POST", body: JSON.stringify({ badge, note }) });
+}
+
+/** Owner-only: featured/pinned toggle for an event or race. */
+export function adminSetHighlight(contentId: string, patch: { featured?: boolean; pinned?: boolean }, reason: string): Promise<ApiResult<{ ok: true; content: DashboardContentView }>> {
+  return adminRequest(`/api/admin/content/${contentId}/highlight`, reason, { method: "POST", body: JSON.stringify(patch) });
+}

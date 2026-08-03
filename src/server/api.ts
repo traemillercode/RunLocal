@@ -28,6 +28,16 @@ import {
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
+import {
+  dashboardOverview,
+  liftSuspension,
+  moderateFlag,
+  publicModerated,
+  setContentHighlight,
+  setGroupRrca,
+  suspendAccount,
+  unhideContent,
+} from "./dashboard";
 
 export const SESSION_COOKIE = "runlocal_sid";
 export const ADMIN_COOKIE = "runlocal_admin";
@@ -234,6 +244,16 @@ async function handleApi(
 
   if (method === "POST" && !originAllowed(req)) {
     return err(res, { status: 403, error: "forbidden" }), true;
+  }
+
+  // ---- public-safe moderation state (visibility facts only) ----------------
+  // Rendered by every city page: which content is hidden, which events/races
+  // are featured/pinned, and which groups carry the RRCA badge. NO reasons,
+  // reporters, suspension details, or sensitive records — see
+  // dashboard.publicModerated.
+  if (method === "GET" && url.pathname === "/api/moderated") {
+    const cityId = url.searchParams.get("city") ?? "";
+    return ok(res, publicModerated(db, cityId)), true;
   }
 
   // ---- account creation (signup completion) ------------------------------
@@ -544,6 +564,81 @@ async function handleAdmin(
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, { results: result.data }), true;
+  }
+
+  // GET /api/admin/dashboard?city= — owner-only moderation dashboard overview
+  if (method === "GET" && url.pathname === "/api/admin/dashboard") {
+    const result = dashboardOverview(db, ctx, url.searchParams.get("city") ?? "", now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, result.data), true;
+  }
+
+  // POST /api/admin/moderate/flag/:flagId — dismiss | hide an open flag
+  const flagMatch = /^\/api\/admin\/moderate\/flag\/([a-f0-9]{32})\/?$/.exec(url.pathname);
+  if (flagMatch && method === "POST") {
+    const body = (await readJson(req)) as { action?: unknown };
+    const action = body.action === "hide" ? "hide" : body.action === "dismiss" ? "dismiss" : null;
+    if (!action) return err(res, { status: 400, error: "invalid_action", message: "Action must be 'dismiss' or 'hide'." }), true;
+    const result = moderateFlag(db, ctx, flagMatch[1], action, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, flag: result.data }), true;
+  }
+
+  // POST /api/admin/moderate/unhide/:contentId — reverse a hide
+  const unhideMatch = /^\/api\/admin\/moderate\/unhide\/([a-z]+:[A-Za-z0-9_-]+)\/?$/.exec(url.pathname);
+  if (unhideMatch && method === "POST") {
+    const result = unhideContent(db, ctx, unhideMatch[1], now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, content: result.data }), true;
+  }
+
+  // POST /api/admin/suspend/:accountId — posting-blocking suspension (days optional)
+  const suspendMatch = /^\/api\/admin\/suspend\/([a-f0-9]{32})\/?$/.exec(url.pathname);
+  if (suspendMatch && method === "POST") {
+    const body = (await readJson(req)) as { days?: unknown };
+    const days = body.days === undefined || body.days === null || body.days === "" ? null : Number(body.days);
+    const result = suspendAccount(db, ctx, suspendMatch[1], days, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, account: result.data }), true;
+  }
+
+  // POST /api/admin/lift/:accountId — lift a suspension
+  const liftMatch = /^\/api\/admin\/lift\/([a-f0-9]{32})\/?$/.exec(url.pathname);
+  if (liftMatch && method === "POST") {
+    const result = liftSuspension(db, ctx, liftMatch[1], now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, account: result.data }), true;
+  }
+
+  // POST /api/admin/group/:groupId/rrca — RRCA badge + internal note
+  const rrcaMatch = /^\/api\/admin\/group\/([A-Za-z0-9_-]+)\/rrca\/?$/.exec(url.pathname);
+  if (rrcaMatch && method === "POST") {
+    const body = (await readJson(req)) as { badge?: unknown; note?: unknown };
+    const result = setGroupRrca(db, ctx, rrcaMatch[1], { badge: body.badge === true, note: typeof body.note === "string" ? body.note : undefined }, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, group: result.data }), true;
+  }
+
+  // POST /api/admin/content/:contentId/highlight — featured/pinned toggles
+  const highlightMatch = /^\/api\/admin\/content\/([a-z]+:[A-Za-z0-9_-]+)\/highlight\/?$/.exec(url.pathname);
+  if (highlightMatch && method === "POST") {
+    const body = (await readJson(req)) as { featured?: unknown; pinned?: unknown };
+    const result = setContentHighlight(
+      db,
+      ctx,
+      highlightMatch[1],
+      { featured: typeof body.featured === "boolean" ? body.featured : undefined, pinned: typeof body.pinned === "boolean" ? body.pinned : undefined },
+      now,
+    );
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, content: result.data }), true;
   }
 
   // GET /api/admin/search?q=

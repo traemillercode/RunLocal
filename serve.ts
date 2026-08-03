@@ -28,6 +28,7 @@ import { extname, join, normalize } from "node:path";
 import { Db } from "./src/server/store";
 import { apiHandler, pruneSessionsWith } from "./src/server/api";
 import { purgeEligible } from "./src/server/retention";
+import { seedContentRegistry, seedSampleFlags } from "./src/server/contentSeed";
 
 const root = normalize(process.env.RUN_LOCAL_ROOT ?? join(import.meta.dirname, "dist"));
 const port = Number(process.env.RUN_LOCAL_PORT ?? 3000);
@@ -36,6 +37,12 @@ const retentionYears = Math.max(1, Number(process.env.RUN_LOCAL_RETENTION_YEARS 
 
 const db = new Db({ dataDir, retentionYears });
 await db.load();
+
+// Mirror the seeded city content into the moderation registry (idempotent,
+// preserves owner decisions) and seed the labeled sample flags once.
+seedContentRegistry(db);
+seedSampleFlags(db);
+await db.persist();
 
 // Retention purge on boot, then daily. Never keep verification data forever.
 let lastPurge = 0;

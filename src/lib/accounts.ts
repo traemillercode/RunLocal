@@ -43,6 +43,11 @@ export interface PublicAccount {
    * self-assign the role — never derive it from the email client-side.
    */
   isOwner: boolean;
+  /**
+   * Posting-blocking suspension, computed SERVER-side against the current
+   * time. The client may only see the boolean — never the expiry or reason.
+   */
+  suspended: boolean;
   profilePhotoUrl: string | null;
 }
 
@@ -63,6 +68,11 @@ export function roleOf(me: Me): AccountRole {
 
 export function isVerified(me: Me): boolean {
   return roleOf(me) === "verified";
+}
+
+/** True when a signed-in account's posting rights are suspended (server-computed). */
+export function isSuspended(me: Me): boolean {
+  return me.status === "signed_in" && me.account.suspended === true;
 }
 
 /** Human-readable label for a pending funnel stage (UI copy only). */

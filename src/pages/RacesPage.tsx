@@ -1,8 +1,10 @@
+import { useMemo } from "react";
 import { Chip, Icon } from "../components/ui";
 import { formatRaceDate } from "../lib/dates";
+import { useModerated } from "../state/moderated";
 import type { City, Race } from "../types";
 
-function RaceCard({ race }: { race: Race }) {
+function RaceCard({ race, featured = false, pinned = false }: { race: Race; featured?: boolean; pinned?: boolean }) {
   return (
     <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
       <div className="flex items-start justify-between gap-3 p-4 pb-3">
@@ -10,7 +12,19 @@ function RaceCard({ race }: { race: Race }) {
           <h3 className="text-[15px] font-bold leading-snug text-slate-900">{race.name}</h3>
           <p className="mt-0.5 text-[13px] font-medium text-slate-500">{race.distance}</p>
         </div>
-        {race.registrationOpen ? <Chip tone="emerald">Registration open</Chip> : <Chip tone="amber">{race.registrationNote ?? "Registration TBA"}</Chip>}
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {featured ? (
+            <Chip tone="volt">
+              <Icon name="spark" className="h-3 w-3" /> Featured
+            </Chip>
+          ) : null}
+          {pinned ? (
+            <Chip tone="amber">
+              <Icon name="pin" className="h-3 w-3" /> Pinned
+            </Chip>
+          ) : null}
+          {race.registrationOpen ? <Chip tone="emerald">Registration open</Chip> : <Chip tone="amber">{race.registrationNote ?? "Registration TBA"}</Chip>}
+        </div>
       </div>
       <div className="space-y-1.5 px-4 pb-4 text-[13px] text-slate-600">
         <p className="flex items-center gap-2">
@@ -43,6 +57,21 @@ function RaceCard({ race }: { race: Race }) {
 }
 
 export function RacesPage({ city }: { city: City }) {
+  const { hidden, highlights } = useModerated();
+  const races = useMemo(() => {
+    return [...city.races]
+      // Owner-hidden races are excluded from public rendering.
+      .filter((r) => !hidden.has(`race:${r.id}`))
+      // Featured first, then pinned — server-driven ordering facts.
+      .sort((a, b) => {
+        const ha = highlights.get(`race:${a.id}`);
+        const hb = highlights.get(`race:${b.id}`);
+        const ra = Number(!!ha?.featured) * 2 + Number(!!ha?.pinned);
+        const rb = Number(!!hb?.featured) * 2 + Number(!!hb?.pinned);
+        return rb - ra;
+      });
+  }, [city.races, hidden, highlights]);
+
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
       <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Races</h1>
@@ -51,11 +80,14 @@ export function RacesPage({ city }: { city: City }) {
       </p>
 
       <ul className="mt-4 space-y-3">
-        {city.races.map((r) => (
-          <li key={r.id}>
-            <RaceCard race={r} />
-          </li>
-        ))}
+        {races.map((r) => {
+          const hl = highlights.get(`race:${r.id}`);
+          return (
+            <li key={r.id}>
+              <RaceCard race={r} featured={hl?.featured} pinned={hl?.pinned} />
+            </li>
+          );
+        })}
       </ul>
 
       <div className="mt-4 flex items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white/60 p-4">

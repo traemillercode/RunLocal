@@ -3,6 +3,7 @@ import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { Chip, Icon, PillButton, Sheet } from "../components/ui";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
+import { useModerated } from "../state/moderated";
 import { FORUM_SECTIONS, type City, type ForumPost, type ForumSection, type QaSort } from "../types";
 
 const SECTION_META: Record<ForumSection, { icon: string; active: string; badge: string; dot: string }> = {
@@ -75,13 +76,16 @@ function PostCard({
 export function ForumPage({ city }: { city: City }) {
   const toast = useToast();
   const { role } = useAccount();
+  const { hidden } = useModerated();
   const [section, setSection] = useState<ForumSection>("announcements");
   const [qaSort, setQaSort] = useState<QaSort>("newest");
   const [gateOpen, setGateOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
   const posts = useMemo(() => {
-    let list = city.forum.filter((p) => p.section === section);
+    // Owner-hidden posts are excluded from public rendering.
+    const visible = city.forum.filter((p) => !hidden.has(`post:${p.id}`));
+    let list = visible.filter((p) => p.section === section);
     if (section === "qa") {
       const sorted = [...list];
       if (qaSort === "newest") sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -90,7 +94,7 @@ export function ForumPage({ city }: { city: City }) {
       return sorted;
     }
     return [...list].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
-  }, [city.forum, section, qaSort]);
+  }, [city.forum, hidden, section, qaSort]);
 
   const onReply = (title: string) => {
     toast(`Replies need a verified profile — "${title}"`, "info");
