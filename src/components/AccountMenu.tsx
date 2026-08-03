@@ -5,11 +5,15 @@
  * pending: verification progress + read-only state; verified: badge; owner:
  * Admin control center. Every row is a 44px touch target. The owner flag comes
  * from the server's `/api/me` payload — nothing here inspects emails or roles.
+ *
+ * `AccountMenuContent` is the pure presentational body (no hooks) so UI tests
+ * can render the real guest menu markup with react-dom/server.
  */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { profileMenuEntries } from "../lib/accountMenu";
+import { profileMenuEntries, type MenuEntry } from "../lib/accountMenu";
 import { phaseLabel, roleLabel } from "../lib/accounts";
+import type { Me } from "../lib/accounts";
 import { useAccount } from "../state/account";
 import { Icon, Sheet } from "./ui";
 
@@ -21,6 +25,98 @@ export function initials(name: string): string {
       .slice(0, 2)
       .map((p) => p[0]?.toUpperCase() ?? "")
       .join("") || "R"
+  );
+}
+
+/** Presentational menu body — driven by props so tests can render it without a router. */
+export function AccountMenuContent({
+  me,
+  backendAvailable,
+  onNavigate,
+  onLogout,
+}: {
+  me: Me | null;
+  backendAvailable: boolean;
+  onNavigate: (to: string) => void;
+  onLogout: () => void;
+}) {
+  const account = me?.status === "signed_in" ? me.account : null;
+  const photo = account?.profilePhotoUrl ?? null;
+
+  const handleEntry = (entry: MenuEntry) => {
+    if (entry.key === "logout") onLogout();
+    else if (entry.to) onNavigate(entry.to);
+  };
+
+  return (
+    <>
+      {!backendAvailable ? (
+        <p className="mb-3 rounded-xl bg-amber-50 p-3 text-[12px] leading-relaxed text-amber-900">
+          The Run Local server is unreachable right now — signing in and verification are unavailable until it's back.
+        </p>
+      ) : null}
+
+      {account ? (
+        <div className="mb-3 flex items-center gap-3 rounded-2xl bg-slate-50 p-3">
+          {photo ? (
+            <img src={photo} alt="" className="h-11 w-11 rounded-full object-cover" />
+          ) : (
+            <span className="grid h-11 w-11 place-items-center rounded-full bg-[#0b2b22] text-sm font-extrabold text-[#c8f169]">
+              {initials(account.name)}
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-slate-900">{account.name}</p>
+            <p className="truncate text-xs text-slate-500">
+              {account.status === "verified" ? (
+                <>
+                  <span className="font-semibold text-emerald-700">Verified</span> · {roleLabel(account.role)}
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-amber-700">Pending</span> · {phaseLabel(account.phase)}
+                </>
+              )}
+              {account.isOwner ? " · Super Admin" : ""}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {account && account.status === "pending" ? (
+        <p className="mb-3 rounded-xl bg-amber-50 p-3 text-[12px] leading-relaxed text-amber-900">
+          <span className="font-semibold">Read-only account.</span> No RSVPs, posts, or submissions until your
+          email + selfie verification is approved.
+        </p>
+      ) : null}
+
+      <ul className="divide-y divide-slate-100">
+        {profileMenuEntries(me).entries.map((entry) => (
+          <li key={entry.key}>
+            <button
+              type="button"
+              onClick={() => handleEntry(entry)}
+              className={`flex min-h-11 w-full items-center gap-3 px-1 py-3 text-left ${
+                entry.danger ? "text-red-600" : "text-slate-800"
+              } active:bg-slate-50`}
+            >
+              <span
+                className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
+                  entry.danger ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                <Icon name={entry.icon} className="h-4.5 w-4.5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-semibold">{entry.label}</span>
+                {entry.hint ? <span className="block truncate text-xs text-slate-500">{entry.hint}</span> : null}
+              </span>
+              {entry.danger ? null : <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-slate-300" />}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -66,80 +162,19 @@ export function AccountMenuButton() {
         title={account ? "Account" : "Run Local account"}
         subtitle={account ? account.name : "Sign up or log in to verify and participate"}
       >
-        {!backendAvailable ? (
-          <p className="mb-3 rounded-xl bg-amber-50 p-3 text-[12px] leading-relaxed text-amber-900">
-            The Run Local server is unreachable right now — signing in and verification are unavailable until it's back.
-          </p>
-        ) : null}
-
-        {account ? (
-          <div className="mb-3 flex items-center gap-3 rounded-2xl bg-slate-50 p-3">
-            {photo ? (
-              <img src={photo} alt="" className="h-11 w-11 rounded-full object-cover" />
-            ) : (
-              <span className="grid h-11 w-11 place-items-center rounded-full bg-[#0b2b22] text-sm font-extrabold text-[#c8f169]">
-                {initials(account.name)}
-              </span>
-            )}
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-slate-900">{account.name}</p>
-              <p className="truncate text-xs text-slate-500">
-                {account.status === "verified" ? (
-                  <>
-                    <span className="font-semibold text-emerald-700">Verified</span> · {roleLabel(account.role)}
-                  </>
-                ) : (
-                  <>
-                    <span className="font-semibold text-amber-700">Pending</span> · {phaseLabel(account.phase)}
-                  </>
-                )}
-                {account.isOwner ? " · Super Admin" : ""}
-              </p>
-            </div>
-          </div>
-        ) : null}
-
-        {account && account.status === "pending" ? (
-          <p className="mb-3 rounded-xl bg-amber-50 p-3 text-[12px] leading-relaxed text-amber-900">
-            <span className="font-semibold">Read-only account.</span> No RSVPs, posts, or submissions until your
-            email + selfie verification is approved.
-          </p>
-        ) : null}
-
-        <ul className="divide-y divide-slate-100">
-          {profileMenuEntries(me).entries.map((entry) => (
-            <li key={entry.key}>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  if (entry.key === "logout") {
-                    void signOut();
-                    navigate("/");
-                  } else if (entry.to) {
-                    navigate(entry.to);
-                  }
-                }}
-                className={`flex min-h-11 w-full items-center gap-3 px-1 py-3 text-left ${
-                  entry.danger ? "text-red-600" : "text-slate-800"
-                } active:bg-slate-50`}
-              >
-                <span
-                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
-                    entry.danger ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  <Icon name={entry.icon} className="h-4.5 w-4.5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[14px] font-semibold">{entry.label}</span>
-                  {entry.hint ? <span className="block truncate text-xs text-slate-500">{entry.hint}</span> : null}
-                </span>
-                {entry.danger ? null : <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-slate-300" />}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <AccountMenuContent
+          me={me}
+          backendAvailable={backendAvailable}
+          onNavigate={(to) => {
+            setOpen(false);
+            navigate(to);
+          }}
+          onLogout={() => {
+            setOpen(false);
+            void signOut();
+            navigate("/");
+          }}
+        />
       </Sheet>
     </>
   );
