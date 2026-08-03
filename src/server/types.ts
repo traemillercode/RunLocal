@@ -48,7 +48,13 @@ export interface AccountRecord {
   phone: string | null;
   phoneVerified: boolean;
   phoneVerifiedAt: string | null;
-  birthdate: string;
+  /**
+   * Birthdate collected at signup (server-enforced minimum age). Null only for
+   * accounts auto-created by /api/login/check from a verified Supabase
+   * identity where the birthdate was never collected — those users fill it in
+   * through the normal signup-metadata path on their next full signup.
+   */
+  birthdate: string | null;
   /** Filename in uploads/private — the live selfie capture. NEVER public. */
   selfieRef: string | null;
   selfieCapturedAt: string | null;

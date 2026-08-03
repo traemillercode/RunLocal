@@ -99,10 +99,11 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
         <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <h2 className="text-[15px] font-bold text-slate-900">Create your runner profile</h2>
           <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
-            Verified runners get RSVPs, a public profile, and posting access. Verification uses an email code, then a live selfie — reviewed by a person, never shown publicly.
+            Verified runners get RSVPs, a public profile, and posting access. Sign up with your email and password,
+            confirm your email, then complete a live selfie — reviewed by a person, never shown publicly.
           </p>
-          <PillButton variant="secondary" onClick={() => navigate("/verify")} className="mt-3.5 w-full">
-            <Icon name="shield" className="h-4 w-4" /> Get verified
+          <PillButton variant="secondary" onClick={() => navigate("/login?mode=signup")} className="mt-3.5 w-full">
+            <Icon name="shield" className="h-4 w-4" /> Create account
           </PillButton>
         </section>
       ) : null}
