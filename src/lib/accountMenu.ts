@@ -34,7 +34,7 @@ export function profileMenuEntries(me: Me | null): { entries: MenuEntry[]; signe
     return {
       signedInLabel: "",
       entries: [
-        { key: "signup", label: "Sign up", icon: "plus", to: "/verify" },
+        { key: "signup", label: "Sign up", icon: "plus", to: "/login?mode=signup" },
         { key: "login", label: "Log in", icon: "chevronRight", to: "/login" },
       ],
     };

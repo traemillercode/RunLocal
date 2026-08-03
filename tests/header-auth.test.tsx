@@ -145,7 +145,7 @@ describe("account popup menu (UI)", () => {
     expect(login?.label).toBe("Log in");
     expect(login?.to).toBe("/login");
     const signup = guest.entries.find((e) => e.key === "signup");
-    expect(signup?.to).toBe("/verify");
+    expect(signup?.to).toBe("/login?mode=signup");
   });
 
   it("keeps the guest Sign up / Log in rows and 44px targets in the popup", () => {
