@@ -47,10 +47,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
 }
 
 // ------------------------------------------------------------------ health
+export interface EmailSenderHealth {
+  status: "unconfigured" | "blocked" | "test_mode" | "custom_domain";
+  verifiable: boolean;
+  /** false = determinably invalid (consumer mailbox, test sender); null = undetermined. */
+  verified: boolean | null;
+  domain: string | null;
+  reason: "missing_sender" | "consumer_domain" | "resend_dev_test_sender" | "not_confirmed";
+}
 export interface HealthInfo {
   ok: true;
   emailConfigured: boolean;
   emailMissing: string[];
+  emailSender: EmailSenderHealth;
   adminConfigured: boolean;
   retentionYears: number;
   retention: { retentionYears: number; eligibleForPurge: number; totalAccounts: number };
@@ -65,7 +74,7 @@ export function getMe(): Promise<ApiResult<Me>> {
 }
 
 // ---------------------------------------------------------------- accounts
-export function createAccount(input: { name: string; email: string; phone?: string; birthdate: string }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
+export function createAccount(input: { name: string; email: string; phone?: string; birthdate: string; requestedRole?: "runner" | "group_leader" }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
   return request("/api/accounts", { method: "POST", body: JSON.stringify(input) });
 }
 
@@ -95,6 +104,15 @@ export function deleteAccount(): Promise<ApiResult<{ status: string }>> {
   return request("/api/account/delete", { method: "POST" });
 }
 
+// ------------------------------------------------------------ email sign-in
+export function loginStart(email: string): Promise<ApiResult<{ status: string; resendInSec: number }>> {
+  return request("/api/login/start", { method: "POST", body: JSON.stringify({ email }) });
+}
+
+export function loginCheck(email: string, code: string): Promise<ApiResult<{ status: string; account: import("./accounts").PublicAccount }>> {
+  return request("/api/login/check", { method: "POST", body: JSON.stringify({ email, code }) });
+}
+
 // -------------------------------------------------------------------- admin
 export interface AdminSearchRow {
   id: string;
@@ -105,6 +123,16 @@ export interface AdminSearchRow {
   phoneLast4: string | null;
   createdAt: string;
   verifiedAt: string | null;
+}
+
+/** Owner-only pending queue row — redacted public fields only. */
+export interface PendingQueueRow {
+  id: string;
+  name: string;
+  email: string;
+  phase: string;
+  requestedRole: "runner" | "group_leader" | null;
+  signupAt: string;
 }
 
 export interface AdminRecordView extends AdminSearchRow {
@@ -157,8 +185,13 @@ export function adminGetRecord(id: string, reason: string): Promise<ApiResult<{ 
   return adminRequest(`/api/admin/records/${id}`, reason);
 }
 
-export function adminSetStatus(id: string, action: "approve" | "reject", reason: string): Promise<ApiResult<{ ok: true }>> {
-  return adminRequest(`/api/admin/records/${id}/${action}`, reason, { method: "POST" });
+export function adminSetStatus(id: string, action: "approve" | "reject", reason: string, role: "runner" | "group_leader" = "runner"): Promise<ApiResult<{ ok: true }>> {
+  return adminRequest(`/api/admin/records/${id}/${action}?role=${role}`, reason, { method: "POST" });
+}
+
+/** Owner-only: fetch the pending-users queue (audited with the reason). */
+export function adminPending(reason: string): Promise<ApiResult<{ results: PendingQueueRow[] }>> {
+  return adminRequest("/api/admin/pending", reason);
 }
 
 export function adminDeleteRecord(id: string, reason: string): Promise<ApiResult<{ ok: true }>> {

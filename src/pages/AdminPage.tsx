@@ -14,7 +14,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
-import type { AdminRecordView, AdminSearchRow, AuditEntryView } from "../lib/api";
+import type { AdminRecordView, AdminSearchRow, AuditEntryView, PendingQueueRow } from "../lib/api";
+import { useAccount } from "../state/account";
 
 const inputCls =
   "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
@@ -42,6 +43,11 @@ function maskIp(ip: string | null): string {
 
 export function AdminPage() {
   const navigate = useNavigate();
+  const { me } = useAccount();
+  // The owner/super-admin (server-derived isOwner flag from /api/me) gets the
+  // control center through their normal signed-in session — no key needed.
+  // Everyone else sees the key-based safety tool login exactly as before.
+  const isOwner = me?.status === "signed_in" && me.account.isOwner === true;
   const [loading, setLoading] = useState(true);
   const [health, setHealth] = useState<api.HealthInfo | null>(null);
   const [backendDown, setBackendDown] = useState(false);
@@ -58,6 +64,11 @@ export function AdminPage() {
   const [reason, setReason] = useState("");
   const [results, setResults] = useState<AdminSearchRow[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  // pending queue (owner-only)
+  const [pending, setPending] = useState<PendingQueueRow[] | null>(null);
+  const [queueError, setQueueError] = useState<string | null>(null);
+  const [roleSel, setRoleSel] = useState<Record<string, "runner" | "group_leader">>({});
 
   // detail
   const [record, setRecord] = useState<AdminRecordView | null>(null);
@@ -78,7 +89,7 @@ export function AdminPage() {
     else setAuthError(message ?? "Request failed.");
   }, []);
 
-  // Initial load: health + try an admin login probe? No — just health.
+  // Initial load: health + (owner auto-auth | admin-session probe).
   useEffect(() => {
     let alive = true;
     void api.getHealth().then((r) => {
@@ -87,6 +98,12 @@ export function AdminPage() {
       if (r.ok) {
         setHealth(r.data);
         setBackendDown(false);
+        if (isOwner) {
+          // Owner/super-admin: authorized via the signed-in user session.
+          setAuthed(true);
+          setAdminName(me?.status === "signed_in" ? me.account.name : "Super Admin");
+          return;
+        }
         // Probe admin session with a benign action that audits nothing? Use audit list with a generic reason.
         void api.adminAudit(1, "Session check").then((probe) => {
           if (probe.ok) {
@@ -105,7 +122,7 @@ export function AdminPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [isOwner, me]);
 
   const doLogin = async () => {
     setBusy(true);
@@ -128,6 +145,71 @@ export function AdminPage() {
     setRecord(null);
     setAudit(null);
     setPurgeResult(null);
+    setPending(null);
+  };
+
+  // ---- owner-only pending queue -----------------------------------------
+  const loadQueue = async () => {
+    setQueueError(null);
+    if (!reason.trim() || reason.trim().length < 5) {
+      setQueueError("Enter a reason (min 5 characters) to load the pending queue.");
+      return;
+    }
+    const r = await api.adminPending(reason.trim());
+    if (r.ok) {
+      setPending(r.data.results);
+      setQueueError(null);
+    } else {
+      setQueueError(
+        r.error.status === 401
+          ? "Only the owner/super-admin can view the pending queue."
+          : r.error.code === "reason_required"
+            ? "A reason is required to load the queue."
+            : r.error.message ?? "Could not load the queue.",
+      );
+    }
+  };
+
+  const approvePending = async (row: PendingQueueRow) => {
+    setQueueError(null);
+    if (!reason.trim() || reason.trim().length < 5) {
+      setQueueError("Enter a reason (min 5 characters) for this approval.");
+      return;
+    }
+    // Honesty gate, mirrored server-side: no approval without a submitted
+    // selfie in review (phase pending_review).
+    if (row.phase !== "pending_review") {
+      setQueueError("This user hasn't completed email + selfie verification yet — approval isn't allowed before the pending_review state.");
+      return;
+    }
+    const role = roleSel[row.id] ?? row.requestedRole ?? "runner";
+    const roleName = role === "group_leader" ? "Group Leader" : "Verified Runner";
+    if (!window.confirm(`Approve ${row.name} as ${roleName}? This is audited.`)) return;
+    const r = await api.adminSetStatus(row.id, "approve", reason.trim(), role);
+    if (r.ok) {
+      setQueueError(null);
+      void loadQueue();
+    } else if (r.error.code === "verification_incomplete") {
+      setQueueError("Approval blocked: the required verification state (email + selfie, pending_review) isn't complete.");
+    } else {
+      setQueueError(r.error.status === 401 ? "Your admin session expired — sign in again." : r.error.message ?? "Approval failed.");
+    }
+  };
+
+  const rejectPending = async (row: PendingQueueRow) => {
+    setQueueError(null);
+    if (!reason.trim() || reason.trim().length < 5) {
+      setQueueError("Enter a reason (min 5 characters) for this rejection.");
+      return;
+    }
+    if (!window.confirm(`Reject ${row.name}'s pending verification? This is audited.`)) return;
+    const r = await api.adminSetStatus(row.id, "reject", reason.trim());
+    if (r.ok) {
+      setQueueError(null);
+      void loadQueue();
+    } else {
+      setQueueError(r.error.status === 401 ? "Your admin session expired — sign in again." : r.error.message ?? "Rejection failed.");
+    }
   };
 
   const doSearch = async () => {
@@ -268,7 +350,7 @@ export function AdminPage() {
     );
   }
 
-  if (!health?.adminConfigured) {
+  if (!health?.adminConfigured && !isOwner) {
     return (
       <div className="mx-auto w-full max-w-md px-4 pb-32 pt-6">
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
@@ -306,13 +388,77 @@ export function AdminPage() {
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Admin safety tool</h1>
-          <p className="text-sm font-medium text-slate-500">Signed in as {adminName}</p>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Admin control center</h1>
+          <p className="text-sm font-medium text-slate-500">
+            Signed in as {adminName}
+            {isOwner ? <span className="ml-1.5 font-semibold text-[#0b2b22]">(Super Admin)</span> : null}
+          </p>
         </div>
         <button type="button" onClick={() => void doLogout()} className="min-h-11 rounded-full px-4 text-sm font-semibold text-slate-600 active:bg-slate-100">
           Sign out
         </button>
       </div>
+
+      {/* Owner-only pending queue */}
+      {isOwner ? (
+        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+          <h2 className="text-[15px] font-bold text-slate-900">Pending users</h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Accounts awaiting verification, newest first. Rows are redacted — no phone, selfie, or IP data here.
+            Approve only after the user reached the "Under review" state (email + selfie submitted).
+          </p>
+          <div className="mt-3 space-y-3">
+            <textarea rows={2} placeholder="Reason for accessing the queue (required, audited)" value={reason} onChange={(e) => setReason(e.target.value)} className={reasonCls} />
+            <PillButton variant="primary" className="w-full" onClick={() => void loadQueue()}>
+              <Icon name="search" className="h-4 w-4" /> Load pending queue
+            </PillButton>
+            {queueError ? <Err msg={queueError} /> : null}
+          </div>
+          {pending !== null && (
+            <ul className="mt-4 space-y-3">
+              {pending.length === 0 ? <li className="py-2 text-sm text-slate-500">No pending accounts right now.</li> : null}
+              {pending.map((row) => (
+                <li key={row.id} className="rounded-xl border border-slate-200 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-800">{row.name}</p>
+                      <p className="truncate text-xs text-slate-500">{row.email}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${row.phase === "pending_review" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                      {row.phase}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                      Approve as
+                      <select
+                        value={roleSel[row.id] ?? row.requestedRole ?? "runner"}
+                        onChange={(e) => setRoleSel((m) => ({ ...m, [row.id]: e.target.value === "group_leader" ? "group_leader" : "runner" }))}
+                        className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-800"
+                      >
+                        <option value="runner">Verified Runner</option>
+                        <option value="group_leader">Group Leader</option>
+                      </select>
+                      {row.requestedRole ? <span className="text-slate-400">(requested {row.requestedRole})</span> : null}
+                    </label>
+                    <PillButton variant="secondary" className="ml-auto px-4" onClick={() => void approvePending(row)}>
+                      Approve
+                    </PillButton>
+                    <PillButton variant="ghost" className="px-4" onClick={() => void rejectPending(row)}>
+                      Reject
+                    </PillButton>
+                  </div>
+                  {row.phase !== "pending_review" ? (
+                    <p className="mt-1.5 text-[11px] text-amber-700">
+                      Verification incomplete — approval is disabled until this user finishes email + selfie (Under review).
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
 
       {/* Search */}
       <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">

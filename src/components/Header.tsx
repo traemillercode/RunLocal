@@ -1,30 +1,65 @@
+import { Link, useNavigate } from "react-router-dom";
 import type { City } from "../types";
+import { AccountMenuButton } from "./AccountMenu";
+import { useAccount } from "../state/account";
 import { Chip, Icon } from "./ui";
 import { Sheet } from "./ui";
+
+/**
+ * Always-visible guest CTA in the header. Guests get a clear "Log in"
+ * button next to the account avatar so sign-in is reachable on mobile
+ * without hunting through menus — and it never sits behind the bottom nav
+ * (it lives in the sticky top header). Hidden once a session exists.
+ * Purely a link to /login — no client-side role logic.
+ */
+function GuestLoginCta() {
+  const navigate = useNavigate();
+  const { me } = useAccount();
+  if (me?.status === "signed_in") return null;
+  return (
+    <button
+      type="button"
+      onClick={() => navigate("/login")}
+      aria-label="Log in"
+      className="flex h-9 shrink-0 items-center rounded-full bg-[#c8f169] px-3 text-[13px] font-extrabold text-[#0b2b22] active:bg-[#b9e355]"
+    >
+      Log in
+    </button>
+  );
+}
 
 export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet: () => void }) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b2b22] text-white shadow-sm">
-      <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between gap-3 px-4">
-        <div className="flex min-w-0 items-center gap-2.5">
+      <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between gap-2 px-3">
+        {/* Clickable logo / title — always returns to the city home feed. */}
+        <Link
+          to="/"
+          aria-label="Run Local — home"
+          className="flex min-w-0 items-center gap-2.5 rounded-lg active:opacity-80"
+        >
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#c8f169] text-[#0b2b22]">
             <Icon name="pin" className="h-5 w-5" />
           </span>
           <span className="truncate text-[17px] font-extrabold tracking-tight">
             Run <span className="text-[#c8f169]">Local</span>
           </span>
+        </Link>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onOpenCitySheet}
+            aria-label={`Change city — current: ${city.name}, ${city.state}`}
+            className="flex h-11 items-center gap-1.5 rounded-full bg-white/10 pl-3 pr-2 text-sm font-semibold ring-1 ring-white/20 active:bg-white/20"
+          >
+            <span className="max-w-24 truncate">
+              {city.name}, {city.state}
+            </span>
+            <Icon name="chevronDown" className="h-4 w-4 text-[#c8f169]" />
+          </button>
+          <GuestLoginCta />
+          <AccountMenuButton />
         </div>
-        <button
-          type="button"
-          onClick={onOpenCitySheet}
-          aria-label={`Change city — current: ${city.name}, ${city.state}`}
-          className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-white/10 pl-3.5 pr-2 text-sm font-semibold ring-1 ring-white/20 active:bg-white/20"
-        >
-          <span className="max-w-28 truncate">
-            {city.name}, {city.state}
-          </span>
-          <Icon name="chevronDown" className="h-4 w-4 text-[#c8f169]" />
-        </button>
       </div>
     </header>
   );

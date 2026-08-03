@@ -118,10 +118,10 @@ describe("admin authorization", () => {
     expect(audits.some((a) => a.action === "admin.view_record" && a.targetId === rec.id)).toBe(true);
   });
 
-  it("approve transitions pending → verified and is audited", () => {
+  it("approve transitions pending → verified (requires pending_review + selfie) and is audited", () => {
     const db = createMemoryStore();
     const rec = db.createAccount({ name: "A", email: "a@x.com" });
-    db.updateAccount(rec.id, { phase: "pending_review" });
+    db.updateAccount(rec.id, { phase: "pending_review", selfieRef: `${rec.id}_selfie.jpg` });
     const login = adminLogin(db, KEY, "198.51.100.7", T0);
     if (!login.ok) throw new Error("login failed");
     const r = adminSetStatus(db, ctx(login.data.sessionId, "identity confirmed by staff"), rec.id, "verified", T0);

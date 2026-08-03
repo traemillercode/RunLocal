@@ -48,7 +48,7 @@ export function Sheet({ open, onClose, title, subtitle, children }: SheetProps) 
             <Icon name="close" className="h-5 w-5" />
           </button>
         </div>
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
+        <div className="overflow-y-auto px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>
       </div>
     </div>
   );

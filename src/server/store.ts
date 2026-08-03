@@ -72,10 +72,14 @@ export interface PublicAccount {
   status: AccountRecord["status"];
   phase: VerifyPhase | null;
   badge: "verified" | null;
+  /** Assigned runner role (label only — never a power source). */
+  role: AccountRecord["role"];
+  /** Server-derived super-admin flag (from RUN_LOCAL_OWNER_EMAIL). */
+  isOwner: boolean;
   profilePhotoUrl: string | null;
 }
 
-export function toPublicAccount(rec: AccountRecord): PublicAccount {
+export function toPublicAccount(rec: AccountRecord, isOwner = false): PublicAccount {
   return {
     id: rec.id,
     name: rec.name,
@@ -83,6 +87,8 @@ export function toPublicAccount(rec: AccountRecord): PublicAccount {
     status: rec.status,
     phase: rec.status === "pending" ? rec.phase : null,
     badge: rec.status === "verified" ? "verified" : null,
+    role: rec.role,
+    isOwner,
     profilePhotoUrl: rec.profilePhotoRef ? `/uploads/public/${rec.profilePhotoRef}` : null,
   };
 }
@@ -156,13 +162,21 @@ export class Db {
     const key = email.trim().toLowerCase();
     return [...this.accounts.values()].find((a) => a.email.toLowerCase() === key);
   }
-  createAccount(input: { name: string; email: string; phone?: string | null; birthdate?: string }): AccountRecord {
+  createAccount(input: {
+    name: string;
+    email: string;
+    phone?: string | null;
+    birthdate?: string;
+    requestedRole?: "runner" | "group_leader" | null;
+  }): AccountRecord {
     const rec: AccountRecord = {
       id: newId(),
       name: input.name.trim().slice(0, 60),
       email: input.email.trim().toLowerCase(),
       status: "pending",
       phase: "email",
+      role: "runner",
+      requestedRole: input.requestedRole ?? null,
       profilePhotoRef: null,
       phone: input.phone ?? null,
       phoneVerified: false,

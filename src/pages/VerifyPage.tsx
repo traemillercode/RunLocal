@@ -4,7 +4,9 @@
  * profile → email code → consent → camera → submitted
  *
  * Honesty rules baked in:
- *  - Phone is collected as an optional, unverified profile field only.
+ *  - Phone is NOT collected in this flow — it remains an optional, unverified
+ *    profile field reserved for a future upgrade. Verification is email code
+ *    only; there is no SMS.
  *  - Code uses auto-advancing numeric digit boxes (inputMode="numeric").
  *  - The camera opens ONLY after explicit consent (state machine enforced).
  *  - Selfie capture is getUserMedia-only; no gallery/file input.
@@ -13,9 +15,11 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CameraCapture } from "../components/CameraCapture";
+import { CodeEntry } from "../components/CodeEntry";
 import { Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
-import { CODE_LENGTH, applyBackspace, applyDigit, applyPaste, codeValue, emptyCodeState, isComplete, setFocus, type CodeState } from "../lib/numericCode";
+import { validateBirthdate } from "../lib/birthdate";
+import { CODE_LENGTH, emptyCodeState, type CodeState } from "../lib/numericCode";
 import { canOpenCamera, initialState, verifyReducer } from "../lib/verificationFlow";
 import { useAccount } from "../state/account";
 
@@ -80,81 +84,6 @@ function Notice({ tone, children }: { tone: "amber" | "sky" | "emerald" | "red";
   return <p className={`flex items-start gap-2 rounded-xl p-3.5 text-[13px] leading-relaxed ${tones[tone]}`}>{children}</p>;
 }
 
-// ------------------------------------------------------------- code entry
-function CodeEntry({
-  value,
-  onChange,
-  onComplete,
-  disabled,
-}: {
-  value: CodeState;
-  onChange: (s: CodeState) => void;
-  onComplete: (code: string) => void;
-  disabled?: boolean;
-}) {
-  const refs = useRef<(HTMLInputElement | null)[]>([]);
-  const completedRef = useRef(false);
-
-  const commit = useCallback(
-    (next: CodeState) => {
-      onChange(next);
-      const el = refs.current[next.focus];
-      if (el && document.activeElement !== el) el.focus();
-      if (isComplete(next)) {
-        if (!completedRef.current) {
-          completedRef.current = true;
-          onComplete(codeValue(next));
-        }
-      } else {
-        completedRef.current = false;
-      }
-    },
-    [onChange, onComplete],
-  );
-
-  return (
-    <div className="flex justify-between gap-2" role="group" aria-label="6-digit verification code">
-      {value.digits.map((d, i) => (
-        <input
-          key={i}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
-          type="text"
-          inputMode="numeric"
-          autoComplete={i === 0 ? "one-time-code" : "off"}
-          maxLength={1}
-          disabled={disabled}
-          aria-label={`Digit ${i + 1}`}
-          value={d}
-          onChange={(e) => {
-            const ch = e.target.value.slice(-1);
-            if (ch === "") return;
-            commit(applyDigit(value, ch));
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Backspace") {
-              e.preventDefault();
-              commit(applyBackspace(value));
-            }
-          }}
-          onPaste={(e) => {
-            e.preventDefault();
-            const text = e.clipboardData.getData("text");
-            if (text) commit(applyPaste(value, text));
-          }}
-          onFocus={() => {
-            const next = setFocus(value, i);
-            if (next.focus !== value.focus) onChange(next);
-            refs.current[i]?.select();
-          }}
-          className="h-14 w-11 rounded-xl border border-slate-300 bg-white text-center text-xl font-bold text-slate-900 outline-none focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60 sm:w-12"
-        />
-      ))}
-    </div>
-  );
-}
-
 // ------------------------------------------------------------------- page
 export function VerifyPage() {
   const navigate = useNavigate();
@@ -170,8 +99,11 @@ export function VerifyPage() {
   const [photoError, setPhotoError] = useState<string | null>(null);
 
   // profile contact fields
-  const [phone, setPhone] = useState("");
   const [birthdate, setBirthdate] = useState("");
+  const [birthdateError, setBirthdateError] = useState<string | null>(null);
+  // Optional role request (label only — the owner assigns the real role at
+  // approval; requesting never grants anything by itself).
+  const [requestedRole, setRequestedRole] = useState<"runner" | "group_leader" | null>(null);
   const [emailUnconfigured, setEmailUnconfigured] = useState(false);
   const [emailSendFailed, setEmailSendFailed] = useState<string | null>(null);
 
@@ -228,8 +160,17 @@ export function VerifyPage() {
       setError("Enter a valid email — we'll use it for your account.");
       return;
     }
+    // Client-side birthdate guard: the date input is not inside a <form>, so
+    // HTML `required` alone never blocks submission. The server still enforces
+    // the same rule (400 minimum_age) — this just gives a clear inline error.
+    const birthdateCheck = validateBirthdate(birthdate);
+    if (!birthdateCheck.ok) {
+      setBirthdateError(birthdateCheck.message);
+      return;
+    }
+    setBirthdateError(null);
     setBusy(true);
-    const created = await api.createAccount({ name: name.trim(), email: email.trim(), phone: phone.trim() || undefined, birthdate });
+    const created = await api.createAccount({ name: name.trim(), email: email.trim(), birthdate, requestedRole: requestedRole ?? undefined });
     if (!created.ok) {
       setBusy(false);
       setError(
@@ -255,7 +196,7 @@ export function VerifyPage() {
   };
 
   // --- step: email -------------------------------------------------------
-  const submitPhone = async () => {
+  const sendEmailCode = async () => {
     setError(null);
     setEmailUnconfigured(false);
     setEmailSendFailed(null);
@@ -376,8 +317,8 @@ export function VerifyPage() {
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <StepBadge step={1} total={4} label="Create your runner profile" />
           <p className="mb-4 text-[13px] leading-relaxed text-slate-600">
-            Your name and email start your account. You may also add a phone number as an unverified
-            profile field, then complete a live selfie check — all from this phone.
+            Your name, email, and birthdate start your account, then you'll verify your email with a
+            one-time code and complete a live selfie check — all from this phone.
           </p>
           <div className="space-y-4">
             <Field label="Name">
@@ -387,7 +328,36 @@ export function VerifyPage() {
               <input type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
             </Field>
             <Field label="Birthdate (you must be at least 16)">
-              <input type="date" value={birthdate} onChange={(e) => setBirthdate(e.target.value)} className={inputCls} required />
+              <input
+                type="date"
+                value={birthdate}
+                onChange={(e) => {
+                  setBirthdate(e.target.value);
+                  setBirthdateError(null);
+                }}
+                className={inputCls}
+                required
+                aria-invalid={birthdateError ? true : undefined}
+                aria-describedby={birthdateError ? "birthdate-error" : undefined}
+              />
+              {birthdateError ? (
+                <p id="birthdate-error" role="alert" className="mt-1.5 text-xs font-medium text-red-600">
+                  {birthdateError}
+                </p>
+              ) : null}
+            </Field>
+            <Field label="I'd like to join as">
+              <select
+                value={requestedRole ?? "runner"}
+                onChange={(e) => setRequestedRole(e.target.value === "group_leader" ? "group_leader" : null)}
+                className={inputCls}
+              >
+                <option value="runner">A runner (default)</option>
+                <option value="group_leader">A group leader — I run a club or group</option>
+              </select>
+              <span className="mt-1 block text-[11px] leading-relaxed text-slate-400">
+                Just a request — the owner confirms roles at approval. Everyone verifies the same way.
+              </span>
             </Field>
             <Field label="Profile photo (shown on your public profile)">
               <div className="flex items-center gap-3">
@@ -437,21 +407,10 @@ export function VerifyPage() {
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <StepBadge step={2} total={4} label="Verify your email" />
           <p className="mb-4 text-[13px] leading-relaxed text-slate-600">
-            We'll text you a one-time code. Your number is never shown on your public profile — it's used only to prove
-            you're a real local runner and kept private.
+            We'll email a one-time {CODE_LENGTH}-digit code to <span className="font-semibold">{email}</span>.
+            It expires in 10 minutes — no phone number or SMS needed.
           </p>
           <div className="space-y-4">
-            <Field label="Phone number (optional)">
-              <input
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel"
-                placeholder="+1 573 555 0123"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className={inputCls}
-              />
-            </Field>
             {emailUnconfigured ? (
               <Notice tone="amber">
                 <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0" />
@@ -464,7 +423,7 @@ export function VerifyPage() {
             ) : null}
             {emailSendFailed ? <Notice tone="red">{emailSendFailed}</Notice> : null}
             {error ? <Notice tone="red">{error}</Notice> : null}
-            <PillButton variant="primary" className="w-full" disabled={busy} onClick={() => void submitPhone()}>
+            <PillButton variant="primary" className="w-full" disabled={busy} onClick={() => void sendEmailCode()}>
               {busy ? "Sending…" : "Send code"}
             </PillButton>
             <p className="text-center text-xs leading-relaxed text-slate-400">

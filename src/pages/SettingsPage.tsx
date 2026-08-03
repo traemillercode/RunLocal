@@ -1,0 +1,234 @@
+/**
+ * Settings — account preferences with a clearly separated owner-only section.
+ *
+ * The owner-only section renders ONLY when the server-reported `isOwner` flag
+ * is true (never derived from the email client-side). It links to the admin
+ * control center and shows honest deployment status (email sender health,
+ * admin key, retention) from the public /api/health endpoint — no secrets.
+ */
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { VerifiedBadge } from "../components/VerifiedBadge";
+import { Chip, Icon, PillButton } from "../components/ui";
+import { CITIES } from "../data/cities";
+import { phaseLabel, roleLabel } from "../lib/accounts";
+import * as api from "../lib/api";
+import { useAppState } from "../lib/store";
+import { useToast } from "../lib/toast";
+import { useAccount } from "../state/account";
+
+export function SettingsPage() {
+  const navigate = useNavigate();
+  const toast = useToast();
+  const store = useAppState();
+  const { me, backendAvailable, signOut, deleteMyAccount } = useAccount();
+  const [notificationsOn, setNotificationsOn] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [health, setHealth] = useState<api.HealthInfo | null>(null);
+
+  useEffect(() => {
+    void api.getHealth().then((r) => {
+      if (r.ok) setHealth(r.data);
+    });
+  }, []);
+
+  const account = me?.status === "signed_in" ? me.account : null;
+  const verified = account?.status === "verified";
+  const isOwner = account?.isOwner === true;
+  const city = CITIES.find((c) => c.id === store.state.cityId) ?? CITIES[0];
+
+  const doDelete = async () => {
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
+    const result = await deleteMyAccount();
+    if (result.ok) {
+      toast("Your profile was deleted — verification data (phone, selfie, photo) was removed.", "success");
+      navigate("/");
+    } else {
+      toast("Could not delete your profile. Try again.", "neutral");
+    }
+    setConfirmingDelete(false);
+  };
+
+  const senderStatus = health?.emailSender;
+  const senderLabel =
+    senderStatus?.status === "unconfigured"
+      ? "Email sender not configured"
+      : senderStatus?.status === "blocked"
+        ? "Blocked — consumer mailbox can't be verified by the provider"
+        : senderStatus?.status === "test_mode"
+          ? "Test sender — only delivers to the account owner"
+          : senderStatus?.status === "custom_domain"
+            ? "Custom domain — deliverability unconfirmed"
+            : "Unknown";
+
+  return (
+    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+      <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Settings</h1>
+      <p className="mt-0.5 text-sm font-medium text-slate-500">Account preferences & status</p>
+
+      {!backendAvailable ? (
+        <section className="mt-4 rounded-2xl bg-amber-50 p-4 text-[13px] leading-relaxed text-amber-900 ring-1 ring-amber-200">
+          <span className="font-semibold">Server API unreachable.</span> Identity, verification, and account settings
+          are unavailable right now — you're browsing as a guest.
+        </section>
+      ) : null}
+
+      {/* Account */}
+      <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+        <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Account</h2>
+        {account ? (
+          <ul className="divide-y divide-slate-100">
+            <li className="flex items-center justify-between gap-3 px-5 py-3.5">
+              <span className="text-[14px] font-medium text-slate-700">Name</span>
+              <span className="max-w-[60%] truncate text-[14px] text-slate-500">{account.name}</span>
+            </li>
+            <li className="flex items-center justify-between gap-3 px-5 py-3.5">
+              <span className="text-[14px] font-medium text-slate-700">Email</span>
+              <span className="max-w-[60%] truncate text-[14px] text-slate-500">{account.email}</span>
+            </li>
+            <li className="flex items-center justify-between gap-3 px-5 py-3.5">
+              <span className="text-[14px] font-medium text-slate-700">Status</span>
+              <span className="flex flex-wrap items-center justify-end gap-1.5">
+                {verified ? <VerifiedBadge size="sm" /> : <Chip tone="amber">{phaseLabel(account.phase)}</Chip>}
+                {isOwner ? <Chip tone="brand">Super Admin</Chip> : <Chip tone="outline">{roleLabel(account.role)}</Chip>}
+              </span>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => navigate("/verify")}
+                className="flex min-h-11 w-full items-center justify-between gap-3 px-5 text-left active:bg-slate-50"
+              >
+                <span className="text-[14px] font-medium text-slate-700">Verification</span>
+                <span className="flex items-center gap-1 text-[14px] font-semibold text-[#0b2b22]">
+                  {verified ? "View status" : "Continue"} <Icon name="chevronRight" className="h-4 w-4 text-slate-300" />
+                </span>
+              </button>
+            </li>
+          </ul>
+        ) : (
+          <div className="px-5 py-4">
+            <p className="text-[13px] leading-relaxed text-slate-600">
+              You're browsing as a guest — there are no account settings yet.
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <PillButton variant="secondary" onClick={() => navigate("/verify")}>
+                <Icon name="plus" className="h-4 w-4" /> Sign up
+              </PillButton>
+              <PillButton variant="ghost" onClick={() => navigate("/login")}>
+                Log in
+              </PillButton>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Preferences */}
+      <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+        <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Preferences</h2>
+        <ul className="divide-y divide-slate-100">
+          <li className="flex items-center justify-between gap-3 px-5 py-3.5">
+            <span className="text-[14px] font-medium text-slate-700">City</span>
+            <span className="text-[14px] text-slate-500">
+              {city.name}, {city.state}
+            </span>
+          </li>
+          <li>
+            <button
+              type="button"
+              onClick={() => setNotificationsOn((v) => !v)}
+              className="flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3.5 text-left active:bg-slate-50"
+            >
+              <span className="text-[14px] font-medium text-slate-700">Reminders & notifications</span>
+              <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${notificationsOn ? "bg-[#0b2b22]" : "bg-slate-300"}`}>
+                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${notificationsOn ? "left-6" : "left-1"}`} />
+              </span>
+            </button>
+          </li>
+        </ul>
+        <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
+          Preferences are saved on this device only. Verification records are never stored on your device.
+        </p>
+      </section>
+
+      {/* Owner-only */}
+      {isOwner ? (
+        <section className="mt-4 overflow-hidden rounded-2xl bg-[#0b2b22] text-white shadow-sm ring-1 ring-[#0b2b22]/20">
+          <h2 className="flex items-center gap-2 border-b border-white/10 px-5 py-3.5 text-[15px] font-bold">
+            <Icon name="lock" className="h-4 w-4 text-[#c8f169]" /> Owner / Super Admin
+          </h2>
+          <ul className="divide-y divide-white/10">
+            <li>
+              <button
+                type="button"
+                onClick={() => navigate("/admin")}
+                className="flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3.5 text-left active:bg-white/10"
+              >
+                <span>
+                  <span className="block text-[14px] font-semibold">Admin control center</span>
+                  <span className="block text-xs text-white/60">Pending users, approval & audit</span>
+                </span>
+                <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-[#c8f169]" />
+              </button>
+            </li>
+            <li className="px-5 py-3.5">
+              <span className="block text-[13px] font-semibold">Deployment status</span>
+              <dl className="mt-1.5 space-y-1 text-xs text-white/70">
+                <div className="flex justify-between gap-3">
+                  <dt>Email sender</dt>
+                  <dd className="text-right">{senderLabel}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt>Admin key (safety tool)</dt>
+                  <dd className="text-right">{health?.adminConfigured ? "Configured" : "Not configured"}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt>Retention window</dt>
+                  <dd className="text-right">{health ? `${health.retentionYears} year(s)` : "…"}</dd>
+                </div>
+              </dl>
+              <p className="mt-2 text-[11px] leading-relaxed text-white/50">
+                Only you can see this section. Every admin access still requires a reason and is audited.
+              </p>
+            </li>
+          </ul>
+        </section>
+      ) : null}
+
+      {/* Danger zone */}
+      {account ? (
+        <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+          <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Session</h2>
+          <ul className="divide-y divide-slate-100">
+            <li>
+              <button
+                type="button"
+                onClick={() => void signOut().then(() => toast("Signed out.", "neutral"))}
+                className="flex min-h-11 w-full px-5 text-left text-[14px] font-semibold text-slate-700 active:bg-slate-50"
+              >
+                Sign out
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => void doDelete()}
+                className={`flex min-h-11 w-full px-5 text-left text-[14px] font-semibold ${confirmingDelete ? "text-red-700" : "text-red-600"} active:bg-red-50`}
+              >
+                {confirmingDelete ? "Tap again to confirm — deletes phone, selfie & photo" : "Delete my profile"}
+              </button>
+            </li>
+          </ul>
+          <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
+            Verification records (phone, selfie, timestamps, IP history) are stored securely, retained up to 3 years
+            after your last activity, and deleted immediately when you delete your account. Only a Verified badge is
+            ever shown publicly.
+          </p>
+        </section>
+      ) : null}
+    </div>
+  );
+}
