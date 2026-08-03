@@ -5,12 +5,10 @@
 //   RUN_LOCAL_ROOT            static root (default ./dist)
 //   RUN_LOCAL_PORT            port (default 3000; deliberately not `PORT`)
 //   RUN_LOCAL_DATA_DIR        data + uploads directory (default ./data)
-//   RUN_LOCAL_RETENTION_YEARS retention window for verification records
-//                             (default 3 — see src/server/retention.ts)
-//   TWILIO_ACCOUNT_SID        SMS provider (see src/server/twilio.ts)
-//   TWILIO_AUTH_TOKEN
-//   TWILIO_PHONE_NUMBER
-//   RUN_LOCAL_SMS_MODE        "twilio" (default) | "log" (dev only)
+//   RUN_LOCAL_RETENTION_YEARS retention window for verification records (default 3)
+//   RESEND_API_KEY            Resend transactional email API key
+//   RUN_LOCAL_EMAIL_FROM      verified sender, e.g. Run Local <verify@example.com>
+//   RUN_LOCAL_MIN_AGE         minimum signup age (default 16)
 //   RUN_LOCAL_ADMIN_KEY       admin key for the safety tool (server-side only)
 //   RUN_LOCAL_ADMIN_EMAIL     admin identity shown in the audit log
 //

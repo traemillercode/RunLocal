@@ -14,7 +14,7 @@
 
 export type AccountStatus = "pending" | "verified" | "rejected";
 /** Server-tracked stage of the verification funnel. */
-export type VerifyPhase = "phone" | "code" | "selfie" | "pending_review";
+export type VerifyPhase = "email" | "code" | "selfie" | "pending_review";
 
 export interface AccountRecord {
   id: string;
@@ -25,9 +25,11 @@ export interface AccountRecord {
   phase: VerifyPhase;
   /** Filename in uploads/public — the user's chosen public profile photo. */
   profilePhotoRef: string | null;
-  /** E.164 phone number — sensitive, server-side only. */
+  /** Plain signup/profile phone, unverified and server-side only. */
   phone: string | null;
+  phoneVerified: boolean;
   phoneVerifiedAt: string | null;
+  birthdate: string;
   /** Filename in uploads/private — the live selfie capture. NEVER public. */
   selfieRef: string | null;
   selfieCapturedAt: string | null;
@@ -63,8 +65,8 @@ export interface CodeRecord {
   expiresAt: string;
   attempts: number;
   createdAt: string;
-  /** Phone the code was sent to (for the expiry/verification context). */
-  phone: string;
+  /** Email the code was sent to (for expiry/verification context). */
+  email: string;
 }
 
 export type AdminAction =

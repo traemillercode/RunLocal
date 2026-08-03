@@ -1,69 +1,20 @@
-# Run Local — Identity Verification & Safety Layer
+# Run Local verification
 
-## Account state model
-- **Guest** — browse-only. No RSVP, post, comment, or submit.
-- **Pending Verification** — after signup completion; read-only. Stages:
-  `phone → code → selfie → pending_review` (resumable via `/api/me`).
-- **Verified** — admin-approved. Only a simple **Verified badge** is ever
-  shown publicly. Phone, selfie, IPs, timestamps, and retention metadata are
-  never in public payloads.
+Email is the verification gate. Signup creates a **Pending Verification** read-only account; RSVP, comments, posts, and submissions remain unavailable until email verification and selfie review succeed. Phone is collected only as an unverified profile field (`phone_verified: false`) for a future SMS upgrade.
 
-## Verification flow (mobile-first)
-1. Profile basics (name, email, optional public profile photo — file input OK here).
-2. Phone entry (`type="tel"`, `inputMode="numeric"`) → server sends 6-digit code
-   (stored as HMAC + salt, 10-min expiry, 5 attempts, 5 sends/hour/number).
-3. Auto-advancing numeric digit boxes (`inputMode="numeric"`).
-4. **Explicit consent screen** — live capture, comparison to profile photo,
-   no public display/discovery, retention period (from `/api/health`), internal
-   safety / law-enforcement access only. Camera opens ONLY after "I agree".
-5. **Live selfie via getUserMedia only** (no file/gallery input), downscaled
-   JPEG, permission/denied states, tracks stopped on exit.
-6. Submit → server stores selfie in `uploads/private` (never served
-   statically; audited admin endpoint only) → status `pending_review`.
-   **No liveness/match is faked**: review is manual until a provider is wired.
+## Flow and privacy
+1. Signup requires name, email, optional phone, and birthdate; the server rejects users under `RUN_LOCAL_MIN_AGE` (default 16).
+2. A six-digit numeric code is sent to the signup email by Resend. Code boxes auto-advance and use `inputmode=numeric`.
+3. A mandatory consent screen appears before `getUserMedia`; no gallery/file picker is used for selfies. Consent states live capture, comparison/review, no public display/discovery, admin-only access, and retention.
+4. Selfie submissions are explicitly `pending_review`; no liveness or biometric match is claimed without a real provider.
 
-## Required env vars (server, never in the client)
-| Var | Purpose | Required? |
-|---|---|---|
-| `TWILIO_ACCOUNT_SID` | Twilio account | for real SMS |
-| `TWILIO_AUTH_TOKEN` | Twilio auth token (secret) | for real SMS |
-| `TWILIO_PHONE_NUMBER` | From number (E.164) | for real SMS |
-| `RUN_LOCAL_SMS_MODE` | `twilio` (default) \| `log` (DEV ONLY) | no |
-| `RUN_LOCAL_ADMIN_KEY` | unlocks the admin safety tool | for admin UI |
-| `RUN_LOCAL_ADMIN_EMAIL` | admin identity in audit log | no (default admin@runlocal.app) |
-| `RUN_LOCAL_DATA_DIR` | data + uploads dir | no (default ./data) |
-| `RUN_LOCAL_RETENTION_YEARS` | retention window | no (default 3) |
+## Server env vars
+- `RESEND_API_KEY` — Resend API key (server-only).
+- `RUN_LOCAL_EMAIL_FROM` — verified sender, e.g. `Run Local <verify@example.com>` (server-only).
+- `RUN_LOCAL_MIN_AGE` — minimum age, default `16`.
+- `RUN_LOCAL_RETENTION_YEARS` — default `3` years after deletion/inactivity.
+- `RUN_LOCAL_ADMIN_KEY`, `RUN_LOCAL_ADMIN_EMAIL` — admin safety tool.
 
-**Missing-config behavior (explicit, never fake):** without the three Twilio
-vars the API returns `503 sms_unconfigured` and the UI shows a clear
-"SMS provider not configured — no code was sent" state. Without
-`RUN_LOCAL_ADMIN_KEY` the admin tool shows a "not configured" state.
-`RUN_LOCAL_SMS_MODE=log` prints the code to the server console for local
-development only — it is real server-side code verification, never claimed as SMS.
+If email vars are missing, `/api/verify/start` returns `503 email_unconfigured`; no code is stored as deliverable and UI states that no email was sent. Provider errors return explicit error states. Twilio/SMS credentials are not required or used.
 
-## Admin safety tool (`#/admin`, not linked anywhere)
-- Login with `RUN_LOCAL_ADMIN_KEY` → HttpOnly admin session.
-- Search by **username/email only** (no phone-based discovery).
-- Every lookup/export/approve/reject/delete/purge requires a **reason** and is
-  **audited** (admin, timestamp, reason, action, IP).
-- Full record (phone, signup IP, 90-day login IPs, retention metadata, selfie)
-  is admin-only; selfie streams through an audited endpoint.
-- Export CSV (audited). Verified runners / group leaders have no access — the
-  API rejects any non-admin session.
-
-## Retention ("never keep data indefinitely")
-- Default **3 years** from last activity (`RUN_LOCAL_RETENTION_YEARS`).
-- Account deletion scrubs phone/selfie/photo/IPs **immediately** (tombstone kept
-  for audit linkage, then purged).
-- Purge removes phone + selfie + photo + IP history and drops the record.
-- Runs on server boot, daily in-process, via admin "Run purge", or on demand:
-  `bun run retention:purge [--dry-run]` (suggested cron: `0 3 * * *`).
-
-## Deployment notes
-- `serve.ts` serves the SPA **and** `/api/*` on one origin (port 3000).
-- Data persists under `RUN_LOCAL_DATA_DIR` (JSON + uploads). Swap for a real DB
-  in production; the store API is a thin seam.
-- Never log raw phone numbers, codes, selfie refs, or IPs (code logs masked
-  values only).
-- Rate limits (phone sends, code attempts, admin login) are in-memory —
-  move to a shared store when scaling horizontally.
+Sensitive verification records (email, timestamps, selfie reference, unverified phone, signup IP, rolling 90-day login IP history, birthdate) remain server-only and are absent from public payloads. Admin search/view/CSV export/selfie access requires a reason and is audited; non-admins are rejected. Selfies and phone/verification records are purged by the existing retention job after the configured window.

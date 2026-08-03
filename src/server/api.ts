@@ -8,8 +8,8 @@
  * IP) is ever included in a public payload or written to logs.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { Db, normalizePhone, PHONE_SEND_LIMIT, PHONE_SEND_WINDOW_MS, MAX_CODE_ATTEMPTS, codesEqual, hashCode, toPublicAccount } from "./store";
-import { sendVerificationCode, smsConfig } from "./twilio";
+import { Db, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, MAX_CODE_ATTEMPTS, codesEqual, hashCode, toPublicAccount, MIN_AGE } from "./store";
+import { sendVerificationEmail, emailConfig } from "./email";
 import {
   adminConfigured,
   adminEmail,
@@ -33,7 +33,7 @@ const MAX_JSON_BODY = 6 * 1024 * 1024; // 6 MB (selfie uploads)
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 MB decoded
 
 // In-memory rate limiting (documented: replace with a shared store at scale).
-const phoneSendLog = new Map<string, number[]>();
+const emailSendLog = new Map<string, number[]>();
 const adminLoginAttempts = new Map<string, number[]>();
 
 export interface ApiDeps {
@@ -174,8 +174,8 @@ async function handleApi(
   if (method === "GET" && url.pathname === "/api/health") {
     return ok(res, {
       ok: true,
-      smsConfigured: smsConfig().configured,
-      smsMode: smsConfig().mode,
+      emailConfigured: emailConfig().configured,
+      emailMissing: emailConfig().missing,
       adminConfigured: adminConfigured(),
       retentionYears: db.retentionYears,
       retention: retentionStatus(db, now),
@@ -202,16 +202,21 @@ async function handleApi(
 
   // ---- account creation (signup completion) ------------------------------
   if (method === "POST" && url.pathname === "/api/accounts") {
-    const body = (await readJson(req)) as { name?: unknown; email?: unknown };
+    const body = (await readJson(req)) as { name?: unknown; email?: unknown; phone?: unknown; birthdate?: unknown };
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const phone = typeof body.phone === "string" ? normalizePhone(body.phone) : null;
+    const birthdate = typeof body.birthdate === "string" ? body.birthdate : "";
+    const ageCutoff = new Date(now.getFullYear() - MIN_AGE, now.getMonth(), now.getDate());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthdate) || Number.isNaN(new Date(`${birthdate}T00:00:00Z`).getTime()) || new Date(`${birthdate}T00:00:00Z`) > ageCutoff) return err(res, { status: 400, error: "minimum_age", message: `You must be at least ${MIN_AGE} to join.` }), true;
     if (name.length < 1 || name.length > 60) return err(res, { status: 400, error: "invalid_name" }), true;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) {
       return err(res, { status: 400, error: "invalid_email" }), true;
     }
     const existing = db.getAccountByEmail(email);
     if (existing && !existing.deletedAt) return err(res, { status: 409, error: "email_taken" }), true;
-    const rec = db.createAccount({ name, email });
+    if (typeof body.phone === "string" && !phone) return err(res, { status: 400, error: "invalid_phone" }), true;
+    const rec = db.createAccount({ name, email, phone, birthdate });
     rec.signupIp = ip;
     rec.signupAt = now.toISOString();
     db.appendLoginIp(rec.id, ip, now);
@@ -221,67 +226,32 @@ async function handleApi(
     return ok(res, { account: toPublicAccount(rec) }), true;
   }
 
-  // ---- send SMS code ------------------------------------------------------
+  // ---- send email code ----------------------------------------------------
   if (method === "POST" && url.pathname === "/api/verify/start") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
-    const body = (await readJson(req)) as { phone?: unknown };
-    const phone = typeof body.phone === "string" ? normalizePhone(body.phone) : null;
-    if (!phone) return err(res, { status: 400, error: "invalid_phone" }), true;
     const rec = db.getAccount(sess.accountId);
     if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
-    if (rec.status !== "pending" || (rec.phase !== "phone" && rec.phase !== "code")) {
-      return err(res, { status: 409, error: "wrong_step" }), true;
-    }
-    if (rateLimited(phoneSendLog, phone, PHONE_SEND_LIMIT, PHONE_SEND_WINDOW_MS, now.getTime())) {
-      return err(res, { status: 429, error: "rate_limited", message: "Too many codes for this number. Try again in an hour." }), true;
-    }
-    const { code } = db.createCode(rec.id, phone, now);
-    const sent = await sendVerificationCode(phone, code);
-    if (!sent.ok) {
-      db.deleteCode(rec.id);
-      if (sent.kind === "unconfigured") {
-        return err(res, {
-          status: 503,
-          error: "sms_unconfigured",
-          message: "SMS provider is not configured on this server. No code was sent — verification is unavailable until a provider is configured.",
-        }), true;
-      }
-      return err(res, { status: 502, error: "sms_send_failed", message: sent.message }), true;
-    }
-    db.updateAccount(rec.id, { phone, phase: "code" });
-    await db.persist();
+    if (rec.status !== "pending" || (rec.phase !== "email" && rec.phase !== "code")) return err(res, { status: 409, error: "wrong_step" }), true;
+    if (rateLimited(emailSendLog, rec.email, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, now.getTime())) return err(res, { status: 429, error: "rate_limited" }), true;
+    const { code } = db.createCode(rec.id, rec.email, now);
+    const sent = await sendVerificationEmail(rec.email, code);
+    if (!sent.ok) { db.deleteCode(rec.id); return err(res, { status: sent.kind === "unconfigured" ? 503 : 502, error: sent.kind === "unconfigured" ? "email_unconfigured" : "email_send_failed", message: sent.message }), true; }
+    db.updateAccount(rec.id, { phase: "code" }); await db.persist();
     return ok(res, { status: "code_sent", resendInSec: 30 }), true;
   }
 
-  // ---- verify code --------------------------------------------------------
+  // ---- verify email code --------------------------------------------------
   if (method === "POST" && url.pathname === "/api/verify/check") {
-    const sess = requireSession(db, cookies);
-    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
-    const body = (await readJson(req)) as { code?: unknown };
-    const code = typeof body.code === "string" ? body.code.replace(/\D/g, "") : "";
-    const rec = db.getAccount(sess.accountId);
-    if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { code?: unknown }; const code = typeof body.code === "string" ? body.code.replace(/\D/g, "") : "";
+    const rec = db.getAccount(sess.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
     if (rec.phase !== "code") return err(res, { status: 409, error: "wrong_step" }), true;
-    const codeRec = db.getCode(rec.id);
-    if (!codeRec || new Date(codeRec.expiresAt).getTime() < now.getTime()) {
-      return err(res, { status: 410, error: "code_expired", message: "That code expired. Request a new one." }), true;
-    }
-    codeRec.attempts += 1;
-    if (codeRec.attempts > MAX_CODE_ATTEMPTS) {
-      db.deleteCode(rec.id);
-      return err(res, { status: 429, error: "too_many_attempts", message: "Too many attempts. Request a new code." }), true;
-    }
-    const expected = hashCode(code, codeRec.salt);
-    if (!codesEqual(expected, codeRec.hash)) {
-      await db.persist();
-      return err(res, { status: 401, error: "invalid_code" }), true;
-    }
-    db.deleteCode(rec.id);
-    db.updateAccount(rec.id, { phone: codeRec.phone, phoneVerifiedAt: now.toISOString(), phase: "selfie", lastActivityAt: now.toISOString() });
-    db.appendLoginIp(rec.id, ip, now);
-    await db.persist();
-    return ok(res, { status: "phone_verified", next: "selfie" }), true;
+    const codeRec = db.getCode(rec.id); if (!codeRec || new Date(codeRec.expiresAt).getTime() < now.getTime()) return err(res, { status: 410, error: "code_expired" }), true;
+    codeRec.attempts += 1; if (codeRec.attempts > MAX_CODE_ATTEMPTS) { db.deleteCode(rec.id); return err(res, { status: 429, error: "too_many_attempts" }), true; }
+    if (!codesEqual(hashCode(code, codeRec.salt), codeRec.hash)) { await db.persist(); return err(res, { status: 401, error: "invalid_code" }), true; }
+    db.deleteCode(rec.id); db.updateAccount(rec.id, { phase: "selfie", lastActivityAt: now.toISOString() }); db.appendLoginIp(rec.id, ip, now); await db.persist();
+    return ok(res, { status: "email_verified", next: "selfie" }), true;
   }
 
   // ---- selfie submission (server-side verification request contract) -----

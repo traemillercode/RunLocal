@@ -33,7 +33,7 @@ describe("roleOf", () => {
 
 describe("phase labels", () => {
   it("gives copy for each funnel stage", () => {
-    expect(phaseLabel("phone")).toMatch(/phone/i);
+    expect(phaseLabel("email")).toMatch(/email/i);
     expect(phaseLabel("code")).toMatch(/code/i);
     expect(phaseLabel("selfie")).toMatch(/selfie/i);
     expect(phaseLabel("pending_review")).toMatch(/review/i);
@@ -69,6 +69,6 @@ describe("public payloads never leak sensitive verification data", () => {
     expect(json).not.toContain("purgeAt");
     expect(json).not.toContain("verifiedAt");
     // Only the badge is exposed.
-    expect(Object.keys(pub).sort()).toEqual(["badge", "email", "id", "name", "phase", "profilePhotoUrl", "status"].sort());
+    expect(Object.keys(pub).sort()).toEqual(["badge", "email", "id", "name", "phase", "phoneVerified", "profilePhotoUrl", "status"].sort());
   });
 });

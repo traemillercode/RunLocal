@@ -49,8 +49,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
 // ------------------------------------------------------------------ health
 export interface HealthInfo {
   ok: true;
-  smsConfigured: boolean;
-  smsMode: string;
+  emailConfigured: boolean;
+  emailMissing: string[];
   adminConfigured: boolean;
   retentionYears: number;
   retention: { retentionYears: number; eligibleForPurge: number; totalAccounts: number };
@@ -65,7 +65,7 @@ export function getMe(): Promise<ApiResult<Me>> {
 }
 
 // ---------------------------------------------------------------- accounts
-export function createAccount(input: { name: string; email: string }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
+export function createAccount(input: { name: string; email: string; phone?: string; birthdate: string }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
   return request("/api/accounts", { method: "POST", body: JSON.stringify(input) });
 }
 
@@ -74,8 +74,8 @@ export function uploadProfilePhoto(photoDataUrl: string): Promise<ApiResult<{ ph
 }
 
 // -------------------------------------------------------------- verification
-export function sendCode(phone: string): Promise<ApiResult<{ status: string; resendInSec: number }>> {
-  return request("/api/verify/start", { method: "POST", body: JSON.stringify({ phone }) });
+export function sendCode(): Promise<ApiResult<{ status: string; resendInSec: number }>> {
+  return request("/api/verify/start", { method: "POST", body: JSON.stringify({}) });
 }
 
 export function checkCode(code: string): Promise<ApiResult<{ status: string; next: string }>> {

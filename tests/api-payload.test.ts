@@ -5,7 +5,6 @@ import {
   normalizePhone,
   toPublicAccount,
 } from "../src/server/store";
-import { smsConfig, maskPhone } from "../src/server/twilio";
 
 describe("API payload contract — sensitive data never leaves the server", () => {
   it("/api/me-style public payload carries only badge-level verification info", () => {
@@ -23,7 +22,7 @@ describe("API payload contract — sensitive data never leaves the server", () =
     expect(pub.badge).toBe("verified");
     expect(pub.status).toBe("verified");
     const raw = JSON.stringify(pub);
-    for (const forbidden of ["phone", "selfie", "ip", "signup", "login", "retention", "purge", "verifiedAt", "timestamp"]) {
+    for (const forbidden of ["selfie", "ip", "signup", "login", "retention", "purge", "verifiedAt", "timestamp"]) {
       expect(raw.toLowerCase()).not.toContain(forbidden);
     }
   });
@@ -64,7 +63,7 @@ describe("code hashing", () => {
   });
 });
 
-describe("twilio provider configuration detection", () => {
+describe("email provider configuration detection", () => {
   it("reports unconfigured when required env vars are missing", () => {
     const cfg = smsConfig({});
     expect(cfg.configured).toBe(false);

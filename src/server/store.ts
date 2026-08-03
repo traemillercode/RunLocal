@@ -27,8 +27,9 @@ export const LOGIN_IP_MAX_ENTRIES = 200;
 export const CODE_LENGTH = 6;
 export const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 export const MAX_CODE_ATTEMPTS = 5;
-export const PHONE_SEND_LIMIT = 5; // sends per phone per rolling hour
-export const PHONE_SEND_WINDOW_MS = 60 * 60 * 1000;
+export const EMAIL_SEND_LIMIT = 5; // sends per email per rolling hour
+export const EMAIL_SEND_WINDOW_MS = 60 * 60 * 1000;
+export const MIN_AGE = Math.max(13, Number(process.env.RUN_LOCAL_MIN_AGE ?? 16) || 16);
 
 export function nowIso(now = new Date()): string {
   return now.toISOString();
@@ -155,16 +156,18 @@ export class Db {
     const key = email.trim().toLowerCase();
     return [...this.accounts.values()].find((a) => a.email.toLowerCase() === key);
   }
-  createAccount(input: { name: string; email: string }): AccountRecord {
+  createAccount(input: { name: string; email: string; phone?: string | null; birthdate?: string }): AccountRecord {
     const rec: AccountRecord = {
       id: newId(),
       name: input.name.trim().slice(0, 60),
       email: input.email.trim().toLowerCase(),
       status: "pending",
-      phase: "phone",
+      phase: "email",
       profilePhotoRef: null,
-      phone: null,
+      phone: input.phone ?? null,
+      phoneVerified: false,
       phoneVerifiedAt: null,
+      birthdate: input.birthdate ?? "1970-01-01",
       selfieRef: null,
       selfieCapturedAt: null,
       signupIp: null,
@@ -249,7 +252,7 @@ export class Db {
   getCode(accountId: string): CodeRecord | undefined {
     return this.codes.get(accountId);
   }
-  createCode(accountId: string, phone: string, now = new Date()): { code: string; record: CodeRecord } {
+  createCode(accountId: string, email: string, now = new Date()): { code: string; record: CodeRecord } {
     const code = newCode();
     const salt = randomBytes(16).toString("hex");
     const rec: CodeRecord = {
@@ -259,7 +262,7 @@ export class Db {
       expiresAt: nowIso(new Date(now.getTime() + CODE_TTL_MS)),
       attempts: 0,
       createdAt: nowIso(now),
-      phone,
+      email,
     };
     this.codes.set(accountId, rec);
     return { code, record: rec };

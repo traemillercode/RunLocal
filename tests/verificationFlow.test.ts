@@ -68,8 +68,8 @@ describe("consent-before-camera invariant", () => {
 
 describe("resume mapping", () => {
   it("maps server phases to the right UI step", () => {
-    expect(stepForServerPhase("phone")).toBe("phone");
-    expect(stepForServerPhase("code")).toBe("phone");
+    expect(stepForServerPhase("email")).toBe("email");
+    expect(stepForServerPhase("code")).toBe("email");
     expect(stepForServerPhase("selfie")).toBe("consent");
     expect(stepForServerPhase("pending_review")).toBe("submitted");
     expect(stepForServerPhase(null)).toBe("profile");

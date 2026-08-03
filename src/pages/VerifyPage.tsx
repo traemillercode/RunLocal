@@ -171,8 +171,9 @@ export function VerifyPage() {
 
   // phone step
   const [phone, setPhone] = useState("");
-  const [smsUnconfigured, setSmsUnconfigured] = useState(false);
-  const [smsSendFailed, setSmsSendFailed] = useState<string | null>(null);
+  const [birthdate, setBirthdate] = useState("");
+  const [emailUnconfigured, setEmailUnconfigured] = useState(false);
+  const [emailSendFailed, setEmailSendFailed] = useState<string | null>(null);
 
   // code step
   const [code, setCode] = useState<CodeState>(emptyCodeState());
@@ -228,7 +229,7 @@ export function VerifyPage() {
       return;
     }
     setBusy(true);
-    const created = await api.createAccount({ name: name.trim(), email: email.trim() });
+    const created = await api.createAccount({ name: name.trim(), email: email.trim(), phone: phone.trim() || undefined, birthdate });
     if (!created.ok) {
       setBusy(false);
       setError(
@@ -243,42 +244,36 @@ export function VerifyPage() {
       if (!up.ok) {
         setBusy(false);
         setError("Your account was created but the profile photo failed to upload — you can skip it for now.");
-        dispatch({ type: "GOTO", phase: "phone" });
+        dispatch({ type: "GOTO", phase: "email" });
         await refresh();
         return;
       }
     }
     setBusy(false);
-    dispatch({ type: "GOTO", phase: "phone" });
+    dispatch({ type: "GOTO", phase: "email" });
     await refresh();
   };
 
-  // --- step: phone -------------------------------------------------------
+  // --- step: email -------------------------------------------------------
   const submitPhone = async () => {
     setError(null);
-    setSmsUnconfigured(false);
-    setSmsSendFailed(null);
-    const digits = phone.replace(/[\s().-]/g, "");
-    if (!/^\+?\d{10,15}$/.test(digits)) {
-      setError("Enter a valid phone number with country code (e.g. +15735550123).");
-      return;
-    }
+    setEmailUnconfigured(false);
+    setEmailSendFailed(null);
     setBusy(true);
-    const result = await api.sendCode(digits);
+    const result = await api.sendCode();
     setBusy(false);
     if (result.ok) {
-      setPhone("");
       dispatch({ type: "GOTO", phase: "code" });
       startResendTimer(result.data.resendInSec ?? 30);
       return;
     }
-    if (result.error.code === "sms_unconfigured") {
-      setSmsUnconfigured(true);
+    if (result.error.code === "email_unconfigured") {
+      setEmailUnconfigured(true);
       setError(null);
     } else if (result.error.code === "rate_limited") {
       setError(result.error.message ?? "Too many codes sent. Try again in an hour.");
-    } else if (result.error.code === "sms_send_failed") {
-      setSmsSendFailed(result.error.message ?? "The SMS provider rejected the message.");
+    } else if (result.error.code === "email_send_failed") {
+      setEmailSendFailed(result.error.message ?? "The Email provider rejected the message.");
     } else {
       setError(result.error.message ?? "Could not send the code. Try again.");
     }
@@ -299,7 +294,7 @@ export function VerifyPage() {
     setCode(emptyCodeState());
     setCodeError(
       result.error.code === "invalid_code"
-        ? "That code wasn't right — check the text and try again."
+        ? "That code wasn't right — check the email and try again."
         : result.error.code === "code_expired"
           ? "That code expired. Request a new one below."
           : result.error.code === "too_many_attempts"
@@ -311,7 +306,7 @@ export function VerifyPage() {
   const resendCode = async () => {
     setCodeError(null);
     setBusy(true);
-    const result = await api.sendCode(phone.replace(/[\s().-]/g, ""));
+    const result = await api.sendCode();
     setBusy(false);
     if (result.ok) {
       setCode(emptyCodeState());
@@ -358,10 +353,10 @@ export function VerifyPage() {
 
   const back = () => {
     setError(null);
-    if (flow.phase === "phone") {
+    if (flow.phase === "email") {
       dispatch({ type: "GOTO", phase: "profile" });
     } else if (flow.phase === "code") {
-      dispatch({ type: "GOTO", phase: "phone" });
+      dispatch({ type: "GOTO", phase: "email" });
     } else if (flow.phase === "consent") {
       dispatch({ type: "GOTO", phase: "code" });
     } else if (flow.phase === "camera") {
@@ -390,6 +385,9 @@ export function VerifyPage() {
             </Field>
             <Field label="Email">
               <input type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+            </Field>
+            <Field label="Birthdate (you must be at least 16)">
+              <input type="date" value={birthdate} onChange={(e) => setBirthdate(e.target.value)} className={inputCls} required />
             </Field>
             <Field label="Profile photo (shown on your public profile)">
               <div className="flex items-center gap-3">
@@ -429,21 +427,21 @@ export function VerifyPage() {
             </Field>
             {error ? <Notice tone="red">{error}</Notice> : null}
             <PillButton variant="primary" className="w-full" disabled={busy} onClick={() => void submitProfile()}>
-              {busy ? "Creating…" : "Continue to phone verification"}
+              {busy ? "Creating…" : "Continue to email verification"}
             </PillButton>
           </div>
         </section>
       )}
 
-      {flow.phase === "phone" && (
+      {flow.phase === "email" && (
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
-          <StepBadge step={2} total={4} label="Verify your phone number" />
+          <StepBadge step={2} total={4} label="Verify your email" />
           <p className="mb-4 text-[13px] leading-relaxed text-slate-600">
             We'll text you a one-time code. Your number is never shown on your public profile — it's used only to prove
             you're a real local runner and kept private.
           </p>
           <div className="space-y-4">
-            <Field label="Mobile number">
+            <Field label="Phone number (optional)">
               <input
                 type="tel"
                 inputMode="numeric"
@@ -454,23 +452,23 @@ export function VerifyPage() {
                 className={inputCls}
               />
             </Field>
-            {smsUnconfigured ? (
+            {emailUnconfigured ? (
               <Notice tone="amber">
                 <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
-                  <span className="font-semibold">SMS isn't configured on this server yet.</span> No code was sent, and
-                  verification can't continue until the operator sets up the SMS provider. Nothing is faked — this is an
+                  <span className="font-semibold">Email isn't configured on this server yet.</span> No code was sent, and
+                  verification can't continue until the operator sets up the Email provider. Nothing is faked — this is an
                   explicit unconfigured state.
                 </span>
               </Notice>
             ) : null}
-            {smsSendFailed ? <Notice tone="red">{smsSendFailed}</Notice> : null}
+            {emailSendFailed ? <Notice tone="red">{emailSendFailed}</Notice> : null}
             {error ? <Notice tone="red">{error}</Notice> : null}
             <PillButton variant="primary" className="w-full" disabled={busy} onClick={() => void submitPhone()}>
               {busy ? "Sending…" : "Send code"}
             </PillButton>
             <p className="text-center text-xs leading-relaxed text-slate-400">
-              Standard SMS rates may apply. Codes expire after 10 minutes.
+              Email delivery is provided by Resend. Codes expire after 10 minutes.
             </p>
           </div>
         </section>
@@ -480,7 +478,7 @@ export function VerifyPage() {
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <StepBadge step={3} total={4} label="Enter the code" />
           <p className="mb-4 text-[13px] leading-relaxed text-slate-600">
-            We texted a {CODE_LENGTH}-digit code to your phone. It auto-advances as you type.
+            We emailed a {CODE_LENGTH}-digit code to your phone. It auto-advances as you type.
           </p>
           <CodeEntry value={code} onChange={setCode} onComplete={(c) => void submitCode(c)} disabled={busy} />
           {codeError ? <div className="mt-3"><Notice tone="red">{codeError}</Notice></div> : null}
@@ -581,7 +579,7 @@ export function VerifyPage() {
           </span>
           <h1 className="mt-3 text-xl font-extrabold text-slate-900">Verification submitted</h1>
           <p className="mt-2 text-sm leading-relaxed text-slate-600">
-            Your phone number and live selfie are in. A Run Local administrator will review them — this is a manual
+            Your email and live selfie are in. A Run Local administrator will review them — this is a manual
             review, not an automated match. You're still in{" "}
             <span className="font-semibold">Pending Verification</span> and can browse, but can't RSVP or post yet.
           </p>

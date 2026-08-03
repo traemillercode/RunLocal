@@ -8,7 +8,7 @@
  * tests in tests/verificationFlow.test.ts.
  */
 
-export type FlowPhase = "profile" | "phone" | "code" | "consent" | "camera" | "submitted";
+export type FlowPhase = "profile" | "email" | "code" | "consent" | "camera" | "submitted";
 
 export interface FlowState {
   phase: FlowPhase;
@@ -16,7 +16,7 @@ export interface FlowState {
   cameraOpen: boolean;
   selfieCaptured: boolean;
   /** Server-reported pending stage (used to resume mid-flow). */
-  serverPhase: "phone" | "code" | "selfie" | "pending_review" | null;
+  serverPhase: "email" | "code" | "selfie" | "pending_review" | null;
 }
 
 export type FlowAction =
@@ -35,9 +35,9 @@ export function initialState(): FlowState {
 /** Map the server-reported phase to the first UI step the user must complete. */
 export function stepForServerPhase(serverPhase: FlowState["serverPhase"]): FlowPhase {
   switch (serverPhase) {
-    case "phone":
+    case "email":
     case "code":
-      return "phone";
+      return "email";
     case "selfie":
       return "consent";
     case "pending_review":

@@ -31,8 +31,8 @@ export interface PublicAccount {
   name: string;
   email: string;
   status: "pending" | "verified" | "rejected";
-  /** Funnel stage for pending accounts: phone | code | selfie | pending_review. */
-  phase: "phone" | "code" | "selfie" | "pending_review" | null;
+  /** Funnel stage for pending accounts: email | code | selfie | pending_review. */
+  phase: "email" | "code" | "selfie" | "pending_review" | null;
   /** The only verification artifact shown publicly. */
   badge: "verified" | null;
   profilePhotoUrl: string | null;
@@ -60,8 +60,8 @@ export function isVerified(me: Me): boolean {
 /** Human-readable label for a pending funnel stage (UI copy only). */
 export function phaseLabel(phase: PublicAccount["phase"]): string {
   switch (phase) {
-    case "phone":
-      return "Add your phone number";
+    case "email":
+      return "Verify your email address";
     case "code":
       return "Enter the code we sent";
     case "selfie":
