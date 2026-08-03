@@ -47,10 +47,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
 }
 
 // ------------------------------------------------------------------ health
+export interface EmailSenderHealth {
+  status: "unconfigured" | "blocked" | "test_mode" | "custom_domain";
+  verifiable: boolean;
+  /** false = determinably invalid (consumer mailbox, test sender); null = undetermined. */
+  verified: boolean | null;
+  domain: string | null;
+  reason: "missing_sender" | "consumer_domain" | "resend_dev_test_sender" | "not_confirmed";
+}
 export interface HealthInfo {
   ok: true;
   emailConfigured: boolean;
   emailMissing: string[];
+  emailSender: EmailSenderHealth;
   adminConfigured: boolean;
   retentionYears: number;
   retention: { retentionYears: number; eligibleForPurge: number; totalAccounts: number };

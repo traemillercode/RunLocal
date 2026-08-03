@@ -9,7 +9,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Db, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, MAX_CODE_ATTEMPTS, codesEqual, hashCode, toPublicAccount, MIN_AGE } from "./store";
-import { sendVerificationEmail, emailConfig } from "./email";
+import { sendVerificationEmail, emailConfig, emailSenderCheck } from "./email";
 import {
   adminConfigured,
   adminEmail,
@@ -187,6 +187,11 @@ async function handleApi(
       ok: true,
       emailConfigured: emailConfig().configured,
       emailMissing: emailConfig().missing,
+      // Deterministic sender classification — no provider call, no secrets.
+      // Reports Gmail/consumer FROM domains as blocked, and custom domains as
+      // "verifiable but unconfirmed" (we never claim verified without asking
+      // Resend).
+      emailSender: emailSenderCheck(),
       adminConfigured: adminConfigured(),
       retentionYears: db.retentionYears,
       retention: retentionStatus(db, now),
