@@ -13,7 +13,8 @@ sleep 1
 
 echo "→ Starting static server (detached)"
 mkdir -p .run
-setsid nohup bun run serve.ts > .run/server.log 2>&1 &
+# RUN_LOCAL_PORT guards against a globally-set PORT env (sandboxes set PORT=80)
+setsid nohup env RUN_LOCAL_PORT=3000 bun run serve.ts > .run/server.log 2>&1 &
 sleep 2
 
 echo "→ Verifying"

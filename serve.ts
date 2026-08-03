@@ -1,11 +1,13 @@
 // Minimal static server for the built SPA — serves dist/ with a
 // single-origin SPA fallback on 0.0.0.0:3000. Zero dependencies.
+// NOTE: we deliberately avoid the generic PORT env var — sandboxes often set
+// PORT=80 globally, which would steal the team's fixed public port (3000).
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 
-const root = normalize(join(import.meta.dirname, "dist"));
-const port = Number(process.env.PORT ?? 3000);
+const root = normalize(process.env.RUN_LOCAL_ROOT ?? join(import.meta.dirname, "dist"));
+const port = Number(process.env.RUN_LOCAL_PORT ?? 3000);
 
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
