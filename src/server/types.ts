@@ -37,6 +37,13 @@ export interface AccountRecord {
   requestedRole: AccountRole | null;
   /** Filename in uploads/public — the user's chosen public profile photo. */
   profilePhotoRef: string | null;
+  /**
+   * Supabase Auth user UUID (sub) linked after email OTP verification.
+   * Server-side only — never shipped to the client. This is the secure bridge
+   * between the Supabase-authenticated email identity and the Run Local
+   * account; null until the first successful OTP verification.
+   */
+  supabaseAuthId: string | null;
   /** Plain signup/profile phone, unverified and server-side only. */
   phone: string | null;
   phoneVerified: boolean;

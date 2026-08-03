@@ -7,6 +7,10 @@
  *  - Phone is NOT collected in this flow — it remains an optional, unverified
  *    profile field reserved for a future upgrade. Verification is email code
  *    only; there is no SMS.
+ *  - Email codes are delivered by Supabase Auth email OTP (signInWithOtp /
+ *    verifyOtp, browser-safe anon key only). The server independently
+ *    validates the Supabase identity before advancing the funnel — a code
+ *    alone never grants the Verified badge.
  *  - Code uses auto-advancing numeric digit boxes (inputMode="numeric").
  *  - The camera opens ONLY after explicit consent (state machine enforced).
  *  - Selfie capture is getUserMedia-only; no gallery/file input.
@@ -20,6 +24,7 @@ import { Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
 import { validateBirthdate } from "../lib/birthdate";
 import { CODE_LENGTH, emptyCodeState, type CodeState } from "../lib/numericCode";
+import * as supabaseOtp from "../lib/supabase";
 import { canOpenCamera, initialState, verifyReducer } from "../lib/verificationFlow";
 import { useAccount } from "../state/account";
 
@@ -196,27 +201,41 @@ export function VerifyPage() {
   };
 
   // --- step: email -------------------------------------------------------
+  // Server gate first (phase + config + rate limit), then Supabase actually
+  // sends the code. We only advance when Supabase confirmed the send.
   const sendEmailCode = async () => {
     setError(null);
     setEmailUnconfigured(false);
     setEmailSendFailed(null);
     setBusy(true);
-    const result = await api.sendCode();
-    setBusy(false);
-    if (result.ok) {
-      dispatch({ type: "GOTO", phase: "code" });
-      startResendTimer(result.data.resendInSec ?? 30);
+    const gate = await api.requestOtp();
+    if (gate.ok) {
+      const sent = await supabaseOtp.sendOtp(email.trim());
+      setBusy(false);
+      if (sent.ok) {
+        dispatch({ type: "GOTO", phase: "code" });
+        startResendTimer(gate.data.resendInSec ?? 30);
+        return;
+      }
+      if (sent.code === "unconfigured") {
+        setEmailUnconfigured(true);
+      } else if (sent.code === "rate_limited") {
+        setError(sent.message);
+      } else {
+        setEmailSendFailed(sent.message);
+      }
       return;
     }
-    if (result.error.code === "email_unconfigured") {
+    setBusy(false);
+    if (gate.error.code === "email_unconfigured") {
       setEmailUnconfigured(true);
       setError(null);
-    } else if (result.error.code === "rate_limited") {
-      setError(result.error.message ?? "Too many codes sent. Try again in an hour.");
-    } else if (result.error.code === "email_send_failed") {
-      setEmailSendFailed(result.error.message ?? "The Email provider rejected the message.");
+    } else if (gate.error.code === "rate_limited") {
+      setError(gate.error.message ?? "Too many codes sent. Try again in an hour.");
+    } else if (gate.error.code === "wrong_step") {
+      setError("Verification is already past the email step — continue from your profile.");
     } else {
-      setError(result.error.message ?? "Could not send the code. Try again.");
+      setError(gate.error.message ?? "Could not send the code. Try again.");
     }
   };
 
@@ -224,7 +243,26 @@ export function VerifyPage() {
   const submitCode = async (c: string) => {
     setCodeError(null);
     setBusy(true);
-    const result = await api.checkCode(c);
+    // Verify the 6-digit code with Supabase; on success hand the access token
+    // to the server, which validates it before advancing the funnel.
+    const verified = await supabaseOtp.verifyOtp(email.trim(), c);
+    if (!verified.ok) {
+      setBusy(false);
+      setCode(emptyCodeState());
+      if (verified.code === "code_expired") {
+        setCodeError(verified.message);
+      } else if (verified.code === "invalid_code") {
+        setCodeError(verified.message);
+      } else if (verified.code === "rate_limited") {
+        setCodeError(verified.message);
+      } else if (verified.code === "unconfigured") {
+        setCodeError("Email verification isn't configured on this deployment, so the code can't be checked. No success is faked.");
+      } else {
+        setCodeError(verified.message);
+      }
+      return;
+    }
+    const result = await api.confirmEmailOtp(verified.accessToken);
     setBusy(false);
     if (result.ok) {
       setCode(emptyCodeState());
@@ -233,27 +271,47 @@ export function VerifyPage() {
       return;
     }
     setCode(emptyCodeState());
-    setCodeError(
-      result.error.code === "invalid_code"
-        ? "That code wasn't right — check the email and try again."
-        : result.error.code === "code_expired"
-          ? "That code expired. Request a new one below."
-          : result.error.code === "too_many_attempts"
-            ? "Too many wrong attempts. Request a new code."
-            : result.error.message ?? "Could not verify the code.",
-    );
+    switch (result.error.code) {
+      case "auth_failed":
+        setCodeError(result.error.message ?? "The verification session was rejected — request a new code.");
+        break;
+      case "email_unconfigured":
+        setCodeError("Email verification isn't configured on this server. No success is faked.");
+        break;
+      case "email_mismatch":
+      case "identity_mismatch":
+        setCodeError(result.error.message ?? "This verification session doesn't match your account.");
+        break;
+      case "wrong_step":
+        setCodeError("Verification is already past the email step — continue from your profile.");
+        break;
+      default:
+        setCodeError(result.error.message ?? "Could not verify the code.");
+    }
   };
 
   const resendCode = async () => {
     setCodeError(null);
     setBusy(true);
-    const result = await api.sendCode();
+    const gate = await api.requestOtp();
+    if (!gate.ok) {
+      setBusy(false);
+      setCodeError(
+        gate.error.code === "email_unconfigured"
+          ? "Email verification isn't configured on this server. No code was sent — nothing is faked."
+          : gate.error.message ?? "Could not resend the code.",
+      );
+      return;
+    }
+    const sent = await supabaseOtp.sendOtp(email.trim());
     setBusy(false);
-    if (result.ok) {
+    if (sent.ok) {
       setCode(emptyCodeState());
-      startResendTimer(result.data.resendInSec ?? 30);
+      startResendTimer(gate.data.resendInSec ?? 30);
+    } else if (sent.code === "unconfigured") {
+      setCodeError("Email verification isn't configured on this deployment. No code was sent — nothing is faked.");
     } else {
-      setCodeError(result.error.message ?? "Could not resend the code.");
+      setCodeError(sent.message);
     }
   };
 
@@ -408,15 +466,16 @@ export function VerifyPage() {
           <StepBadge step={2} total={4} label="Verify your email" />
           <p className="mb-4 text-[13px] leading-relaxed text-slate-600">
             We'll email a one-time {CODE_LENGTH}-digit code to <span className="font-semibold">{email}</span>.
-            It expires in 10 minutes — no phone number or SMS needed.
+            Codes expire automatically — if yours expires, just request a new one. No phone number or SMS needed.
           </p>
           <div className="space-y-4">
             {emailUnconfigured ? (
               <Notice tone="amber">
                 <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
-                  <span className="font-semibold">Email isn't configured on this server yet.</span> No code was sent, and
-                  verification can't continue until the operator sets up the Email provider. Nothing is faked — this is an
+                  <span className="font-semibold">Email verification isn't configured on this deployment yet.</span>{" "}
+                  No code was sent, and verification can't continue until the operator sets up Supabase Auth (the
+                  VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables). Nothing is faked — this is an
                   explicit unconfigured state.
                 </span>
               </Notice>
@@ -427,7 +486,8 @@ export function VerifyPage() {
               {busy ? "Sending…" : "Send code"}
             </PillButton>
             <p className="text-center text-xs leading-relaxed text-slate-400">
-              Email delivery is provided by Resend. Codes expire after 10 minutes.
+              Email codes are delivered by Supabase Auth. The code alone doesn't finish verification — you'll still
+              complete the selfie check, which a Run Local administrator reviews manually.
             </p>
           </div>
         </section>

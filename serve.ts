@@ -6,11 +6,18 @@
 //   RUN_LOCAL_PORT            port (default 3000; deliberately not `PORT`)
 //   RUN_LOCAL_DATA_DIR        data + uploads directory (default ./data)
 //   RUN_LOCAL_RETENTION_YEARS retention window for verification records (default 3)
-//   RESEND_API_KEY            Resend transactional email API key
-//   RUN_LOCAL_EMAIL_FROM      verified sender, e.g. Run Local <verify@example.com>
+//   VITE_SUPABASE_URL         Supabase project URL (browser-safe; also embedded
+//                             in the client bundle by Vite at build time)
+//   VITE_SUPABASE_ANON_KEY    Supabase PUBLIC anon key (browser-safe; also
+//                             embedded in the client bundle by Vite)
 //   RUN_LOCAL_MIN_AGE         minimum signup age (default 16)
 //   RUN_LOCAL_ADMIN_KEY       admin key for the safety tool (server-side only)
 //   RUN_LOCAL_ADMIN_EMAIL     admin identity shown in the audit log
+//
+// Email OTP verification is delivered by Supabase Auth (signInWithOtp /
+// verifyOtp). The server validates the resulting access token against
+// Supabase's /auth/v1/user endpoint using only the public anon key — no
+// service_role key or other secret is ever used or stored.
 //
 // NOTE: private uploads (selfies) live under <data>/uploads/private and are
 // deliberately NOT reachable through the static handler — only the audited

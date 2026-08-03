@@ -3,8 +3,9 @@
  *
  * The owner-only section renders ONLY when the server-reported `isOwner` flag
  * is true (never derived from the email client-side). It links to the admin
- * control center and shows honest deployment status (email sender health,
- * admin key, retention) from the public /api/health endpoint — no secrets.
+ * control center and shows honest deployment status (Supabase Auth email
+ * verification, admin key, retention) from the public /api/health endpoint —
+ * no secrets.
  */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -52,17 +53,13 @@ export function SettingsPage() {
     setConfirmingDelete(false);
   };
 
-  const senderStatus = health?.emailSender;
-  const senderLabel =
-    senderStatus?.status === "unconfigured"
-      ? "Email sender not configured"
-      : senderStatus?.status === "blocked"
-        ? "Blocked — consumer mailbox can't be verified by the provider"
-        : senderStatus?.status === "test_mode"
-          ? "Test sender — only delivers to the account owner"
-          : senderStatus?.status === "custom_domain"
-            ? "Custom domain — deliverability unconfirmed"
-            : "Unknown";
+  const supabaseConfigured = health?.supabaseConfigured;
+  const supabaseLabel =
+    supabaseConfigured === undefined
+      ? "…"
+      : supabaseConfigured
+        ? "Configured"
+        : "Not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)";
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
@@ -178,8 +175,8 @@ export function SettingsPage() {
               <span className="block text-[13px] font-semibold">Deployment status</span>
               <dl className="mt-1.5 space-y-1 text-xs text-white/70">
                 <div className="flex justify-between gap-3">
-                  <dt>Email sender</dt>
-                  <dd className="text-right">{senderLabel}</dd>
+                  <dt>Email verification (Supabase Auth)</dt>
+                  <dd className="text-right">{supabaseLabel}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt>Admin key (safety tool)</dt>
