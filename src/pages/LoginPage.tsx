@@ -1,11 +1,11 @@
 /**
- * Log in — email code sign-in.
+ * Log in — email OTP sign-in (Supabase Auth).
  *
- * Honest auth: enter the account email, we email a one-time code, enter it,
- * done. There are no passwords and no fake SSO — every failure state is
+ * Honest auth: enter the account email, Supabase emails a one-time code, enter
+ * it, done. There are no passwords and no fake SSO — every failure state is
  * explicit (unknown email, rejected account, unconfigured provider, wrong or
- * expired code). Sessions are the same server-issued HttpOnly cookies used by
- * the verification flow.
+ * expired code, rejected Supabase session). The server validates the Supabase
+ * identity before issuing its HttpOnly session cookie.
  */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -13,6 +13,7 @@ import { CodeEntry } from "../components/CodeEntry";
 import { Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
 import { emptyCodeState, type CodeState } from "../lib/numericCode";
+import * as supabaseOtp from "../lib/supabase";
 import { useAccount } from "../state/account";
 
 const inputCls =
@@ -46,39 +47,65 @@ export function LoginPage() {
       return;
     }
     setBusy(true);
-    const result = await api.loginStart(email.trim());
-    setBusy(false);
-    if (result.ok) {
-      setCode(emptyCodeState());
-      setStep("code");
-      setResendIn(result.data.resendInSec ?? 30);
+    // Server gate first (account exists, not rejected, provider configured,
+    // rate limited) — then Supabase actually emails the code.
+    const gate = await api.loginStart(email.trim());
+    if (gate.ok) {
+      const sent = await supabaseOtp.sendOtp(email.trim());
+      setBusy(false);
+      if (sent.ok) {
+        setCode(emptyCodeState());
+        setStep("code");
+        setResendIn(gate.data.resendInSec ?? 30);
+        return;
+      }
+      if (sent.code === "unconfigured") {
+        setError("Email verification isn't configured on this deployment, so no sign-in code can be sent. Nothing is faked — try again later.");
+      } else if (sent.code === "rate_limited") {
+        setError(sent.message);
+      } else {
+        setError(sent.message);
+      }
       return;
     }
-    switch (result.error.code) {
+    setBusy(false);
+    switch (gate.error.code) {
       case "no_account":
         setError("No Run Local account found for that email — you can sign up instead.");
         break;
       case "account_rejected":
-        setError(result.error.message ?? "This account was rejected and can't sign in.");
+        setError(gate.error.message ?? "This account was rejected and can't sign in.");
         break;
       case "email_unconfigured":
-        setError("Email isn't configured on this server yet, so no sign-in code can be sent. Nothing is faked — try again later.");
+        setError("Email verification isn't configured on this server yet, so no sign-in code can be sent. Nothing is faked — try again later.");
         break;
       case "rate_limited":
         setError("Too many codes requested for this email. Try again in about an hour.");
         break;
-      case "email_send_failed":
-        setError(result.error.message ?? "The email provider rejected the message.");
-        break;
       default:
-        setError(result.error.message ?? "Could not send the code. Try again.");
+        setError(gate.error.message ?? "Could not send the code. Try again.");
     }
   };
 
   const checkLogin = async (c: string) => {
     setError(null);
     setBusy(true);
-    const result = await api.loginCheck(email.trim(), c);
+    // Verify the 6-digit code with Supabase, then hand the access token to the
+    // server, which validates the Supabase identity before signing us in.
+    const verified = await supabaseOtp.verifyOtp(email.trim(), c);
+    if (!verified.ok) {
+      setBusy(false);
+      setCode(emptyCodeState());
+      if (verified.code === "code_expired" || verified.code === "invalid_code" || verified.code === "rate_limited") {
+        setError(verified.message);
+      } else if (verified.code === "unconfigured") {
+        setError("Email verification isn't configured on this deployment, so the code can't be checked. No success is faked.");
+      } else {
+        setError(verified.message);
+      }
+      return;
+    }
+    const result = await api.loginCheck(verified.accessToken);
     setBusy(false);
     if (result.ok) {
       setStep("signed_in");
@@ -87,14 +114,15 @@ export function LoginPage() {
     }
     setCode(emptyCodeState());
     switch (result.error.code) {
-      case "invalid_code":
-        setError("That code wasn't right — check the email and try again.");
+      case "auth_failed":
+        setError(result.error.message ?? "The sign-in session was rejected — request a new code.");
         break;
-      case "code_expired":
-        setError("That code expired. Request a new one below.");
+      case "email_unconfigured":
+        setError("Email verification isn't configured on this server. No success is faked.");
         break;
-      case "too_many_attempts":
-        setError("Too many wrong attempts. Request a new code.");
+      case "email_mismatch":
+      case "identity_mismatch":
+        setError(result.error.message ?? "This sign-in session doesn't match your account.");
         break;
       default:
         setError(result.error.message ?? "Could not sign in.");
@@ -104,13 +132,25 @@ export function LoginPage() {
   const resend = async () => {
     setError(null);
     setBusy(true);
-    const result = await api.loginStart(email.trim());
+    const gate = await api.loginStart(email.trim());
+    if (!gate.ok) {
+      setBusy(false);
+      setError(
+        gate.error.code === "email_unconfigured"
+          ? "Email verification isn't configured on this server. No code was sent — nothing is faked."
+          : gate.error.message ?? "Could not resend the code.",
+      );
+      return;
+    }
+    const sent = await supabaseOtp.sendOtp(email.trim());
     setBusy(false);
-    if (result.ok) {
+    if (sent.ok) {
       setCode(emptyCodeState());
-      setResendIn(result.data.resendInSec ?? 30);
+      setResendIn(gate.data.resendInSec ?? 30);
+    } else if (sent.code === "unconfigured") {
+      setError("Email verification isn't configured on this deployment. No code was sent — nothing is faked.");
     } else {
-      setError(result.error.message ?? "Could not resend the code.");
+      setError(sent.message);
     }
   };
 
@@ -191,7 +231,8 @@ export function LoginPage() {
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <h1 className="text-xl font-extrabold tracking-tight text-slate-900">Enter the code</h1>
           <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
-            We emailed a 6-digit code to <span className="font-semibold">{email}</span>. It expires in 10 minutes.
+            We emailed a 6-digit code to <span className="font-semibold">{email}</span>. Codes expire automatically — if
+            yours expires, just request a new one.
           </p>
           <div className="mt-4">
             <CodeEntry value={code} onChange={setCode} onComplete={(c) => void checkLogin(c)} disabled={busy} />

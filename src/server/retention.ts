@@ -52,6 +52,7 @@ export function deleteAccount(rec: AccountRecord, now = new Date()): AccountReco
     selfieRef: null,
     selfieCapturedAt: null,
     profilePhotoRef: null,
+    supabaseAuthId: null,
     signupIp: null,
     loginIps: [],
     deletedAt: now.toISOString(),

@@ -36,6 +36,16 @@ describe("API payload contract — sensitive data never leaves the server", () =
     expect(pub.badge).toBeNull();
     expect(JSON.stringify(pub)).not.toContain("573555");
   });
+
+  it("the Supabase auth identity link never leaves the server", () => {
+    const db = createMemoryStore();
+    const rec = db.createAccount({ name: "S", email: "s@example.com" });
+    db.updateAccount(rec.id, { supabaseAuthId: "11111111-2222-3333-4444-555555555555" });
+    const pub = toPublicAccount(db.getAccount(rec.id)!);
+    expect(pub).not.toHaveProperty("supabaseAuthId");
+    expect(JSON.stringify(pub)).not.toContain("11111111-2222-3333-4444-555555555555");
+    expect(JSON.stringify(pub)).not.toContain("supabase");
+  });
 });
 
 describe("authenticated phone contract", () => {
@@ -74,17 +84,5 @@ describe("code hashing", () => {
     expect(h).not.toContain("123456");
     expect(hashCode("123456", salt)).toBe(h);
     expect(hashCode("123457", salt)).not.toBe(h);
-  });
-});
-
-describe("email provider configuration detection", () => {
-  it("reports unconfigured when Resend vars are missing", async () => {
-    const { emailConfig } = await import("../src/server/email");
-    expect(emailConfig({}).configured).toBe(false);
-    expect(emailConfig({}).missing).toEqual(["RESEND_API_KEY", "RUN_LOCAL_EMAIL_FROM"]);
-  });
-  it("reports configured with both Resend vars", async () => {
-    const { emailConfig } = await import("../src/server/email");
-    expect(emailConfig({ RESEND_API_KEY: "key", RUN_LOCAL_EMAIL_FROM: "Run Local <v@example.com>" }).configured).toBe(true);
   });
 });

@@ -47,19 +47,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
 }
 
 // ------------------------------------------------------------------ health
-export interface EmailSenderHealth {
-  status: "unconfigured" | "blocked" | "test_mode" | "custom_domain";
-  verifiable: boolean;
-  /** false = determinably invalid (consumer mailbox, test sender); null = undetermined. */
-  verified: boolean | null;
-  domain: string | null;
-  reason: "missing_sender" | "consumer_domain" | "resend_dev_test_sender" | "not_confirmed";
-}
 export interface HealthInfo {
   ok: true;
-  emailConfigured: boolean;
-  emailMissing: string[];
-  emailSender: EmailSenderHealth;
+  /** Supabase email OTP provider configured (browser-safe env vars present). */
+  supabaseConfigured: boolean;
+  /** Names of missing provider vars only — never values, never secrets. */
+  supabaseMissing: string[];
   adminConfigured: boolean;
   retentionYears: number;
   retention: { retentionYears: number; eligibleForPurge: number; totalAccounts: number };
@@ -83,12 +76,20 @@ export function uploadProfilePhoto(photoDataUrl: string): Promise<ApiResult<{ ph
 }
 
 // -------------------------------------------------------------- verification
-export function sendCode(): Promise<ApiResult<{ status: string; resendInSec: number }>> {
+/**
+ * Request a Supabase email OTP (the server gates the request; the client then
+ * calls the Supabase adapter's sendOtp to actually trigger delivery).
+ */
+export function requestOtp(): Promise<ApiResult<{ status: string; resendInSec: number }>> {
   return request("/api/verify/start", { method: "POST", body: JSON.stringify({}) });
 }
 
-export function checkCode(code: string): Promise<ApiResult<{ status: string; next: string }>> {
-  return request("/api/verify/check", { method: "POST", body: JSON.stringify({ code }) });
+/**
+ * Submit the Supabase access token obtained from a successful verifyOtp call.
+ * The server validates it against Supabase before linking the identity.
+ */
+export function confirmEmailOtp(token: string): Promise<ApiResult<{ status: string; next: string }>> {
+  return request("/api/verify/check", { method: "POST", body: JSON.stringify({ token }) });
 }
 
 export function submitSelfie(photoDataUrl: string): Promise<ApiResult<{ status: string; message: string }>> {
@@ -109,8 +110,8 @@ export function loginStart(email: string): Promise<ApiResult<{ status: string; r
   return request("/api/login/start", { method: "POST", body: JSON.stringify({ email }) });
 }
 
-export function loginCheck(email: string, code: string): Promise<ApiResult<{ status: string; account: import("./accounts").PublicAccount }>> {
-  return request("/api/login/check", { method: "POST", body: JSON.stringify({ email, code }) });
+export function loginCheck(token: string): Promise<ApiResult<{ status: string; account: import("./accounts").PublicAccount }>> {
+  return request("/api/login/check", { method: "POST", body: JSON.stringify({ token }) });
 }
 
 // -------------------------------------------------------------------- admin

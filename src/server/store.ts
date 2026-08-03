@@ -178,6 +178,7 @@ export class Db {
       role: "runner",
       requestedRole: input.requestedRole ?? null,
       profilePhotoRef: null,
+      supabaseAuthId: null,
       phone: input.phone ?? null,
       phoneVerified: false,
       phoneVerifiedAt: null,

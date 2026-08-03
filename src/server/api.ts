@@ -8,8 +8,8 @@
  * IP) is ever included in a public payload or written to logs.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { Db, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, MAX_CODE_ATTEMPTS, codesEqual, hashCode, toPublicAccount, MIN_AGE } from "./store";
-import { sendVerificationEmail, emailConfig, emailSenderCheck } from "./email";
+import { Db, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPublicAccount, MIN_AGE } from "./store";
+import { supabaseConfig, verifySupabaseToken, applySupabaseIdentity } from "./supabase";
 import {
   adminConfigured,
   adminEmail,
@@ -185,15 +185,13 @@ async function handleApi(
 
   // ---- health (non-sensitive config booleans for the UI) -----------------
   if (method === "GET" && url.pathname === "/api/health") {
+    const supabase = supabaseConfig();
     return ok(res, {
       ok: true,
-      emailConfigured: emailConfig().configured,
-      emailMissing: emailConfig().missing,
-      // Deterministic sender classification — no provider call, no secrets.
-      // Reports Gmail/consumer FROM domains as blocked, and custom domains as
-      // "verifiable but unconfirmed" (we never claim verified without asking
-      // Resend).
-      emailSender: emailSenderCheck(),
+      // Supabase email OTP provider status — names of missing vars only, never
+      // values, and never the anon key itself.
+      supabaseConfigured: supabase.configured,
+      supabaseMissing: supabase.missing,
       adminConfigured: adminConfigured(),
       retentionYears: db.retentionYears,
       retention: retentionStatus(db, now),
@@ -249,41 +247,62 @@ async function handleApi(
     return ok(res, { account: toPublicAccount(rec, isOwnerEmail(rec.email)) }), true;
   }
 
-  // ---- send email code ----------------------------------------------------
+  // ---- request email OTP (Supabase delivers it) ----------------------------
+  // Supabase sends the 6-digit code to the user's inbox. This endpoint only
+  // gates the request: session, funnel phase, provider configuration, and the
+  // Run Local rate limit. The actual send happens client-side via the
+  // supabase-js `signInWithOtp` call, so the server never holds the code.
   if (method === "POST" && url.pathname === "/api/verify/start") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const rec = db.getAccount(sess.accountId);
     if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
     if (rec.status !== "pending" || (rec.phase !== "email" && rec.phase !== "code")) return err(res, { status: 409, error: "wrong_step" }), true;
-    // Fail before rate limiting or creating a code when deployment config is absent.
-    // This keeps an unavailable provider from consuming the user's resend budget.
-    const emailStatus = emailConfig();
-    if (!emailStatus.configured) {
+    // Fail before rate limiting when deployment config is absent. This keeps
+    // an unavailable provider from consuming the user's resend budget.
+    const supabase = supabaseConfig();
+    if (!supabase.configured) {
       return err(res, {
         status: 503,
         error: "email_unconfigured",
-        message: `Email provider is not configured (${emailStatus.missing.join(", ")}). No code was sent.`,
+        message: "Email verification is not configured on this server (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY missing). No code was sent.",
       }), true;
     }
     if (rateLimited(emailSendLog, rec.email, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, now.getTime())) return err(res, { status: 429, error: "rate_limited" }), true;
-    const { code } = db.createCode(rec.id, rec.email, now);
-    const sent = await sendVerificationEmail(rec.email, code);
-    if (!sent.ok) { db.deleteCode(rec.id); return err(res, { status: sent.kind === "unconfigured" ? 503 : 502, error: sent.kind === "unconfigured" ? "email_unconfigured" : "email_send_failed", message: sent.message }), true; }
-    db.updateAccount(rec.id, { phase: "code" }); await db.persist();
-    return ok(res, { status: "code_sent", resendInSec: 30 }), true;
+    return ok(res, { status: "otp_sent", resendInSec: 30 }), true;
   }
 
-  // ---- verify email code --------------------------------------------------
+  // ---- verify email OTP (server validates the Supabase identity) ----------
+  // The client verifies the 6-digit code with Supabase (verifyOtp) and sends
+  // the resulting access token here. The server NEVER trusts the client's
+  // claim: it introspects the token against Supabase and only then links the
+  // Supabase user (sub) to the Run Local account and advances the funnel.
+  // Email verification alone moves the funnel to the selfie step — it does NOT
+  // grant the Verified badge (only owner approval does).
   if (method === "POST" && url.pathname === "/api/verify/check") {
     const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
-    const body = (await readJson(req)) as { code?: unknown }; const code = typeof body.code === "string" ? body.code.replace(/\D/g, "") : "";
+    const body = (await readJson(req)) as { token?: unknown };
+    const token = typeof body.token === "string" ? body.token.trim() : "";
+    if (!token) return err(res, { status: 400, error: "invalid_token", message: "No Supabase session token was provided." }), true;
     const rec = db.getAccount(sess.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
-    if (rec.phase !== "code") return err(res, { status: 409, error: "wrong_step" }), true;
-    const codeRec = db.getCode(rec.id); if (!codeRec || new Date(codeRec.expiresAt).getTime() < now.getTime()) return err(res, { status: 410, error: "code_expired" }), true;
-    codeRec.attempts += 1; if (codeRec.attempts > MAX_CODE_ATTEMPTS) { db.deleteCode(rec.id); return err(res, { status: 429, error: "too_many_attempts" }), true; }
-    if (!codesEqual(hashCode(code, codeRec.salt), codeRec.hash)) { await db.persist(); return err(res, { status: 401, error: "invalid_code" }), true; }
-    db.deleteCode(rec.id); db.updateAccount(rec.id, { phase: "selfie", lastActivityAt: now.toISOString() }); db.appendLoginIp(rec.id, ip, now); await db.persist();
+    if (rec.phase !== "code" && rec.phase !== "email") return err(res, { status: 409, error: "wrong_step" }), true;
+    const verified = await verifySupabaseToken(token);
+    if (!verified.ok) {
+      return err(res, {
+        status: verified.reason === "unconfigured" ? 503 : verified.reason === "network" ? 502 : 401,
+        error: verified.reason === "unconfigured" ? "email_unconfigured" : "auth_failed",
+        message: verified.message,
+      }), true;
+    }
+    const linked = applySupabaseIdentity(rec, verified);
+    if (!linked.ok) {
+      const status = linked.code === "email_mismatch" ? 409 : 403;
+      return err(res, { status, error: linked.code, message: linked.message }), true;
+    }
+    db.updateAccount(rec.id, { ...linked.patch, phase: "selfie", lastActivityAt: now.toISOString() });
+    db.deleteCode(rec.id); // clear any legacy local code record
+    db.appendLoginIp(rec.id, ip, now);
+    await db.persist();
     return ok(res, { status: "email_verified", next: "selfie" }), true;
   }
 
@@ -330,11 +349,13 @@ async function handleApi(
     return ok(res, { photoUrl: `/uploads/public/${filename}` }), true;
   }
 
-  // ---- sign in with email code (honest: no passwords, no fake SSO) -------
-  // Guests with an existing account sign in by requesting a fresh 6-digit
-  // code to their email. Every failure is explicit: unknown email, rejected
-  // account, unconfigured provider, wrong/expired code. Sessions are the
-  // server-issued HttpOnly cookies used everywhere else.
+  // ---- sign in with email OTP (honest: no passwords, no fake SSO) --------
+  // Guests with an existing account sign in through the SAME Supabase OTP path
+  // as signup: the server validates the account exists and gates the request;
+  // Supabase delivers the code; the client verifies it; the server validates
+  // the resulting Supabase identity and issues the Run Local session cookie.
+  // Every failure is explicit: unknown email, rejected account, unconfigured
+  // provider, rejected/unverifiable Supabase token.
   if (method === "POST" && url.pathname === "/api/login/start") {
     const body = (await readJson(req)) as { email?: unknown };
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
@@ -348,56 +369,54 @@ async function handleApi(
     if (rec.status === "rejected") {
       return err(res, { status: 403, error: "account_rejected", message: "This account was rejected and can't sign in. Contact the owner if you believe this is a mistake." }), true;
     }
-    const emailStatus = emailConfig();
-    if (!emailStatus.configured) {
+    const supabase = supabaseConfig();
+    if (!supabase.configured) {
       return err(res, {
         status: 503,
         error: "email_unconfigured",
-        message: `Email provider is not configured (${emailStatus.missing.join(", ")}). No code was sent.`,
+        message: "Email verification is not configured on this server (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY missing). No code was sent.",
       }), true;
     }
     if (rateLimited(emailSendLog, rec.email, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, now.getTime())) {
       return err(res, { status: 429, error: "rate_limited" }), true;
     }
-    const { code } = db.createCode(rec.id, rec.email, now);
-    const sent = await sendVerificationEmail(rec.email, code);
-    if (!sent.ok) {
-      db.deleteCode(rec.id);
-      return err(res, { status: sent.kind === "unconfigured" ? 503 : 502, error: sent.kind === "unconfigured" ? "email_unconfigured" : "email_send_failed", message: sent.message }), true;
-    }
-    db.touchActivity(rec.id, now);
-    await db.persist();
-    return ok(res, { status: "code_sent", resendInSec: 30 }), true;
+    return ok(res, { status: "otp_sent", resendInSec: 30 }), true;
   }
 
   if (method === "POST" && url.pathname === "/api/login/check") {
-    const body = (await readJson(req)) as { email?: unknown; code?: unknown };
-    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-    const code = typeof body.code === "string" ? body.code.replace(/\D/g, "") : "";
-    const rec = db.getAccountByEmail(email);
-    if (!rec || rec.deletedAt) return err(res, { status: 404, error: "no_account" }), true;
+    const body = (await readJson(req)) as { token?: unknown };
+    const token = typeof body.token === "string" ? body.token.trim() : "";
+    if (!token) return err(res, { status: 400, error: "invalid_token", message: "No Supabase session token was provided." }), true;
+    const verified = await verifySupabaseToken(token);
+    if (!verified.ok) {
+      return err(res, {
+        status: verified.reason === "unconfigured" ? 503 : verified.reason === "network" ? 502 : 401,
+        error: verified.reason === "unconfigured" ? "email_unconfigured" : "auth_failed",
+        message: verified.message,
+      }), true;
+    }
+    // The authenticated email comes from the VERIFIED token, never from the
+    // client request body — the client cannot choose whose account to sign in
+    // to.
+    const rec = db.getAccountByEmail(verified.email);
+    if (!rec || rec.deletedAt) return err(res, { status: 404, error: "no_account", message: "No Run Local account found for that email — you can sign up instead." }), true;
     if (rec.status === "rejected") return err(res, { status: 403, error: "account_rejected" }), true;
-    const codeRec = db.getCode(rec.id);
-    if (!codeRec || new Date(codeRec.expiresAt).getTime() < now.getTime()) {
-      return err(res, { status: 410, error: "code_expired", message: "That code expired. Request a new one below." }), true;
+    const linked = applySupabaseIdentity(rec, verified);
+    if (!linked.ok) {
+      const status = linked.code === "email_mismatch" ? 409 : 403;
+      return err(res, { status, error: linked.code, message: linked.message }), true;
     }
-    codeRec.attempts += 1;
-    if (codeRec.attempts > MAX_CODE_ATTEMPTS) {
-      db.deleteCode(rec.id);
-      await db.persist();
-      return err(res, { status: 429, error: "too_many_attempts", message: "Too many wrong attempts. Request a new code." }), true;
-    }
-    if (!codesEqual(hashCode(code, codeRec.salt), codeRec.hash)) {
-      await db.persist();
-      return err(res, { status: 401, error: "invalid_code", message: "That code wasn't right — check the email and try again." }), true;
-    }
+    // Link the Supabase identity if this is a legacy account that predates the
+    // bridge (email ownership was just proven by Supabase OTP, so linking is
+    // legitimate); a mismatch with an existing link is rejected above.
+    if (!rec.supabaseAuthId) db.updateAccount(rec.id, linked.patch);
     db.deleteCode(rec.id);
     db.appendLoginIp(rec.id, ip, now);
     db.touchActivity(rec.id, now);
     const session = db.createSession(rec.id, ip, now);
     setCookie(res, SESSION_COOKIE, session.id, secure, 60 * 60 * 24 * 30);
     await db.persist();
-    return ok(res, { status: "signed_in", account: toPublicAccount(rec, isOwnerEmail(rec.email)) }), true;
+    return ok(res, { status: "signed_in", account: toPublicAccount(db.getAccount(rec.id)!, isOwnerEmail(rec.email)) }), true;
   }
 
   // ---- logout -------------------------------------------------------------
