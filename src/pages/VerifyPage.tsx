@@ -7,8 +7,8 @@
  *  - Phone is NOT collected in this flow — it remains an optional, unverified
  *    profile field reserved for a future upgrade. Verification is email code
  *    only; there is no SMS.
- *  - Email codes are delivered by Supabase Auth email OTP (signInWithOtp /
- *    verifyOtp, browser-safe anon key only). The server independently
+ *  - Email codes are delivered by Supabase Auth email verification (email verification /
+ *    verification code, browser-safe anon key only). The server independently
  *    validates the Supabase identity before advancing the funnel — a code
  *    alone never grants the Verified badge.
  *  - Code uses auto-advancing numeric digit boxes (inputMode="numeric").

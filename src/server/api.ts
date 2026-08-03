@@ -188,7 +188,7 @@ async function handleApi(
     const supabase = supabaseConfig();
     return ok(res, {
       ok: true,
-      // Supabase email OTP provider status — names of missing vars only, never
+      // Supabase email verification provider status — names of missing vars only, never
       // values, and never the anon key itself.
       supabaseConfigured: supabase.configured,
       supabaseMissing: supabase.missing,
@@ -247,11 +247,11 @@ async function handleApi(
     return ok(res, { account: toPublicAccount(rec, isOwnerEmail(rec.email)) }), true;
   }
 
-  // ---- request email OTP (Supabase delivers it) ----------------------------
+  // ---- request email verification (Supabase delivers it) ----------------------------
   // Supabase sends the 6-digit code to the user's inbox. This endpoint only
   // gates the request: session, funnel phase, provider configuration, and the
   // Run Local rate limit. The actual send happens client-side via the
-  // supabase-js `signInWithOtp` call, so the server never holds the code.
+  // supabase-js `email verification` call, so the server never holds the code.
   if (method === "POST" && url.pathname === "/api/verify/start") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
@@ -272,8 +272,8 @@ async function handleApi(
     return ok(res, { status: "otp_sent", resendInSec: 30 }), true;
   }
 
-  // ---- verify email OTP (server validates the Supabase identity) ----------
-  // The client verifies the 6-digit code with Supabase (verifyOtp) and sends
+  // ---- verify email verification (server validates the Supabase identity) ----------
+  // The client verifies the 6-digit code with Supabase (verification code) and sends
   // the resulting access token here. The server NEVER trusts the client's
   // claim: it introspects the token against Supabase and only then links the
   // Supabase user (sub) to the Run Local account and advances the funnel.
@@ -349,7 +349,7 @@ async function handleApi(
     return ok(res, { photoUrl: `/uploads/public/${filename}` }), true;
   }
 
-  // ---- sign in with email OTP (honest: no passwords, no fake SSO) --------
+  // ---- sign in with email verification (honest: no passwords, no fake SSO) --------
   // Guests with an existing account sign in through the SAME Supabase OTP path
   // as signup: the server validates the account exists and gates the request;
   // Supabase delivers the code; the client verifies it; the server validates

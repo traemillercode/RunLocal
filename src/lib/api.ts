@@ -49,7 +49,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
 // ------------------------------------------------------------------ health
 export interface HealthInfo {
   ok: true;
-  /** Supabase email OTP provider configured (browser-safe env vars present). */
+  /** Supabase email verification provider configured (browser-safe env vars present). */
   supabaseConfigured: boolean;
   /** Names of missing provider vars only — never values, never secrets. */
   supabaseMissing: string[];
@@ -77,7 +77,7 @@ export function uploadProfilePhoto(photoDataUrl: string): Promise<ApiResult<{ ph
 
 // -------------------------------------------------------------- verification
 /**
- * Request a Supabase email OTP (the server gates the request; the client then
+ * Request a Supabase email verification (the server gates the request; the client then
  * calls the Supabase adapter's sendOtp to actually trigger delivery).
  */
 export function requestOtp(): Promise<ApiResult<{ status: string; resendInSec: number }>> {
@@ -85,7 +85,7 @@ export function requestOtp(): Promise<ApiResult<{ status: string; resendInSec: n
 }
 
 /**
- * Submit the Supabase access token obtained from a successful verifyOtp call.
+ * Submit the Supabase access token obtained from a successful verification code call.
  * The server validates it against Supabase before linking the identity.
  */
 export function confirmEmailOtp(token: string): Promise<ApiResult<{ status: string; next: string }>> {

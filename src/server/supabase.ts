@@ -1,8 +1,7 @@
 /**
- * Server-side Supabase Auth bridge for email OTP verification.
+ * Server-side Supabase Auth bridge for email verification verification.
  *
- * Supabase owns email delivery + OTP verification (signInWithOtp /
- * verifyOtp run in the browser with the PUBLIC anon key). This module is the
+ * Supabase owns email delivery + OTP verification (email verification run in the browser with the PUBLIC anon key). This module is the
  * server's half of the bridge: it validates that a presented access token is
  * a REAL Supabase session for a given identity, so the Run Local server never
  * trusts a client-supplied "email verified" claim, email address, or role.
