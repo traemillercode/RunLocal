@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { BottomNav } from "./components/BottomNav";
 import { CitySheet, Header } from "./components/Header";
 import { CITIES } from "./data/cities";
@@ -14,12 +14,25 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { RacesPage } from "./pages/RacesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { VerifyPage } from "./pages/VerifyPage";
+import { RecoveryPage } from "./pages/RecoveryPage";
+import { parseRecoveryHash } from "./lib/recovery";
+import * as supabase from "./lib/supabase";
 
 /** Routes that get a chrome-free wizard layout (no bottom nav). */
-const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login"]);
+const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login", "/recovery"]);
 
 function Shell() {
   const store = useAppState();
+  const navigate = useNavigate();
+  const [recoveryError, setRecoveryError] = useState<string>();
+  useEffect(() => {
+    const parsed = parseRecoveryHash(window.location.hash);
+    if (!parsed) return;
+    window.history.replaceState(null, "", window.location.pathname + window.location.search + "#/recovery");
+    navigate("/recovery", { replace: true });
+    if ("error" in parsed) { setRecoveryError(parsed.error); return; }
+    void supabase.setRecoverySession(parsed.accessToken, parsed.refreshToken).then((result) => { if (!result.ok) setRecoveryError(result.message); });
+  }, [navigate]);
   const [cityOpen, setCityOpen] = useState(false);
   const city = CITIES.find((c) => c.id === store.state.cityId) ?? CITIES[0];
   const location = useLocation();
@@ -35,6 +48,7 @@ function Shell() {
           <Route path="/profile" element={<ProfilePage city={city} store={store} />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/recovery" element={<RecoveryPage sessionError={recoveryError} />} />
           <Route path="/verify" element={<VerifyPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

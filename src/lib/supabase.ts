@@ -14,6 +14,8 @@ export interface SupabaseAuthLike {
   signUp?: SupabaseClient["auth"]["signUp"];
   signInWithPassword?: SupabaseClient["auth"]["signInWithPassword"];
   resetPasswordForEmail?: SupabaseClient["auth"]["resetPasswordForEmail"];
+  updateUser?: SupabaseClient["auth"]["updateUser"];
+  setSession?: SupabaseClient["auth"]["setSession"];
 }
 const missingMessage = "Password sign-in is not configured on this deployment (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are missing).";
 function authFor(cfg: SupabaseClientConfig): SupabaseAuthLike { return createClient(cfg.url!, cfg.anonKey!).auth; }
@@ -29,7 +31,16 @@ export async function signInWithPassword(email: string, password: string, opts: 
   try { const { data, error } = await (opts.auth ?? authFor(c)).signInWithPassword!({ email, password }); if (error) return mapError(error.message); const token=data.session?.access_token; return token ? {ok:true,accessToken:token,emailConfirmationRequired:false} : {ok:false,code:"failed",message:"Supabase returned no session token."}; } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
 }
 export async function resetPasswordForEmail(email: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}): Promise<{ok:true}|{ok:false;code:"unconfigured"|"failed";message:string}> {
-  const c=cfg(opts.env); if(!c.configured) return {ok:false,code:"unconfigured",message:missingMessage}; try { const {error}=await (opts.auth??authFor(c)).resetPasswordForEmail!(email); return error ? {ok:false,code:"failed",message:"Supabase could not send a reset email. Check the address and try again."}:{ok:true}; } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
+  const c=cfg(opts.env); if(!c.configured) return {ok:false,code:"unconfigured",message:missingMessage};
+  try { const {error}=await (opts.auth??authFor(c)).resetPasswordForEmail!(email, { redirectTo: "https://runlocal.ctonew.app" }); return error ? {ok:false,code:"failed",message:"Supabase could not send a reset email. Check the address and try again."}:{ok:true}; } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
+}
+export async function setRecoverySession(accessToken: string, refreshToken: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}) {
+  const c=cfg(opts.env); if(!c.configured) return {ok:false as const, code:"unconfigured", message:missingMessage};
+  try { const {error}=await (opts.auth??authFor(c)).setSession!({access_token:accessToken, refresh_token:refreshToken}); return error ? {ok:false as const, code:"failed", message:"This recovery link is invalid or expired. Request a new one."}:{ok:true as const}; } catch { return {ok:false as const,code:"failed",message:"This recovery link is invalid or expired. Request a new one."}; }
+}
+export async function updatePassword(password: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}) {
+  const c=cfg(opts.env); if(!c.configured) return {ok:false as const, code:"unconfigured", message:missingMessage};
+  try { const {error}=await (opts.auth??authFor(c)).updateUser!({password}); return error ? {ok:false as const,code:"failed",message:"Could not update your password. The recovery link may have expired."}:{ok:true as const}; } catch { return {ok:false as const,code:"failed",message:"Could not update your password. The recovery link may have expired."}; }
 }
 
 /** Email-code helpers remain for the separate identity-verification funnel; password is the primary auth UI. */
