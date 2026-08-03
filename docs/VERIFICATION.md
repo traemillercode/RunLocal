@@ -2,11 +2,11 @@
 
 Email is the verification gate. Signup creates a **Pending Verification** read-only account; RSVP, comments, posts, and submissions remain unavailable until email verification and selfie review succeed. Phone is collected only as an unverified profile field (`phone_verified: false`) for a future SMS upgrade.
 
-Email OTP delivery is provided by **Supabase Auth** (`signInWithOtp` → 6-digit code → `verifyOtp`), using only the browser-safe public anon key. There is no Resend, no Gmail/domain sender, and no service_role key anywhere.
+Email verification delivery is provided by **Supabase Auth** (`email verification` → 6-digit code → `verification code`), using only the browser-safe public anon key. There is no Resend, no Gmail/domain sender, and no service_role key anywhere.
 
 ## Flow and privacy
 1. Signup requires name, email, optional phone, and birthdate; the server rejects users under `RUN_LOCAL_MIN_AGE` (default 16).
-2. Supabase emails a six-digit OTP to the signup email. Code boxes auto-advance and use `inputmode=numeric`. The client verifies the code with Supabase (`verifyOtp`, type `email`) and sends the resulting access token to the Run Local server.
+2. Supabase emails a six-digit OTP to the signup email. Code boxes auto-advance and use `inputmode=numeric`. The client verifies the code with Supabase (`verification code`, type `email`) and sends the resulting access token to the Run Local server.
 3. The server **never trusts the client's claim**: it validates the access token against Supabase's `/auth/v1/user` endpoint (public anon key only) and only then links the Supabase user UUID to the Run Local account (`supabaseAuthId`, server-side only). The token's email must equal the account email, and an already-linked account can't be re-homed to a different Supabase identity.
 4. **Email verification alone does NOT grant the Verified badge.** It only advances the funnel to the selfie step; the badge comes from manual owner review.
 5. A mandatory consent screen appears before `getUserMedia`; no gallery/file picker is used for selfies. Consent states live capture, comparison/review, no public display/discovery, admin-only access, and retention.
@@ -24,7 +24,7 @@ If the Supabase vars are missing, `/api/verify/start` and `/api/login/start` ret
 ## Supabase dashboard settings (project setup)
 - **Authentication → Providers → Email**: Enabled (this is the "Email provider + OTP" path).
 - **Authentication → Sign In / Up**: "Allow new users to sign up" ON — signup OTP (`shouldCreateUser: true`) creates the Supabase auth user for the new email. The Supabase auth user is only an email-identity vehicle; the Run Local account (profile, verification state) is created separately by the Run Local server.
-- **Authentication → Email**: "Email OTP Length" `6` (must match the six-digit code boxes), confirm email / OTP verification enabled (do not disable email confirmation).
+- **Authentication → Email**: "Email verification Length" `6` (must match the six-digit code boxes), confirm email / OTP verification enabled (do not disable email confirmation).
 - **Authentication → JWT Settings**: the project's JWT secret can stay whatever it is. The server validates tokens via Supabase's `/auth/v1/user` endpoint, which works with any JWT secret — no JWT secret is needed in the Run Local configuration.
 
 ## Known limitation (documented, not faked)

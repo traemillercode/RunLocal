@@ -203,12 +203,12 @@ describe("sendOtp (browser adapter)", () => {
     expect(result).toMatchObject({ ok: false, code: "rate_limited" });
   });
 
-  it("maps signups-disabled to a clear operator-facing error", async () => {
+  it("treats a signups-disabled provider error as a plain send failure (no OTP-era operator message)", async () => {
     const auth = authStub();
     auth.signInWithOtp.mockResolvedValue({ data: {}, error: { message: "Signups not allowed for otp" } });
     const result = await sendOtp("runner@example.com", { env: CLIENT_ENV, auth });
     expect(result).toMatchObject({ ok: false, code: "send_failed" });
-    if (!result.ok) expect(result.message).toContain("Allow new users to sign up");
+    if (!result.ok) expect(result.message).toBe("Could not send the verification email. Try again.");
   });
 
   it("surfaces a network throw as send_failed", async () => {
