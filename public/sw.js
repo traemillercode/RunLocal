@@ -27,6 +27,8 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  // API + uploads are never cached — identity state must always be fresh.
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/uploads/")) return;
 
   // Navigations: network first, fall back to cached shell.
   if (request.mode === "navigate") {

@@ -8,6 +8,12 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 5173,
+    // In dev the API runs on 3000 (bun run server) — proxy so the SPA and
+    // API share an origin (HttpOnly cookies work the same in dev and prod).
+    proxy: {
+      "/api": { target: "http://localhost:3000", changeOrigin: true },
+      "/uploads": { target: "http://localhost:3000", changeOrigin: true },
+    },
   },
   preview: {
     host: "0.0.0.0",
