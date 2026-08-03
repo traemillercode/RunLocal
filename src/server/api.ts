@@ -233,6 +233,16 @@ async function handleApi(
     const rec = db.getAccount(sess.accountId);
     if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
     if (rec.status !== "pending" || (rec.phase !== "email" && rec.phase !== "code")) return err(res, { status: 409, error: "wrong_step" }), true;
+    // Fail before rate limiting or creating a code when deployment config is absent.
+    // This keeps an unavailable provider from consuming the user's resend budget.
+    const emailStatus = emailConfig();
+    if (!emailStatus.configured) {
+      return err(res, {
+        status: 503,
+        error: "email_unconfigured",
+        message: `Email provider is not configured (${emailStatus.missing.join(", ")}). No code was sent.`,
+      }), true;
+    }
     if (rateLimited(emailSendLog, rec.email, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, now.getTime())) return err(res, { status: 429, error: "rate_limited" }), true;
     const { code } = db.createCode(rec.id, rec.email, now);
     const sent = await sendVerificationEmail(rec.email, code);
