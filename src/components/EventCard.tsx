@@ -1,23 +1,16 @@
-import type { AppStore } from "../lib/store";
-import { dayLabel, monthDayLabel, type DatedRunEvent } from "../lib/dates";
-import { GROUP_TYPE_LABELS, type City } from "../types";
 import { Chip, Icon } from "./ui";
-
-export function EventCard({
-  event,
-  city,
-  store,
-  onRsvp,
-}: {
+import { GROUP_TYPE_LABELS, type City } from "../types";
+import { dayLabel, monthDayLabel, type DatedRunEvent } from "../lib/dates";
+interface EventCardProps {
   event: DatedRunEvent;
   city: City;
-  store: AppStore;
+  rsvped: boolean;
+  /** Verified runners only. When false the button opens the verified gate. */
+  canRsvp: boolean;
   onRsvp: () => void;
-}) {
+}
+export function EventCard({ event, city, rsvped, canRsvp, onRsvp }: EventCardProps) {
   const group = city.groups.find((g) => g.id === event.groupId);
-  const rsvped = !!store.state.rsvped[event.id];
-  const canRsvp = store.isVerified;
-
   return (
     <article
       className={`overflow-hidden rounded-2xl bg-white shadow-sm ring-1 transition-shadow ${
@@ -37,7 +30,6 @@ export function EventCard({
             {monthDayLabel(event.date).split(" ")[0]}
           </span>
         </div>
-
         {/* Body */}
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
@@ -54,7 +46,6 @@ export function EventCard({
               </a>
             ) : null}
           </div>
-
           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-slate-600">
             <span className="inline-flex items-center gap-1">
               <Icon name="clock" className="h-3.5 w-3.5 text-slate-400" />
@@ -71,7 +62,6 @@ export function EventCard({
               <span className="ml-1.5 font-normal text-slate-400">· {GROUP_TYPE_LABELS[group.groupType]}</span>
             ) : null}
           </p>
-
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             <Chip tone={event.invite === "Open to all" ? "emerald" : "amber"}>{event.invite}</Chip>
             <Chip tone="outline">
@@ -80,20 +70,18 @@ export function EventCard({
           </div>
         </div>
       </div>
-
       <div className="flex items-center gap-2 border-t border-slate-100 px-4 py-2.5">
         <span className="text-xs font-semibold text-slate-500">{dayLabel(event.date, new Date())}</span>
         <span className="text-xs text-slate-300">·</span>
         <button
           type="button"
           onClick={onRsvp}
-          disabled={!canRsvp}
           className={`inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full text-sm font-semibold transition-colors ${
             rsvped
               ? "bg-emerald-100 text-emerald-800"
               : canRsvp
                 ? "bg-[#c8f169] text-[#0b2b22] active:bg-[#b9e355]"
-                : "bg-slate-100 text-slate-500"
+                : "bg-slate-100 text-slate-500 active:bg-slate-200"
           }`}
         >
           {rsvped ? (
@@ -106,7 +94,7 @@ export function EventCard({
             </>
           ) : (
             <>
-              <Icon name="lock" className="h-4 w-4" /> Sign in to RSVP
+              <Icon name="lock" className="h-4 w-4" /> Verified runners only
             </>
           )}
         </button>

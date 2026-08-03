@@ -2,7 +2,7 @@ import type { City } from "../types";
 import { Chip, Icon } from "./ui";
 import { Sheet } from "./ui";
 
-export function Header({ city, isDemo, onOpenCitySheet }: { city: City; isDemo: boolean; onOpenCitySheet: () => void }) {
+export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet: () => void }) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b2b22] text-white shadow-sm">
       <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between gap-3 px-4">
@@ -13,11 +13,6 @@ export function Header({ city, isDemo, onOpenCitySheet }: { city: City; isDemo: 
           <span className="truncate text-[17px] font-extrabold tracking-tight">
             Run <span className="text-[#c8f169]">Local</span>
           </span>
-          {isDemo ? (
-            <Chip tone="volt">
-              <Icon name="spark" className="h-3 w-3" /> Demo
-            </Chip>
-          ) : null}
         </div>
         <button
           type="button"

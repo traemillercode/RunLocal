@@ -2,14 +2,14 @@
 
 Mobile-first, installable web app for city-scoped running communities. **Launch city: Columbia, MO.**
 
-This is the **MVP** per the ratified business plan: core browsing and navigation first. Deeper verification, admin workflows, submissions, and integrations come in later phases.
+This is the **MVP + identity/safety layer**: core browsing and navigation, plus an explicit Guest → Pending Verification → Verified account model with phone + live-selfie verification (Twilio), an admin-only safety tool (audited), and a 3-year retention purge. See `docs/VERIFICATION.md` for the full contract and env vars.
 
 ## What's here
 
 - **Home / Events** — this week's group runs, chronological, with date, time, location, host, invitation label, RSVP affordance, and external-link affordance. Includes a search box (`type="search"`).
 - **Races** — seeded race cards with external registration links.
 - **Forum** — three distinct sections (Announcements / Community / Q&A) with Q&A sorting controls (Newest / Unanswered / Top). Guests browse; posting & replying are gated behind sign-in/verification messaging.
-- **Profile** — guest vs. verified-runner presentation, a demo preview toggle (clearly labeled — **no fake verification**, no claimed SMS/selfie functionality), and a launch-notification signup (email `type="email"`, phone `type="tel"`).
+- **Profile** — guest / pending / verified presentation with the real verification flow (`#/verify`): phone code → explicit consent → live selfie (getUserMedia), reviewed manually by an admin. Only a Verified badge is public.
 - **City switcher** — Columbia, MO is the live launch city; future cities are data-model placeholders ("Coming soon").
 - **PWA shell** — web manifest, service worker (offline shell), generated PNG icons, theme colors, standalone display.
 - **App-like interactions** — no full page reloads (SPA), bottom sheets, toasts, RSVP/sign-in feedback, gated create-sheets.

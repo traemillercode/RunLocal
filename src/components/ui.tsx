@@ -169,6 +169,18 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9" />
     </>
   ),
+  download: (
+    <>
+      <path d="M12 4v11M8 11l4 4 4-4" />
+      <path d="M5 20h14" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M5 7h14M10 7V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2" />
+      <path d="M7 7l1 13h8l1-13M10 11v6M14 11v6" />
+    </>
+  ),
   trophy: (
     <>
       <path d="M8 4h8v5a4 4 0 0 1-8 0V4z" />

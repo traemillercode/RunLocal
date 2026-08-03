@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { SignInSheet } from "../components/SignInSheet";
+import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { Chip, Icon, PillButton, Sheet } from "../components/ui";
-import type { AppStore } from "../lib/store";
 import { useToast } from "../lib/toast";
+import { useAccount } from "../state/account";
 import { FORUM_SECTIONS, type City, type ForumPost, type ForumSection, type QaSort } from "../types";
 
 const SECTION_META: Record<ForumSection, { icon: string; active: string; badge: string; dot: string }> = {
@@ -72,11 +72,12 @@ function PostCard({
   );
 }
 
-export function ForumPage({ city, store }: { city: City; store: AppStore }) {
+export function ForumPage({ city }: { city: City }) {
   const toast = useToast();
+  const { role } = useAccount();
   const [section, setSection] = useState<ForumSection>("announcements");
   const [qaSort, setQaSort] = useState<QaSort>("newest");
-  const [signInOpen, setSignInOpen] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
   const posts = useMemo(() => {
@@ -93,7 +94,7 @@ export function ForumPage({ city, store }: { city: City; store: AppStore }) {
 
   const onReply = (title: string) => {
     toast(`Replies need a verified profile — "${title}"`, "info");
-    setSignInOpen(true);
+    setGateOpen(true);
   };
 
   return (
@@ -178,8 +179,8 @@ export function ForumPage({ city, store }: { city: City; store: AppStore }) {
           <Icon name="shield" className="h-5 w-5" />
         </span>
         <p className="text-[13px] leading-relaxed text-slate-600">
-          <span className="font-semibold text-slate-800">Guests can browse everything.</span> Posting &amp; replying require a
-          verified runner profile — verification launches in a later phase.
+          <span className="font-semibold text-slate-800">Everyone can browse.</span> Posting &amp; replying require a verified
+          runner profile — guests and pending profiles are read-only.
         </p>
       </div>
 
@@ -193,7 +194,7 @@ export function ForumPage({ city, store }: { city: City; store: AppStore }) {
         <div className="space-y-4">
           <p className="flex items-start gap-2 rounded-xl bg-amber-50 p-3.5 text-[13px] leading-relaxed text-amber-900">
             <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0" />
-            Posts open to verified runners in a later phase. Add your email and we'll notify you when posting launches.
+            Posting is limited to verified runners and the form itself launches in a later phase — finish verification first so you're ready when it does.
           </p>
           <div>
             <span className="mb-1.5 block text-sm font-semibold text-slate-700">Section</span>
@@ -237,20 +238,21 @@ export function ForumPage({ city, store }: { city: City; store: AppStore }) {
             className="w-full"
             onClick={() => {
               setCreateOpen(false);
-              setSignInOpen(true);
+              setGateOpen(true);
             }}
           >
-            <Icon name="mail" className="h-4 w-4" /> Notify me when posting launches
+            <Icon name="shield" className="h-4 w-4" /> {role === "pending" ? "Continue verification" : "Get verified"}
           </PillButton>
           <p className="text-center text-xs text-slate-400">Preview build — this form is disabled on purpose.</p>
         </div>
       </Sheet>
 
-      <SignInSheet
-        open={signInOpen}
-        onClose={() => setSignInOpen(false)}
-        store={store}
-        reason="Posting and replying are verified-runner actions. Sign-in & verification launch in a later phase — add your email and we'll let you know."
+      <VerifiedGateSheet
+        open={gateOpen}
+        onClose={() => setGateOpen(false)}
+        role={role}
+        actionLabel="posting and replying"
+        pendingLabel="Your profile is still in review."
       />
     </div>
   );

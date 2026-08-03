@@ -11,7 +11,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "bun run serve.ts",
     "publish": "bash ./publish.sh",
-    "icons": "bun scripts/gen-icons.mjs"
+    "icons": "bun scripts/gen-icons.mjs",
+    "server": "bun run serve.ts",
+    "retention:purge": "bun scripts/retention-purge.ts",
+    "verify:all": "bun run typecheck && bun run test && bun run build"
   },
   "dependencies": {
     "react": "^19.2.4",
