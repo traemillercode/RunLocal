@@ -1469,7 +1469,7 @@ async function handleAdmin(
     }
     // Role to assign on approval (owner/operator picks in the control center).
     const role = url.searchParams.get("role") === "group_leader" ? "group_leader" : "runner";
-    const result = adminSetStatus(db, ctx, id, action as "verified" | "rejected", now, role);
+    const result = adminSetStatus(db, ctx, id, action === "approve" ? "verified" : "rejected", now, role);
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, { ok: true, account: toPublicAccount(result.data, isOwnerEmail(result.data.email)) }), true;
