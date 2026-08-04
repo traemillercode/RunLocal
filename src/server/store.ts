@@ -174,6 +174,8 @@ export class Db {
   private matchingPreferences = new Map<string, import("./types").MatchingPreferencesRecord>();
   private joinRequests = new Map<string, import("./types").JoinRequestRecord>();
   private blocks = new Map<string, import("./types").BlockRecord>();
+  /** Persisted per-account JoinRequest timestamps. Old entries are pruned on every check. */
+  private joinRequestRate = new Map<string, number[]>();
   /**
    * Private upload bytes (credential proofs) kept in memory so in-memory/test
    * stores can serve them back; file-backed stores mirror the bytes to disk
@@ -250,6 +252,9 @@ export class Db {
       for (const p of parsed.matchingPreferences ?? []) this.matchingPreferences.set(p.accountId, p);
       for (const j of parsed.joinRequests ?? []) this.joinRequests.set(j.id, { ...j, requesterAccepted: j.requesterAccepted ?? false, recipientAccepted: j.recipientAccepted ?? false });
       for (const b of parsed.blocks ?? []) this.blocks.set(`${b.blockerId}:${b.blockedId}`, b);
+      for (const [accountId, timestamps] of Object.entries(parsed.joinRequestRate ?? {})) {
+        this.joinRequestRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
+      }
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -282,6 +287,7 @@ export class Db {
       matchingPreferences: [...this.matchingPreferences.values()],
       joinRequests: [...this.joinRequests.values()],
       blocks: [...this.blocks.values()],
+      joinRequestRate: Object.fromEntries(this.joinRequestRate.entries()),
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -401,6 +407,15 @@ export class Db {
   findPendingJoinRequest(requesterId: string, recipientId: string, contextType: "event" | "personal_run", contextId: string): import("./types").JoinRequestRecord | undefined { return [...this.joinRequests.values()].find((r) => r.requesterId === requesterId && r.recipientId === recipientId && r.contextType === contextType && r.contextId === contextId && r.state === "pending"); }
   isBlocked(a: string, b: string): boolean { return this.blocks.has(`${a}:${b}`) || this.blocks.has(`${b}:${a}`); }
   addBlock(record: import("./types").BlockRecord): void { this.blocks.set(`${record.blockerId}:${record.blockedId}`, record); }
+  /** Sliding-window limiter: returns true and records a request, persisting on caller's next persist(). */
+  consumeJoinRequestRate(accountId: string, nowMs: number, limit: number, windowMs: number): boolean {
+    const cutoff = nowMs - windowMs;
+    const current = (this.joinRequestRate.get(accountId) ?? []).filter((t) => t > cutoff).slice(-limit);
+    if (current.length >= limit) { this.joinRequestRate.set(accountId, current); return false; }
+    current.push(nowMs);
+    this.joinRequestRate.set(accountId, current);
+    return true;
+  }
   removeBlock(blockerId: string, blockedId: string): void { this.blocks.delete(`${blockerId}:${blockedId}`); }
   listBlocks(blockerId: string): import("./types").BlockRecord[] { return [...this.blocks.values()].filter(b => b.blockerId === blockerId); }
   invalidateJoinRequests(a: string, b: string): number { let n=0; for (const r of this.joinRequests.values()) if (((r.requesterId===a&&r.recipientId===b)||(r.requesterId===b&&r.recipientId===a)) && (r.state === "pending" || r.state === "accepted")) { r.state="blocked"; r.updatedAt=new Date().toISOString(); n++; } return n; }

@@ -251,6 +251,8 @@ export interface PersistedDb {
   matchingPreferences?: MatchingPreferencesRecord[];
   joinRequests?: JoinRequestRecord[];
   blocks?: BlockRecord[];
+  /** Per-account JoinRequest timestamps (epoch ms), persisted for restart/shared enforcement. */
+  joinRequestRate?: Record<string, number[]>;
 }
 
 export interface MatchingPreferencesRecord {
