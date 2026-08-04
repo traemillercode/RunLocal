@@ -10,6 +10,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Db, newId, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPublicAccount, MIN_AGE } from "./store";
 import type { AccountRecord } from "./types";
+import { PERSONAL_RUN_CONSENT_VERSION } from "./types";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
 
 import { supabaseConfig, verifySupabaseToken, applySupabaseIdentity } from "./supabase";
@@ -915,6 +916,44 @@ async function handleApi(
     const cityId = url.searchParams.get("city") ?? "";
     if (!cityId) return err(res, { status: 400, error: "invalid_city" }), true;
     return ok(res, { recognitions: publicRecognitions(db, cityId) }), true;
+  }
+
+  // ---- strictly private PersonalRun records -------------------------------
+  // Account identity is always derived from the HttpOnly session. PersonalRuns
+  // never enter public content, admin dashboards, or matching surfaces.
+  if (url.pathname === "/api/personal-runs" && (method === "GET" || method === "POST")) {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(s.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    if (method === "GET") return ok(res, { runs: db.listPersonalRuns(s.accountId).filter(r => !r.deletedAt) }), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    const cityId = typeof b.cityId === "string" ? b.cityId.trim() : "";
+    const title = typeof b.title === "string" ? b.title.trim() : "";
+    const startsAt = typeof b.startsAt === "string" ? b.startsAt : "";
+    const validText = (v: unknown, max: number) => v === undefined || v === null || (typeof v === "string" && v.trim().length <= max);
+    if (!cityId || cityStatus(db, cityId) === null) return err(res, { status: 400, error: "invalid_city" }), true;
+    if (!title || title.length > 120 || !validText(b.locationLabel, 160) || !validText(b.distanceLabel, 80) || !validText(b.notes, 1000)) return err(res, { status: 400, error: "invalid_personal_run" }), true;
+    const parsed = new Date(startsAt); const nowMs = now.getTime();
+    if (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d{1,3})?)?(?:Z|[+-]\\d{2}:?\\d{2})$/.test(startsAt) || Number.isNaN(parsed.getTime()) || parsed.getTime() < nowMs - 24 * 60 * 60 * 1000 || parsed.getTime() > nowMs + 2 * 365 * 24 * 60 * 60 * 1000) return err(res, { status: 400, error: "invalid_starts_at" }), true;
+    if (b.consentVersion !== PERSONAL_RUN_CONSENT_VERSION || b.consent !== true) return err(res, { status: 400, error: "consent_required" }), true;
+    const r = { id: newId(), accountId: s.accountId, cityId, title, startsAt: parsed.toISOString(), locationLabel: typeof b.locationLabel === "string" && b.locationLabel.trim() ? b.locationLabel.trim() : null, distanceLabel: typeof b.distanceLabel === "string" && b.distanceLabel.trim() ? b.distanceLabel.trim() : null, notes: typeof b.notes === "string" && b.notes.trim() ? b.notes.trim() : null, visibility: "private" as const, consentVersion: PERSONAL_RUN_CONSENT_VERSION, consentedAt: now.toISOString(), createdAt: now.toISOString(), updatedAt: now.toISOString(), deletedAt: null };
+    db.addPersonalRun(r); await db.persist(); return ok(res, { run: r }), true;
+  }
+  const personalRunId = /^\/api\/personal-runs\/([^/]+)$/.exec(url.pathname);
+  if (personalRunId && (method === "PATCH" || method === "DELETE")) {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(s.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const run = db.getPersonalRun(decodeURIComponent(personalRunId[1]));
+    if (!run || run.accountId !== s.accountId || run.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
+    if (method === "DELETE") { db.updatePersonalRun(run.id, { deletedAt: now.toISOString(), updatedAt: now.toISOString() }); await db.persist(); return ok(res, { deleted: true }), true; }
+    const b = await readJson(req) as Record<string, unknown>;
+    const merged = { ...run, ...b };
+    if (b.consent !== true || b.consentVersion !== PERSONAL_RUN_CONSENT_VERSION) return err(res, { status: 400, error: "consent_required" }), true;
+    const fakeReq = { ...merged, accountId: undefined }; // validation below never accepts accountId
+    const cityId = typeof fakeReq.cityId === "string" ? fakeReq.cityId.trim() : ""; const title = typeof fakeReq.title === "string" ? fakeReq.title.trim() : ""; const startsAt = typeof fakeReq.startsAt === "string" ? fakeReq.startsAt : ""; const parsed = new Date(startsAt);
+    if (!cityId || cityStatus(db, cityId) === null || !title || title.length > 120 || !/^\\d{4}-\\d{2}-\\d{2}T/.test(startsAt) || Number.isNaN(parsed.getTime())) return err(res, { status: 400, error: "invalid_personal_run" }), true;
+    const next = db.updatePersonalRun(run.id, { cityId, title, startsAt: parsed.toISOString(), locationLabel: typeof fakeReq.locationLabel === "string" ? fakeReq.locationLabel.trim() || null : run.locationLabel, distanceLabel: typeof fakeReq.distanceLabel === "string" ? fakeReq.distanceLabel.trim() || null : run.distanceLabel, notes: typeof fakeReq.notes === "string" ? fakeReq.notes.trim() || null : run.notes, consentVersion: PERSONAL_RUN_CONSENT_VERSION, consentedAt: now.toISOString(), updatedAt: now.toISOString() }); await db.persist(); return ok(res, { run: next }), true;
   }
 
   // ---- RSVP to an event (server-side shared attendance) -------------------
