@@ -67,8 +67,13 @@ export function getMe(): Promise<ApiResult<Me>> {
 }
 
 // ---------------------------------------------------------------- accounts
-export function createAccount(input: { name: string; email: string; phone?: string; birthdate: string; requestedRole?: "runner" | "group_leader"; noSession?: boolean }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
+export function createAccount(input: { name: string; username: string; email: string; phone?: string; birthdate: string; requestedRole?: "runner" | "group_leader"; noSession?: boolean }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
   return request("/api/accounts", { method: "POST", body: JSON.stringify(input) });
+}
+
+/** Set or change the signed-in user's unique public handle (server-normalized). */
+export function setUsername(username: string): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
+  return request("/api/profile/username", { method: "POST", body: JSON.stringify({ username }) });
 }
 
 export function uploadProfilePhoto(photoDataUrl: string): Promise<ApiResult<{ photoUrl: string }>> {

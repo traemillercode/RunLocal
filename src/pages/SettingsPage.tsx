@@ -87,6 +87,12 @@ export function SettingsPage() {
               <span className="max-w-[60%] truncate text-[14px] text-slate-500">{account.email}</span>
             </li>
             <li className="flex items-center justify-between gap-3 px-5 py-3.5">
+              <span className="text-[14px] font-medium text-slate-700">Username</span>
+              <span className="max-w-[60%] truncate text-[14px] text-slate-500">
+                {account.username ? `@${account.username}` : "Not set — add one on your profile"}
+              </span>
+            </li>
+            <li className="flex items-center justify-between gap-3 px-5 py-3.5">
               <span className="text-[14px] font-medium text-slate-700">Status</span>
               <span className="flex flex-wrap items-center justify-end gap-1.5">
                 {verified ? <VerifiedBadge size="sm" /> : <Chip tone="amber">{phaseLabel(account.phase)}</Chip>}

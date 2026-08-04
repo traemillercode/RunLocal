@@ -5,9 +5,11 @@
  *  1. supabase.signUp(email, password) creates the Supabase auth user. The
  *     password is NEVER sent to Run Local and never stored client-side.
  *  2. The local Pending profile is then created through POST /api/accounts
- *     with ONLY profile metadata (name, email, birthdate, optional phone,
- *     optional profile photo) — this is the fix for the bug where Supabase
- *     created auth.users but Run Local never created the matching account.
+ *     with ONLY profile metadata (name, username, email, birthdate, optional
+ *     phone, optional profile photo) — this is the fix for the bug where
+ *     Supabase created auth.users but Run Local never created the matching
+ *     account. Username uniqueness is enforced server-side (see
+ *     src/lib/username.ts).
  *  3a. If Supabase returns an immediate session (email confirmation off):
  *      the local account is created with a Run Local session, the Supabase
  *      identity is linked via /api/login/check, and the user is signed in.
@@ -27,6 +29,7 @@ import { Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
 import { validateBirthdate } from "../lib/birthdate";
 import * as supabase from "../lib/supabase";
+import { normalizeUsername, USERNAME_HINT } from "../lib/username";
 import { useAccount } from "../state/account";
 
 const inputCls =
@@ -67,6 +70,7 @@ export function LoginPage() {
   const [confirm, setConfirm] = useState("");
   // signup-only profile metadata
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [birthdate, setBirthdate] = useState("");
   const [birthdateError, setBirthdateError] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
@@ -115,6 +119,10 @@ export function LoginPage() {
         setError("Enter your name (at least 2 characters).");
         return;
       }
+      if (!normalizeUsername(username)) {
+        setError("Choose a username — 3–24 characters: letters, numbers, _ or -, starting with a letter.");
+        return;
+      }
       const birthdateCheck = validateBirthdate(birthdate);
       if (!birthdateCheck.ok) {
         setBirthdateError(birthdateCheck.message);
@@ -145,21 +153,31 @@ export function LoginPage() {
         // the local Pending profile WITHOUT a Run Local session — signed-in
         // status is never claimed without a valid Supabase session. The
         // account links to the confirmed identity on first login.
-        const created = await api.createAccount({ name: name.trim(), email: e, birthdate, phone: phone.trim() || undefined, noSession: true });
+        const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, phone: phone.trim() || undefined, noSession: true });
         setBusy(false);
         if (created.ok || created.error.code === "email_taken") {
           setNotice(
             "Account created. Check your email and tap the confirmation link, then log in with your password. " +
               (photoDataUrl ? "You can add your profile photo right after your first sign-in." : ""),
           );
+          setMode("login");
+          setPassword("");
+          setConfirm("");
+        } else if (created.error.code === "username_taken") {
+          // The Supabase auth user exists but the local profile wasn't saved —
+          // let the runner pick a free name and finish here. Nothing is faked:
+          // the account is linked on first confirmed login.
+          setError("That username is already taken — try another.");
+        } else if (created.error.code === "invalid_username") {
+          setError(created.error.message ?? "Pick a valid username.");
         } else {
           setNotice(
             "Your Supabase account was created, but Run Local couldn't save your profile right now. Confirm your email and log in — your account will finish setting up then.",
           );
+          setMode("login");
+          setPassword("");
+          setConfirm("");
         }
-        setMode("login");
-        setPassword("");
-        setConfirm("");
         return;
       }
       if (!r.accessToken) {
@@ -169,14 +187,13 @@ export function LoginPage() {
       }
       // Immediate session: create the local Pending account (this establishes
       // the Run Local session cookie) — never the password, only metadata.
-      const created = await api.createAccount({ name: name.trim(), email: e, birthdate, phone: phone.trim() || undefined });
-      if (!created.ok && created.error.code !== "email_taken") {
+      const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, phone: phone.trim() || undefined });
+      if (!created.ok) {
         setBusy(false);
-        setError(
-          created.error.code === "email_taken"
-            ? "That email already has an account. Log in instead."
-            : created.error.message ?? "Could not create your Run Local profile. Try again.",
-        );
+        if (created.error.code === "email_taken") setError("That email already has an account. Log in instead.");
+        else if (created.error.code === "username_taken") setError("That username is already taken — try another.");
+        else if (created.error.code === "invalid_username") setError(created.error.message ?? "Pick a valid username.");
+        else setError(created.error.message ?? "Could not create your Run Local profile. Try again.");
         return;
       }
       // Link the verified Supabase identity to the local account and confirm
@@ -265,6 +282,21 @@ export function LoginPage() {
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold">Name</span>
                 <input type="text" autoComplete="name" placeholder="Jordan Lee" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold">Username</span>
+                <input
+                  type="text"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="jordanlee"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className={inputCls}
+                />
+                <span className="mt-1 block text-[11px] leading-relaxed text-slate-400">{USERNAME_HINT}</span>
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold">Birthdate (you must be at least 16)</span>

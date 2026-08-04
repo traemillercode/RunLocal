@@ -1,11 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { Chip, Icon, PillButton } from "../components/ui";
 import type { City } from "../types";
 import { resolveWeekEvents } from "../lib/dates";
 import { phaseLabel, roleLabel } from "../lib/accounts";
+import type { PublicAccount } from "../lib/accounts";
+import * as api from "../lib/api";
 import type { AppStore } from "../lib/store";
+import { normalizeUsername, USERNAME_HINT, USERNAME_PROMPT } from "../lib/username";
 import { useAccount } from "../state/account";
 
 function initials(name: string): string {
@@ -17,9 +20,125 @@ function initials(name: string): string {
     .join("") || "R";
 }
 
+const editorInputCls =
+  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+
+/**
+ * Inline username editor (server-authoritative — the server re-validates and
+ * rejects duplicates; this UI only surfaces its verdicts clearly).
+ */
+function UsernameEditor({ account, refresh }: { account: PublicAccount; refresh: () => Promise<void> }) {
+  const [open, setOpen] = useState(account.username == null);
+  const [value, setValue] = useState(account.username ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const save = async () => {
+    setError(null);
+    setSaved(false);
+    const normalized = normalizeUsername(value);
+    if (!normalized) {
+      setError("Use 3–24 characters: letters, numbers, _ or -, starting with a letter.");
+      return;
+    }
+    setBusy(true);
+    const r = await api.setUsername(normalized);
+    setBusy(false);
+    if (r.ok) {
+      setValue(r.data.account.username ?? normalized);
+      setSaved(true);
+      setOpen(false);
+      await refresh();
+    } else if (r.error.code === "username_taken") {
+      setError("That username is already taken — try another.");
+    } else if (r.error.code === "invalid_username") {
+      setError(r.error.message ?? "Pick a valid username.");
+    } else if (r.error.code === "sign_in_required") {
+      setError("Your session expired — log in again to save your username.");
+    } else {
+      setError(r.error.message ?? "Couldn't save your username. Try again.");
+    }
+  };
+
+  if (!open) {
+    return (
+      <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-bold text-slate-900">Username</h2>
+            <p className="truncate text-[13px] font-semibold text-[#0b2b22]">@{account.username ?? "not set"}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(true);
+              setError(null);
+              setSaved(false);
+            }}
+            className="shrink-0 rounded-full bg-slate-100 px-4 py-2 text-[13px] font-semibold text-slate-700 active:bg-slate-200"
+          >
+            {account.username ? "Change" : "Set"}
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{USERNAME_HINT}</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+      <h2 className="text-[15px] font-bold text-slate-900">{account.username ? "Change username" : "Choose your username"}</h2>
+      {!account.username ? (
+        <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{USERNAME_PROMPT}</p>
+      ) : null}
+      <div className="mt-3 flex items-center gap-2">
+        <span className="text-[15px] font-semibold text-slate-500">@</span>
+        <input
+          type="text"
+          autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setError(null);
+            setSaved(false);
+          }}
+          placeholder="jordanlee"
+          aria-invalid={error ? true : undefined}
+          className={editorInputCls}
+        />
+      </div>
+      {error ? (
+        <p role="alert" className="mt-1.5 text-xs font-medium text-red-600">
+          {error}
+        </p>
+      ) : null}
+      {saved ? (
+        <p role="status" className="mt-1.5 text-xs font-medium text-emerald-700">
+          Username saved.
+        </p>
+      ) : null}
+      <div className="mt-3 flex gap-2">
+        <PillButton variant="primary" className="flex-1" disabled={busy} onClick={() => void save()}>
+          {busy ? "Saving…" : "Save username"}
+        </PillButton>
+        <PillButton variant="ghost" onClick={() => { setOpen(false); setError(null); setSaved(false); setValue(account.username ?? ""); }}>
+          Cancel
+        </PillButton>
+      </div>
+      <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+        Public and unique. Case-insensitive — stored lowercase. Never anything sensitive.
+      </p>
+    </section>
+  );
+}
+
 export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
   const navigate = useNavigate();
-  const { me, backendAvailable } = useAccount();
+  const { me, backendAvailable, refresh } = useAccount();
 
   const rsvps = useMemo(() => {
     const all = resolveWeekEvents(city.events, new Date());
@@ -55,6 +174,9 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
           )}
           <div className="min-w-0">
             <p className="truncate text-lg font-bold leading-tight">{name}</p>
+            {signedIn?.username ? (
+              <p className="truncate text-[13px] font-semibold leading-tight text-[#c8f169]">@{signedIn.username}</p>
+            ) : null}
             <p className="mt-0.5 text-[13px] text-white/70">
               {city.name}, {city.state}
             </p>
@@ -106,7 +228,9 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
             <Icon name="shield" className="h-4 w-4" /> Create account
           </PillButton>
         </section>
-      ) : null}
+      ) : (
+        <UsernameEditor account={signedIn} refresh={refresh} />
+      )}
 
       {/* Pending resume */}
       {signedIn && !verified ? (

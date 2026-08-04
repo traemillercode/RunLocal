@@ -72,6 +72,11 @@ export interface PublicAccount {
   id: string;
   name: string;
   email: string;
+  /**
+   * Unique public handle, normalized lowercase (null = legacy account that has
+   * not claimed one yet). Public profile identity — never sensitive data.
+   */
+  username: string | null;
   status: AccountRecord["status"];
   phase: VerifyPhase | null;
   badge: "verified" | null;
@@ -110,6 +115,7 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new D
     id: rec.id,
     name: rec.name,
     email: rec.email,
+    username: rec.username ?? null,
     status: rec.status,
     phase: rec.status === "pending" ? rec.phase : null,
     badge: rec.status === "verified" ? "verified" : null,
@@ -157,7 +163,13 @@ export class Db {
     try {
       const raw = await readFile(file, "utf8");
       const parsed = JSON.parse(raw) as PersistedDb;
-      for (const a of parsed.accounts ?? []) this.accounts.set(a.id, a);
+      for (const a of parsed.accounts ?? []) {
+        // Backward-compatible migration: accounts persisted before usernames
+        // existed simply lack the field — treat it as `null` (not set) so they
+        // keep working and can claim a username from their profile later.
+        a.username = a.username ?? null;
+        this.accounts.set(a.id, a);
+      }
       for (const s of parsed.sessions ?? []) this.sessions.set(s.id, s);
       for (const c of parsed.codes ?? []) this.codes.set(c.accountId, c);
       this.audits = parsed.audits ?? [];
@@ -198,9 +210,20 @@ export class Db {
     const key = email.trim().toLowerCase();
     return [...this.accounts.values()].find((a) => a.email.toLowerCase() === key);
   }
+  /**
+   * Look up an account by its normalized username (case-insensitive). The
+   * caller MUST pass the already-normalized form (see `normalizeUsername` in
+   * `src/lib/username.ts`) — this method compares on the stored, normalized
+   * lowercase value, so any casing of the same name collides deterministically.
+   */
+  getAccountByUsername(username: string): AccountRecord | undefined {
+    const key = username.trim().toLowerCase();
+    return [...this.accounts.values()].find((a) => a.username !== null && a.username !== undefined && a.username.toLowerCase() === key);
+  }
   createAccount(input: {
     name: string;
     email: string;
+    username?: string | null;
     phone?: string | null;
     birthdate?: string | null;
     requestedRole?: "runner" | "group_leader" | null;
@@ -209,6 +232,10 @@ export class Db {
       id: newId(),
       name: input.name.trim().slice(0, 60),
       email: input.email.trim().toLowerCase(),
+      // Uniqueness/validation live in the API layer (single-threaded store:
+      // check-then-write is atomic in-process). The store keeps the value as
+      // given — callers are expected to pass the normalized form.
+      username: input.username ?? null,
       status: "pending",
       phase: "email",
       role: "runner",

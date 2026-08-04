@@ -198,6 +198,7 @@ describe("profile menu states", () => {
         id: "x",
         name: "Taylor",
         email: "t@example.com",
+        username: "taylor_runs",
         status: "pending",
         phase: "pending_review",
         badge: null,
