@@ -10,7 +10,11 @@ import { parseAuthCallback, parseRecoveryHash } from "../src/lib/recovery";
 
 describe("parseAuthCallback", () => {
   it("routes signup confirmation callbacks without treating them as OTP verification", () => {
-    expect(parseAuthCallback("https://runlocal.ctonew.app/#type=signup&code=confirm-code")).toEqual({ kind: "confirmation" });
+    expect(parseAuthCallback("https://runlocal.ctonew.app/#type=signup&code=confirm-code")).toEqual({ kind: "confirmation", code: "confirm-code" });
+  });
+
+  it("preserves a confirmation callback session for deterministic linking", () => {
+    expect(parseAuthCallback("https://runlocal.ctonew.app/#type=signup&access_token=at&refresh_token=rt")).toEqual({ kind: "confirmation", accessToken: "at", refreshToken: "rt" });
   });
 
   it("routes recovery callbacks and keeps tokens at the callback boundary", () => {

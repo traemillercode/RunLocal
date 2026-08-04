@@ -24,6 +24,8 @@ export interface SupabaseAuthLike {
   resend?: SupabaseClient["auth"]["resend"];
   updateUser?: SupabaseClient["auth"]["updateUser"];
   setSession?: SupabaseClient["auth"]["setSession"];
+  getSession?: SupabaseClient["auth"]["getSession"];
+  exchangeCodeForSession?: SupabaseClient["auth"]["exchangeCodeForSession"];
 }
 const missingMessage = "Password sign-in is not configured on this deployment (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are missing).";
 function authFor(cfg: SupabaseClientConfig): SupabaseAuthLike { return createClient(cfg.url!, cfg.anonKey!).auth; }
@@ -102,6 +104,25 @@ export async function resendConfirmationEmail(email: string, opts: { env?: Recor
     if (/rate|too many|security purposes/i.test(normalizeErrorMessage(error))) return { ok:false, code:"rate_limited", message:"Too many requests. Wait a moment and try again." };
     return { ok:false, code:"failed", message:"Supabase could not resend the confirmation email. Check the address and try again." };
   } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
+}
+export async function getConfirmationSession(opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike; code?: string; accessToken?: string; refreshToken?: string } = {}): Promise<{ ok: true; accessToken: string } | { ok: false; code: "unconfigured" | "unavailable"; message: string }> {
+  const c = cfg(opts.env); if (!c.configured) return { ok: false, code: "unconfigured", message: missingMessage };
+  try {
+    const auth = opts.auth ?? authFor(c);
+    if (opts.accessToken && opts.refreshToken && auth.setSession) {
+      const session = await auth.setSession({ access_token: opts.accessToken, refresh_token: opts.refreshToken });
+      if (!session.error && session.data.session?.access_token) return { ok: true, accessToken: session.data.session.access_token };
+    }
+    if (opts.code && auth.exchangeCodeForSession) {
+      const exchanged = await auth.exchangeCodeForSession(opts.code);
+      if (exchanged.error || !exchanged.data.session?.access_token) return { ok: false, code: "unavailable", message: "Your confirmation link could not establish a session. Log in to continue." };
+      return { ok: true, accessToken: exchanged.data.session.access_token };
+    }
+    if (!auth.getSession) return { ok: false, code: "unavailable", message: "Your email is confirmed. Log in to continue." };
+    const current = await auth.getSession();
+    if (current.error || !current.data.session?.access_token) return { ok: false, code: "unavailable", message: "Your email is confirmed. Log in to continue." };
+    return { ok: true, accessToken: current.data.session.access_token };
+  } catch { return { ok: false, code: "unavailable", message: "Your email is confirmed. Log in to continue." }; }
 }
 export async function setRecoverySession(accessToken: string, refreshToken: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}) {
   const c=cfg(opts.env); if(!c.configured) return {ok:false as const, code:"unconfigured", message:missingMessage};
