@@ -57,7 +57,15 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
     }
   }, []);
 
+  const attachStream = useCallback((stream: MediaStream) => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.srcObject = stream;
+    void video.play().catch(() => {});
+  }, []);
+
   const startCamera = useCallback(async () => {
+    stopTracks();
     setStatus("requesting");
     setErrorDetail("");
     try {
@@ -66,10 +74,12 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
         audio: false,
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+      if (!videoRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        return;
       }
+      attachStream(stream);
       setStatus("ready");
     } catch (err) {
       if (err instanceof DOMException && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")) {
@@ -83,7 +93,11 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
         setErrorDetail("The camera could not be started. Check that another app is not using it, then retry.");
       }
     }
-  }, []);
+  }, [attachStream, stopTracks]);
+
+  useEffect(() => {
+    if (streamRef.current) attachStream(streamRef.current);
+  }, [status, attachStream]);
 
   useEffect(() => {
     void startCamera();
@@ -92,7 +106,10 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
 
   const capture = useCallback(() => {
     const video = videoRef.current;
-    if (!video || video.videoWidth === 0) return;
+    if (!video || video.videoWidth === 0) {
+      setErrorDetail("The camera preview is not ready yet. Please wait a moment and try again.");
+      return;
+    }
     try {
       const dataUrl = downscaleToDataUrl(video);
       setCapturedUrl(dataUrl);
@@ -114,17 +131,16 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
             <p className="text-xs font-medium">Starting camera…</p>
           </div>
         )}
-        {status === "ready" && (
-          <video
-            ref={videoRef}
-            playsInline
-            muted
-            autoPlay
-            className="h-full w-full object-cover"
-            style={{ transform: "scaleX(-1)" }}
-            aria-label="Live selfie preview"
-          />
-        )}
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          autoPlay
+          className={`h-full w-full object-cover ${status === "ready" ? "" : "invisible"}`}
+          style={{ transform: "scaleX(-1)" }}
+          aria-label="Live selfie preview"
+        />
+
         {status === "captured" && capturedUrl && (
           <img src={capturedUrl} alt="Captured selfie preview" className="h-full w-full object-cover" />
         )}
