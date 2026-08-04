@@ -96,8 +96,8 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
           <Icon name="external" className="h-4 w-4" />
         </a>
       ) : null}
-      <div className="flex items-center gap-2 border-t border-slate-100 px-4 py-2.5">
-        <span className="text-xs font-semibold text-slate-500">{dayLabel(event.date, new Date())}</span>
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-4 py-2.5">
+        <span className="min-w-0 text-xs font-semibold text-slate-500">{dayLabel(event.date, new Date())}</span>
         <span className="text-xs text-slate-300">·</span>
         <button
           type="button"
@@ -112,15 +112,15 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
         >
           {rsvped ? (
             <>
-              <Icon name="check" className="h-4 w-4" /> You're in — see you there
+              <Icon name="check" className="h-4 w-4" /> Remove from My Runs
             </>
           ) : canRsvp ? (
             <>
-              <Icon name="rsvp" className="h-4 w-4" /> RSVP
+              <Icon name="rsvp" className="h-4 w-4" /> Add to My Runs
             </>
           ) : (
             <>
-              <Icon name="lock" className="h-4 w-4" /> Verified runners only
+              <Icon name="rsvp" className="h-4 w-4" /> Add to My Runs
             </>
           )}
         </button>

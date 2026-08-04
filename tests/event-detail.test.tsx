@@ -77,7 +77,7 @@ describe("EventCard primary navigation (UI)", () => {
         <EventCard event={EVENT} city={CITY} rsvped={false} canRsvp onRsvp={noop} />
       </MemoryRouter>,
     );
-    expect(html).toContain("RSVP");
+    expect(html).toContain("Add to My Runs");
     expect(html).toContain("Open to all");
     expect(html).toContain("3-5 mi");
   });
@@ -105,7 +105,7 @@ describe("EventDetailView (UI)", () => {
     expect(html).toContain("Flat Branch Park — south shelter"); // location
     expect(html).toContain("3-5 mi, no-drop pace"); // meet-up notes
     expect(html).toContain("Open to all"); // invite
-    expect(html).toContain("RSVP for this run"); // RSVP action
+    expect(html).toContain("Add to My Runs"); // My Runs action
     expect(html).toContain("External details"); // external link action
     expect(html).toContain('href="https://www.facebook.com/runcomo/"');
     expect(html).toContain("Back to this week");
@@ -115,12 +115,13 @@ describe("EventDetailView (UI)", () => {
     const gated = renderToStaticMarkup(
       <EventDetailView event={EVENT} city={CITY} rsvped={false} canRsvp={false} onRsvp={noop} onBack={noop} />,
     );
-    expect(gated).toContain("Verified runners only");
+    // Ineligible users keep the same action-first CTA; tapping it opens the gate sheet.
+    expect(gated).toContain("Add to My Runs");
+    expect(gated).not.toContain("Verified runners only");
     expect(gated).not.toContain("RSVP for this run");
     const rsvped = renderToStaticMarkup(
       <EventDetailView event={EVENT} city={CITY} rsvped canRsvp onRsvp={noop} onBack={noop} />,
     );
-    // Apostrophe is HTML-escaped in SSR output — assert the entity-free phrase.
-    expect(rsvped).toContain("see you there");
+    expect(rsvped).toContain("Remove from My Runs");
   });
 });

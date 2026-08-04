@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EventCard } from "../components/EventCard";
 import { HomeCityBanner } from "../components/HomeCityBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
@@ -16,7 +16,7 @@ import { useModerated } from "../state/moderated";
 import { usePublicContent } from "../state/content";
 import { GROUP_TYPE_LABELS, type City } from "../types";
 
-export function EventsPage({ city, store }: { city: City; store: AppStore }) {
+export function EventsPage({ city }: { city: City; store: AppStore }) {
   const toast = useToast();
   const { role, me } = useAccount();
   const { hidden, highlights, groupBadges } = useModerated();
@@ -25,8 +25,13 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
   const [eventSheetOpen, setEventSheetOpen] = useState(false);
   const [groupSheetOpen, setGroupSheetOpen] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
+  const [myRunIds, setMyRunIds] = useState<Set<string>>(new Set());
   const weekStart = startOfWeek(new Date());
   const canRsvp = canDo(role, "rsvp");
+  useEffect(() => {
+    if (!canRsvp) { setMyRunIds(new Set()); return; }
+    void api.getMyRuns().then((r) => { if (r.ok) setMyRunIds(new Set(r.data.runs.map((run) => run.eventId))); });
+  }, [canRsvp]);
   const isGroupLeader = me?.status === "signed_in" && me.account.role === "group_leader";
 
   // Merge approved recurring independent events into the weekly model. Only
@@ -97,14 +102,14 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
       setGateOpen(true);
       return;
     }
-    const nowRsvped = !store.state.rsvped[eventId];
+    const nowRsvped = !myRunIds.has(eventId);
     // Server-side RSVP: shared-attendance record (rating eligibility basis).
     void api.rsvpEvent(eventId, nowRsvped).then((r) => {
       if (!r.ok) {
         toast(r.error.message ?? "Couldn't save your RSVP. Try again.", "info");
         return;
       }
-      store.toggleRsvp(eventId);
+      setMyRunIds((ids) => { const next = new Set(ids); if (nowRsvped) next.add(eventId); else next.delete(eventId); return next; });
       toast(nowRsvped ? `You're in for "${title}"!` : `RSVP removed for "${title}".`, nowRsvped ? "success" : "neutral");
     });
   };
@@ -200,7 +205,7 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
                       <EventCard
                         event={e}
                         city={city}
-                        rsvped={!!store.state.rsvped[e.id]}
+                        rsvped={myRunIds.has(e.id)}
                         canRsvp={canRsvp}
                         onRsvp={() => onRsvp(e.id, e.title)}
                         featured={hl?.featured}
