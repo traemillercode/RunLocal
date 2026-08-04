@@ -16,9 +16,9 @@ import { Icon, PillButton } from "./ui";
 import * as api from "../lib/api";
 
 const inputCls =
-  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 const reasonCls =
-  "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+  "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 const labelCls = "mb-1 block text-xs font-semibold text-slate-600";
 const BOTTOM_NAV_LABELS: Record<string, string> = { home: "Events (home)", races: "Races", clubs: "Clubs", forum: "Forum" };
 const TAG_LABELS: Record<string, string> = { runTypes: "Run types", credentialBodies: "Credential bodies", qa: "Q&A topics", ratings: "Ratings" };
@@ -134,7 +134,7 @@ export function GlobalAdminSection() {
     setBusy(false);
     if (!res.ok) {
       const map: Record<string, string> = {
-        invalid_color: "Colors must be 6-digit hex codes (e.g. #0b2b22).",
+        invalid_color: "Colors must be 6-digit hex codes (e.g. #14171C).",
         invalid_url: "Announcement links must start with https://.",
         invalid_text: "Title, wordmark, and tagline have invalid lengths.",
         invalid_bottom_nav: "The bottom navigation has invalid entries.",
@@ -333,7 +333,7 @@ export function GlobalAdminSection() {
                           type="checkbox"
                           checked={providers[id] !== false}
                           onChange={(e) => setProviders((p) => ({ ...p, [id]: e.target.checked }))}
-                          className="h-4 w-4 accent-[#0b2b22]"
+                          className="h-4 w-4 accent-[#14171C]"
                         />
                         Offered
                       </label>
@@ -370,7 +370,7 @@ export function GlobalAdminSection() {
                 ).map(([label, value, setter]) => (
                   <label key={label} className="block">
                     <span className={labelCls}>{label} (hex)</span>
-                    <input value={value} onChange={(e) => setter(e.target.value)} maxLength={7} placeholder="#0b2b22" className={`${inputCls} font-mono`} />
+                    <input value={value} onChange={(e) => setter(e.target.value)} maxLength={7} placeholder="#14171C" className={`${inputCls} font-mono`} />
                   </label>
                 ))}
               </div>
@@ -413,7 +413,7 @@ export function GlobalAdminSection() {
             <h3 className="text-[13px] font-bold uppercase tracking-wide text-slate-500">Announcement banner</h3>
             <div className="mt-2 space-y-3">
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                <input type="checkbox" checked={annOn} onChange={(e) => setAnnOn(e.target.checked)} className="h-4 w-4 accent-[#0b2b22]" />
+                <input type="checkbox" checked={annOn} onChange={(e) => setAnnOn(e.target.checked)} className="h-4 w-4 accent-[#14171C]" />
                 Show announcement
               </label>
               {annOn ? (
@@ -443,7 +443,7 @@ export function GlobalAdminSection() {
                     key={id}
                     type="button"
                     onClick={() => setBottomNav((nav) => (on ? nav.filter((n) => n !== id) : [...nav, id]))}
-                    className={`min-h-9 rounded-full px-3 text-xs font-semibold transition-colors ${on ? "bg-[#0b2b22] text-white" : "bg-slate-100 text-slate-500 active:bg-slate-200"}`}
+                    className={`min-h-9 rounded-full px-3 text-xs font-semibold transition-colors ${on ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-500 active:bg-slate-200"}`}
                     aria-pressed={on}
                   >
                     {label}
@@ -592,7 +592,7 @@ function CityRow({
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
           Accent hex
-          <input value={accent} onChange={(e) => setAccent(e.target.value)} maxLength={7} placeholder="#0b2b22" className="h-9 w-24 rounded-lg border border-slate-300 bg-white px-2 font-mono text-xs outline-none focus:border-[#0b2b22]" aria-label={`${city.name} accent`} />
+          <input value={accent} onChange={(e) => setAccent(e.target.value)} maxLength={7} placeholder="#14171C" className="h-9 w-24 rounded-lg border border-slate-300 bg-white px-2 font-mono text-xs outline-none focus:border-[#14171C]" aria-label={`${city.name} accent`} />
         </label>
         <label className="ml-auto inline-flex min-h-9 cursor-pointer items-center rounded-full bg-slate-100 px-3 text-xs font-semibold text-slate-600 active:bg-slate-200">
           Header image

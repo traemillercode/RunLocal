@@ -23,7 +23,7 @@ function initials(name: string): string {
 }
 
 const editorInputCls =
-  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
 /**
  * Inline username editor (server-authoritative — the server re-validates and
@@ -69,7 +69,7 @@ function UsernameEditor({ account, refresh }: { account: PublicAccount; refresh:
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-[15px] font-bold text-slate-900">Username</h2>
-            <p className="truncate text-[13px] font-semibold text-[#0b2b22]">@{account.username ?? "not set"}</p>
+            <p className="truncate text-[13px] font-semibold text-[#14171C]">@{account.username ?? "not set"}</p>
           </div>
           <button
             type="button"
@@ -222,19 +222,19 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
       ) : null}
 
       {/* Identity card */}
-      <section className="mt-4 overflow-hidden rounded-2xl bg-[#0b2b22] text-white shadow-sm">
+      <section className="mt-4 overflow-hidden rounded-2xl bg-[#14171C] text-white shadow-sm">
         <div className="flex items-center gap-4 p-5">
           {photo ? (
             <img src={photo} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover ring-2 ring-white/20" />
           ) : (
-            <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[#c8f169] text-xl font-extrabold text-[#0b2b22]">
+            <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[#FF5741] text-xl font-extrabold text-[#14171C]">
               {initials(name)}
             </span>
           )}
           <div className="min-w-0">
             <p className="truncate text-lg font-bold leading-tight">{name}</p>
             {signedIn?.username ? (
-              <p className="truncate text-[13px] font-semibold leading-tight text-[#c8f169]">@{signedIn.username}</p>
+              <p className="truncate text-[13px] font-semibold leading-tight text-[#FF5741]">@{signedIn.username}</p>
             ) : null}
             <p className="mt-0.5 text-[13px] text-white/70">
               {signedIn ? (hasHomeCity ? `Home: ${city.name}, ${city.state}` : "Home city: not set") : `${city.name}, ${city.state}`}
@@ -267,7 +267,7 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
         {signedIn && !verified ? (
           <div className="border-t border-white/10 bg-white/5 px-5 py-3">
             <p className="flex items-start gap-2 text-[12px] leading-relaxed text-white/70">
-              <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0 text-[#c8f169]" />
+              <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0 text-[#FF5741]" />
               Pending Verification profiles are read-only: no RSVPs, posts, or submissions until your identity is
               approved. Only a Verified badge is ever shown publicly.
             </p>
@@ -308,7 +308,7 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
             <div className="min-w-0">
               <h2 className="text-[15px] font-bold text-slate-900">Home city</h2>
               {hasHomeCity ? (
-                <p className="truncate text-[13px] font-semibold text-[#0b2b22]">
+                <p className="truncate text-[13px] font-semibold text-[#14171C]">
                   {city.name}, {city.state}
                 </p>
               ) : (
