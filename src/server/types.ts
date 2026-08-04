@@ -248,8 +248,32 @@ export interface PersistedDb {
    */
   attendance?: AttendanceRecord[];
   personalRuns?: PersonalRunRecord[];
+  matchingPreferences?: MatchingPreferencesRecord[];
+  joinRequests?: JoinRequestRecord[];
+  blocks?: BlockRecord[];
 }
 
+export interface MatchingPreferencesRecord {
+  accountId: string;
+  enabled: boolean;
+  consentVersion: string | null;
+  consentedAt: string | null;
+  cityId: string | null;
+  timeWindow: "morning" | "afternoon" | "evening" | "flexible" | null;
+  selfDescribedGender: string | null;
+  genderPreference: string | null;
+  updatedAt: string;
+}
+export type JoinRequestState = "pending" | "accepted" | "declined" | "cancelled" | "expired" | "blocked";
+export interface JoinRequestRecord {
+  id: string; requesterId: string; recipientId: string;
+  contextType: "event" | "personal_run"; contextId: string;
+  state: JoinRequestState; createdAt: string; expiresAt: string;
+  updatedAt: string;
+}
+export interface BlockRecord { blockerId: string; blockedId: string; createdAt: string; }
+
+export const MATCHING_CONSENT_VERSION = "2026-08-04.matching.v1";
 export const PERSONAL_RUN_CONSENT_VERSION = "2026-08-04.v1";
 export interface PersonalRunRecord {
   id: string; accountId: string; cityId: string; title: string; startsAt: string;

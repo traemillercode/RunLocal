@@ -10,7 +10,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Db, newId, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPublicAccount, MIN_AGE } from "./store";
 import type { AccountRecord } from "./types";
-import { PERSONAL_RUN_CONSENT_VERSION } from "./types";
+import { PERSONAL_RUN_CONSENT_VERSION, MATCHING_CONSENT_VERSION } from "./types";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
 
 import { supabaseConfig, verifySupabaseToken, applySupabaseIdentity } from "./supabase";
@@ -918,6 +918,36 @@ async function handleApi(
     if (!cityId) return err(res, { status: 400, error: "invalid_city" }), true;
     return ok(res, { recognitions: publicRecognitions(db, cityId) }), true;
   }
+
+  // ---- private matching preferences ----------------------------------------
+  if (url.pathname === "/api/matching/preferences" && (method === "GET" || method === "PATCH")) {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    if (!db.getAccount(s.accountId)) return err(res, { status: 401, error: "sign_in_required" }), true;
+    if (method === "GET") return ok(res, { preferences: db.getMatchingPreferences(s.accountId) ?? { accountId:s.accountId, enabled:false, consentVersion:null, consentedAt:null, cityId:null, timeWindow:null, selfDescribedGender:null, genderPreference:null, updatedAt:null } }), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    if (typeof b.enabled !== "boolean") return err(res, { status:400, error:"invalid_enabled" }), true;
+    if (b.enabled && (b.consent !== true || b.consentVersion !== MATCHING_CONSENT_VERSION)) return err(res, { status:400, error:"consent_required" }), true;
+    const cityId = b.cityId == null ? null : typeof b.cityId === "string" ? b.cityId.trim() : "";
+    const timeWindow = b.timeWindow == null ? null : b.timeWindow;
+    const text = (v:unknown) => v == null || (typeof v === "string" && v.trim().length <= 80);
+    if ((cityId !== null && cityStatus(db, cityId) === null) || (timeWindow !== null && !["morning","afternoon","evening","flexible"].includes(String(timeWindow))) || !text(b.selfDescribedGender) || !text(b.genderPreference)) return err(res, { status:400, error:"invalid_preferences" }), true;
+    const old = db.getMatchingPreferences(s.accountId); const p = { accountId:s.accountId, enabled:b.enabled, consentVersion:b.enabled ? MATCHING_CONSENT_VERSION : null, consentedAt:b.enabled ? (old?.consentedAt ?? now.toISOString()) : null, cityId, timeWindow:timeWindow as any, selfDescribedGender:typeof b.selfDescribedGender === "string" ? b.selfDescribedGender.trim() || null : null, genderPreference:typeof b.genderPreference === "string" ? b.genderPreference.trim() || null : null, updatedAt:now.toISOString() };
+    db.setMatchingPreferences(p); await db.persist(); return ok(res, { preferences:p }), true;
+  }
+
+  // ---- private join requests (no discovery/candidate listing) -------------
+  if (url.pathname === "/api/join-requests" && (method === "GET" || method === "POST")) {
+    const s=requireSession(db,cookies); if(!s)return err(res,{status:401,error:"sign_in_required"}),true;
+    if(method==="GET") return ok(res,{requests:db.listJoinRequests(s.accountId).map(r=>({id:r.id,requesterId:r.requesterId,recipientId:r.recipientId,contextType:r.contextType,contextId:r.contextId,state:r.state,createdAt:r.createdAt,expiresAt:r.expiresAt,updatedAt:r.updatedAt}))}),true;
+    const b=await readJson(req) as Record<string,unknown>, target=typeof b.targetId==="string"?b.targetId:"", kind=b.contextType as "event" | "personal_run", context=typeof b.contextId==="string"?b.contextId:"";
+    if(!target||target===s.accountId||!db.getAccount(target)||(kind!=="event"&&kind!=="personal_run")||!context)return err(res,{status:400,error:"invalid_join_request"}),true;
+    if(kind==="personal_run"){const run=db.getPersonalRun(context);if(!run||run.accountId!==target||run.deletedAt)return err(res,{status:404,error:"not_found"}),true;}
+    if(db.isBlocked(s.accountId,target))return err(res,{status:403,error:"blocked"}),true;
+    if(db.findPendingJoinRequest(s.accountId,target,kind,context))return err(res,{status:409,error:"duplicate_request"}),true;
+    const r: import("./types").JoinRequestRecord={id:newId(),requesterId:s.accountId,recipientId:target,contextType:kind,contextId:context,state:"pending",createdAt:now.toISOString(),expiresAt:new Date(now.getTime()+7*86400000).toISOString(),updatedAt:now.toISOString()};db.addJoinRequest(r);await db.persist();return ok(res,{request:r}),true;
+  }
+  const ja=/^\/api\/join-requests\/([^/]+)\/(accept|decline|cancel)$/.exec(url.pathname);
+  if(ja&&method==="POST"){const s=requireSession(db,cookies);if(!s)return err(res,{status:401,error:"sign_in_required"}),true;const r=db.getJoinRequest(ja[1]);if(!r)return err(res,{status:404,error:"not_found"}),true;if(r.state!=="pending")return err(res,{status:409,error:"invalid_state"}),true;if(new Date(r.expiresAt)<=now){db.updateJoinRequest(r.id,{state:"expired",updatedAt:now.toISOString()});await db.persist();return err(res,{status:409,error:"expired"}),true;}const action=ja[2];if((action!=="cancel"&&r.recipientId!==s.accountId)||(action==="cancel"&&r.requesterId!==s.accountId))return err(res,{status:403,error:"forbidden"}),true;const state=action==="accept"?"accepted":action==="decline"?"declined":"cancelled";db.updateJoinRequest(r.id,{state,updatedAt:now.toISOString()});await db.persist();return ok(res,{request:{...r,state}}),true;}
 
   // ---- strictly private PersonalRun records -------------------------------
   // Account identity is always derived from the HttpOnly session. PersonalRuns
