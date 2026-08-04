@@ -12,6 +12,8 @@ import { Db, newId, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPu
 import type { AccountRecord } from "./types";
 import { PERSONAL_RUN_CONSENT_VERSION, MATCHING_CONSENT_VERSION } from "./types";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
+import { listSafetyReportsAdmin, decideSafetyReport } from "./safety";
+import type { SafetyReportStatus } from "./types";
 
 import { supabaseConfig, verifySupabaseToken, applySupabaseIdentity } from "./supabase";
 import {
@@ -1473,6 +1475,25 @@ async function handleAdmin(
     db.appendAudit({ admin: adminEmail(), action: "admin.purge", reason: ctx.reason!.trim().slice(0, 500), targetId: null, ip }, now);
     await db.persist();
     return ok(res, { purged: result.purged.length, retained: result.retained.length }), true;
+  }
+
+  // Safety reports: scoped, privacy-safe admin DTOs.
+  if (method === "GET" && url.pathname === "/api/admin/safety-reports") {
+    const city = url.searchParams.get("city");
+    const result = listSafetyReportsAdmin(db, ctx, city, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { reports: result.data }), true;
+  }
+  const safetyDecision = /^\/api\/admin\/safety-reports\/([a-f0-9]{32})\/?$/.exec(url.pathname);
+  if (method === "POST" && safetyDecision) {
+    const body = (await readJson(req)) as { status?: unknown };
+    const status = body.status;
+    if (status !== "open" && status !== "under_review" && status !== "resolved" && status !== "dismissed") return err(res, {status:400,error:"invalid_status"}), true;
+    const result = decideSafetyReport(db, ctx, safetyDecision[1], status as SafetyReportStatus, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { report: result.data }), true;
   }
 
   // ==================== MULTI-CITY ADMIN FOUNDATION ========================
