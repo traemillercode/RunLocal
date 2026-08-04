@@ -11,6 +11,7 @@ import { PublicContentProvider } from "./state/content";
 import { useSelectedCity } from "./state/city";
 import { AdminPage } from "./pages/AdminPage";
 import { EventsPage } from "./pages/EventsPage";
+import { EventDetailPage } from "./pages/EventDetailPage";
 import { ForumPage } from "./pages/ForumPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -48,6 +49,7 @@ function Shell() {
           <PublicContentProvider cityId={city.id}>
             <Routes>
             <Route path="/" element={<EventsPage city={city} store={store} />} />
+            <Route path="/events/:eventId" element={<EventDetailPage city={city} store={store} />} />
             <Route path="/races" element={<RacesPage city={city} />} />
             <Route path="/forum" element={<ForumPage city={city} />} />
             <Route path="/profile" element={<ProfilePage city={city} store={store} />} />

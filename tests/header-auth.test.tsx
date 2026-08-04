@@ -179,6 +179,23 @@ describe("header auth UI", () => {
     expect(html).toContain("Local");
   });
 
+  it("keeps the full Run Local wordmark on one line at mobile widths (no truncation to Run L…)", () => {
+    guestAuth();
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <Header city={CITIES[0]} onOpenCitySheet={noop} />
+      </MemoryRouter>,
+    );
+    // The wordmark is responsive-sized and never `truncate`d — it only hides
+    // (icon-only) below 360px, so at 390px the full "Run Local" mark is shown.
+    expect(html).toContain("Run");
+    expect(html).toContain("Local");
+    expect(html).toContain("whitespace-nowrap");
+    expect(html).toContain("min-[360px]:inline");
+    expect(html).toContain("text-[15px]");
+    expect(html).toContain("sm:text-[17px]");
+  });
+
   it("hides the guest Log in CTA once signed in", () => {
     signedInAuth();
     const html = renderToStaticMarkup(

@@ -36,6 +36,20 @@ import { useAccount } from "../state/account";
 const inputCls =
   "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
 
+/**
+ * Map the URL's `mode` search param to the login/signup mode. The URL is the
+ * single source of truth for which form is shown: the header "Log in" CTA
+ * navigates to /login (no param), the account menu "Sign up" entry navigates
+ * to /login?mode=signup, and the in-form toggles update the param. Deriving
+ * the mode from the URL (instead of copying it into state once) guarantees a
+ * navigation while the page is already mounted — e.g. tapping header "Log in"
+ * while on #/login?mode=signup — always switches the rendered form, with no
+ * hard reload and no stale state.
+ */
+export function loginModeFromSearch(search: URLSearchParams): "login" | "signup" {
+  return search.get("mode") === "signup" ? "signup" : "login";
+}
+
 /** Downscale a chosen image to a compact JPEG data URL (same as the profile step). */
 async function fileToDataUrl(file: File, maxEdge = 512, quality = 0.82): Promise<string> {
   const dataUrl: string = await new Promise((resolve, reject) => {
@@ -64,7 +78,7 @@ async function fileToDataUrl(file: File, maxEdge = 512, quality = 0.82): Promise
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { me, backendAvailable, refresh } = useAccount();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -82,7 +96,11 @@ export function LoginPage() {
   // only the in-form selection.
   const [cityId, setCityId] = useState<string | null>(null);
   const [cityError, setCityError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"login" | "signup">(() => (searchParams.get("mode") === "signup" ? "signup" : "login"));
+  // Which form is shown is derived from the URL (`?mode=signup`), never copied
+  // into state: navigating to /login while this page is mounted (header "Log
+  // in" CTA) re-derives login mode without a reload, and the in-form toggle
+  // writes the param back so the URL always reflects the visible form.
+  const mode = loginModeFromSearch(searchParams);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -173,7 +191,7 @@ export function LoginPage() {
             "Account created. Check your email and tap the confirmation link, then log in with your password. " +
               (photoDataUrl ? "You can add your profile photo right after your first sign-in." : ""),
           );
-          setMode("login");
+          setSearchParams({}, { replace: true });
           setPassword("");
           setConfirm("");
         } else if (created.error.code === "username_taken") {
@@ -189,7 +207,7 @@ export function LoginPage() {
           setNotice(
             "Your Supabase account was created, but Run Local couldn't save your profile right now. Confirm your email and log in — your account will finish setting up then.",
           );
-          setMode("login");
+          setSearchParams({}, { replace: true });
           setPassword("");
           setConfirm("");
         }
@@ -473,7 +491,11 @@ export function LoginPage() {
             <button
               type="button"
               onClick={() => {
-                setMode(mode === "login" ? "signup" : "login");
+                // Write the mode back to the URL (replace — no history spam) so
+                // the header "Log in" CTA and deep links always land on the form
+                // the URL advertises. Field state is preserved: only the param
+                // changes, the page stays mounted.
+                setSearchParams(mode === "login" ? { mode: "signup" } : {}, { replace: true });
                 setError(null);
                 setNotice(null);
                 setCityError(null);
