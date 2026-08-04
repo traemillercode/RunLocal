@@ -24,6 +24,7 @@ import type {
   SessionRecord,
   SubmissionRecord,
   VerifyPhase,
+  SafetyReportRecord,
 } from "./types";
 
 export const DEFAULT_RETENTION_YEARS = 3;
@@ -176,6 +177,8 @@ export class Db {
   private blocks = new Map<string, import("./types").BlockRecord>();
   /** Persisted per-account JoinRequest timestamps. Old entries are pruned on every check. */
   private joinRequestRate = new Map<string, number[]>();
+  private safetyReports = new Map<string, SafetyReportRecord>();
+  private safetyReportRate = new Map<string, number[]>();
   /**
    * Private upload bytes (credential proofs) kept in memory so in-memory/test
    * stores can serve them back; file-backed stores mirror the bytes to disk
@@ -252,6 +255,8 @@ export class Db {
       for (const p of parsed.matchingPreferences ?? []) this.matchingPreferences.set(p.accountId, p);
       for (const j of parsed.joinRequests ?? []) this.joinRequests.set(j.id, { ...j, requesterAccepted: j.requesterAccepted ?? false, recipientAccepted: j.recipientAccepted ?? false });
       for (const b of parsed.blocks ?? []) this.blocks.set(`${b.blockerId}:${b.blockedId}`, b);
+      for (const r of parsed.safetyReports ?? []) this.safetyReports.set(r.id, r);
+      for (const [accountId, timestamps] of Object.entries(parsed.safetyReportRate ?? {})) this.safetyReportRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
       for (const [accountId, timestamps] of Object.entries(parsed.joinRequestRate ?? {})) {
         this.joinRequestRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
       }
@@ -288,6 +293,8 @@ export class Db {
       joinRequests: [...this.joinRequests.values()],
       blocks: [...this.blocks.values()],
       joinRequestRate: Object.fromEntries(this.joinRequestRate.entries()),
+      safetyReports: [...this.safetyReports.values()],
+      safetyReportRate: Object.fromEntries(this.safetyReportRate.entries()),
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -420,6 +427,11 @@ export class Db {
   listBlocks(blockerId: string): import("./types").BlockRecord[] { return [...this.blocks.values()].filter(b => b.blockerId === blockerId); }
   invalidateJoinRequests(a: string, b: string): number { let n=0; for (const r of this.joinRequests.values()) if (((r.requesterId===a&&r.recipientId===b)||(r.requesterId===b&&r.recipientId===a)) && (r.state === "pending" || r.state === "accepted")) { r.state="blocked"; r.updatedAt=new Date().toISOString(); n++; } return n; }
 
+  listSafetyReports(): SafetyReportRecord[] { return [...this.safetyReports.values()]; }
+  getSafetyReport(id: string): SafetyReportRecord | undefined { return this.safetyReports.get(id); }
+  addSafetyReport(r: SafetyReportRecord): void { this.safetyReports.set(r.id, r); }
+  updateSafetyReport(id: string, patch: Partial<SafetyReportRecord>): SafetyReportRecord | undefined { const r=this.safetyReports.get(id); if (!r) return; const next={...r,...patch}; this.safetyReports.set(id,next); return next; }
+  consumeSafetyReportRate(accountId:string, nowMs:number, limit=3, windowMs=60*60*1000): boolean { const current=(this.safetyReportRate.get(accountId)??[]).filter(t=>nowMs-t<windowMs); if(current.length>=limit){this.safetyReportRate.set(accountId,current);return false;} current.push(nowMs);this.safetyReportRate.set(accountId,current);return true; }
   getSettings<T>(fallback:T): T { return (this.settings ?? fallback) as T; }
   setSettings(settings: import("./types").SiteSettings): void { this.settings = settings; }
   getCity(id:string): import("./types").CmsCity | undefined { return this.cities.get(id); }
