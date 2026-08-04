@@ -15,6 +15,7 @@ import { join } from "node:path";
 import type {
   AccountRecord,
   AuditEntry,
+  CityInvitationRecord,
   CodeRecord,
   ContentRecord,
   FlagRecord,
@@ -155,6 +156,7 @@ export class Db {
   private oauthTokens = new Map<string, import("./activity").OAuthToken>();
   private settings: import("./types").SiteSettings | undefined;
   private cities = new Map<string, import("./types").CmsCity>();
+  private invitations = new Map<string, CityInvitationRecord>();
   /**
    * CMS image references (brand logo/favicon, city header images) keyed by
    * ref id. Bytes live on disk under uploads/private for file-backed stores
@@ -192,11 +194,16 @@ export class Db {
         // existed lack the field — treat it as `null` (not set) so they keep
         // working and are prompted to choose a city (see /api/profile/city).
         a.cityId = a.cityId ?? null;
+        // Same for the City Admin scope fields: accounts persisted before the
+        // multi-city foundation lack them — treat as `null` (not a City Admin).
+        a.adminCityId = a.adminCityId ?? null;
+        a.rolePriorAdmin = a.rolePriorAdmin ?? null;
         this.accounts.set(a.id, a);
       }
       for (const s of parsed.sessions ?? []) this.sessions.set(s.id, s);
       for (const c of parsed.codes ?? []) this.codes.set(c.accountId, c);
-      this.audits = parsed.audits ?? [];
+      // Pre-multi-city audit entries have no cityId — normalize to null.
+      this.audits = (parsed.audits ?? []).map((a) => ({ ...a, cityId: a.cityId ?? null }));
       for (const r of parsed.content ?? []) this.content.set(r.id, r);
       for (const g of parsed.groups ?? []) this.groups.set(g.id, g);
       this.flags = parsed.flags ?? [];
@@ -205,6 +212,7 @@ export class Db {
       for (const t of parsed.oauthTokens ?? []) this.oauthTokens.set(`${t.accountId}:${t.provider}`, t);
       this.settings = parsed.settings;
       for (const c of parsed.cities ?? []) this.cities.set(c.id, c);
+      for (const i of parsed.invitations ?? []) this.invitations.set(i.id, i);
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -226,6 +234,7 @@ export class Db {
       oauthTokens: [...this.oauthTokens.values()],
       settings: this.settings,
       cities: [...this.cities.values()],
+      invitations: [...this.invitations.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -276,6 +285,8 @@ export class Db {
       status: "pending",
       phase: "email",
       role: "runner",
+      adminCityId: null,
+      rolePriorAdmin: null,
       requestedRole: input.requestedRole ?? null,
       profilePhotoRef: null,
       supabaseAuthId: null,
@@ -336,6 +347,25 @@ export class Db {
   getCity(id:string): import("./types").CmsCity | undefined { return this.cities.get(id); }
   listCities(): import("./types").CmsCity[] { return [...this.cities.values()]; }
   setCity(city:import("./types").CmsCity): void { this.cities.set(city.id, city); }
+
+  // ------------------------------------------------------------- invitations
+  listInvitations(): CityInvitationRecord[] { return [...this.invitations.values()]; }
+  getInvitation(id: string): CityInvitationRecord | undefined { return this.invitations.get(id); }
+  appendInvitation(rec: CityInvitationRecord): CityInvitationRecord { this.invitations.set(rec.id, rec); return rec; }
+  updateInvitation(id: string, patch: Partial<CityInvitationRecord>): CityInvitationRecord | undefined {
+    const rec = this.invitations.get(id);
+    if (!rec) return undefined;
+    const next = { ...rec, ...patch };
+    this.invitations.set(id, next);
+    return next;
+  }
+  /** Find the active (non-revoked) invitation for a city+recipient, newest first. */
+  findInvitation(cityId: string, email: string): CityInvitationRecord | undefined {
+    const key = email.trim().toLowerCase();
+    return [...this.invitations.values()]
+      .filter((i) => i.cityId === cityId && i.email.toLowerCase() === key && i.revokedAt === null)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  }
 
   // ------------------------------------------------------------ cms image refs
   /**
@@ -422,8 +452,11 @@ export class Db {
   }
 
   // ------------------------------------------------------------------- audit
-  appendAudit(entry: Omit<AuditEntry, "id" | "at">, now = new Date()): AuditEntry {
-    const rec: AuditEntry = { ...entry, id: newId(), at: nowIso(now) };
+  appendAudit(
+    entry: Omit<AuditEntry, "id" | "at" | "cityId"> & { cityId?: string | null },
+    now = new Date(),
+  ): AuditEntry {
+    const rec: AuditEntry = { ...entry, cityId: entry.cityId ?? null, id: newId(), at: nowIso(now) };
     this.audits.push(rec);
     return rec;
   }

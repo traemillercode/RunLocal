@@ -28,10 +28,15 @@ import {
   toCsv,
   validReason,
   authorizeAdmin,
+  adminAccessLevel,
+  assignCityAdmin,
+  revokeCityAdmin,
+  listCityAdmins,
+  cityAdminAudit,
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
-import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, citySupported, CMS_REF_PATTERN, refContentType } from "./cms";
+import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType } from "./cms";
 import {
   dashboardOverview,
   liftSuspension,
@@ -41,6 +46,11 @@ import {
   setGroupRrca,
   suspendAccount,
   unhideContent,
+  cityDashboardOverview,
+  cityModerateFlag,
+  cityUnhideContent,
+  citySetGroupRrca,
+  citySetContentHighlight,
 } from "./dashboard";
 import { adapters, configError, oauthState, stateValid, normalizeActivity, publicActivityCard, type Provider, type ShareMode } from "./activity";
 import { decideSubmission,
@@ -50,7 +60,10 @@ import { decideSubmission,
   submitGroup,
   submitRace,
   submissionQueue,
+  citySubmissionQueue,
+  cityDecideSubmission,
 } from "./submissions";
+import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
 
 export const SESSION_COOKIE = "runlocal_sid";
 export const ADMIN_COOKIE = "runlocal_admin";
@@ -276,7 +289,9 @@ async function handleApi(
   // or rejection reasons — just the public listing facts.
   if (method === "GET" && url.pathname === "/api/content") {
     const cityId = url.searchParams.get("city") ?? "";
-    if (!cityId || !citySupported(db, cityId)) {
+    // Any KNOWN city serves its content history — deactivated and invite-only
+    // cities stay browsable for existing members even though they deny new entry.
+    if (!cityId || !cityExists(db, cityId)) {
       return err(res, { status: 400, error: "invalid_city" }), true;
     }
     return ok(res, publicApprovedContent(db, cityId)), true;
@@ -349,7 +364,7 @@ async function handleApi(
   // without a valid Supabase session. The account links to the verified
   // Supabase identity on the user's first confirmed login (/api/login/check).
   if (method === "POST" && url.pathname === "/api/accounts") {
-    const body = (await readJson(req)) as { name?: unknown; username?: unknown; email?: unknown; phone?: unknown; birthdate?: unknown; cityId?: unknown; requestedRole?: unknown; noSession?: unknown };
+    const body = (await readJson(req)) as { name?: unknown; username?: unknown; email?: unknown; phone?: unknown; birthdate?: unknown; cityId?: unknown; requestedRole?: unknown; noSession?: unknown; invitationToken?: unknown };
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const phone = typeof body.phone === "string" ? normalizePhone(body.phone) : null;
@@ -371,8 +386,22 @@ async function handleApi(
     if (!cityId) {
       return err(res, { status: 400, error: "city_required", message: "Choose your home city — Run Local is city-scoped and your community content defaults to it." }), true;
     }
-    if (rawCityId !== cityId || !citySupported(db, cityId)) {
+    if (rawCityId !== cityId || cityStatus(db, cityId) === null) {
       return err(res, { status: 400, error: "invalid_city", message: "That city isn't supported yet — pick one from the list." }), true;
+    }
+    // Lifecycle gate: coming_soon and inactive cities deny new signups
+    // entirely; invite_only cities require a valid invitation bound to this
+    // email (validated before any account is created — a failed invitation
+    // never leaves a partial account behind).
+    const signupCityStatus = cityStatus(db, cityId)!;
+    if (signupCityStatus === "coming_soon" || signupCityStatus === "inactive") {
+      const e = cityNotOpenError(signupCityStatus);
+      return err(res, { status: e.status, error: e.error, message: e.message }), true;
+    }
+    const invitationToken = signupCityStatus === "invite_only" ? (typeof body.invitationToken === "string" ? body.invitationToken.trim() : "") : "";
+    if (signupCityStatus === "invite_only") {
+      const v = validateInvitation(db, cityId, email, invitationToken, now);
+      if (!v.ok) return err(res, { status: v.status, error: v.error, message: v.message }), true;
     }
     // Username is REQUIRED for new signups and validated/normalized here —
     // the server is authoritative, never the client. Legacy accounts without
@@ -398,6 +427,17 @@ async function handleApi(
     const rec = db.createAccount({ name, username, email, phone, birthdate, cityId, requestedRole });
     rec.signupIp = ip;
     rec.signupAt = now.toISOString();
+    if (signupCityStatus === "invite_only") {
+      // Consume the invitation (one-time). Validated above in the same
+      // synchronous turn of the single-threaded store, so no concurrent
+      // request can interleave; still handle an unexpected failure safely by
+      // dropping the invite-only home city rather than granting entry.
+      const redeemed = redeemInvitation(db, cityId, email, invitationToken, rec.id, now);
+      if (!redeemed.ok) {
+        db.updateAccount(rec.id, { cityId: null });
+        return err(res, { status: redeemed.status, error: redeemed.error, message: redeemed.message }), true;
+      }
+    }
     db.appendLoginIp(rec.id, ip, now);
     if (body.noSession !== true) {
       const session = db.createSession(rec.id, ip, now);
@@ -545,20 +585,44 @@ async function handleApi(
   if (method === "POST" && url.pathname === "/api/profile/city") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
-    const body = (await readJson(req)) as { cityId?: unknown };
+    const body = (await readJson(req)) as { cityId?: unknown; invitationToken?: unknown };
     const rec = db.getAccount(sess.accountId);
     if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
     const cityId = typeof body.cityId === "string" ? body.cityId.trim() : "";
     if (!cityId) {
       return err(res, { status: 400, error: "city_required", message: "Choose your home city — Run Local is city-scoped and your community content defaults to it." }), true;
     }
-    if (!citySupported(db, cityId)) {
+    const status = cityStatus(db, cityId);
+    if (status === null) {
       return err(res, { status: 400, error: "invalid_city", message: "That city isn't supported yet — pick one from the list." }), true;
     }
-    if (rec.cityId !== cityId) {
-      db.updateAccount(rec.id, { cityId, lastActivityAt: now.toISOString() });
-      await db.persist();
+    // Re-submitting the current home city is a harmless no-op — no invitation
+    // is needed to keep what you already have (members of an invite-only or
+    // deactivated city keep their home city).
+    if (rec.cityId === cityId) {
+      return ok(res, { account: toPublicAccount(rec, isOwnerEmail(rec.email)) }), true;
     }
+    // Lifecycle gate: coming_soon / inactive cities deny NEW entry while
+    // retaining their history; invite_only requires a valid invitation bound
+    // to the account email (validated before the write — a failed invitation
+    // never changes the account).
+    if (status === "coming_soon" || status === "inactive") {
+      const e = cityNotOpenError(status);
+      return err(res, { status: e.status, error: e.error, message: e.message }), true;
+    }
+    const invitationToken = status === "invite_only" ? (typeof body.invitationToken === "string" ? body.invitationToken.trim() : "") : "";
+    if (status === "invite_only") {
+      const v = validateInvitation(db, cityId, rec.email, invitationToken, now);
+      if (!v.ok) return err(res, { status: v.status, error: v.error, message: v.message }), true;
+    }
+    db.updateAccount(rec.id, { cityId, lastActivityAt: now.toISOString() });
+    if (status === "invite_only") {
+      // Consume the invitation (one-time) — validated above in the same
+      // synchronous turn, so this can only fail on an interleaving race, which
+      // the single-threaded store rules out.
+      redeemInvitation(db, cityId, rec.email, invitationToken, rec.id, now);
+    }
+    await db.persist();
     return ok(res, { account: toPublicAccount(db.getAccount(rec.id)!, isOwnerEmail(rec.email)) }), true;
   }
 
@@ -732,7 +796,7 @@ async function handleApi(
     return ok(res, { submission: { id: result.data.id, status: result.data.status } }), true;
   }
 
-  if (method === "GET" && url.pathname === "/api/config") return ok(res, { settings: publicSettings(db), cities: db.listCities().filter(c=>c.status === "active"), integrations: integrations(db) }), true;
+  if (method === "GET" && url.pathname === "/api/config") return ok(res, { settings: publicSettings(db), cities: publicCities(db), integrations: integrations(db) }), true;
   // Public brand/city-header images: ONLY refs currently referenced by the
   // public config (logo, favicon, active-city headers). Everything else stays
   // private behind the audited admin route.
@@ -1005,6 +1069,124 @@ async function handleAdmin(
     db.appendAudit({ admin: adminEmail(), action: "admin.purge", reason: ctx.reason!.trim().slice(0, 500), targetId: null, ip }, now);
     await db.persist();
     return ok(res, { purged: result.purged.length, retained: result.retained.length }), true;
+  }
+
+  // ==================== MULTI-CITY ADMIN FOUNDATION ========================
+  // GET /api/admin/access — non-auditing probe of the caller's admin level
+  // (global_admin | city_admin | none). The UI uses it to render the right
+  // surface; it never reveals verification data.
+  if (method === "GET" && url.pathname === "/api/admin/access") {
+    return ok(res, adminAccessLevel(db, ctx)), true;
+  }
+
+  // ---- Global Admin: City Admin assignment & revocation (audited) ---------
+  if (method === "GET" && url.pathname === "/api/admin/cityadmins") {
+    const result = listCityAdmins(db, ctx, now);
+    if (!result.ok) return sendErr(result), true;
+    return ok(res, { admins: result.data }), true;
+  }
+  if (method === "POST" && url.pathname === "/api/admin/cityadmins") {
+    const body = (await readJson(req)) as { email?: unknown; cityId?: unknown };
+    const result = assignCityAdmin(db, ctx, typeof body.email === "string" ? body.email : "", typeof body.cityId === "string" ? body.cityId : "", now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { admin: result.data.row }), true;
+  }
+  const cityAdminRevoke = /^\/api\/admin\/cityadmins\/([a-f0-9]{32})\/revoke\/?$/.exec(url.pathname);
+  if (cityAdminRevoke && method === "POST") {
+    const result = revokeCityAdmin(db, ctx, cityAdminRevoke[1], now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { revoked: result.data.accountId }), true;
+  }
+
+  // ---- Global Admin: city invitations (audited; token shown once) ---------
+  if (method === "GET" && url.pathname === "/api/admin/invitations") {
+    const cityId = url.searchParams.get("city")?.trim() || null;
+    const result = listInvitations(db, ctx, cityId, now);
+    if (!result.ok) return sendErr(result), true;
+    return ok(res, { invitations: result.data }), true;
+  }
+  if (method === "POST" && url.pathname === "/api/admin/invitations") {
+    const body = (await readJson(req)) as { cityId?: unknown; email?: unknown; expiresInDays?: unknown };
+    const result = createInvitation(db, ctx, { cityId: body.cityId, email: body.email, expiresInDays: body.expiresInDays }, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { invitation: result.data.invitation, token: result.data.token }), true;
+  }
+  const invitationRevoke = /^\/api\/admin\/invitations\/([a-f0-9]{32})\/revoke\/?$/.exec(url.pathname);
+  if (invitationRevoke && method === "POST") {
+    const result = revokeInvitation(db, ctx, invitationRevoke[1], now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { invitation: result.data.invitation }), true;
+  }
+
+  // ---- City Admin: scoped reads & mutations (server-enforced one-city) ----
+  if (method === "GET" && url.pathname === "/api/admin/city/dashboard") {
+    const result = cityDashboardOverview(db, ctx, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, result.data), true;
+  }
+  if (method === "GET" && url.pathname === "/api/admin/city/submissions") {
+    const result = citySubmissionQueue(db, ctx, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { results: result.data }), true;
+  }
+  const citySubmissionMatch = /^\/api\/admin\/city\/submissions\/([a-f0-9]{32})\/(approve|reject)\/?$/.exec(url.pathname);
+  if (citySubmissionMatch && method === "POST") {
+    const result = cityDecideSubmission(db, ctx, citySubmissionMatch[1], citySubmissionMatch[2] as "approve" | "reject", now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, submission: { id: result.data.id, status: result.data.status } }), true;
+  }
+  const cityFlagMatch = /^\/api\/admin\/city\/moderate\/flag\/([a-f0-9]{32})\/?$/.exec(url.pathname);
+  if (cityFlagMatch && method === "POST") {
+    const body = (await readJson(req)) as { action?: unknown };
+    const action = body.action === "hide" ? "hide" : body.action === "dismiss" ? "dismiss" : null;
+    if (!action) return err(res, { status: 400, error: "invalid_action", message: "Action must be 'dismiss' or 'hide'." }), true;
+    const result = cityModerateFlag(db, ctx, cityFlagMatch[1], action, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, flag: result.data }), true;
+  }
+  const cityUnhideMatch = /^\/api\/admin\/city\/moderate\/unhide\/([a-z]+:[A-Za-z0-9_-]+)\/?$/.exec(url.pathname);
+  if (cityUnhideMatch && method === "POST") {
+    const result = cityUnhideContent(db, ctx, cityUnhideMatch[1], now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, content: result.data }), true;
+  }
+  const cityRrcaMatch = /^\/api\/admin\/city\/group\/([A-Za-z0-9_-]+)\/rrca\/?$/.exec(url.pathname);
+  if (cityRrcaMatch && method === "POST") {
+    const body = (await readJson(req)) as { badge?: unknown; note?: unknown };
+    const result = citySetGroupRrca(db, ctx, cityRrcaMatch[1], { badge: body.badge === true, note: typeof body.note === "string" ? body.note : undefined }, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, group: result.data }), true;
+  }
+  const cityHighlightMatch = /^\/api\/admin\/city\/content\/([a-z]+:[A-Za-z0-9_-]+)\/highlight\/?$/.exec(url.pathname);
+  if (cityHighlightMatch && method === "POST") {
+    const body = (await readJson(req)) as { featured?: unknown; pinned?: unknown };
+    const result = citySetContentHighlight(
+      db,
+      ctx,
+      cityHighlightMatch[1],
+      { featured: typeof body.featured === "boolean" ? body.featured : undefined, pinned: typeof body.pinned === "boolean" ? body.pinned : undefined },
+      now,
+    );
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, content: result.data }), true;
+  }
+  if (method === "GET" && url.pathname === "/api/admin/city/audit") {
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? "100") || 100, 500);
+    const result = cityAdminAudit(db, ctx, limit, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { entries: result.data }), true;
   }
 
   // Unknown admin route

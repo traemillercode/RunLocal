@@ -24,9 +24,9 @@ import { newId } from "./store";
 import type { Db } from "./store";
 import { isSuspended } from "./store";
 import type { AdminCtx, AdminResult } from "./admin";
-import { authorizeAdmin } from "./admin";
+import { authorizeAdmin, authorizeScoped } from "./admin";
 import { REASON_MAX, REASON_MIN } from "./admin";
-import { isSupportedCityId } from "../data/cities";
+import { cityAcceptsSubmissions, cityNotOpenError, cityStatus } from "./cms";
 import type {
   AccountRecord,
   EventSubmissionPayload,
@@ -96,18 +96,26 @@ export function requireVerifiedSubmitter(db: Db, accountId: string): AdminResult
 }
 
 /**
- * Resolve the submission's city: an explicit supported cityId wins; otherwise
- * the submitter's home city. Never client-trusted — validated against the
- * known city entities.
+ * Resolve the submission's city: an explicit known cityId wins; otherwise the
+ * submitter's home city. Never client-trusted — validated against the
+ * server-authoritative city registry (store + seeded defaults). New
+ * submissions are accepted only for cities that accept submissions (active /
+ * invite_only); inactive and coming-soon cities retain their history but deny
+ * new submissions.
  */
-function resolveCity(rec: AccountRecord, cityIdParam: unknown): AdminResult<string> {
+function resolveCity(db: Db, rec: AccountRecord, cityIdParam: unknown): AdminResult<string> {
   let cityId = typeof cityIdParam === "string" ? cityIdParam.trim() : "";
   if (!cityId) cityId = rec.cityId ?? "";
   if (!cityId) {
     return { ok: false, status: 400, error: "city_required", message: "This submission needs a city — set your home city or pass a cityId." };
   }
-  if (!isSupportedCityId(cityId)) {
+  const status = cityStatus(db, cityId);
+  if (status === null) {
     return { ok: false, status: 400, error: "invalid_city", message: "That city isn't supported yet — pick one from the list." };
+  }
+  if (!cityAcceptsSubmissions(db, cityId)) {
+    const e = cityNotOpenError(status);
+    return { ok: false, status: 400, error: e.error, message: e.message };
   }
   return { ok: true, data: cityId };
 }
@@ -159,7 +167,7 @@ export interface RaceSubmitInput {
 export function submitRace(db: Db, accountId: string, input: RaceSubmitInput, now = new Date()): AdminResult<SubmissionRecord> {
   const auth = requireVerifiedSubmitter(db, accountId);
   if (!auth.ok) return auth;
-  const city = resolveCity(auth.data, input.cityId);
+  const city = resolveCity(db, auth.data, input.cityId);
   if (!city.ok) return city;
   const name = sliceTrim(input.name, MAX_NAME);
   if (!name) return { ok: false, status: 400, error: "invalid_name", message: "Race name is required." };
@@ -201,7 +209,7 @@ export interface GroupSubmitInput {
 export function submitGroup(db: Db, accountId: string, input: GroupSubmitInput, now = new Date()): AdminResult<SubmissionRecord> {
   const auth = requireVerifiedSubmitter(db, accountId);
   if (!auth.ok) return auth;
-  const city = resolveCity(auth.data, input.cityId);
+  const city = resolveCity(db, auth.data, input.cityId);
   if (!city.ok) return city;
   const name = sliceTrim(input.name, MAX_NAME);
   if (!name) return { ok: false, status: 400, error: "invalid_name", message: "Group name is required." };
@@ -264,7 +272,7 @@ export function submitEvent(db: Db, accountId: string, input: EventSubmitInput, 
       message: "Group Leaders submit runs through their group's event path, not as independent runs.",
     };
   }
-  const city = resolveCity(auth.data, input.cityId);
+  const city = resolveCity(db, auth.data, input.cityId);
   if (!city.ok) return city;
   const type = input.type === "one_time" ? "one_time" : input.type === "recurring" ? "recurring" : null;
   if (!type) return { ok: false, status: 400, error: "invalid_type", message: "Event type must be one_time or recurring." };
@@ -358,6 +366,7 @@ export interface SubmissionQueueRow {
  * Admin-only pending-submission queue (owner OR key-based admin; audited with
  * a required reason). Safe summaries: title, kind, submitter display name,
  * and a short payload summary. No email, phone, IP, or other user's data.
+ * Global admins may filter by city or see the all-city queue.
  */
 export function submissionQueue(
   db: Db,
@@ -367,6 +376,23 @@ export function submissionQueue(
 ): AdminResult<SubmissionQueueRow[]> {
   const auth = authorizeAdmin(db, ctx, "admin.submission_list", null, now);
   if (!auth.ok) return auth;
+  return submissionQueueRows(db, cityId);
+}
+
+/**
+ * City Admin variant of the pending queue — the scope city is enforced
+ * server-side (the client cannot widen it), so a City Admin can NEVER see the
+ * all-city queue or another city's submissions.
+ */
+export function citySubmissionQueue(db: Db, ctx: AdminCtx, now = new Date()): AdminResult<SubmissionQueueRow[]> {
+  const auth = authorizeScoped(db, ctx, "cityadmin.submission_list", null, now);
+  if (!auth.ok) return auth;
+  const cityId = auth.data.scope.kind === "city" ? auth.data.scope.cityId : null;
+  if (cityId === null) return { ok: false, status: 403, error: "city_scope_denied" };
+  return submissionQueueRows(db, cityId);
+}
+
+function submissionQueueRows(db: Db, cityId: string | null): AdminResult<SubmissionQueueRow[]> {
   const rows = db
     .listSubmissions()
     .filter((s) => s.status === "pending" && (!cityId || s.cityId === cityId))
@@ -419,22 +445,59 @@ export function decideSubmission(
 ): AdminResult<SubmissionRecord> {
   const auth = authorizeAdmin(db, ctx, action === "approve" ? "admin.submission_approve" : "admin.submission_reject", submissionId, now);
   if (!auth.ok) return auth;
+  return decideSubmissionCore(db, auth.data.admin, ctx.reason, submissionId, action, now);
+}
+
+/**
+ * City Admin variant — the target submission's cityId MUST equal the City
+ * Admin's scope. A City Admin can never approve/reject a submission from
+ * another city, regardless of any client-supplied id.
+ */
+export function cityDecideSubmission(
+  db: Db,
+  ctx: AdminCtx,
+  submissionId: string,
+  action: DecideAction,
+  now = new Date(),
+): AdminResult<SubmissionRecord> {
+  // Look up the record first so we can bind the authorization to its city.
+  const rec = db.getSubmission(submissionId);
+  if (!rec) return { ok: false, status: 404, error: "not_found" };
+  const auth = authorizeScoped(
+    db,
+    ctx,
+    action === "approve" ? "cityadmin.submission_approve" : "cityadmin.submission_reject",
+    submissionId,
+    now,
+    { enforceCity: rec.cityId, auditCity: rec.cityId },
+  );
+  if (!auth.ok) return auth;
+  return decideSubmissionCore(db, auth.data.admin, ctx.reason, submissionId, action, now);
+}
+
+function decideSubmissionCore(
+  db: Db,
+  admin: string,
+  reason: string | undefined,
+  submissionId: string,
+  action: DecideAction,
+  now: Date,
+): AdminResult<SubmissionRecord> {
   const rec = db.getSubmission(submissionId);
   if (!rec) return { ok: false, status: 404, error: "not_found" };
   if (rec.status !== "pending") {
     return { ok: false, status: 409, error: "already_decided", message: "This submission was already approved or rejected." };
   }
-  const admin = auth.data.admin;
   if (action === "reject") {
-    const reason = ctx.reason?.trim().slice(0, REASON_MAX) ?? "";
-    if (!validSubmissionReason(reason)) {
+    const rejection = reason?.trim().slice(0, REASON_MAX) ?? "";
+    if (!validSubmissionReason(rejection)) {
       return { ok: false, status: 400, error: "reason_required", message: "A rejection reason (5–500 chars) is required — the submitter will see it." };
     }
     const updated = db.updateSubmission(submissionId, {
       status: "rejected",
       decidedAt: now.toISOString(),
       decidedBy: admin,
-      rejectionReason: reason,
+      rejectionReason: rejection,
     })!;
     return { ok: true, data: updated };
   }

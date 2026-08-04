@@ -17,7 +17,7 @@
  *    flow (admin.ts / adminGetRecord), which remains admin-accessible.
  */
 import type { AdminCtx, AdminResult } from "./admin";
-import { authorizeOwner } from "./admin";
+import { authorizeOwner, authorizeScoped } from "./admin";
 import { REASON_MAX } from "./admin";
 import type { Db } from "./store";
 import { isSuspended } from "./store";
@@ -150,6 +150,30 @@ export function dashboardOverview(
 ): AdminResult<DashboardView> {
   const auth = authorizeOwner(db, ctx, "admin.dashboard", null, now);
   if (!auth.ok) return auth;
+  return dashboardRows(db, cityId, now, { suspensions: true });
+}
+
+/**
+ * City Admin dashboard overview — scope is enforced server-side (the client
+ * cannot pass another city), and suspensions are ALWAYS empty: suspension
+ * management is Global Admin-only.
+ */
+export function cityDashboardOverview(db: Db, ctx: AdminCtx, now = new Date()): AdminResult<DashboardView> {
+  const auth = authorizeScoped(db, ctx, "cityadmin.dashboard", null, now);
+  if (!auth.ok) return auth;
+  const cityId = auth.data.scope.kind === "city" ? auth.data.scope.cityId : null;
+  if (cityId === null) return { ok: false, status: 403, error: "city_scope_denied" };
+  const view = dashboardRows(db, cityId, now, { suspensions: false });
+  if (!view.ok) return view;
+  return { ok: true, data: { ...view.data, cityId } };
+}
+
+function dashboardRows(
+  db: Db,
+  cityId: string,
+  now: Date,
+  opts: { suspensions: boolean },
+): AdminResult<DashboardView> {
   const flags = db
     .listFlags()
     .filter((f) => f.cityId === cityId)
@@ -175,11 +199,13 @@ export function dashboardOverview(
     .filter((g) => g.cityId === cityId)
     .map(groupView)
     .sort((a, b) => a.name.localeCompare(b.name));
-  const suspensions = db
-    .listAccounts()
-    .filter((a) => !a.deletedAt && isSuspended(a, now))
-    .map(suspensionView)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const suspensions = opts.suspensions
+    ? db
+        .listAccounts()
+        .filter((a) => !a.deletedAt && isSuspended(a, now))
+        .map(suspensionView)
+        .sort((a, b) => a.name.localeCompare(b.name))
+    : [];
   return { ok: true, data: { cityId, flags, events, races, posts, groups, suspensions } };
 }
 
@@ -198,6 +224,40 @@ export function moderateFlag(
 ): AdminResult<FlagView> {
   const auth = authorizeOwner(db, ctx, action === "dismiss" ? "admin.flag_dismiss" : "admin.flag_hide", flagId, now);
   if (!auth.ok) return auth;
+  return moderateFlagCore(db, flagId, action, now);
+}
+
+/**
+ * City Admin variant — the flag's city MUST equal the City Admin's scope.
+ * The flag is resolved first so the authorization binds to its cityId.
+ */
+export function cityModerateFlag(
+  db: Db,
+  ctx: AdminCtx,
+  flagId: string,
+  action: "dismiss" | "hide",
+  now = new Date(),
+): AdminResult<FlagView> {
+  const flag = db.getFlag(flagId);
+  if (!flag) return { ok: false, status: 404, error: "not_found" };
+  const auth = authorizeScoped(
+    db,
+    ctx,
+    action === "dismiss" ? "cityadmin.flag_dismiss" : "cityadmin.flag_hide",
+    flagId,
+    now,
+    { enforceCity: flag.cityId, auditCity: flag.cityId },
+  );
+  if (!auth.ok) return auth;
+  return moderateFlagCore(db, flagId, action, now);
+}
+
+function moderateFlagCore(
+  db: Db,
+  flagId: string,
+  action: "dismiss" | "hide",
+  now: Date,
+): AdminResult<FlagView> {
   const flag = db.getFlag(flagId);
   if (!flag) return { ok: false, status: 404, error: "not_found" };
   if (flag.status !== "open") return { ok: false, status: 409, error: "already_resolved" };
@@ -227,6 +287,24 @@ export function unhideContent(
 ): AdminResult<ContentView> {
   const auth = authorizeOwner(db, ctx, "admin.content_unhide", contentId, now);
   if (!auth.ok) return auth;
+  return unhideContentCore(db, contentId);
+}
+
+/** City Admin variant — the content's city MUST equal the City Admin's scope. */
+export function cityUnhideContent(
+  db: Db,
+  ctx: AdminCtx,
+  contentId: string,
+  now = new Date(),
+): AdminResult<ContentView> {
+  const content = db.getContent(contentId);
+  if (!content) return { ok: false, status: 404, error: "not_found" };
+  const auth = authorizeScoped(db, ctx, "cityadmin.content_unhide", contentId, now, { enforceCity: content.cityId, auditCity: content.cityId });
+  if (!auth.ok) return auth;
+  return unhideContentCore(db, contentId);
+}
+
+function unhideContentCore(db: Db, contentId: string): AdminResult<ContentView> {
   const content = db.getContent(contentId);
   if (!content) return { ok: false, status: 404, error: "not_found" };
   if (!content.hidden) return { ok: false, status: 409, error: "not_hidden" };
@@ -303,6 +381,30 @@ export function setGroupRrca(
 ): AdminResult<GroupView> {
   const auth = authorizeOwner(db, ctx, "admin.group_rrca", groupId, now);
   if (!auth.ok) return auth;
+  return setGroupRrcaCore(db, groupId, input, now);
+}
+
+/** City Admin variant — the group's city MUST equal the City Admin's scope. */
+export function citySetGroupRrca(
+  db: Db,
+  ctx: AdminCtx,
+  groupId: string,
+  input: { badge: boolean; note?: string },
+  now = new Date(),
+): AdminResult<GroupView> {
+  const group = db.getGroup(groupId);
+  if (!group) return { ok: false, status: 404, error: "not_found" };
+  const auth = authorizeScoped(db, ctx, "cityadmin.group_rrca", groupId, now, { enforceCity: group.cityId, auditCity: group.cityId });
+  if (!auth.ok) return auth;
+  return setGroupRrcaCore(db, groupId, input, now);
+}
+
+function setGroupRrcaCore(
+  db: Db,
+  groupId: string,
+  input: { badge: boolean; note?: string },
+  now: Date,
+): AdminResult<GroupView> {
   const group = db.getGroup(groupId);
   if (!group) return { ok: false, status: 404, error: "not_found" };
   const note = input.note === undefined ? group.rrcaNote : input.note.trim().slice(0, REASON_MAX) || null;
@@ -329,6 +431,29 @@ export function setContentHighlight(
 ): AdminResult<ContentView> {
   const auth = authorizeOwner(db, ctx, "admin.content_highlight", contentId, now);
   if (!auth.ok) return auth;
+  return setContentHighlightCore(db, contentId, patch);
+}
+
+/** City Admin variant — the content's city MUST equal the City Admin's scope. */
+export function citySetContentHighlight(
+  db: Db,
+  ctx: AdminCtx,
+  contentId: string,
+  patch: { featured?: boolean; pinned?: boolean },
+  now = new Date(),
+): AdminResult<ContentView> {
+  const content = db.getContent(contentId);
+  if (!content) return { ok: false, status: 404, error: "not_found" };
+  const auth = authorizeScoped(db, ctx, "cityadmin.content_highlight", contentId, now, { enforceCity: content.cityId, auditCity: content.cityId });
+  if (!auth.ok) return auth;
+  return setContentHighlightCore(db, contentId, patch);
+}
+
+function setContentHighlightCore(
+  db: Db,
+  contentId: string,
+  patch: { featured?: boolean; pinned?: boolean },
+): AdminResult<ContentView> {
   const content = db.getContent(contentId);
   if (!content) return { ok: false, status: 404, error: "not_found" };
   if (content.kind === "post") {

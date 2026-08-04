@@ -380,13 +380,16 @@ describe("Global Admin CMS — city CRUD & deactivation", () => {
     expect(deact.status).toBe(200);
     expect(deact.body.city.status).toBe("inactive");
     const config = await call(db, "GET", "/api/config");
-    expect(config.body.cities.some((c: { id: string }) => c.id === id)).toBe(false);
+    // Deactivated cities stay VISIBLE in the public registry (history
+    // retained) but are no longer enterable — presence and enterability are
+    // independent, decided by status.
+    expect(config.body.cities.find((c: { id: string }) => c.id === id)?.status).toBe("inactive");
     // New signups cannot choose an inactive CMS city…
     const signup = await call(db, "POST", "/api/accounts", {
       body: { name: "New Runner", username: "newrunner", email: "new@example.com", birthdate: "1998-01-01", cityId: id },
     });
     expect(signup.status).toBe(400);
-    expect((signup.body as { error: string }).error).toBe("invalid_city");
+    expect((signup.body as { error: string }).error).toBe("city_inactive");
     // …but reactivating makes it public and selectable again.
     const react = await call(db, "POST", "/api/admin/cms/city", { cookie, reason: REASON, body: { id, name: "Springfield", state: "MO", slug: "springfield-mo", status: "active" } });
     expect(react.status).toBe(200);
@@ -410,9 +413,11 @@ describe("Global Admin CMS — city CRUD & deactivation", () => {
     seedCmsCities(db); // idempotent
     expect(db.listCities().length).toBe(5);
     expect(db.getCity("columbia-mo")?.status).toBe("active");
-    expect(db.getCity("stl-mo")?.status).toBe("inactive"); // non-live placeholder
+    expect(db.getCity("stl-mo")?.status).toBe("coming_soon"); // non-live placeholder — visible but not enterable
     const config = await call(db, "GET", "/api/config");
-    expect(config.body.cities.map((c: { id: string }) => c.id)).toEqual(["columbia-mo"]);
+    // The public registry serves every lifecycle state (active / coming_soon);
+    // enterability is decided by status, not by presence in the list.
+    expect(config.body.cities.map((c: { id: string }) => c.id).sort()).toEqual(["columbia-mo", "jc-mo", "kc-mo", "springfield-mo", "stl-mo"]);
   });
 });
 
