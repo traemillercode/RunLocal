@@ -39,6 +39,7 @@ import {
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
+import { publicGroups, publicGroup } from "./groups";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import {
   dashboardOverview,
@@ -65,6 +66,7 @@ import { decideSubmission,
   submissionQueue,
   citySubmissionQueue,
   cityDecideSubmission,
+  requireVerifiedSubmitter,
 } from "./submissions";
 import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
 import {
@@ -308,6 +310,14 @@ async function handleApi(
   // Only APPROVED submissions ever appear here (pending/rejected never leave
   // the server), and owner-hidden content is excluded. No emails, phones, IPs,
   // or rejection reasons — just the public listing facts.
+  if (method === "GET" && url.pathname === "/api/groups") {
+    const cityId = url.searchParams.get("city") ?? "";
+    if (!cityId || !cityExists(db, cityId)) return err(res, { status: 400, error: "invalid_city" }), true;
+    return ok(res, { cityId, groups: publicGroups(db, cityId) }), true;
+  }
+  const groupDetail = /^\/api\/groups\/([a-f0-9-]+)$/.exec(url.pathname);
+  if (method === "GET" && groupDetail) { const group = publicGroup(db, groupDetail[1]); if (!group) return err(res,{status:404,error:"not_found"}),true; return ok(res,{group}),true; }
+
   if (method === "GET" && url.pathname === "/api/content") {
     const cityId = url.searchParams.get("city") ?? "";
     // Any KNOWN city serves its content history — deactivated and invite-only
@@ -588,6 +598,21 @@ async function handleApi(
   // deterministically on the normalized case-insensitive form. The check +
   // write run in one synchronous turn of the single-threaded store, so a
   // concurrent request can never claim the same name in between.
+  if (method === "POST" && url.pathname === "/api/group/photo") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { photo?: unknown };
+    const rec = db.getAccount(sess.accountId);
+    if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const verified = requireVerifiedSubmitter(db, sess.accountId);
+    if (!verified.ok) return err(res, { status: verified.status, error: verified.error, message: verified.message }), true;
+    if (typeof body.photo !== "string") return err(res, { status: 400, error: "invalid_image" }), true;
+    const img = decodeImage(body.photo);
+    if (!img.ok) return err(res, { status: 400, error: img.error }), true;
+    const filename = `${rec.id}_group_${newId()}.${img.ext}`;
+    await db.writePublicUpload(filename, img.bytes);
+    return ok(res, { photoRef: filename }), true;
+  }
   if (method === "POST" && url.pathname === "/api/profile/username") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
@@ -831,7 +856,7 @@ async function handleApi(
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const body = (await readJson(req)) as {
       cityId?: unknown; name?: unknown; description?: unknown; groupType?: unknown;
-      groupmeUrl?: unknown; facebookUrl?: unknown; instagramUrl?: unknown; websiteUrl?: unknown;
+      groupmeUrl?: unknown; facebookUrl?: unknown; instagramUrl?: unknown; websiteUrl?: unknown; coverPhoto?: unknown; logoPhoto?: unknown; membershipMode?: unknown;
     };
     const result = submitGroup(db, sess.accountId, body, now);
     if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;

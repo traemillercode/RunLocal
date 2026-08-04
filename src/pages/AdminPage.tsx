@@ -565,8 +565,8 @@ export function AdminPage() {
       <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
         <h2 className="text-[15px] font-bold text-slate-900">Submission queue</h2>
         <p className="mt-0.5 text-xs text-slate-500">
-          Community-submitted races, groups, and independent events awaiting review. Approve publishes them publicly (groups grant the submitter the Group
-          Leader role); reject requires a reason the submitter will see. Every action is audited with the reason above.
+          Community-submitted races, groups, and independent events awaiting review. Pending items are not public; approve publishes them (groups grant the submitter the Group
+          Leader role), while reject requires a reason the submitter will see. Every action is audited with the reason above.
         </p>
         <div className="mt-3 space-y-3">
           <textarea rows={2} placeholder="Reason for loading/deciding the queue (required, audited; rejection reason goes to the submitter)" value={subReason} onChange={(e) => setSubReason(e.target.value)} className={reasonCls} />

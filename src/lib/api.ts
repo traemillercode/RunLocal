@@ -120,6 +120,9 @@ export function setHomeCity(cityId: string): Promise<ApiResult<{ account: import
 export function uploadProfilePhoto(photoDataUrl: string): Promise<ApiResult<{ photoUrl: string }>> {
   return request("/api/profile/photo", { method: "POST", body: JSON.stringify({ photo: photoDataUrl }) });
 }
+export function uploadGroupPhoto(photoDataUrl: string): Promise<ApiResult<{ photoRef: string }>> {
+  return request("/api/group/photo", { method: "POST", body: JSON.stringify({ photo: photoDataUrl }) });
+}
 
 // -------------------------------------------------------------- verification
 /**
@@ -369,7 +372,7 @@ export function submitRace(input: {
 
 export function submitGroup(input: {
   cityId?: string; name: string; description?: string; groupType: "rrca-chartered" | "community";
-  groupmeUrl?: string; facebookUrl?: string; instagramUrl?: string; websiteUrl?: string;
+  groupmeUrl?: string; facebookUrl?: string; instagramUrl?: string; websiteUrl?: string; coverPhoto?: string; logoPhoto?: string; membershipMode?: "open" | "request";
 }): Promise<ApiResult<{ submission: { id: string; status: string } }>> {
   return request("/api/submissions/group", { method: "POST", body: JSON.stringify(input) });
 }
@@ -414,7 +417,7 @@ export interface PublicUserRace {
 }
 export interface PublicUserGroup {
   id: string; kind: "group"; name: string; groupType: "rrca-chartered" | "community"; description: string;
-  groupmeUrl: string | null; facebookUrl: string | null; instagramUrl: string | null; websiteUrl: string | null;
+  groupmeUrl: string | null; facebookUrl: string | null; instagramUrl: string | null; websiteUrl: string | null; coverPhotoUrl?: string; logoPhotoUrl?: string; membershipMode?: "open" | "request"; rrcaVerified?: boolean; leaders?: {id:string;name:string}[];
 }
 export interface PublicUserEvent {
   id: string; kind: "event"; title: string; type: "one_time" | "recurring"; date: string | null;
@@ -428,6 +431,8 @@ export interface PublicApprovedContent {
 export function getPublicContent(cityId: string): Promise<ApiResult<PublicApprovedContent>> {
   return request(`/api/content?city=${encodeURIComponent(cityId)}`);
 }
+export function getPublicGroups(cityId: string): Promise<ApiResult<{cityId:string;groups:PublicUserGroup[]}>> { return request(`/api/groups?city=${encodeURIComponent(cityId)}`); }
+export function getPublicGroup(id: string): Promise<ApiResult<{group:PublicUserGroup}>> { return request(`/api/groups/${encodeURIComponent(id)}`); }
 
 // ------------------------------------------------- owner dashboard (admin)
 export interface DashboardFlagView {

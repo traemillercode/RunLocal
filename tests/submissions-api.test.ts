@@ -132,6 +132,30 @@ describe("POST /api/submissions/* — session + permission gating", () => {
   });
 });
 
+describe("group photo uploads persist into pending group submissions", () => {
+  it("accepts both uploaded photo refs and keeps the group pending", async () => {
+    const db = createMemoryStore();
+    const { cookie } = verifiedUser(db, "group@example.com");
+    const photo = "data:image/png;base64,iVBORw0KGgo=";
+    const refs: string[] = [];
+    for (const body of [{ photo }, { photo }]) {
+      const { res, fake } = makeRes();
+      await apiHandler(makeReq("POST", "/api/group/photo", { body, cookie }), res, db);
+      expect(fake.status).toBe(200);
+      refs.push((JSON.parse(fake.body) as { photoRef: string }).photoRef);
+    }
+    const { res, fake } = makeRes();
+    await apiHandler(makeReq("POST", "/api/submissions/group", {
+      cookie,
+      body: { cityId: "columbia-mo", name: "River Runners", description: "A local group.", groupType: "community", coverPhoto: refs[0], logoPhoto: refs[1], membershipMode: "request" },
+    }), res, db);
+    expect(fake.status).toBe(200);
+    expect(JSON.parse(fake.body)).toMatchObject({ submission: { status: "pending" } });
+    expect(db.listSubmissions()).toHaveLength(1);
+    expect(db.listSubmissions()[0].status).toBe("pending");
+  });
+});
+
 describe("GET /api/my/submissions", () => {
   it("returns only the caller's records; rejection reason appears only to the submitter", async () => {
     const db = createMemoryStore();

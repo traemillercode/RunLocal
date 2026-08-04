@@ -46,9 +46,10 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
         externalUrl: e.externalUrl ?? undefined,
       }));
     const today = new Date();
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    // Recurring seed slots describe the full weekly schedule, including a
+    // Monday slot after Monday has passed; one-time community activity is
+    // filtered separately below by its calendar date.
     const resolved = resolveWeekEvents([...city.events, ...recurring], today)
-      .filter((e) => e.date >= todayStart)
       .filter((e) => !hidden.has(`event:${e.id}`))
       .sort((a, b) => {
         const ha = highlights.get(`event:${a.id}`);
