@@ -171,6 +171,11 @@ export class Db {
   private recognitions = new Map<string, import("./types").RecognitionRecord>();
   private attendance = new Map<string, import("./types").AttendanceRecord>();
   private personalRuns = new Map<string, import("./types").PersonalRunRecord>();
+  private matchingPreferences = new Map<string, import("./types").MatchingPreferencesRecord>();
+  private joinRequests = new Map<string, import("./types").JoinRequestRecord>();
+  private blocks = new Map<string, import("./types").BlockRecord>();
+  /** Persisted per-account JoinRequest timestamps. Old entries are pruned on every check. */
+  private joinRequestRate = new Map<string, number[]>();
   /**
    * Private upload bytes (credential proofs) kept in memory so in-memory/test
    * stores can serve them back; file-backed stores mirror the bytes to disk
@@ -244,6 +249,12 @@ export class Db {
       for (const r of parsed.recognitions ?? []) this.recognitions.set(`${r.accountId}:${r.role}`, r);
       for (const a of parsed.attendance ?? []) this.attendance.set(a.id, a);
       for (const r of parsed.personalRuns ?? []) this.personalRuns.set(r.id, r);
+      for (const p of parsed.matchingPreferences ?? []) this.matchingPreferences.set(p.accountId, p);
+      for (const j of parsed.joinRequests ?? []) this.joinRequests.set(j.id, { ...j, requesterAccepted: j.requesterAccepted ?? false, recipientAccepted: j.recipientAccepted ?? false });
+      for (const b of parsed.blocks ?? []) this.blocks.set(`${b.blockerId}:${b.blockedId}`, b);
+      for (const [accountId, timestamps] of Object.entries(parsed.joinRequestRate ?? {})) {
+        this.joinRequestRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
+      }
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -273,6 +284,10 @@ export class Db {
       recognitions: [...this.recognitions.values()],
       attendance: [...this.attendance.values()],
       personalRuns: [...this.personalRuns.values()],
+      matchingPreferences: [...this.matchingPreferences.values()],
+      joinRequests: [...this.joinRequests.values()],
+      blocks: [...this.blocks.values()],
+      joinRequestRate: Object.fromEntries(this.joinRequestRate.entries()),
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -381,6 +396,29 @@ export class Db {
     this.accounts.delete(id);
     this.deleteCode(id);
   }
+
+  // ------------------------------------------------------ private matching data
+  getMatchingPreferences(accountId: string): import("./types").MatchingPreferencesRecord | undefined { return this.matchingPreferences.get(accountId); }
+  setMatchingPreferences(record: import("./types").MatchingPreferencesRecord): void { this.matchingPreferences.set(record.accountId, record); }
+  listJoinRequests(accountId: string): import("./types").JoinRequestRecord[] { return [...this.joinRequests.values()].filter((r) => r.requesterId === accountId || r.recipientId === accountId); }
+  getJoinRequest(id: string): import("./types").JoinRequestRecord | undefined { return this.joinRequests.get(id); }
+  addJoinRequest(record: import("./types").JoinRequestRecord): void { this.joinRequests.set(record.id, record); }
+  updateJoinRequest(id: string, patch: Partial<import("./types").JoinRequestRecord>): import("./types").JoinRequestRecord | undefined { const r = this.joinRequests.get(id); if (!r) return undefined; const next = { ...r, ...patch }; this.joinRequests.set(id, next); return next; }
+  findPendingJoinRequest(requesterId: string, recipientId: string, contextType: "event" | "personal_run", contextId: string): import("./types").JoinRequestRecord | undefined { return [...this.joinRequests.values()].find((r) => r.requesterId === requesterId && r.recipientId === recipientId && r.contextType === contextType && r.contextId === contextId && r.state === "pending"); }
+  isBlocked(a: string, b: string): boolean { return this.blocks.has(`${a}:${b}`) || this.blocks.has(`${b}:${a}`); }
+  addBlock(record: import("./types").BlockRecord): void { this.blocks.set(`${record.blockerId}:${record.blockedId}`, record); }
+  /** Sliding-window limiter: returns true and records a request, persisting on caller's next persist(). */
+  consumeJoinRequestRate(accountId: string, nowMs: number, limit: number, windowMs: number): boolean {
+    const cutoff = nowMs - windowMs;
+    const current = (this.joinRequestRate.get(accountId) ?? []).filter((t) => t > cutoff).slice(-limit);
+    if (current.length >= limit) { this.joinRequestRate.set(accountId, current); return false; }
+    current.push(nowMs);
+    this.joinRequestRate.set(accountId, current);
+    return true;
+  }
+  removeBlock(blockerId: string, blockedId: string): void { this.blocks.delete(`${blockerId}:${blockedId}`); }
+  listBlocks(blockerId: string): import("./types").BlockRecord[] { return [...this.blocks.values()].filter(b => b.blockerId === blockerId); }
+  invalidateJoinRequests(a: string, b: string): number { let n=0; for (const r of this.joinRequests.values()) if (((r.requesterId===a&&r.recipientId===b)||(r.requesterId===b&&r.recipientId===a)) && (r.state === "pending" || r.state === "accepted")) { r.state="blocked"; r.updatedAt=new Date().toISOString(); n++; } return n; }
 
   getSettings<T>(fallback:T): T { return (this.settings ?? fallback) as T; }
   setSettings(settings: import("./types").SiteSettings): void { this.settings = settings; }
