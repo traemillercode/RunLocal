@@ -262,6 +262,7 @@ async function handleApi(
       // values, and never the anon key itself.
       supabaseConfigured: supabase.configured,
       supabaseMissing: supabase.missing,
+      authRedirectConfigured: supabase.redirectConfigured,
       adminConfigured: adminConfigured(),
       retentionYears: db.retentionYears,
       retention: retentionStatus(db, now),

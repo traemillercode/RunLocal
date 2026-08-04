@@ -226,7 +226,7 @@ export function LoginPage() {
     setResendNotice(null);
 
     if (mode === "signup") {
-      const r = await supabase.signUp(e, password);
+      const r = await supabase.signUp(e, password, { data: { username: normalizeUsername(username)!, display_name: name.trim() } });
       if (!r.ok) {
         setBusy(false);
         setError(r.message);
