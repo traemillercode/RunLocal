@@ -50,6 +50,21 @@ export function usernameFormatValid(value: string): boolean {
   return normalizeUsername(value) !== null;
 }
 
+/** Pure signup gate used by the form and regression tests. */
+export function signupFieldsValid(password: string, username: string, usernameAvailable: boolean): boolean {
+  return password.length > 0 && passwordRequirements(password).every(Boolean) && usernameFormatValid(username) && usernameAvailable;
+}
+
+export const USERNAME_AVAILABILITY_DEBOUNCE_MS = 400;
+export function isCurrentUsernameRequest(requestId: number, currentRequestId: number): boolean {
+  return requestId === currentRequestId;
+}
+
+/** Provider failures can be arbitrary values; never render an object as "[object Object]" or "{}". */
+export function authErrorText(value: unknown): string {
+  return normalizeErrorMessage(value, "Could not complete signup. Please try again.");
+}
+
 const inputCls =
   "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
 
@@ -170,7 +185,7 @@ export function LoginPage() {
       } catch {
         if (requestId === usernameRequest.current) setUsernameAvailability("error");
       }
-    }, 400);
+    }, USERNAME_AVAILABILITY_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [username, usernameValid]);
 
@@ -430,11 +445,11 @@ export function LoginPage() {
                   aria-invalid={usernameTyped && (!usernameValid || usernameAvailability === "taken" || usernameAvailability === "error") ? true : undefined}
                   className={`${inputCls} ${usernameTyped && !usernameValid ? "border-red-400 focus:border-red-500 focus:ring-red-200" : usernameAvailability === "available" ? "border-emerald-500 focus:border-emerald-600 focus:ring-emerald-200" : usernameAvailability === "taken" || usernameAvailability === "error" ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
                 />
-                {usernameTyped && !usernameValid ? <p role="alert" className="mt-1 text-xs font-medium text-red-600">Use 3–24 characters, starting with a letter; letters, numbers, _ and - only.</p> : null}
-                {usernameTyped && usernameValid && usernameAvailability === "loading" ? <p className="mt-1 text-xs text-slate-500" role="status">Checking availability…</p> : null}
-                {usernameTyped && usernameValid && usernameAvailability === "available" ? <p className="mt-1 text-xs font-medium text-emerald-600" role="status">Username available</p> : null}
-                {usernameTyped && usernameValid && usernameAvailability === "taken" ? <p role="alert" className="mt-1 text-xs font-medium text-red-600">Username already taken</p> : null}
-                {usernameTyped && usernameValid && usernameAvailability === "error" ? <p role="alert" className="mt-1 text-xs font-medium text-red-600">Couldn’t check availability. Try again.</p> : null}
+                {usernameTyped && !usernameValid ? <p role="alert" className="mt-1 text-xs font-medium text-red-600"><span aria-hidden="true" className="mr-1">✕</span>Use 3–24 characters, starting with a letter; letters, numbers, _ and - only.</p> : null}
+                {usernameTyped && usernameValid && usernameAvailability === "loading" ? <p className="mt-1 text-xs text-slate-500" role="status"><span aria-hidden="true" className="mr-1 inline-block animate-spin">◌</span>Checking availability…</p> : null}
+                {usernameTyped && usernameValid && usernameAvailability === "available" ? <p className="mt-1 text-xs font-medium text-emerald-600" role="status"><span aria-hidden="true" className="mr-1">✓</span>Username available</p> : null}
+                {usernameTyped && usernameValid && usernameAvailability === "taken" ? <p role="alert" className="mt-1 text-xs font-medium text-red-600"><span aria-hidden="true" className="mr-1">✕</span>Username already taken</p> : null}
+                {usernameTyped && usernameValid && usernameAvailability === "error" ? <p role="alert" className="mt-1 text-xs font-medium text-red-600"><span aria-hidden="true" className="mr-1">✕</span>Couldn’t check availability. Try again.</p> : null}
                 <span className="mt-1 block text-[11px] leading-relaxed text-slate-400">{USERNAME_HINT}</span>
               </label>
               <label className="block">
@@ -583,7 +598,7 @@ export function LoginPage() {
               <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className={inputCls} />
             </label>
           )}
-          {error && <p className="rounded-xl bg-red-50 p-3.5 text-[13px] text-red-800">{normalizeErrorMessage(error)}</p>}
+          {error && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-[13px] text-red-800">{authErrorText(error)}</p>}
           {notice && <p className="rounded-xl bg-emerald-50 p-3.5 text-[13px] text-emerald-900">{notice}</p>}
           {pendingConfirmationEmail && (
             <ResendConfirmationBox
