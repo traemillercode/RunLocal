@@ -40,6 +40,7 @@ import {
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
 import { publicGroups, publicGroup } from "./groups";
+import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import {
   dashboardOverview,
@@ -306,6 +307,10 @@ async function handleApi(
     return ok(res, publicModerated(db, cityId)), true;
   }
 
+  if (method === "GET" && url.pathname === "/api/events") {
+    const cityId = url.searchParams.get("city") ?? undefined;
+    return ok(res, { cityId: cityId ?? null, events: publicEvents(db, cityId) }), true;
+  }
   // ---- public approved community content (no auth) -------------------------
   // Only APPROVED submissions ever appear here (pending/rejected never leave
   // the server), and owner-hidden content is excluded. No emails, phones, IPs,
@@ -1349,6 +1354,24 @@ async function handleAdmin(
     return ok(res, { ok: true, submission: { id: result.data.id, status: result.data.status } }), true;
   }
 
+  if (url.pathname === "/api/admin/events" && method === "GET") {
+    const result = listAdminEvents(db, ctx, url.searchParams.get("city") ?? undefined, now);
+    if (!result.ok) return sendErr(result), true; await db.persist(); return ok(res, { events: result.data }), true;
+  }
+  if (url.pathname === "/api/admin/events" && method === "POST") {
+    const result = createEvent(db, ctx, (await readJson(req)) as Record<string, unknown>, now);
+    if (!result.ok) return sendErr(result), true; await db.persist(); return ok(res, { event: result.data }), true;
+  }
+  const eventEdit = /^\/api\/admin\/events\/([^/]+)$/.exec(url.pathname);
+  if (eventEdit && method === "PATCH") {
+    const result = editEvent(db, ctx, eventEdit[1], (await readJson(req)) as Record<string, unknown>, now);
+    if (!result.ok) return sendErr(result), true; await db.persist(); return ok(res, { event: result.data }), true;
+  }
+  const eventTransition = /^\/api\/admin\/events\/([^/]+)\/(approve|publish|hide|unhide|archive)$/.exec(url.pathname);
+  if (eventTransition && method === "POST") {
+    const result = transitionEvent(db, ctx, eventTransition[1], eventTransition[2] as "approve"|"publish"|"hide"|"unhide"|"archive", now);
+    if (!result.ok) return sendErr(result), true; await db.persist(); return ok(res, { event: result.data }), true;
+  }
   // GET /api/admin/dashboard?city= — owner-only moderation dashboard overview
   if (method === "GET" && url.pathname === "/api/admin/dashboard") {
     const result = dashboardOverview(db, ctx, url.searchParams.get("city") ?? "", now);
