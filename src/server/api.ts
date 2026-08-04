@@ -27,9 +27,11 @@ import {
   adminViewSelfie,
   toCsv,
   validReason,
+  authorizeAdmin,
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
+import { publicSettings, updateSettings, saveCity, deleteCity, validateUpload } from "./cms";
 import {
   dashboardOverview,
   liftSuspension,
@@ -725,6 +727,7 @@ async function handleApi(
     return ok(res, { submission: { id: result.data.id, status: result.data.status } }), true;
   }
 
+  if (method === "GET" && url.pathname === "/api/config") return ok(res, { settings: publicSettings(db), cities: db.listCities().filter(c=>c.status === "active") }), true;
   // ============================ ADMIN =====================================
   if (url.pathname.startsWith("/api/admin")) {
     return handleAdmin(req, res, db, url, method, cookies, ip, secure, now);
@@ -751,6 +754,11 @@ async function handleAdmin(
   const sendErr = (r: { ok: false; error: string; status: number; message?: string }) =>
     err(res, { status: r.status, error: r.error, message: r.message });
 
+  if (method === "GET" && url.pathname === "/api/admin/cms/settings") { const a=authorizeAdmin(db,ctx,"admin.cms_settings",null,now); if(!a.ok)return sendErr(a),true; return ok(res,{settings:publicSettings(db)}),true; }
+  if (method === "POST" && url.pathname === "/api/admin/cms/settings") { const body=await readJson(req) as Record<string,unknown>; const r=updateSettings(db,ctx,body as any,now); if(!r.ok)return sendErr(r),true; await db.persist(); return ok(res,r.data),true; }
+  if (method === "POST" && url.pathname === "/api/admin/cms/city") { const body=await readJson(req) as any; const r=saveCity(db,ctx,body,now); if(!r.ok)return sendErr(r),true; await db.persist(); return ok(res,r.data),true; }
+  if (method === "POST" && url.pathname.startsWith("/api/admin/cms/city/") && url.pathname.endsWith("/deactivate")) { const id=url.pathname.split("/").at(-2)!; const r=deleteCity(db,ctx,id,now); if(!r.ok)return sendErr(r),true; await db.persist(); return ok(res,r.data),true; }
+  if (method === "POST" && url.pathname === "/api/admin/cms/upload") { const a=authorizeAdmin(db,ctx,"admin.cms_settings",null,now); if(!a.ok)return sendErr(a),true; const body=await readJson(req) as any; if(!validateUpload(body.ref))return err(res,{status:400,error:"invalid_image"}),true; return ok(res,{ref:`pending-upload-${newId()}`}),true; }
   // POST /api/admin/login
   if (method === "POST" && url.pathname === "/api/admin/login") {
     if (!adminConfigured()) {

@@ -153,6 +153,8 @@ export class Db {
   private submissions = new Map<string, SubmissionRecord>();
   private activities = new Map<string, import("./activity").Activity>();
   private oauthTokens = new Map<string, import("./activity").OAuthToken>();
+  private settings: import("./types").SiteSettings | undefined;
+  private cities = new Map<string, import("./types").CmsCity>();
   private loaded = false;
 
   constructor(opts: DbOptions = {}) {
@@ -193,6 +195,8 @@ export class Db {
       for (const s of parsed.submissions ?? []) this.submissions.set(s.id, s);
       for (const a of parsed.activities ?? []) this.activities.set(a.id, a);
       for (const t of parsed.oauthTokens ?? []) this.oauthTokens.set(`${t.accountId}:${t.provider}`, t);
+      this.settings = parsed.settings;
+      for (const c of parsed.cities ?? []) this.cities.set(c.id, c);
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -212,6 +216,8 @@ export class Db {
       submissions: [...this.submissions.values()],
       activities: [...this.activities.values()],
       oauthTokens: [...this.oauthTokens.values()],
+      settings: this.settings,
+      cities: [...this.cities.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -316,6 +322,12 @@ export class Db {
     this.accounts.delete(id);
     this.deleteCode(id);
   }
+
+  getSettings<T>(fallback:T): T { return (this.settings ?? fallback) as T; }
+  setSettings(settings: import("./types").SiteSettings): void { this.settings = settings; }
+  getCity(id:string): import("./types").CmsCity | undefined { return this.cities.get(id); }
+  listCities(): import("./types").CmsCity[] { return [...this.cities.values()]; }
+  setCity(city:import("./types").CmsCity): void { this.cities.set(city.id, city); }
 
   // ---------------------------------------------------------------- sessions
   getSession(id: string): SessionRecord | undefined {

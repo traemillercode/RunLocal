@@ -124,6 +124,13 @@ export function loginCheck(token: string): Promise<ApiResult<{ status: string; a
   return request("/api/login/check", { method: "POST", body: JSON.stringify({ token }) });
 }
 
+// ---------------------------------------------------------------- CMS / site configuration
+export interface SiteConfig { settings: { title:string; wordmark:string; tagline:string; primary:string; accent:string; surface:string; strings:Record<string,string>; tags:Record<string,string[]>; providers:Record<string,boolean>; bottomNav:string[]; announcement:{text:string;link?:string}|null; logoRef:string|null; faviconRef:string|null }; cities: Array<{id:string;name:string;state:string;slug:string;status:string;headerImageRef:string|null;accent:string|null}> }
+export function getSiteConfig(): Promise<ApiResult<SiteConfig>> { return request("/api/config"); }
+export function adminCmsSettings(reason:string): Promise<ApiResult<{settings:SiteConfig["settings"]}>> { return adminRequest("/api/admin/cms/settings", reason); }
+export function adminSaveCmsSettings(settings:Partial<SiteConfig["settings"]>, reason:string): Promise<ApiResult<{settings:SiteConfig["settings"]}>> { return adminRequest("/api/admin/cms/settings", reason, {method:"POST",body:JSON.stringify(settings)}); }
+export function adminSaveCity(city:Record<string,unknown>, reason:string): Promise<ApiResult<{city:SiteConfig["cities"][number]}>> { return adminRequest("/api/admin/cms/city", reason, {method:"POST",body:JSON.stringify(city)}); }
+
 // -------------------------------------------------------------------- admin
 export interface AdminSearchRow {
   id: string;
