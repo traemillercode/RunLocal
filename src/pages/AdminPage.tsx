@@ -12,9 +12,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { GlobalAdminSection } from "../components/GlobalAdminSection";
+import { AdminTrustSection } from "../components/AdminTrustSection";
 import { Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
-import type { AdminRecordView, AdminSearchRow, AuditEntryView, PendingQueueRow } from "../lib/api";
+import type { AdminRecordView, AdminSearchRow, AuditEntryView, DashboardView, PendingQueueRow } from "../lib/api";
+import { CITIES } from "../data/cities";
 import { useAccount } from "../state/account";
 
 const inputCls =
@@ -79,6 +82,51 @@ export function AdminPage() {
 
   // purge
   const [purgeResult, setPurgeResult] = useState<string | null>(null);
+
+  // owner dashboard (moderation, RRCA, featured/pinned)
+  const [dashCity, setDashCity] = useState<string>(CITIES.find((c) => c.live)?.id ?? "columbia-mo");
+  const [dash, setDash] = useState<DashboardView | null>(null);
+  const [dashReason, setDashReason] = useState("");
+  const [dashError, setDashError] = useState<string | null>(null);
+  const [dashBusy, setDashBusy] = useState(false);
+  /** Registry id of the row action currently in flight (disables that row). */
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
+  /** Per-group RRCA draft state (badge + note) before saving. */
+  const [rrcaDrafts, setRrcaDrafts] = useState<Record<string, { badge: boolean; note: string }>>({});
+  /** Per-flag suspension-days input (blank = indefinite). */
+  const [suspendDays, setSuspendDays] = useState<Record<string, string>>({});
+  const [subRows, setSubRows] = useState<api.SubmissionQueueRow[] | null>(null);
+  const [subReason, setSubReason] = useState("");
+  const [subError, setSubError] = useState<string | null>(null);
+  const [subBusy, setSubBusy] = useState(false);
+  const [subAction, setSubAction] = useState<string | null>(null);
+  const loadSubmissions = async () => {
+    setSubError(null);
+    if (!subReason.trim() || subReason.trim().length < 5) {
+      setSubError("Enter a reason (min 5 characters) to load the submission queue.");
+      return;
+    }
+    setSubBusy(true);
+    const r = await api.adminGetSubmissions(null, subReason.trim());
+    setSubBusy(false);
+    if (r.ok) setSubRows(r.data.results);
+    else setSubError(r.error.message ?? "Couldn't load the queue.");
+  };
+  const decideSubmission = async (id: string, action: "approve" | "reject") => {
+    setSubError(null);
+    if (!subReason.trim() || subReason.trim().length < 5) {
+      setSubError(action === "reject" ? "Enter the rejection reason (min 5 chars) — the submitter will see it." : "Enter a reason (min 5 chars).");
+      return;
+    }
+    setSubAction(id);
+    const r = await api.adminDecideSubmission(id, action, subReason.trim());
+    setSubAction(null);
+    if (r.ok) {
+      setSubRows((rows) => (rows ? rows.filter((row) => row.id !== id) : rows));
+    } else {
+      setSubError(r.error.message ?? "Action failed.");
+    }
+  };
 
   const selfieCheckRef = useRef(false);
 
@@ -146,6 +194,9 @@ export function AdminPage() {
     setAudit(null);
     setPurgeResult(null);
     setPending(null);
+    setDash(null);
+    setDashError(null);
+    setDashReason("");
   };
 
   // ---- owner-only pending queue -----------------------------------------
@@ -310,6 +361,56 @@ export function AdminPage() {
     else setDetailError(r.error.status === 401 ? "Admin session expired — sign in again." : r.error.message ?? "Purge failed.");
   };
 
+  // ---- owner dashboard (moderation, RRCA, featured/pinned) ----------------
+  /** Returns the trimmed reason when valid, else sets an error and returns null. */
+  const dashReasonOr = (what: string): string | null => {
+    if (!dashReason.trim() || dashReason.trim().length < 5) {
+      setDashError(`Enter a reason (min 5 characters) to ${what}.`);
+      return null;
+    }
+    return dashReason.trim();
+  };
+
+  const loadDashboard = async () => {
+    setDashBusy(true);
+    const reason = dashReasonOr("open the dashboard");
+    if (!reason) {
+      setDashBusy(false);
+      return;
+    }
+    const r = await api.adminDashboard(dashCity, reason);
+    setDashBusy(false);
+    if (r.ok) {
+      setDash(r.data);
+      setDashError(null);
+      setRrcaDrafts(
+        Object.fromEntries(r.data.groups.map((g) => [g.id, { badge: g.rrcaBadge, note: g.rrcaNote ?? "" }])),
+      );
+    } else {
+      setDashError(r.error.status === 401 ? "Your admin session expired — sign in again." : r.error.message ?? "Could not load the dashboard.");
+    }
+  };
+
+  /** Run a dashboard mutation, then reload the overview. */
+  const dashAction = async (busyKey: string, label: string, fn: () => Promise<api.ApiResult<unknown>>) => {
+    const reason = dashReasonOr(label);
+    if (!reason) return;
+    setActionBusy(busyKey);
+    const r = await fn();
+    setActionBusy(null);
+    if (r.ok) {
+      setDashError(null);
+      void loadDashboard();
+    } else {
+      setDashError(r.error.status === 401 ? "Your admin session expired — sign in again." : r.error.message ?? "Action failed.");
+    }
+  };
+
+  const goLookup = () => {
+    document.getElementById("lookup")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    (document.getElementById("lookup-query") as HTMLInputElement | null)?.focus({ preventScroll: true });
+  };
+
   const openSelfie = async () => {
     if (!record) return;
     if (!reason.trim() || reason.trim().length < 5) {
@@ -460,12 +561,322 @@ export function AdminPage() {
         </section>
       ) : null}
 
-      {/* Search */}
+      {/* Admin submission queue — owner OR key admin; audited with a reason */}
       <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+        <h2 className="text-[15px] font-bold text-slate-900">Submission queue</h2>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Community-submitted races, groups, and independent events awaiting review. Approve publishes them publicly (groups grant the submitter the Group
+          Leader role); reject requires a reason the submitter will see. Every action is audited with the reason above.
+        </p>
+        <div className="mt-3 space-y-3">
+          <textarea rows={2} placeholder="Reason for loading/deciding the queue (required, audited; rejection reason goes to the submitter)" value={subReason} onChange={(e) => setSubReason(e.target.value)} className={reasonCls} />
+          <PillButton variant="primary" className="w-full" disabled={subBusy} onClick={() => void loadSubmissions()}>
+            <Icon name="search" className="h-4 w-4" /> {subBusy ? "Loading…" : "Load submission queue"}
+          </PillButton>
+          {subError ? <Err msg={subError} /> : null}
+        </div>
+        {subRows !== null && (
+          <ul className="mt-4 space-y-3">
+            {subRows.length === 0 ? <li className="py-2 text-sm text-slate-500">No pending submissions.</li> : null}
+            {subRows.map((row) => (
+              <li key={row.id} className="rounded-xl border border-slate-200 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-800">{row.title}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {row.kind === "race" ? "Race" : row.kind === "group" ? "Group" : "Independent run"} · {row.submitterName} · {row.summary}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">Pending</span>
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <PillButton variant="secondary" className="flex-1 px-3" disabled={subAction === row.id} onClick={() => void decideSubmission(row.id, "approve")}>
+                    Approve
+                  </PillButton>
+                  <PillButton variant="ghost" className="flex-1 px-3" disabled={subAction === row.id} onClick={() => void decideSubmission(row.id, "reject")}>
+                    Reject
+                  </PillButton>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Owner-only dashboard: moderation, RRCA, featured/pinned */}
+      {isOwner ? (
+        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h2 className="text-[15px] font-bold text-slate-900">City dashboard</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Moderation, RRCA badges, and highlights for one city. Every action is reason-required and audited.
+              </p>
+            </div>
+            <button type="button" onClick={goLookup} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-[#0b2b22] px-4 text-xs font-semibold text-white active:bg-[#124d3c]">
+              <Icon name="search" className="h-4 w-4" /> Verification lookup
+            </button>
+          </div>
+          <div className="mt-3 space-y-3">
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-slate-600">City</span>
+              <select
+                value={dashCity}
+                onChange={(e) => {
+                  setDashCity(e.target.value);
+                  setDash(null);
+                }}
+                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-[#0b2b22]"
+              >
+                {CITIES.filter((c) => c.live).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}, {c.state}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <textarea rows={2} placeholder="Reason for dashboard access & actions (required, audited)" value={dashReason} onChange={(e) => setDashReason(e.target.value)} className={reasonCls} />
+            <PillButton variant="primary" className="w-full" disabled={dashBusy} onClick={() => void loadDashboard()}>
+              <Icon name="shield" className="h-4 w-4" /> {dashBusy ? "Loading…" : "Load dashboard"}
+            </PillButton>
+            {dashError ? <Err msg={dashError} /> : null}
+          </div>
+
+          {dash ? (
+            <div className="mt-4 space-y-5">
+              {/* Flags */}
+              <div>
+                <h3 className="text-[13px] font-bold uppercase tracking-wide text-slate-500">Flagged content</h3>
+                {dash.flags.filter((f) => f.status === "open").length === 0 ? <p className="mt-1.5 text-sm text-slate-500">No open flags.</p> : null}
+                <ul className="mt-2 space-y-2">
+                  {dash.flags.map((f) => {
+                    const busy = actionBusy === f.id;
+                    const open = f.status === "open";
+                    return (
+                      <li key={f.id} className={`rounded-xl border p-3 ${open ? "border-red-200 bg-red-50/40" : "border-slate-200 bg-slate-50/60"}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-800">{f.title}</p>
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                              {f.kind} · {f.reporterName}
+                            </p>
+                          </div>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${open ? "bg-red-100 text-red-700" : "bg-slate-200 text-slate-500"}`}>{f.status}</span>
+                        </div>
+                        <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{f.reason}</p>
+                        {open ? (
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <PillButton variant="secondary" className="min-h-9 px-3 text-xs" disabled={busy} onClick={() => void dashAction(f.id, "dismiss this flag", () => api.adminModerateFlag(f.id, "dismiss", dashReason.trim()))}>
+                              Dismiss
+                            </PillButton>
+                            <PillButton
+                              variant="ghost"
+                              className="min-h-9 px-3 text-xs text-red-600"
+                              disabled={busy}
+                              onClick={() => {
+                                if (window.confirm(`Hide "${f.title}" from everyone? This is audited.`)) {
+                                  void dashAction(f.id, "hide this content", () => api.adminModerateFlag(f.id, "hide", dashReason.trim()));
+                                }
+                              }}
+                            >
+                              Hide
+                            </PillButton>
+                            {f.authorAccountId ? (
+                              <>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={365}
+                                  placeholder="days (blank = indefinite)"
+                                  value={suspendDays[f.id] ?? ""}
+                                  onChange={(e) => setSuspendDays((m) => ({ ...m, [f.id]: e.target.value }))}
+                                  className="h-9 w-36 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none"
+                                  aria-label="Suspension days for the flagged content's author"
+                                />
+                                <PillButton
+                                  variant="ghost"
+                                  className="min-h-9 px-3 text-xs"
+                                  disabled={busy}
+                                  onClick={() => {
+                                    const raw = (suspendDays[f.id] ?? "").trim();
+                                    const days = raw === "" ? null : Number(raw);
+                                    if (days !== null && (!Number.isInteger(days) || days < 1 || days > 365)) {
+                                      setDashError("Suspension days must be 1–365, or blank for indefinite.");
+                                      return;
+                                    }
+                                    void dashAction(f.id, "suspend the flagged author", () => api.adminSuspendAccount(f.authorAccountId!, days, dashReason.trim()));
+                                  }}
+                                >
+                                  Suspend author
+                                </PillButton>
+                              </>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <p className="mt-1.5 text-[11px] text-slate-400">
+                            {f.resolvedAction === "hide" ? "Hidden — content is not shown to anyone." : "Dismissed — no action taken."} Resolved {fmt(f.resolvedAt)}.
+                          </p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {/* Hidden content */}
+              {dash.events.some((e) => e.hidden) || dash.races.some((r) => r.hidden) || dash.posts.some((p) => p.hidden) ? (
+                <div>
+                  <h3 className="text-[13px] font-bold uppercase tracking-wide text-slate-500">Hidden content</h3>
+                  <ul className="mt-2 space-y-2">
+                    {[...dash.events, ...dash.races, ...dash.posts]
+                      .filter((c) => c.hidden)
+                      .map((c) => (
+                        <li key={c.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 p-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-800">{c.title}</p>
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{c.kind}</p>
+                          </div>
+                          <PillButton variant="ghost" className="min-h-9 shrink-0 px-3 text-xs" disabled={actionBusy === c.id} onClick={() => void dashAction(c.id, "unhide this content", () => api.adminUnhideContent(c.id, dashReason.trim()))}>
+                            Unhide
+                          </PillButton>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {/* Suspensions */}
+              <div>
+                <h3 className="text-[13px] font-bold uppercase tracking-wide text-slate-500">Suspended accounts</h3>
+                {dash.suspensions.length === 0 ? (
+                  <p className="mt-1.5 text-sm text-slate-500">No active suspensions.</p>
+                ) : (
+                  <ul className="mt-2 space-y-2">
+                    {dash.suspensions.map((s) => (
+                      <li key={s.accountId} className="rounded-xl border border-amber-200 bg-amber-50/40 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-800">{s.name}</p>
+                            <p className="truncate text-xs text-slate-500">{s.email}</p>
+                            <p className="mt-1 text-[11px] leading-relaxed text-amber-800">
+                              {s.suspendedUntil ? `Suspended until ${fmt(s.suspendedUntil)}` : "Suspended indefinitely"} · {s.suspensionReason ?? "no reason recorded"}
+                            </p>
+                          </div>
+                          <PillButton variant="ghost" className="min-h-9 shrink-0 px-3 text-xs" disabled={actionBusy === s.accountId} onClick={() => void dashAction(s.accountId, "lift this suspension", () => api.adminLiftSuspension(s.accountId, dashReason.trim()))}>
+                            Lift
+                          </PillButton>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-1.5 text-[11px] text-slate-400">
+                  Suspended accounts can't post anywhere until the expiry or a lift. "Suspend author" appears on a flag once the flagged content belongs to a signed-in account.
+                </p>
+              </div>
+
+              {/* RRCA notes */}
+              <div>
+                <h3 className="text-[13px] font-bold uppercase tracking-wide text-slate-500">RRCA club badges</h3>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  The badge drives the public "RRCA-Chartered Club" label. The note is your internal evidence trail — never shown publicly.
+                </p>
+                <ul className="mt-2 space-y-2">
+                  {dash.groups.map((g) => {
+                    const draft = rrcaDrafts[g.id] ?? { badge: g.rrcaBadge, note: g.rrcaNote ?? "" };
+                    const busy = actionBusy === `rrca:${g.id}`;
+                    return (
+                      <li key={g.id} className="rounded-xl border border-slate-200 p-3">
+                        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                          <input
+                            type="checkbox"
+                            checked={draft.badge}
+                            onChange={(e) => setRrcaDrafts((m) => ({ ...m, [g.id]: { ...draft, badge: e.target.checked } }))}
+                            className="h-4 w-4 accent-[#0b2b22]"
+                          />
+                          {g.name}
+                          {g.rrcaBadge ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-800">RRCA badge on</span> : null}
+                        </label>
+                        <textarea
+                          rows={2}
+                          placeholder="Internal charter note (e.g. charter number + date verified)"
+                          value={draft.note}
+                          onChange={(e) => setRrcaDrafts((m) => ({ ...m, [g.id]: { ...draft, note: e.target.value } }))}
+                          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-[#0b2b22]"
+                        />
+                        <PillButton
+                          variant="ghost"
+                          className="mt-2 min-h-9 px-3 text-xs"
+                          disabled={busy || (draft.badge === g.rrcaBadge && draft.note === (g.rrcaNote ?? ""))}
+                          onClick={() => void dashAction(`rrca:${g.id}`, "save the RRCA note", () => api.adminSetGroupRrca(g.id, draft.badge, draft.note, dashReason.trim()))}
+                        >
+                          Save badge & note
+                        </PillButton>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {/* Featured & pinned */}
+              <div>
+                <h3 className="text-[13px] font-bold uppercase tracking-wide text-slate-500">Featured & pinned events / races</h3>
+                <p className="mt-0.5 text-[11px] text-slate-400">Featured sorts first with a highlight chip; pinned adds a pin chip. Independent toggles.</p>
+                {(
+                  [
+                    ["events", dash.events],
+                    ["races", dash.races],
+                  ] as const
+                ).map(([label, items]) => (
+                  <div key={label} className="mt-2">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{label}</p>
+                    <ul className="mt-1.5 space-y-1.5">
+                      {items.map((c) => {
+                        const busy = actionBusy === c.id;
+                        return (
+                          <li key={c.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2">
+                            <span className="min-w-0 truncate text-[13px] font-semibold text-slate-800">{c.title}</span>
+                            <span className="flex shrink-0 items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void dashAction(c.id, "toggle featured", () => api.adminSetHighlight(c.id, { featured: !c.featured }, dashReason.trim()))}
+                                className={`min-h-9 rounded-full px-3 text-xs font-semibold transition-colors ${c.featured ? "bg-[#c8f169] text-[#0b2b22]" : "bg-slate-100 text-slate-500 active:bg-slate-200"}`}
+                              >
+                                Featured
+                              </button>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void dashAction(c.id, "toggle pinned", () => api.adminSetHighlight(c.id, { pinned: !c.pinned }, dashReason.trim()))}
+                                className={`min-h-9 rounded-full px-3 text-xs font-semibold transition-colors ${c.pinned ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-500 active:bg-slate-200"}`}
+                              >
+                                Pinned
+                              </button>
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {/* Global Admin — site settings & CMS (key admin or owner; audited) */}
+      <GlobalAdminSection />
+      {/* Global Admin — community trust & credentials (audited) */}
+      <AdminTrustSection />
+
+      {/* Search */}
+      <section id="lookup" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
         <h2 className="text-[15px] font-bold text-slate-900">Lookup by username or email</h2>
         <p className="mt-0.5 text-xs text-slate-500">Phone-number search is intentionally not available — no discovery by phone.</p>
         <div className="mt-3 space-y-3">
-          <input type="search" inputMode="search" placeholder="Name or email" value={query} onChange={(e) => setQuery(e.target.value)} className={inputCls} aria-label="Search query" />
+          <input id="lookup-query" type="search" inputMode="search" placeholder="Name or email" value={query} onChange={(e) => setQuery(e.target.value)} className={inputCls} aria-label="Search query" />
           <div>
             <span className="mb-1 block text-xs font-semibold text-slate-600">Reason for this access (required, audited)</span>
             <textarea rows={2} placeholder="e.g. Safety review of a flagged report" value={reason} onChange={(e) => setReason(e.target.value)} className={reasonCls} />

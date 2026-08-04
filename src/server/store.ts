@@ -15,9 +15,14 @@ import { join } from "node:path";
 import type {
   AccountRecord,
   AuditEntry,
+  CityInvitationRecord,
   CodeRecord,
+  ContentRecord,
+  FlagRecord,
+  GroupModRecord,
   PersistedDb,
   SessionRecord,
+  SubmissionRecord,
   VerifyPhase,
 } from "./types";
 
@@ -69,6 +74,16 @@ export interface PublicAccount {
   id: string;
   name: string;
   email: string;
+  /**
+   * Unique public handle, normalized lowercase (null = legacy account that has
+   * not claimed one yet). Public profile identity — never sensitive data.
+   */
+  username: string | null;
+  /**
+   * Home city id (null = legacy account that has not chosen one yet — the UI
+   * prompts them clearly). Public profile identity, never sensitive.
+   */
+  cityId: string | null;
   status: AccountRecord["status"];
   phase: VerifyPhase | null;
   badge: "verified" | null;
@@ -76,19 +91,52 @@ export interface PublicAccount {
   role: AccountRecord["role"];
   /** Server-derived super-admin flag (from RUN_LOCAL_OWNER_EMAIL). */
   isOwner: boolean;
+  /**
+   * Posting-blocking suspension, computed server-side against the current
+   * time. The client may only ever see this boolean — never the expiry or the
+   * reason (moderation data stays owner-only).
+   */
+  suspended: boolean;
+  /**
+   * Community-trust review state (see AccountRecord.underReview). Visible to
+   * the account itself (and the admin) — the account may still browse, RSVP,
+   * and comment, but hosting and coach/club posting are restricted.
+   */
+  underReview: boolean;
   profilePhotoUrl: string | null;
 }
 
-export function toPublicAccount(rec: AccountRecord, isOwner = false): PublicAccount {
+/**
+ * True while the account's posting rights are suspended. `suspendedUntil`
+ * null means indefinite (until lifted); past timestamps are treated as
+ * expired.
+ */
+export function isSuspended(rec: AccountRecord, now = new Date()): boolean {
+  if (rec.deletedAt || !rec.suspended) return false;
+  if (rec.suspendedUntil === null) return true; // indefinite
+  return new Date(rec.suspendedUntil).getTime() > now.getTime();
+}
+
+/** Posting gate used by the client payload and (in future) posting endpoints. */
+export function canPost(rec: AccountRecord, now = new Date()): { ok: boolean; reason?: string } {
+  if (!isSuspended(rec, now)) return { ok: true };
+  return { ok: false, reason: "suspended" };
+}
+
+export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new Date()): PublicAccount {
   return {
     id: rec.id,
     name: rec.name,
     email: rec.email,
+    username: rec.username ?? null,
+    cityId: rec.cityId ?? null,
     status: rec.status,
     phase: rec.status === "pending" ? rec.phase : null,
     badge: rec.status === "verified" ? "verified" : null,
     role: rec.role,
     isOwner,
+    suspended: isSuspended(rec, now),
+    underReview: rec.underReview === true,
     profilePhotoUrl: rec.profilePhotoRef ? `/uploads/public/${rec.profilePhotoRef}` : null,
   };
 }
@@ -107,6 +155,35 @@ export class Db {
   private sessions = new Map<string, SessionRecord>();
   private codes = new Map<string, CodeRecord>();
   private audits: AuditEntry[] = [];
+  private content = new Map<string, ContentRecord>();
+  private groups = new Map<string, GroupModRecord>();
+  private flags: FlagRecord[] = [];
+  private submissions = new Map<string, SubmissionRecord>();
+  private activities = new Map<string, import("./activity").Activity>();
+  private oauthTokens = new Map<string, import("./activity").OAuthToken>();
+  private settings: import("./types").SiteSettings | undefined;
+  private cities = new Map<string, import("./types").CmsCity>();
+  private invitations = new Map<string, CityInvitationRecord>();
+  private credentials = new Map<string, import("./types").CredentialRecord>();
+  private ratings = new Map<string, import("./types").RatingRecord>();
+  private concerns = new Map<string, import("./types").ConcernRecord>();
+  private appeals = new Map<string, import("./types").AppealRecord>();
+  private recognitions = new Map<string, import("./types").RecognitionRecord>();
+  private attendance = new Map<string, import("./types").AttendanceRecord>();
+  /**
+   * Private upload bytes (credential proofs) kept in memory so in-memory/test
+   * stores can serve them back; file-backed stores mirror the bytes to disk
+   * under uploads/private (never in db.json) exactly like selfies and CMS refs.
+   */
+  private privateUploads = new Map<string, Buffer>();
+  /**
+   * CMS image references (brand logo/favicon, city header images) keyed by
+   * ref id. Bytes live on disk under uploads/private for file-backed stores
+   * (never in db.json) and in this map for in-memory/test stores. Refs are
+   * opaque ids — settings/cities only ever carry the ref string, never the
+   * image bytes or data URLs.
+   */
+  private refs = new Map<string, Buffer>();
   private loaded = false;
 
   constructor(opts: DbOptions = {}) {
@@ -127,10 +204,44 @@ export class Db {
     try {
       const raw = await readFile(file, "utf8");
       const parsed = JSON.parse(raw) as PersistedDb;
-      for (const a of parsed.accounts ?? []) this.accounts.set(a.id, a);
+      for (const a of parsed.accounts ?? []) {
+        // Backward-compatible migration: accounts persisted before usernames
+        // existed simply lack the field — treat it as `null` (not set) so they
+        // keep working and can claim a username from their profile later.
+        a.username = a.username ?? null;
+        // Same for home cities: accounts created before home-city selection
+        // existed lack the field — treat it as `null` (not set) so they keep
+        // working and are prompted to choose a city (see /api/profile/city).
+        a.cityId = a.cityId ?? null;
+        // Same for the City Admin scope fields: accounts persisted before the
+        // multi-city foundation lack them — treat as `null` (not a City Admin).
+        a.adminCityId = a.adminCityId ?? null;
+        a.rolePriorAdmin = a.rolePriorAdmin ?? null;
+        // Same for the community-trust review state: accounts persisted before
+        // it existed lack the fields — treat as not under review.
+        a.underReview = a.underReview === true;
+        a.underReviewAt = a.underReviewAt ?? null;
+        this.accounts.set(a.id, a);
+      }
       for (const s of parsed.sessions ?? []) this.sessions.set(s.id, s);
       for (const c of parsed.codes ?? []) this.codes.set(c.accountId, c);
-      this.audits = parsed.audits ?? [];
+      // Pre-multi-city audit entries have no cityId — normalize to null.
+      this.audits = (parsed.audits ?? []).map((a) => ({ ...a, cityId: a.cityId ?? null }));
+      for (const r of parsed.content ?? []) this.content.set(r.id, r);
+      for (const g of parsed.groups ?? []) this.groups.set(g.id, g);
+      this.flags = parsed.flags ?? [];
+      for (const s of parsed.submissions ?? []) this.submissions.set(s.id, s);
+      for (const a of parsed.activities ?? []) this.activities.set(a.id, a);
+      for (const t of parsed.oauthTokens ?? []) this.oauthTokens.set(`${t.accountId}:${t.provider}`, t);
+      this.settings = parsed.settings;
+      for (const c of parsed.cities ?? []) this.cities.set(c.id, c);
+      for (const i of parsed.invitations ?? []) this.invitations.set(i.id, i);
+      for (const c of parsed.credentials ?? []) this.credentials.set(c.id, c);
+      for (const r of parsed.ratings ?? []) this.ratings.set(r.id, r);
+      for (const c of parsed.concerns ?? []) this.concerns.set(c.id, c);
+      for (const a of parsed.appeals ?? []) this.appeals.set(a.id, a);
+      for (const r of parsed.recognitions ?? []) this.recognitions.set(`${r.accountId}:${r.role}`, r);
+      for (const a of parsed.attendance ?? []) this.attendance.set(a.id, a);
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -144,6 +255,21 @@ export class Db {
       sessions: [...this.sessions.values()],
       codes: [...this.codes.values()],
       audits: this.audits,
+      content: [...this.content.values()],
+      groups: [...this.groups.values()],
+      flags: this.flags,
+      submissions: [...this.submissions.values()],
+      activities: [...this.activities.values()],
+      oauthTokens: [...this.oauthTokens.values()],
+      settings: this.settings,
+      cities: [...this.cities.values()],
+      invitations: [...this.invitations.values()],
+      credentials: [...this.credentials.values()],
+      ratings: [...this.ratings.values()],
+      concerns: [...this.concerns.values()],
+      appeals: [...this.appeals.values()],
+      recognitions: [...this.recognitions.values()],
+      attendance: [...this.attendance.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -162,26 +288,47 @@ export class Db {
     const key = email.trim().toLowerCase();
     return [...this.accounts.values()].find((a) => a.email.toLowerCase() === key);
   }
+  /**
+   * Look up an account by its normalized username (case-insensitive). The
+   * caller MUST pass the already-normalized form (see `normalizeUsername` in
+   * `src/lib/username.ts`) — this method compares on the stored, normalized
+   * lowercase value, so any casing of the same name collides deterministically.
+   */
+  getAccountByUsername(username: string): AccountRecord | undefined {
+    const key = username.trim().toLowerCase();
+    return [...this.accounts.values()].find((a) => a.username !== null && a.username !== undefined && a.username.toLowerCase() === key);
+  }
   createAccount(input: {
     name: string;
     email: string;
+    username?: string | null;
+    /** Home city id — REQUIRED for new signups (validated in the API layer against known city entities). */
+    cityId?: string | null;
     phone?: string | null;
-    birthdate?: string;
+    birthdate?: string | null;
     requestedRole?: "runner" | "group_leader" | null;
   }): AccountRecord {
     const rec: AccountRecord = {
       id: newId(),
       name: input.name.trim().slice(0, 60),
       email: input.email.trim().toLowerCase(),
+      // Uniqueness/validation live in the API layer (single-threaded store:
+      // check-then-write is atomic in-process). The store keeps the value as
+      // given — callers are expected to pass the normalized form.
+      username: input.username ?? null,
+      cityId: input.cityId ?? null,
       status: "pending",
       phase: "email",
       role: "runner",
+      adminCityId: null,
+      rolePriorAdmin: null,
       requestedRole: input.requestedRole ?? null,
       profilePhotoRef: null,
+      supabaseAuthId: null,
       phone: input.phone ?? null,
       phoneVerified: false,
       phoneVerifiedAt: null,
-      birthdate: input.birthdate ?? "1970-01-01",
+      birthdate: input.birthdate ?? null,
       selfieRef: null,
       selfieCapturedAt: null,
       signupIp: null,
@@ -193,6 +340,11 @@ export class Db {
       purgeAt: null,
       purgedAt: null,
       retentionYears: this.retentionYears,
+      suspended: false,
+      suspendedUntil: null,
+      suspensionReason: null,
+      underReview: false,
+      underReviewAt: null,
     };
     this.accounts.set(rec.id, rec);
     return rec;
@@ -225,6 +377,57 @@ export class Db {
   removeAccount(id: string): void {
     this.accounts.delete(id);
     this.deleteCode(id);
+  }
+
+  getSettings<T>(fallback:T): T { return (this.settings ?? fallback) as T; }
+  setSettings(settings: import("./types").SiteSettings): void { this.settings = settings; }
+  getCity(id:string): import("./types").CmsCity | undefined { return this.cities.get(id); }
+  listCities(): import("./types").CmsCity[] { return [...this.cities.values()]; }
+  setCity(city:import("./types").CmsCity): void { this.cities.set(city.id, city); }
+
+  // ------------------------------------------------------------- invitations
+  listInvitations(): CityInvitationRecord[] { return [...this.invitations.values()]; }
+  getInvitation(id: string): CityInvitationRecord | undefined { return this.invitations.get(id); }
+  appendInvitation(rec: CityInvitationRecord): CityInvitationRecord { this.invitations.set(rec.id, rec); return rec; }
+  updateInvitation(id: string, patch: Partial<CityInvitationRecord>): CityInvitationRecord | undefined {
+    const rec = this.invitations.get(id);
+    if (!rec) return undefined;
+    const next = { ...rec, ...patch };
+    this.invitations.set(id, next);
+    return next;
+  }
+  /** Find the active (non-revoked) invitation for a city+recipient, newest first. */
+  findInvitation(cityId: string, email: string): CityInvitationRecord | undefined {
+    const key = email.trim().toLowerCase();
+    return [...this.invitations.values()]
+      .filter((i) => i.cityId === cityId && i.email.toLowerCase() === key && i.revokedAt === null)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  }
+
+  // ------------------------------------------------------------ cms image refs
+  /**
+   * Store CMS image bytes under an opaque ref. File-backed stores write to
+   * uploads/private (like selfies) so image data never appears in db.json;
+   * in-memory stores keep the bytes in the map. The ref is the ONLY value
+   * that settings/cities ever carry.
+   */
+  async saveRef(ref: string, bytes: Buffer): Promise<void> {
+    this.refs.set(ref, bytes);
+    if (!this.dataDir) return;
+    const dir = this.uploadDir("private");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, `cms-${ref}`), bytes);
+  }
+  /** Read CMS image bytes by ref (memory first, then disk). */
+  async readRef(ref: string): Promise<Buffer | null> {
+    const mem = this.refs.get(ref);
+    if (mem) return mem;
+    if (!this.dataDir) return null;
+    try {
+      return await readFile(join(this.uploadDir("private"), `cms-${ref}`));
+    } catch {
+      return null;
+    }
   }
 
   // ---------------------------------------------------------------- sessions
@@ -286,8 +489,11 @@ export class Db {
   }
 
   // ------------------------------------------------------------------- audit
-  appendAudit(entry: Omit<AuditEntry, "id" | "at">, now = new Date()): AuditEntry {
-    const rec: AuditEntry = { ...entry, id: newId(), at: nowIso(now) };
+  appendAudit(
+    entry: Omit<AuditEntry, "id" | "at" | "cityId"> & { cityId?: string | null },
+    now = new Date(),
+  ): AuditEntry {
+    const rec: AuditEntry = { ...entry, cityId: entry.cityId ?? null, id: newId(), at: nowIso(now) };
     this.audits.push(rec);
     return rec;
   }
@@ -301,18 +507,140 @@ export class Db {
     return before - this.audits.length;
   }
 
+  // ------------------------------------------- owner-dashboard registry
+  listContent(): ContentRecord[] {
+    return [...this.content.values()];
+  }
+  getContent(id: string): ContentRecord | undefined {
+    return this.content.get(id);
+  }
+  /**
+   * Upsert a registry record, applying the FULL incoming state. Moderation
+   * callers pass the complete record (hidden/featured/pinned included);
+   * re-seeding never touches existing records (see contentSeed.ts) so owner
+   * decisions are preserved.
+   */
+  upsertContent(rec: ContentRecord): ContentRecord {
+    const prev = this.content.get(rec.id);
+    const next = prev ? { ...prev, ...rec } : rec;
+    this.content.set(rec.id, next);
+    return next;
+  }
+  listGroups(): GroupModRecord[] {
+    return [...this.groups.values()];
+  }
+  getGroup(id: string): GroupModRecord | undefined {
+    return this.groups.get(id);
+  }
+  upsertGroup(rec: GroupModRecord): GroupModRecord {
+    const prev = this.groups.get(rec.id);
+    if (prev) {
+      // Preserve owner-managed badge state and notes across re-seeds.
+      const next = { ...prev, cityId: rec.cityId, name: rec.name };
+      this.groups.set(rec.id, next);
+      return next;
+    }
+    this.groups.set(rec.id, rec);
+    return rec;
+  }
+  updateGroup(id: string, patch: Partial<GroupModRecord>): GroupModRecord | undefined {
+    const rec = this.groups.get(id);
+    if (!rec) return undefined;
+    const next = { ...rec, ...patch };
+    this.groups.set(id, next);
+    return next;
+  }
+  listFlags(): FlagRecord[] {
+    return [...this.flags];
+  }
+  getFlag(id: string): FlagRecord | undefined {
+    return this.flags.find((f) => f.id === id);
+  }
+  appendFlag(flag: Omit<FlagRecord, "id" | "createdAt">, now = new Date()): FlagRecord {
+    const rec: FlagRecord = { ...flag, id: newId(), createdAt: nowIso(now) };
+    this.flags.push(rec);
+    return rec;
+  }
+  updateFlag(id: string, patch: Partial<FlagRecord>): FlagRecord | undefined {
+    const idx = this.flags.findIndex((f) => f.id === id);
+    if (idx === -1) return undefined;
+    const next = { ...this.flags[idx], ...patch };
+    this.flags[idx] = next;
+    return next;
+  }
+
+  // ------------------------------------------------------------- submissions
+  listSubmissions(): SubmissionRecord[] {
+    return [...this.submissions.values()];
+  }
+  getSubmission(id: string): SubmissionRecord | undefined {
+    return this.submissions.get(id);
+  }
+  listSubmissionsBySubmitter(accountId: string): SubmissionRecord[] {
+    return this.listSubmissions()
+      .filter((s) => s.submitterAccountId === accountId)
+      .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+  }
+  appendSubmission(rec: SubmissionRecord): SubmissionRecord {
+    this.submissions.set(rec.id, rec);
+    return rec;
+  }
+  updateSubmission(id: string, patch: Partial<SubmissionRecord>): SubmissionRecord | undefined {
+    const rec = this.submissions.get(id);
+    if (!rec) return undefined;
+    const next = { ...rec, ...patch };
+    this.submissions.set(id, next);
+    return next;
+  }
+
+  // ------------------------------------------------------------- activities
+  listActivities(accountId?: string) { return [...this.activities.values()].filter(a => !accountId || a.accountId === accountId); }
+  addActivity(a: import("./activity").Activity) { this.activities.set(a.id, a); return a; }
+  removeActivities(accountId: string, provider: import("./activity").Provider) { for (const [id,a] of this.activities) if (a.accountId===accountId && a.provider===provider) this.activities.delete(id); }
+  getToken(accountId: string, provider: import("./activity").Provider) { return this.oauthTokens.get(`${accountId}:${provider}`); }
+  setToken(t: import("./activity").OAuthToken) { this.oauthTokens.set(`${t.accountId}:${t.provider}`, t); }
+  removeToken(accountId: string, provider: import("./activity").Provider) { this.oauthTokens.delete(`${accountId}:${provider}`); }
+
+  // ------------------------------------------------------ credentials & trust
+  listCredentials(accountId?: string) { return [...this.credentials.values()].filter(c => !accountId || c.accountId === accountId); }
+  getCredential(id: string) { return this.credentials.get(id); }
+  addCredential(c: import("./types").CredentialRecord) { this.credentials.set(c.id, c); return c; }
+  updateCredential(id: string, patch: Partial<import("./types").CredentialRecord>) { const c=this.credentials.get(id); if (!c) return undefined; const n={...c,...patch}; this.credentials.set(id,n); return n; }
+  listRatings() { return [...this.ratings.values()]; }
+  addRating(r: import("./types").RatingRecord) { this.ratings.set(r.id,r); return r; }
+  hasRating(reviewerId:string, revieweeId:string, eventId:string) { return [...this.ratings.values()].some(r=>r.reviewerId===reviewerId&&r.revieweeId===revieweeId&&r.eventId===eventId); }
+  listConcerns() { return [...this.concerns.values()]; }
+  addConcern(c: import("./types").ConcernRecord) { this.concerns.set(c.id,c); return c; }
+  updateConcern(id:string, patch: Partial<import("./types").ConcernRecord>) { const c=this.concerns.get(id); if(!c)return; const n={...c,...patch};this.concerns.set(id,n);return n; }
+  listAppeals(accountId?:string) { return [...this.appeals.values()].filter(a=>!accountId||a.accountId===accountId); }
+  getAppeal(id:string) { return this.appeals.get(id); }
+  addAppeal(a: import("./types").AppealRecord) { this.appeals.set(a.id,a);return a; }
+  updateAppeal(id:string, patch: Partial<import("./types").AppealRecord>) { const a=this.appeals.get(id);if(!a)return;const n={...a,...patch};this.appeals.set(id,n);return n; }
+  listRecognitions() { return [...this.recognitions.values()]; }
+  setRecognition(r: import("./types").RecognitionRecord) { this.recognitions.set(`${r.accountId}:${r.role}`,r);return r; }
+  // ------------------------------------------------------- shared attendance
+  listAttendance(accountId?: string) { return [...this.attendance.values()].filter(a => !accountId || a.accountId === accountId); }
+  listAttendanceByEvent(eventId: string) { return [...this.attendance.values()].filter(a => a.eventId === eventId); }
+  hasAttendance(accountId: string, eventId: string) { return [...this.attendance.values()].some(a => a.accountId === accountId && a.eventId === eventId); }
+  addAttendance(a: import("./types").AttendanceRecord) { this.attendance.set(a.id, a); return a; }
+  removeAttendance(id: string) { this.attendance.delete(id); }
+
   // ---------------------------------------------------------------- uploads
   private uploadDir(kind: "private" | "public"): string {
     return this.dataDir ? join(this.dataDir, "uploads", kind) : "";
   }
 
   async writePrivateUpload(filename: string, buffer: Buffer): Promise<void> {
+    // Keep bytes in memory so in-memory/test stores can serve proofs back.
+    this.privateUploads.set(filename, buffer);
     if (!this.dataDir) return;
     const dir = this.uploadDir("private");
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, filename), buffer);
   }
   async readPrivateUpload(filename: string): Promise<Buffer | null> {
+    const mem = this.privateUploads.get(filename);
+    if (mem) return mem;
     if (!this.dataDir) return null;
     try {
       return await readFile(join(this.uploadDir("private"), filename));
@@ -321,6 +649,7 @@ export class Db {
     }
   }
   async deletePrivateUpload(filename: string): Promise<void> {
+    this.privateUploads.delete(filename);
     if (!this.dataDir) return;
     try {
       await unlink(join(this.uploadDir("private"), filename));

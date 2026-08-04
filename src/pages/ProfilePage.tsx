@@ -1,12 +1,17 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { Chip, Icon, PillButton } from "../components/ui";
 import type { City } from "../types";
 import { resolveWeekEvents } from "../lib/dates";
 import { phaseLabel, roleLabel } from "../lib/accounts";
+import type { PublicAccount } from "../lib/accounts";
+import * as api from "../lib/api";
 import type { AppStore } from "../lib/store";
+import { normalizeUsername, USERNAME_HINT, USERNAME_PROMPT } from "../lib/username";
 import { useAccount } from "../state/account";
+import { useSelectedCity } from "../state/city";
+import { TrustProfileSection } from "../components/TrustProfileSection";
 
 function initials(name: string): string {
   return name
@@ -17,9 +22,182 @@ function initials(name: string): string {
     .join("") || "R";
 }
 
+const editorInputCls =
+  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+
+/**
+ * Inline username editor (server-authoritative — the server re-validates and
+ * rejects duplicates; this UI only surfaces its verdicts clearly).
+ */
+function UsernameEditor({ account, refresh }: { account: PublicAccount; refresh: () => Promise<void> }) {
+  const [open, setOpen] = useState(account.username == null);
+  const [value, setValue] = useState(account.username ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const save = async () => {
+    setError(null);
+    setSaved(false);
+    const normalized = normalizeUsername(value);
+    if (!normalized) {
+      setError("Use 3–24 characters: letters, numbers, _ or -, starting with a letter.");
+      return;
+    }
+    setBusy(true);
+    const r = await api.setUsername(normalized);
+    setBusy(false);
+    if (r.ok) {
+      setValue(r.data.account.username ?? normalized);
+      setSaved(true);
+      setOpen(false);
+      await refresh();
+    } else if (r.error.code === "username_taken") {
+      setError("That username is already taken — try another.");
+    } else if (r.error.code === "invalid_username") {
+      setError(r.error.message ?? "Pick a valid username.");
+    } else if (r.error.code === "sign_in_required") {
+      setError("Your session expired — log in again to save your username.");
+    } else {
+      setError(r.error.message ?? "Couldn't save your username. Try again.");
+    }
+  };
+
+  if (!open) {
+    return (
+      <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-bold text-slate-900">Username</h2>
+            <p className="truncate text-[13px] font-semibold text-[#0b2b22]">@{account.username ?? "not set"}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(true);
+              setError(null);
+              setSaved(false);
+            }}
+            className="shrink-0 rounded-full bg-slate-100 px-4 py-2 text-[13px] font-semibold text-slate-700 active:bg-slate-200"
+          >
+            {account.username ? "Change" : "Set"}
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{USERNAME_HINT}</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+      <h2 className="text-[15px] font-bold text-slate-900">{account.username ? "Change username" : "Choose your username"}</h2>
+      {!account.username ? (
+        <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{USERNAME_PROMPT}</p>
+      ) : null}
+      <div className="mt-3 flex items-center gap-2">
+        <span className="text-[15px] font-semibold text-slate-500">@</span>
+        <input
+          type="text"
+          autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setError(null);
+            setSaved(false);
+          }}
+          placeholder="jordanlee"
+          aria-invalid={error ? true : undefined}
+          className={editorInputCls}
+        />
+      </div>
+      {error ? (
+        <p role="alert" className="mt-1.5 text-xs font-medium text-red-600">
+          {error}
+        </p>
+      ) : null}
+      {saved ? (
+        <p role="status" className="mt-1.5 text-xs font-medium text-emerald-700">
+          Username saved.
+        </p>
+      ) : null}
+      <div className="mt-3 flex gap-2">
+        <PillButton variant="primary" className="flex-1" disabled={busy} onClick={() => void save()}>
+          {busy ? "Saving…" : "Save username"}
+        </PillButton>
+        <PillButton variant="ghost" onClick={() => { setOpen(false); setError(null); setSaved(false); setValue(account.username ?? ""); }}>
+          Cancel
+        </PillButton>
+      </div>
+      <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+        Public and unique. Case-insensitive — stored lowercase. Never anything sensitive.
+      </p>
+    </section>
+  );
+}
+
+const KIND_LABELS: Record<string, string> = { race: "Race", group: "Group", event: "Independent run" };
+const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
+  pending: { label: "Pending approval", cls: "bg-amber-100 text-amber-800" },
+  approved: { label: "Approved", cls: "bg-emerald-100 text-emerald-800" },
+  rejected: { label: "Rejected", cls: "bg-red-100 text-red-700" },
+};
+
+/** The signed-in user's OWN submissions (server returns this account's records only). */
+export function MySubmissions({ signedIn }: { signedIn: boolean }) {
+  const [rows, setRows] = useState<api.MySubmissionView[] | null>(null);
+  useEffect(() => {
+    if (!signedIn) return;
+    let alive = true;
+    void api.getMySubmissions().then((r) => {
+      if (alive && r.ok) setRows(r.data.submissions);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [signedIn]);
+  if (!signedIn) return null;
+  return (
+    <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+      <h2 className="text-[15px] font-bold text-slate-900">My submissions</h2>
+      <p className="mt-0.5 text-xs text-slate-500">Your race, group, and independent-run submissions — only you can see these.</p>
+      {rows === null ? (
+        <p className="mt-3 text-[13px] text-slate-400">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="mt-3 text-[13px] text-slate-500">Nothing submitted yet. Submit a race, group, or independent run from the Races and Events pages.</p>
+      ) : (
+        <ul className="mt-3 space-y-2.5">
+          {rows.map((r) => {
+            const st = STATUS_LABELS[r.status] ?? STATUS_LABELS.pending;
+            return (
+              <li key={r.id} className="rounded-xl border border-slate-200 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold text-slate-800">{r.title}</p>
+                    <p className="text-xs text-slate-500">{KIND_LABELS[r.kind] ?? r.kind}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${st.cls}`}>{st.label}</span>
+                </div>
+                {r.status === "rejected" && r.rejectionReason ? (
+                  <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-[12px] leading-relaxed text-red-700">
+                    <span className="font-semibold">Why it was rejected:</span> {r.rejectionReason}
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
   const navigate = useNavigate();
-  const { me, backendAvailable } = useAccount();
+  const { me, backendAvailable, refresh } = useAccount();
+  const { hasHomeCity } = useSelectedCity();
 
   const rsvps = useMemo(() => {
     const all = resolveWeekEvents(city.events, new Date());
@@ -55,8 +233,11 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
           )}
           <div className="min-w-0">
             <p className="truncate text-lg font-bold leading-tight">{name}</p>
+            {signedIn?.username ? (
+              <p className="truncate text-[13px] font-semibold leading-tight text-[#c8f169]">@{signedIn.username}</p>
+            ) : null}
             <p className="mt-0.5 text-[13px] text-white/70">
-              {city.name}, {city.state}
+              {signedIn ? (hasHomeCity ? `Home: ${city.name}, ${city.state}` : "Home city: not set") : `${city.name}, ${city.state}`}
             </p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {verified ? (
@@ -99,11 +280,52 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
         <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <h2 className="text-[15px] font-bold text-slate-900">Create your runner profile</h2>
           <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
-            Verified runners get RSVPs, a public profile, and posting access. Verification uses an email code, then a live selfie — reviewed by a person, never shown publicly.
+            Verified runners get RSVPs, a public profile, and posting access. Sign up with your email and password,
+            confirm your email, then complete a live selfie — reviewed by a person, never shown publicly.
           </p>
-          <PillButton variant="secondary" onClick={() => navigate("/verify")} className="mt-3.5 w-full">
-            <Icon name="shield" className="h-4 w-4" /> Get verified
+          <PillButton variant="secondary" onClick={() => navigate("/login?mode=signup")} className="mt-3.5 w-full">
+            <Icon name="shield" className="h-4 w-4" /> Create account
           </PillButton>
+        </section>
+      ) : (
+        <UsernameEditor account={signedIn} refresh={refresh} />
+      )}
+
+      {/* My submissions — this account's own submissions only */}
+      <MySubmissions signedIn={!!signedIn} />
+
+      {/* Community trust & credentials — own records, qualitative view only */}
+      {signedIn ? (
+        <TrustProfileSection
+          me={{ id: signedIn.id, name: signedIn.name, email: signedIn.email, underReview: signedIn.underReview === true }}
+        />
+      ) : null}
+
+      {/* Home city — account-owned; change happens in Settings (server-validated) */}
+      {signedIn ? (
+        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-[15px] font-bold text-slate-900">Home city</h2>
+              {hasHomeCity ? (
+                <p className="truncate text-[13px] font-semibold text-[#0b2b22]">
+                  {city.name}, {city.state}
+                </p>
+              ) : (
+                <p className="text-[13px] font-semibold text-amber-700">Not set yet — choose your home city</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/settings")}
+              className="shrink-0 rounded-full bg-slate-100 px-4 py-2 text-[13px] font-semibold text-slate-700 active:bg-slate-200"
+            >
+              {hasHomeCity ? "Change" : "Choose"}
+            </button>
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+            Your events, races, and forum default to your home city. Changing it re-scopes your community content.
+          </p>
         </section>
       ) : null}
 

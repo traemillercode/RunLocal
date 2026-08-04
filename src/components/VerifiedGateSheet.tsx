@@ -35,8 +35,9 @@ export function VerifiedGateSheet({
             </span>
           ) : (
             <span>
-              <span className="font-semibold">{actionLabel} requires a verified runner profile.</span> Verification
-              uses an email code, then a live selfie — reviewed by a person, never shown publicly.
+              <span className="font-semibold">{actionLabel} requires a verified runner profile.</span> Sign up with
+              your email and password, confirm your email, then complete a live selfie — reviewed by a person, never
+              shown publicly.
             </span>
           )}
         </p>
@@ -45,8 +46,8 @@ export function VerifiedGateSheet({
             <Icon name="chevronRight" className="h-4 w-4 rotate-180" /> Continue verification
           </PillButton>
         ) : (
-          <PillButton variant="secondary" className="w-full" onClick={() => { onClose(); navigate("/verify"); }}>
-            <Icon name="shield" className="h-4 w-4" /> Get verified
+          <PillButton variant="secondary" className="w-full" onClick={() => { onClose(); navigate("/login?mode=signup"); }}>
+            <Icon name="shield" className="h-4 w-4" /> Create account
           </PillButton>
         )}
         <p className="text-center text-xs leading-relaxed text-slate-400">

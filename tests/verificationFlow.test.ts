@@ -68,11 +68,14 @@ describe("consent-before-camera invariant", () => {
 
 describe("resume mapping", () => {
   it("maps server phases to the right UI step", () => {
-    expect(stepForServerPhase("email")).toBe("email");
-    expect(stepForServerPhase("code")).toBe("email");
+    // Email ownership is proven by the password login / confirmation link, so
+    // accounts still marked email/code are sent to log in (which links the
+    // identity and advances the phase server-side) — never to a code entry.
+    expect(stepForServerPhase("email")).toBe("login");
+    expect(stepForServerPhase("code")).toBe("login");
     expect(stepForServerPhase("selfie")).toBe("consent");
     expect(stepForServerPhase("pending_review")).toBe("submitted");
-    expect(stepForServerPhase(null)).toBe("profile");
+    expect(stepForServerPhase(null)).toBe("login");
   });
 
   it("RESUME sets the phase from the server", () => {
@@ -80,5 +83,7 @@ describe("resume mapping", () => {
     expect(s.phase).toBe("submitted");
     const s2 = verifyReducer(initialState(), { type: "RESUME", serverPhase: "selfie" });
     expect(s2.phase).toBe("consent");
+    const s3 = verifyReducer(initialState(), { type: "RESUME", serverPhase: "email" });
+    expect(s3.phase).toBe("login");
   });
 });

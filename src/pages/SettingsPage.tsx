@@ -3,8 +3,9 @@
  *
  * The owner-only section renders ONLY when the server-reported `isOwner` flag
  * is true (never derived from the email client-side). It links to the admin
- * control center and shows honest deployment status (email sender health,
- * admin key, retention) from the public /api/health endpoint — no secrets.
+ * control center and shows honest deployment status (Supabase Auth email
+ * verification, admin key, retention) from the public /api/health endpoint —
+ * no secrets.
  */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -13,18 +14,22 @@ import { Chip, Icon, PillButton } from "../components/ui";
 import { CITIES } from "../data/cities";
 import { phaseLabel, roleLabel } from "../lib/accounts";
 import * as api from "../lib/api";
-import { useAppState } from "../lib/store";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
+import { useSelectedCity } from "../state/city";
 
 export function SettingsPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const store = useAppState();
   const { me, backendAvailable, signOut, deleteMyAccount } = useAccount();
+  const { city, cityId, signedIn, hasHomeCity, selectCity } = useSelectedCity();
   const [notificationsOn, setNotificationsOn] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [health, setHealth] = useState<api.HealthInfo | null>(null);
+  // In-progress home-city selection (null = not editing / unchanged).
+  const [pendingCityId, setPendingCityId] = useState<string | null>(null);
+  const [cityBusy, setCityBusy] = useState(false);
+  const [citySaveError, setCitySaveError] = useState<string | null>(null);
 
   useEffect(() => {
     void api.getHealth().then((r) => {
@@ -35,7 +40,36 @@ export function SettingsPage() {
   const account = me?.status === "signed_in" ? me.account : null;
   const verified = account?.status === "verified";
   const isOwner = account?.isOwner === true;
-  const city = CITIES.find((c) => c.id === store.state.cityId) ?? CITIES[0];
+
+  /**
+   * Persist the pending home-city selection through the server (which
+   * re-validates the id against the known city entities) and surface its
+   * verdicts clearly.
+   */
+  const saveHomeCity = async () => {
+    const target = pendingCityId;
+    if (!target || target === cityId) {
+      setPendingCityId(null);
+      setCitySaveError(null);
+      return;
+    }
+    setCityBusy(true);
+    setCitySaveError(null);
+    const r = await selectCity(target);
+    setCityBusy(false);
+    if (r.ok) {
+      setPendingCityId(null);
+      toast("Home city updated.", "success");
+    } else if (r.error.code === "invalid_city") {
+      setCitySaveError("That city isn't supported yet — pick one from the list.");
+    } else if (r.error.code === "city_required") {
+      setCitySaveError("Choose a city first.");
+    } else if (r.error.code === "sign_in_required") {
+      setCitySaveError("Your session expired — log in again to save your home city.");
+    } else {
+      setCitySaveError(r.error.message ?? "Couldn't save your home city. Try again.");
+    }
+  };
 
   const doDelete = async () => {
     if (!confirmingDelete) {
@@ -52,17 +86,13 @@ export function SettingsPage() {
     setConfirmingDelete(false);
   };
 
-  const senderStatus = health?.emailSender;
-  const senderLabel =
-    senderStatus?.status === "unconfigured"
-      ? "Email sender not configured"
-      : senderStatus?.status === "blocked"
-        ? "Blocked — consumer mailbox can't be verified by the provider"
-        : senderStatus?.status === "test_mode"
-          ? "Test sender — only delivers to the account owner"
-          : senderStatus?.status === "custom_domain"
-            ? "Custom domain — deliverability unconfirmed"
-            : "Unknown";
+  const supabaseConfigured = health?.supabaseConfigured;
+  const supabaseLabel =
+    supabaseConfigured === undefined
+      ? "…"
+      : supabaseConfigured
+        ? "Configured"
+        : "Not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)";
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
@@ -76,6 +106,7 @@ export function SettingsPage() {
         </section>
       ) : null}
 
+      {signedIn && account ? <ActivityConnections /> : null}
       {/* Account */}
       <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
         <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Account</h2>
@@ -88,6 +119,12 @@ export function SettingsPage() {
             <li className="flex items-center justify-between gap-3 px-5 py-3.5">
               <span className="text-[14px] font-medium text-slate-700">Email</span>
               <span className="max-w-[60%] truncate text-[14px] text-slate-500">{account.email}</span>
+            </li>
+            <li className="flex items-center justify-between gap-3 px-5 py-3.5">
+              <span className="text-[14px] font-medium text-slate-700">Username</span>
+              <span className="max-w-[60%] truncate text-[14px] text-slate-500">
+                {account.username ? `@${account.username}` : "Not set — add one on your profile"}
+              </span>
             </li>
             <li className="flex items-center justify-between gap-3 px-5 py-3.5">
               <span className="text-[14px] font-medium text-slate-700">Status</span>
@@ -134,6 +171,7 @@ export function SettingsPage() {
             <span className="text-[14px] font-medium text-slate-700">City</span>
             <span className="text-[14px] text-slate-500">
               {city.name}, {city.state}
+              {signedIn && hasHomeCity ? " (home)" : ""}
             </span>
           </li>
           <li>
@@ -150,9 +188,82 @@ export function SettingsPage() {
           </li>
         </ul>
         <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
-          Preferences are saved on this device only. Verification records are never stored on your device.
+          Guest city choice and notification preferences are saved on this device only. Your home city is saved to your
+          account. Verification records are never stored on your device.
         </p>
       </section>
+
+      {/* Home city — account-owned, server-validated */}
+      {signedIn ? (
+        <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+          <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Home city</h2>
+          {!hasHomeCity ? (
+            <div className="border-b border-amber-100 bg-amber-50 px-5 py-3.5">
+              <p className="flex items-start gap-2 text-[13px] font-semibold leading-relaxed text-amber-900">
+                <Icon name="pin" className="mt-0.5 h-4 w-4 shrink-0" />
+                You haven't chosen a home city yet — your runs, races, and forum default to it.
+              </p>
+            </div>
+          ) : null}
+          <ul className="space-y-2 p-4" role="radiogroup" aria-label="Home city">
+            {CITIES.map((c) => {
+              const active = (pendingCityId ?? (hasHomeCity ? cityId : null)) === c.id;
+              const disabled = !c.live;
+              return (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={disabled}
+                    onClick={() => {
+                      setPendingCityId(c.id);
+                      setCitySaveError(null);
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
+                      active ? "border-[#0b2b22] bg-[#0b2b22] text-white" : "border-slate-200 bg-white text-slate-800"
+                    } ${disabled ? "opacity-60" : "active:bg-slate-50"}`}
+                  >
+                    <span
+                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
+                        active ? "bg-white/15 text-[#c8f169]" : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      <Icon name="pin" className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[14px] font-bold">
+                        {c.name}, {c.state}
+                      </span>
+                      <span className={`block truncate text-[11px] ${active ? "text-white/70" : "text-slate-500"}`}>{c.tagline}</span>
+                    </span>
+                    {active ? <Icon name="check" className="h-4 w-4 shrink-0 text-[#c8f169]" /> : disabled ? <Chip tone="amber">Coming soon</Chip> : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {citySaveError ? (
+            <p role="alert" className="px-4 pb-1 text-xs font-medium text-red-600">
+              {citySaveError}
+            </p>
+          ) : null}
+          <div className="flex gap-2 border-t border-slate-100 px-4 py-3.5">
+            <PillButton variant="primary" className="flex-1" disabled={cityBusy || pendingCityId === null || pendingCityId === cityId} onClick={() => void saveHomeCity()}>
+              {cityBusy ? "Saving…" : "Save home city"}
+            </PillButton>
+            {pendingCityId !== null ? (
+              <PillButton variant="ghost" onClick={() => { setPendingCityId(null); setCitySaveError(null); }}>
+                Cancel
+              </PillButton>
+            ) : null}
+          </div>
+          <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
+            One home city, validated server-side against the supported city list. Changing it re-scopes your community
+            content (events, races, forum).
+          </p>
+        </section>
+      ) : null}
 
       {/* Owner-only */}
       {isOwner ? (
@@ -178,8 +289,8 @@ export function SettingsPage() {
               <span className="block text-[13px] font-semibold">Deployment status</span>
               <dl className="mt-1.5 space-y-1 text-xs text-white/70">
                 <div className="flex justify-between gap-3">
-                  <dt>Email sender</dt>
-                  <dd className="text-right">{senderLabel}</dd>
+                  <dt>Email verification (Supabase Auth)</dt>
+                  <dd className="text-right">{supabaseLabel}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt>Admin key (safety tool)</dt>
@@ -231,4 +342,31 @@ export function SettingsPage() {
       ) : null}
     </div>
   );
+}
+
+function ActivityConnections() {
+  const providers = [{ id: "strava", label: "Strava" }, { id: "garmin", label: "Garmin" }, { id: "coros", label: "Coros" }, { id: "suunto", label: "Suunto" }] as const;
+  const [status, setStatus] = useState<Record<string, string>>({});
+  const [mode, setMode] = useState("manual");
+  // Provider availability comes from the CMS (server /api/config): a provider
+  // the operator disabled is honestly shown as "not offered" and cannot be
+  // connected. The server enforces the same toggle on every connection route.
+  const [offered, setOffered] = useState<Record<string, boolean> | null>(null);
+  useEffect(() => {
+    void api.getSiteConfig().then((r) => {
+      if (r.ok) {
+        setOffered(Object.fromEntries(providers.map((p) => [p.id, r.data.settings.providers[p.id] !== false])));
+      } else {
+        setOffered(Object.fromEntries(providers.map((p) => [p.id, true])));
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70"><h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Activity connections</h2><p className="px-5 py-3 text-xs leading-relaxed text-slate-500">Manual sharing is the default. Auto sharing is opt-in; Private keeps activities off the community feed.</p>{providers.map((p) => {
+    const isOffered = offered === null ? true : offered[p.id] === true;
+    if (!isOffered) {
+      return <div key={p.id} className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-3 opacity-70"><div><strong className="text-sm text-slate-800">{p.label}</strong><p className="text-xs text-slate-500">Not offered on this site right now — the operator has disabled this integration.</p></div><PillButton variant="ghost" disabled>Connect</PillButton></div>;
+    }
+    return <div key={p.id} className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-3"><div><strong className="text-sm text-slate-800">{p.label}</strong><p className="text-xs text-slate-500">{status[p.id] ?? (p.id === "strava" ? "Not connected · Strava credentials are not configured" : "Not connected · partner API scaffold")}</p></div><PillButton variant="ghost" onClick={() => void api.getConnection(p.id).then((r) => setStatus((x) => ({ ...x, [p.id]: r.ok ? "Connected" : (r.error.message ?? "Not configured") })))}>Connect</PillButton></div>;
+  })}<label className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-sm font-medium">Share mode<select aria-label="Activity share mode" className="rounded-lg border border-slate-300 px-2 py-1" value={mode} onChange={(e) => setMode(e.target.value)}><option value="manual">Manual</option><option value="auto">Auto</option><option value="private">Private</option></select></label></section>;
 }

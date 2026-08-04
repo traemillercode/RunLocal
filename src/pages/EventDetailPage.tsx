@@ -1,0 +1,235 @@
+/**
+ * Event detail — the in-app destination for a tapped event card on the home /
+ * Events feed. Shows the existing RunEvent model info (title, host, date/time,
+ * location, meet-up notes, invite, external links) plus the RSVP action, so the
+ * card's primary tap navigates here instead of dead-ending.
+ *
+ * `EventDetailView` is a hook-free presentational body (driven by props) so UI
+ * tests can render the real detail markup with react-dom/server; the page
+ * resolves the event from the weekly model and wires up navigation + RSVP.
+ */
+import { useMemo, useState, type ReactNode } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Chip, Icon } from "../components/ui";
+import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
+import * as api from "../lib/api";
+import { dayLabel, monthDayLabel, resolveWeekEvents, type DatedRunEvent } from "../lib/dates";
+import { canDo } from "../lib/accounts";
+import type { AppStore } from "../lib/store";
+import type { City, RunGroup } from "../types";
+import { GROUP_TYPE_LABELS } from "../types";
+import { useToast } from "../lib/toast";
+import { useAccount } from "../state/account";
+import { useModerated } from "../state/moderated";
+import { usePublicContent } from "../state/content";
+
+function DetailRow({ icon, children }: { icon: string; children: ReactNode }) {
+  return (
+    <p className="flex items-start gap-2.5 text-[14px] text-slate-700">
+      <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-500">
+        <Icon name={icon} className="h-3.5 w-3.5" />
+      </span>
+      <span className="min-w-0 flex-1 leading-relaxed">{children}</span>
+    </p>
+  );
+}
+
+export function EventDetailView({
+  event,
+  city,
+  rsvped,
+  canRsvp,
+  onRsvp,
+  onBack,
+  featured = false,
+  pinned = false,
+  groupBadge,
+}: {
+  event: DatedRunEvent;
+  city: City;
+  rsvped: boolean;
+  canRsvp: boolean;
+  onRsvp: () => void;
+  onBack: () => void;
+  featured?: boolean;
+  pinned?: boolean;
+  groupBadge?: boolean;
+}) {
+  const group: RunGroup | undefined = city.groups.find((g) => g.id === event.groupId);
+  const rrca = groupBadge ?? group?.groupType === "rrca-chartered";
+  const label = group ? (rrca ? GROUP_TYPE_LABELS["rrca-chartered"] : GROUP_TYPE_LABELS.community) : null;
+  return (
+    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+      <button type="button" onClick={onBack} className="mb-3 flex items-center gap-1 text-[13px] font-semibold text-slate-500">
+        <Icon name="chevronRight" className="h-4 w-4 rotate-180" /> Back to this week
+      </button>
+
+      <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+        <div className="bg-[#0b2b22] p-5 text-white">
+          <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-[#c8f169]">
+            {dayLabel(event.date, new Date())} · {event.time}
+            {event.isToday ? (
+              <Chip tone="volt">
+                <Icon name="spark" className="h-3 w-3" /> Today
+              </Chip>
+            ) : null}
+          </p>
+          <h1 className="mt-2 text-2xl font-extrabold leading-tight tracking-tight">{event.title}</h1>
+          {group ? (
+            <p className="mt-1.5 text-sm font-medium text-white/75">
+              {group.name}
+              {label ? <span className="ml-1.5 font-normal text-white/60">· {label}</span> : null}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="space-y-3.5 p-5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {featured ? (
+              <Chip tone="volt">
+                <Icon name="spark" className="h-3 w-3" /> Featured
+              </Chip>
+            ) : null}
+            {pinned ? (
+              <Chip tone="amber">
+                <Icon name="pin" className="h-3 w-3" /> Pinned
+              </Chip>
+            ) : null}
+            <Chip tone={event.invite === "Open to all" ? "emerald" : "amber"}>{event.invite}</Chip>
+            {group ? null : <Chip tone="outline">Independent Runner</Chip>}
+          </div>
+
+          <DetailRow icon="calendar">
+            {monthDayLabel(event.date)}, {event.time}
+          </DetailRow>
+          <DetailRow icon="mapPin">{event.location}</DetailRow>
+          <DetailRow icon="flag">{event.distanceLabel}</DetailRow>
+          <DetailRow icon="rsvp">{event.invite}</DetailRow>
+
+          {event.externalUrl ? (
+            <a
+              href={event.externalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#0b2b22] text-sm font-semibold text-white active:bg-[#124d3c]"
+            >
+              External details <Icon name="external" className="h-4 w-4 text-[#c8f169]" />
+            </a>
+          ) : null}
+        </div>
+
+        <div className="px-5 pb-5">
+          <button
+            type="button"
+            onClick={onRsvp}
+            className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full text-sm font-semibold transition-colors ${
+              rsvped
+                ? "bg-emerald-100 text-emerald-800"
+                : canRsvp
+                  ? "bg-[#c8f169] text-[#0b2b22] active:bg-[#b9e355]"
+                  : "bg-slate-100 text-slate-500 active:bg-slate-200"
+            }`}
+          >
+            {rsvped ? (
+              <>
+                <Icon name="check" className="h-4 w-4" /> You're in — see you there
+              </>
+            ) : canRsvp ? (
+              <>
+                <Icon name="rsvp" className="h-4 w-4" /> RSVP for this run
+              </>
+            ) : (
+              <>
+                <Icon name="lock" className="h-4 w-4" /> Verified runners only
+              </>
+            )}
+          </button>
+        </div>
+      </article>
+    </div>
+  );
+}
+
+export function EventDetailPage({ city, store }: { city: City; store: AppStore }) {
+  const toast = useToast();
+  const { role } = useAccount();
+  const { hidden, highlights, groupBadges } = useModerated();
+  const { events: userEvents } = usePublicContent();
+  const { eventId } = useParams();
+  const navigate = useNavigate();
+  const [gateOpen, setGateOpen] = useState(false);
+  const canRsvp = canDo(role, "rsvp");
+
+  // Same weekly resolution as the home/Events feed so an EventCard link always
+  // resolves here. Only recurring events render as EventCards; independent
+  // one-time runs are separate cards and are out of scope for the detail route.
+  const events = useMemo(() => {
+    const recurring: typeof city.events = userEvents
+      .filter((e) => e.type === "recurring" && e.dayOfWeek !== null)
+      .map((e) => ({
+        id: e.id,
+        groupId: "",
+        title: e.title,
+        dayOfWeek: e.dayOfWeek!,
+        time: e.time,
+        location: e.location,
+        distanceLabel: e.distanceLabel,
+        invite: e.invite,
+        externalUrl: e.externalUrl ?? undefined,
+      }));
+    return resolveWeekEvents([...city.events, ...recurring], new Date()).filter((e) => !hidden.has(`event:${e.id}`));
+  }, [city, hidden, userEvents]);
+
+  const event = events.find((e) => e.id === eventId) ?? null;
+
+  if (!event) {
+    return (
+      <div className="mx-auto w-full max-w-md px-4 pb-32 pt-8 text-center">
+        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-slate-100 text-slate-400">
+          <Icon name="calendar" className="h-7 w-7" />
+        </span>
+        <h1 className="mt-3 text-xl font-extrabold">Run not found</h1>
+        <p className="mt-1 text-sm text-slate-500">This run isn't in the current week, or it's no longer listed.</p>
+        <Link to="/" className="mt-4 inline-block rounded-full bg-[#0b2b22] px-5 py-3 text-sm font-semibold text-white">
+          Back to this week
+        </Link>
+      </div>
+    );
+  }
+
+  const hl = highlights.get(`event:${event.id}`);
+  const onRsvp = () => {
+    if (!canRsvp) {
+      setGateOpen(true);
+      return;
+    }
+    const nowRsvped = !store.state.rsvped[event.id];
+    // Server-side RSVP: records shared attendance (rating eligibility basis).
+    // Under-review accounts may still RSVP — the server permits it.
+    void api.rsvpEvent(event.id, nowRsvped).then((r) => {
+      if (!r.ok) {
+        toast(r.error.message ?? "Couldn't save your RSVP. Try again.", "info");
+        return;
+      }
+      store.toggleRsvp(event.id);
+      toast(nowRsvped ? `You're in for "${event.title}"!` : `RSVP removed for "${event.title}".`, nowRsvped ? "success" : "neutral");
+    });
+  };
+
+  return (
+    <>
+      <EventDetailView
+        event={event}
+        city={city}
+        rsvped={!!store.state.rsvped[event.id]}
+        canRsvp={canRsvp}
+        onRsvp={onRsvp}
+        onBack={() => navigate(-1)}
+        featured={hl?.featured}
+        pinned={hl?.pinned}
+        groupBadge={groupBadges.get(event.groupId)}
+      />
+      <VerifiedGateSheet open={gateOpen} onClose={() => setGateOpen(false)} role={role} actionLabel="RSVPing" pendingLabel="Your profile is still in review." />
+    </>
+  );
+}

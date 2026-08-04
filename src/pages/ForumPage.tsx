@@ -1,8 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { HomeCityBanner } from "../components/HomeCityBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { Chip, Icon, PillButton, Sheet } from "../components/ui";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
+import { getActivityFeed, type PublicActivityCard } from "../lib/api";
+import { useModerated } from "../state/moderated";
 import { FORUM_SECTIONS, type City, type ForumPost, type ForumSection, type QaSort } from "../types";
 
 const SECTION_META: Record<ForumSection, { icon: string; active: string; badge: string; dot: string }> = {
@@ -10,6 +13,39 @@ const SECTION_META: Record<ForumSection, { icon: string; active: string; badge: 
   community: { icon: "chat", active: "bg-emerald-600 text-white", badge: "bg-emerald-100 text-emerald-800", dot: "bg-emerald-600" },
   qa: { icon: "help", active: "bg-sky-600 text-white", badge: "bg-sky-100 text-sky-800", dot: "bg-sky-600" },
 };
+
+/**
+ * Forum section tabs — presentational (no hooks) so UI tests can render the
+ * real markup. Tabs size to their content instead of a rigid 3-equal-column
+ * grid: at 390px a fixed third (≈106px) cannot fit "Announcements" (≈118px at
+ * 13px) plus its icon, which is what made that pill overflow while Community
+ * and Q&A looked fine. Content-sized pills give every tab the same comfortable
+ * horizontal padding (`px-3`) without truncating or wrapping any label.
+ */
+export function ForumSectionTabs({ section, onSelect }: { section: ForumSection; onSelect: (s: ForumSection) => void }) {
+  return (
+    <div role="tablist" aria-label="Forum sections" className="mt-4 flex justify-between gap-1.5 rounded-2xl bg-slate-100 p-1.5">
+      {FORUM_SECTIONS.map((s) => {
+        const active = section === s.id;
+        const meta = SECTION_META[s.id];
+        return (
+          <button
+            key={s.id}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onSelect(s.id)}
+            className={`flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 text-[13px] font-semibold transition-colors ${
+              active ? `${meta.active} shadow-sm` : "text-slate-500 active:bg-white"
+            }`}
+          >
+            <Icon name={meta.icon} className="h-4 w-4 shrink-0" />
+            {s.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function PostCard({
   post,
@@ -75,13 +111,16 @@ function PostCard({
 export function ForumPage({ city }: { city: City }) {
   const toast = useToast();
   const { role } = useAccount();
+  const { hidden } = useModerated();
   const [section, setSection] = useState<ForumSection>("announcements");
   const [qaSort, setQaSort] = useState<QaSort>("newest");
   const [gateOpen, setGateOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
   const posts = useMemo(() => {
-    let list = city.forum.filter((p) => p.section === section);
+    // Owner-hidden posts are excluded from public rendering.
+    const visible = city.forum.filter((p) => !hidden.has(`post:${p.id}`));
+    let list = visible.filter((p) => p.section === section);
     if (section === "qa") {
       const sorted = [...list];
       if (qaSort === "newest") sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -90,8 +129,10 @@ export function ForumPage({ city }: { city: City }) {
       return sorted;
     }
     return [...list].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
-  }, [city.forum, section, qaSort]);
+  }, [city.forum, hidden, section, qaSort]);
 
+  const [activityCards, setActivityCards] = useState<PublicActivityCard[]>([]);
+  useEffect(() => { let live = true; void getActivityFeed(city.id).then((r) => { if (live && r.ok) setActivityCards(r.data.cards); }); return () => { live = false; }; }, [city.id]);
   const onReply = (title: string) => {
     toast(`Replies need a verified profile — "${title}"`, "info");
     setGateOpen(true);
@@ -112,29 +153,15 @@ export function ForumPage({ city }: { city: City }) {
       </div>
 
       {/* Section tabs — visually distinct per section */}
-      <div role="tablist" aria-label="Forum sections" className="mt-4 grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-100 p-1.5">
-        {FORUM_SECTIONS.map((s) => {
-          const active = section === s.id;
-          const meta = SECTION_META[s.id];
-          return (
-            <button
-              key={s.id}
-              role="tab"
-              aria-selected={active}
-              onClick={() => setSection(s.id)}
-              className={`flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl text-[13px] font-semibold transition-colors ${
-                active ? `${meta.active} shadow-sm` : "text-slate-500 active:bg-white"
-              }`}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <Icon name={meta.icon} className="h-4 w-4" />
-                {s.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <ForumSectionTabs section={section} onSelect={setSection} />
       <p className="mt-2 text-xs text-slate-500">{FORUM_SECTIONS.find((s) => s.id === section)?.blurb}</p>
+
+      <HomeCityBanner />
+      {activityCards.length > 0 ? <section aria-label="Community activity" className="mt-4 space-y-2">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Community activity</h2>
+        {activityCards.map((card) => <article key={card.id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70"><div className="flex items-center justify-between"><strong className="text-slate-900">{card.type} · {(card.distanceMeters / 1000).toFixed(1)} km</strong><span className="text-xs font-semibold text-slate-500">{card.attribution}</span></div><p className="mt-1 text-xs text-slate-500">{Math.round(card.durationSeconds / 60)} min · shared activity</p></article>)}
+      </section> : null}
+
 
       {/* Q&A sorting controls — visible only on the Q&A tab */}
       {section === "qa" ? (

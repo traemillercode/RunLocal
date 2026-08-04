@@ -30,6 +30,18 @@ export interface PublicAccount {
   id: string;
   name: string;
   email: string;
+  /**
+   * Unique public handle, normalized to lowercase (see `src/lib/username.ts`).
+   * `null` for legacy accounts created before usernames existed — they stay
+   * fully functional and can claim one from their profile at any time.
+   */
+  username: string | null;
+  /**
+   * Home city id — a supported city from the known city entities. `null` for
+   * legacy accounts that have not chosen one yet (they are clearly prompted).
+   * Public profile identity, never sensitive.
+   */
+  cityId: string | null;
   status: "pending" | "verified" | "rejected";
   /** Funnel stage for pending accounts: email | code | selfie | pending_review. */
   phase: "email" | "code" | "selfie" | "pending_review" | null;
@@ -43,6 +55,17 @@ export interface PublicAccount {
    * self-assign the role — never derive it from the email client-side.
    */
   isOwner: boolean;
+  /**
+   * Posting-blocking suspension, computed SERVER-side against the current
+   * time. The client may only see the boolean — never the expiry or reason.
+   */
+  suspended: boolean;
+  /**
+   * Community-trust review state (server-computed). While true the account
+   * may still browse, RSVP, and comment, but hosting and club/coach posting
+   * are paused. Never a count or score — just the state boolean.
+   */
+  underReview: boolean;
   profilePhotoUrl: string | null;
 }
 
@@ -63,6 +86,11 @@ export function roleOf(me: Me): AccountRole {
 
 export function isVerified(me: Me): boolean {
   return roleOf(me) === "verified";
+}
+
+/** True when a signed-in account's posting rights are suspended (server-computed). */
+export function isSuspended(me: Me): boolean {
+  return me.status === "signed_in" && me.account.suspended === true;
 }
 
 /** Human-readable label for a pending funnel stage (UI copy only). */
