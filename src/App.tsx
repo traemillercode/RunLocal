@@ -31,14 +31,13 @@ function Shell() {
   const navigate = useNavigate();
   const { city, selectCity } = useSelectedCity();
   const [recoveryError, setRecoveryError] = useState<string>();
-  const [confirmationError, setConfirmationError] = useState<string>();
   useEffect(() => {
     const parsed = parseAuthCallback(window.location.href);
     if (!parsed) return;
     window.history.replaceState(null, "", cleanCallbackUrl(window.location.href));
     if (parsed.kind === "confirmation") { navigate("/confirmation", { replace: true }); return; }
     navigate(parsed.kind === "recovery" ? "/recovery" : "/confirmation?error=" + encodeURIComponent(parsed.error), { replace: true });
-    if (parsed.kind === "error") { if (parsed.flow === "recovery") setRecoveryError(parsed.error); else setConfirmationError(parsed.error); return; }
+    if (parsed.kind === "error") { if (parsed.flow === "recovery") setRecoveryError(parsed.error); return; }
     void supabase.setRecoverySession(parsed.accessToken, parsed.refreshToken).then((result) => { if (!result.ok) setRecoveryError(result.message); });
   }, [navigate]);
   const [cityOpen, setCityOpen] = useState(false);
