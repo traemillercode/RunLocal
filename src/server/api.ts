@@ -310,7 +310,7 @@ async function handleApi(
       const t = await adapters[p].exchange(url.searchParams.get("code") ?? "");
       db.setToken({ accountId: sess.accountId, provider: p, accessToken: t.accessToken, refreshToken: t.refreshToken ?? null, expiresAt: t.expiresAt ?? null, providerUserId: t.providerUserId ?? null });
       await db.persist();
-      return ok(res, { connected: true, provider: p });
+      ok(res, { connected: true, provider: p }); return true;
     } catch { err(res, { status: 502, error: "oauth_exchange_failed" }); return true; }
   }
   const disconnect = /^\/api\/connections\/([^/]+)\/disconnect$/.exec(url.pathname);
@@ -320,7 +320,7 @@ async function handleApi(
     const t = db.getToken(sess.accountId, p); if (t) await adapters[p].revoke(t.accessToken).catch(() => {});
     db.removeToken(sess.accountId, p); const body = await readJson(req) as Record<string, unknown>;
     if (body.deleteActivities === true) db.removeActivities(sess.accountId, p); await db.persist();
-    return ok(res, { disconnected: true, deletedActivities: body.deleteActivities === true });
+    ok(res, { disconnected: true, deletedActivities: body.deleteActivities === true }); return true;
   }
   if (method === "POST" && url.pathname === "/api/activity/manual") {
     const sess = requireSession(db, cookies); if (!sess) { err(res, { status: 401, error: "sign_in_required" }); return true; }
@@ -329,7 +329,7 @@ async function handleApi(
     if (!validProvider(p)) { err(res, { status: 400, error: "invalid_provider" }); return true; }
     let normalized; try { normalized = normalizeActivity(p, body.activity); } catch { err(res, { status: 400, error: "invalid_activity" }); return true; }
     const a = { ...normalized, id: newId(), accountId: sess.accountId, shareMode: "manual" as ShareMode, caption: typeof body.caption === "string" ? body.caption.slice(0, 280) : null };
-    db.addActivity(a); await db.persist(); return ok(res, { card: publicActivityCard(a) });
+    db.addActivity(a); await db.persist(); ok(res, { card: publicActivityCard(a) }); return true;
   }
 
   // ---- account creation (signup completion) ------------------------------
