@@ -16,6 +16,8 @@ import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { apiHandler } from "../src/server/api";
 import { createMemoryStore, Db } from "../src/server/store";
+import { ADMIN_KEY_VAR, ADMIN_EMAIL_VAR, adminLogin } from "../src/server/admin";
+import { saveCity } from "../src/server/cms";
 
 // ------------------------------------------------------------ HTTP harness
 function makeReq(method: string, path: string, opts: { body?: unknown; cookie?: string } = {}): IncomingMessage {
@@ -135,12 +137,30 @@ describe("POST /api/accounts — home city is required and validated", () => {
     expect(payload.account.cityId).toBe("columbia-mo");
     expect(db.getAccountByEmail(VALID.email)!.cityId).toBe("columbia-mo");
   });
-  it("a known-but-not-yet-live city entity is accepted (validation is entity-driven, never hardcoded to Columbia)", async () => {
+  it("a coming-soon city is known but NOT enterable (400 city_coming_soon, no account created)", async () => {
     const db = createMemoryStore();
     const fake = await post(db, "/api/accounts", { ...VALID, email: "stl@example.com", username: "stl_runner", cityId: "stl-mo" });
+    expect(fake.status).toBe(400);
+    expect(JSON.parse(fake.body).error).toBe("city_coming_soon");
+    expect(db.listAccounts().length).toBe(0);
+  });
+  it("a Global Admin-created ACTIVE city is accepted (runtime registry — never hardcoded to Columbia)", async () => {
+    const db = createMemoryStore();
+    process.env[ADMIN_KEY_VAR] = "test-homecity-key";
+    process.env[ADMIN_EMAIL_VAR] = "admin@example.com";
+    try {
+      const login = adminLogin(db, "test-homecity-key", "198.51.100.23", new Date("2026-08-03T00:00:00Z"));
+      if (!login.ok) throw new Error("admin login failed");
+      const r = saveCity(db, { adminSessionId: login.data.sessionId, userSessionId: null, reason: "routine test", ip: "198.51.100.23" }, { id: "columbus-oh", name: "Columbus", state: "OH", slug: "columbus-oh", status: "active" });
+      expect(r.ok).toBe(true);
+    } finally {
+      delete process.env[ADMIN_KEY_VAR];
+      delete process.env[ADMIN_EMAIL_VAR];
+    }
+    const fake = await post(db, "/api/accounts", { ...VALID, email: "cbus@example.com", username: "cbus_runner", cityId: "columbus-oh" });
     expect(fake.status).toBe(200);
-    expect(JSON.parse(fake.body).account.cityId).toBe("stl-mo");
-    expect(db.getAccountByEmail("stl@example.com")!.cityId).toBe("stl-mo");
+    expect(JSON.parse(fake.body).account.cityId).toBe("columbus-oh");
+    expect(db.getAccountByEmail("cbus@example.com")!.cityId).toBe("columbus-oh");
   });
   it("the signup payload carries cityId but never sensitive fields", async () => {
     const db = createMemoryStore();
@@ -190,15 +210,33 @@ describe("POST /api/profile/city — authenticated home-city change", () => {
   });
   it("changes the home city, persists it, and returns the updated public account", async () => {
     const db = createMemoryStore();
+    process.env[ADMIN_KEY_VAR] = "test-homecity-key";
+    process.env[ADMIN_EMAIL_VAR] = "admin@example.com";
+    try {
+      const login = adminLogin(db, "test-homecity-key", "198.51.100.23", new Date("2026-08-03T00:00:00Z"));
+      if (!login.ok) throw new Error("admin login failed");
+      saveCity(db, { adminSessionId: login.data.sessionId, userSessionId: null, reason: "routine test", ip: "198.51.100.23" }, { id: "columbus-oh", name: "Columbus", state: "OH", slug: "columbus-oh", status: "active" });
+    } finally {
+      delete process.env[ADMIN_KEY_VAR];
+      delete process.env[ADMIN_EMAIL_VAR];
+    }
     const { cookie } = await signedUp(db);
-    const fake = await post(db, "/api/profile/city", { cityId: "stl-mo" }, cookie);
+    const fake = await post(db, "/api/profile/city", { cityId: "columbus-oh" }, cookie);
     expect(fake.status).toBe(200);
     const payload = JSON.parse(fake.body) as { account: { cityId: string } };
-    expect(payload.account.cityId).toBe("stl-mo");
-    expect(db.getAccountByEmail(VALID.email)!.cityId).toBe("stl-mo");
+    expect(payload.account.cityId).toBe("columbus-oh");
+    expect(db.getAccountByEmail(VALID.email)!.cityId).toBe("columbus-oh");
     // Only public fields travel — never the session or sensitive records.
     expect(JSON.stringify(fake.body)).not.toContain("supabase");
     expect(JSON.stringify(fake.body)).not.toContain("selfie");
+  });
+  it("rejects a home-city change to a coming-soon city (400 city_coming_soon, account untouched)", async () => {
+    const db = createMemoryStore();
+    const { cookie } = await signedUp(db);
+    const fake = await post(db, "/api/profile/city", { cityId: "stl-mo" }, cookie);
+    expect(fake.status).toBe(400);
+    expect(JSON.parse(fake.body).error).toBe("city_coming_soon");
+    expect(db.getAccountByEmail(VALID.email)!.cityId).toBe("columbia-mo");
   });
   it("re-submitting your own current city is a harmless 200 no-op", async () => {
     const db = createMemoryStore();

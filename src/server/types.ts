@@ -20,11 +20,14 @@ export type VerifyPhase = "email" | "code" | "selfie" | "pending_review";
 /**
  * Runner role, assigned by the owner/operator at approval time. `runner` is the
  * default (a "Verified Runner"); `group_leader` is a label role for people who
- * run a club/group. Neither role carries admin or moderation powers — the
- * owner/super-admin identity is derived server-side from RUN_LOCAL_OWNER_EMAIL,
- * never from a client-supplied role.
+ * run a club/group. `city_admin` is assigned ONLY by a Global Admin (owner or
+ * key admin) through the audited city-admin assignment endpoint — it is never
+ * accepted from any client payload, and it always carries exactly one city
+ * scope (`AccountRecord.adminCityId`). Neither `runner` nor `group_leader`
+ * carries admin powers; the owner/super-admin identity is derived server-side
+ * from RUN_LOCAL_OWNER_EMAIL, never from a client-supplied role.
  */
-export type AccountRole = "runner" | "group_leader";
+export type AccountRole = "runner" | "group_leader" | "city_admin";
 
 export interface AccountRecord {
   id: string;
@@ -52,6 +55,14 @@ export interface AccountRecord {
   phase: VerifyPhase;
   /** Assigned runner role (set at approval; defaults to "runner"). */
   role: AccountRole;
+  /**
+   * City Admin scope — exactly one city id, set ONLY by a Global Admin via the
+   * audited assignment endpoint. Non-null means the account is a City Admin
+   * with permission over that single city. Never client-settable.
+   */
+  adminCityId: string | null;
+  /** The role held before City Admin assignment (restored on revocation). */
+  rolePriorAdmin: AccountRole | null;
   /** Optional role requested at signup (admin-assigned role wins). */
   requestedRole: AccountRole | null;
   /** Filename in uploads/public — the user's chosen public profile photo. */
@@ -147,6 +158,20 @@ export type AdminAction =
   | "admin.submission_reject"
   | "admin.cms_settings"
   | "admin.cms_city"
+  | "admin.city_admin_assign"
+  | "admin.city_admin_revoke"
+  | "admin.invitation_create"
+  | "admin.invitation_revoke"
+  | "cityadmin.dashboard"
+  | "cityadmin.submission_list"
+  | "cityadmin.submission_approve"
+  | "cityadmin.submission_reject"
+  | "cityadmin.flag_dismiss"
+  | "cityadmin.flag_hide"
+  | "cityadmin.content_unhide"
+  | "cityadmin.group_rrca"
+  | "cityadmin.content_highlight"
+  | "cityadmin.audit"
   | "account.delete";
 
 export interface AuditEntry {
@@ -160,6 +185,12 @@ export interface AuditEntry {
   targetId: string | null;
   /** Admin's IP at access time. */
   ip: string;
+  /**
+   * City this audit entry concerns (city-scoped admin actions). Null for
+   * global/system entries. Added for the multi-city foundation; entries
+   * written before this field existed load as null.
+   */
+  cityId: string | null;
 }
 
 export interface PersistedDb {
@@ -188,9 +219,48 @@ export interface PersistedDb {
   oauthTokens?: import("./activity").OAuthToken[];
   settings?: SiteSettings;
   cities?: CmsCity[];
+  invitations?: CityInvitationRecord[];
 }
 export interface SiteSettings { title:string; wordmark:string; tagline:string; primary:string; accent:string; surface:string; strings:Record<string,string>; tags:Record<string,string[]>; providers:Record<string,boolean>; bottomNav:string[]; announcement:{text:string;link?:string}|null; logoRef:string|null; faviconRef:string|null; }
-export interface CmsCity { id:string; name:string; state:string; slug:string; status:"active"|"inactive"; headerImageRef:string|null; accent:string|null; }
+
+/**
+ * City lifecycle status (server-authoritative runtime registry):
+ *  - `active` — open: signup, home-city selection, and submissions allowed.
+ *  - `coming_soon` — visible in the registry but not enterable (no signup,
+ *    no home-city selection, no submissions).
+ *  - `invite_only` — visible; entry (signup / home-city selection) requires a
+ *    valid, unexpired, unrevoked, one-time invitation bound to the account
+ *    email. Existing members may keep submitting.
+ *  - `inactive` — deactivated: history retained (content stays browsable),
+ *    but new entry and submissions are denied.
+ */
+export type CmsCityStatus = "active" | "coming_soon" | "invite_only" | "inactive";
+export interface CmsCity { id:string; name:string; state:string; slug:string; status:CmsCityStatus; headerImageRef:string|null; accent:string|null; }
+
+/**
+ * Invitation for an invite-only city's home-city selection. The raw token is
+ * returned to the Global Admin ONCE at creation and never stored: only the
+ * HMAC-SHA256 hash (with a per-invitation salt) is persisted, and the token
+ * never appears in any public payload. Redemption is one-time (`usedAt`),
+ * expiry-bound (`expiresAt`), and recipient-bound (`email`, exact match).
+ */
+export interface CityInvitationRecord {
+  id: string;
+  cityId: string;
+  /** Recipient email — exact (case-insensitive) binding. */
+  email: string;
+  /** HMAC-SHA256(token, salt) — the raw token is never stored. */
+  tokenHash: string;
+  salt: string;
+  createdAt: string;
+  /** Global Admin identity that created the invitation (audit trail). */
+  createdBy: string;
+  expiresAt: string;
+  usedAt: string | null;
+  usedByAccountId: string | null;
+  revokedAt: string | null;
+  revokedBy: string | null;
+}
 
 /** What kind of seeded content a moderation record refers to. */
 export type ContentKind = "event" | "race" | "post";

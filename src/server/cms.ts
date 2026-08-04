@@ -17,7 +17,9 @@ import { adapters, configError } from "./activity";
 import type { Db } from "./store";
 import { newId } from "./store";
 import { CITIES } from "../data/cities";
-import type { CmsCity, SiteSettings } from "./types";
+import type { CmsCity, CmsCityStatus, SiteSettings } from "./types";
+
+export const CITY_STATUSES: CmsCityStatus[] = ["active", "coming_soon", "invite_only", "inactive"];
 
 export const DEFAULT_SETTINGS: SiteSettings = { title:"Run Local", wordmark:"Run Local", tagline:"Find your local run.", primary:"#0b2b22", accent:"#c8f169", surface:"#f7f8f3", strings:{}, tags:{runTypes:["Social run","Track","Trail","Long run"],credentialBodies:["RRCA"],qa:["Training","Shoes","Routes"],ratings:["Easy","Moderate","Hard"]}, providers:{strava:true,garmin:true,coros:true,suunto:true}, bottomNav:["home","races","clubs","forum"], announcement:null, logoRef:null, faviconRef:null };
 
@@ -144,12 +146,18 @@ export function saveCity(db: Db, ctx: AdminCtx, input: Partial<CmsCity> & { id?:
   if (slugTaken) return { ok: false, status: 400, error: "duplicate_slug" };
   const headerImageRef = input.headerImageRef === undefined ? (prev?.headerImageRef ?? null) : typeof input.headerImageRef === "string" && input.headerImageRef.length <= 200 ? input.headerImageRef : null;
   const accent = input.accent === undefined ? (prev?.accent ?? null) : hex(input.accent) ? input.accent : null;
+  // Status is one of the four lifecycle states; unknown values fall back to
+  // the previous status (or "active" for new cities).
+  const status: CmsCityStatus =
+    input.status !== undefined && (CITY_STATUSES as readonly string[]).includes(String(input.status))
+      ? (input.status as CmsCityStatus)
+      : (prev?.status ?? "active");
   const city: CmsCity = {
     id,
     name,
     state,
     slug,
-    status: input.status === "inactive" ? "inactive" : "active",
+    status,
     headerImageRef,
     accent,
   };
@@ -157,7 +165,7 @@ export function saveCity(db: Db, ctx: AdminCtx, input: Partial<CmsCity> & { id?:
   return { ok: true, data: { city } };
 }
 
-/** Deactivate (soft delete) a city — active status flips to inactive. */
+/** Deactivate (soft delete) a city — status flips to inactive. */
 export function deleteCity(db: Db, ctx: AdminCtx, id: string, now = new Date()): AdminResult<{ city: CmsCity }> {
   const a = authorizeAdmin(db, ctx, "admin.cms_city", id, now);
   if (!a.ok) return a as AdminResult<{ city: CmsCity }>;
@@ -219,9 +227,9 @@ export function refContentType(ref: string): string {
 
 /**
  * Mirror the known static city entities (src/data/cities.ts) into the CMS
- * city store on first boot — idempotent, never overwrites admin edits, and
- * non-live placeholder cities start inactive so only launched cities are
- * public.
+ * city store on first boot — idempotent, never overwrites admin edits.
+ * Non-live placeholder cities seed as `coming_soon` (visible but not
+ * enterable) so only launched cities are open.
  */
 export function seedCmsCities(db: Db): void {
   for (const c of CITIES) {
@@ -231,7 +239,7 @@ export function seedCmsCities(db: Db): void {
       name: c.name,
       state: c.state,
       slug: c.id,
-      status: c.live ? "active" : "inactive",
+      status: c.live ? "active" : "coming_soon",
       headerImageRef: null,
       accent: null,
     });
@@ -239,12 +247,91 @@ export function seedCmsCities(db: Db): void {
 }
 
 /**
- * Whether a city id is valid for signup/home-city selection: known static
- * entity OR an ACTIVE CMS-managed city. Inactive CMS cities stop accepting
- * new members while existing members keep their home city.
+ * Resolve a city's lifecycle status from the server-authoritative runtime
+ * registry, falling back to the seeded defaults when the store has no entry
+ * yet (memory stores / pre-seed boot). This is the ONE place city status is
+ * decided server-side; every signup / home-city / submission / content path
+ * goes through it so validation is never hardcoded to a specific city.
  */
-export function citySupported(db: Db, id: string): boolean {
-  if (CITIES.some((c) => c.id === id)) return true;
+export function cityStatus(db: Db, id: string): CmsCityStatus | null {
   const c = db.getCity(id);
-  return Boolean(c && c.status === "active");
+  if (c) return c.status;
+  const seed = CITIES.find((x) => x.id === id);
+  if (seed) return seed.live ? "active" : "coming_soon";
+  return null;
+}
+
+/** Whether the id names a KNOWN city entity (store or seed). */
+export function cityExists(db: Db, id: string): boolean {
+  return cityStatus(db, id) !== null;
+}
+
+/**
+ * Whether a city may be newly ENTERED (signup or home-city selection).
+ *  - active → yes;
+ *  - invite_only → yes ONLY with a redeemable invitation (validated by the
+ *    caller via the invitations module against the account email + token);
+ *  - coming_soon / inactive → no (history retained, no new entry).
+ */
+export function cityEnterable(db: Db, id: string): boolean {
+  const status = cityStatus(db, id);
+  return status === "active" || status === "invite_only";
+}
+
+/**
+ * Whether new SUBMISSIONS are accepted for a city. Active and invite-only
+ * cities accept submissions (existing members of an invite-only city keep
+ * participating); coming_soon and inactive cities deny new submissions while
+ * retaining their existing content history.
+ */
+export function cityAcceptsSubmissions(db: Db, id: string): boolean {
+  const status = cityStatus(db, id);
+  return status === "active" || status === "invite_only";
+}
+
+/** Error code + message for "known but not enterable" city states. */
+export function cityNotOpenError(status: CmsCityStatus): { status: 400; error: string; message: string } {
+  if (status === "inactive") {
+    return { status: 400, error: "city_inactive", message: "That city is no longer active — its history stays, but it isn't accepting new members." };
+  }
+  if (status === "coming_soon") {
+    return { status: 400, error: "city_coming_soon", message: "That city is coming soon — it isn't open yet." };
+  }
+  return { status: 400, error: "invitation_required", message: "That city is invite-only — enter your invitation code to join." };
+}
+
+/**
+ * Public city registry rows — the server-authoritative list the client
+ * renders in the switcher / signup / home-city flows. Includes every status
+ * (active / coming_soon / invite_only / inactive are all visible; the client
+ * renders enterability). Merges seeded defaults so unseeded stores still
+ * serve the full registry.
+ */
+export interface PublicCityRow {
+  id: string;
+  name: string;
+  state: string;
+  slug: string;
+  status: CmsCityStatus;
+  headerImageRef: string | null;
+  accent: string | null;
+}
+export function publicCities(db: Db): PublicCityRow[] {
+  const rows = new Map<string, PublicCityRow>();
+  for (const c of db.listCities()) {
+    rows.set(c.id, { id: c.id, name: c.name, state: c.state, slug: c.slug, status: c.status, headerImageRef: c.headerImageRef, accent: c.accent });
+  }
+  for (const c of CITIES) {
+    if (rows.has(c.id)) continue;
+    rows.set(c.id, {
+      id: c.id,
+      name: c.name,
+      state: c.state,
+      slug: c.id,
+      status: c.live ? "active" : "coming_soon",
+      headerImageRef: null,
+      accent: null,
+    });
+  }
+  return [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
 }

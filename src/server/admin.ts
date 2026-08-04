@@ -166,6 +166,209 @@ export function authorizeOwner(
   return { ok: true, data: { admin } };
 }
 
+// --------------------------------------------------------- scope-aware authz
+// Multi-city foundation: three admin identities exist.
+//   1. Key admin ("__admin__" session)            → GLOBAL scope (all cities).
+//   2. Owner (signed-in user whose email matches
+//      RUN_LOCAL_OWNER_EMAIL)                     → GLOBAL scope (all cities).
+//   3. City Admin (signed-in user whose account
+//      has role "city_admin" + adminCityId)       → EXACTLY ONE city scope.
+// authorizeScoped() resolves the caller's scope and enforces it; every
+// city-admin read/mutation passes through it so cross-city access is denied
+// server-side regardless of any client-supplied params.
+
+export type ScopeKind = "global" | "city";
+export interface Authz {
+  /** The caller's effective admin scope. */
+  scope: { kind: ScopeKind; cityId: string | null };
+  /** Admin identity for the audit log. */
+  admin: string;
+  /** Run Local account id (null for key-admin sessions). */
+  accountId: string | null;
+}
+
+/** Resolve the signed-in account behind a user session, if any. */
+export function sessionAccount(db: Db, ctx: AdminCtx): AccountRecord | null {
+  if (!ctx.userSessionId) return null;
+  const session = db.getSession(ctx.userSessionId);
+  if (!session || session.accountId === "__admin__") return null;
+  const rec = db.getAccount(session.accountId);
+  if (!rec || rec.deletedAt) return null;
+  return rec;
+}
+
+/** True when the account is a City Admin with exactly one city scope. */
+export function isCityAdminAccount(rec: AccountRecord): boolean {
+  return rec.role === "city_admin" && typeof rec.adminCityId === "string" && rec.adminCityId.length > 0;
+}
+
+export interface ScopedOptions {
+  /**
+   * When set, city-admin callers must be scoped to exactly this city (used to
+   * bind a mutation to the target record's cityId). Global admins are always
+   * allowed.
+   */
+  enforceCity?: string | null;
+  /**
+   * When true, city-admin sessions are rejected entirely (global-only action).
+   */
+  globalOnly?: boolean;
+  /**
+   * City to record on the audit entry (the city the action concerns). For
+   * city-admin callers this is forced to their scope.
+   */
+  auditCity?: string | null;
+}
+
+/**
+ * Resolve + authorize an admin action with scope enforcement. Appends the
+ * audit entry on success (action, reason, target, ip, city).
+ */
+export function authorizeScoped(
+  db: Db,
+  ctx: AdminCtx,
+  action: AdminAction,
+  targetId: string | null,
+  now = new Date(),
+  opts: ScopedOptions = {},
+): AdminResult<Authz> {
+  if (!validReason(ctx.reason)) {
+    return { ok: false, status: 400, error: "reason_required" };
+  }
+  // 1) Key admin → global.
+  const adminSession = ctx.adminSessionId ? db.getSession(ctx.adminSessionId) : undefined;
+  if (adminSession && adminSession.accountId === "__admin__") {
+    if (!adminConfigured()) {
+      return { ok: false, status: 503, error: "admin_unconfigured" };
+    }
+    const admin = adminEmail();
+    db.appendAudit({ admin, action, reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId, ip: ctx.ip, cityId: opts.auditCity ?? null }, now);
+    return { ok: true, data: { scope: { kind: "global", cityId: null }, admin, accountId: null } };
+  }
+  // 2) Owner signed-in session → global.
+  const owner = ownerSessionAccount(db, ctx);
+  if (owner) {
+    const admin = ownerEmail();
+    db.appendAudit({ admin, action, reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId, ip: ctx.ip, cityId: opts.auditCity ?? null }, now);
+    return { ok: true, data: { scope: { kind: "global", cityId: null }, admin, accountId: owner.id } };
+  }
+  // 3) City Admin signed-in session → exactly one city.
+  const user = sessionAccount(db, ctx);
+  if (user && isCityAdminAccount(user)) {
+    if (opts.globalOnly) return { ok: false, status: 401, error: "unauthorized" };
+    const scopeCity = user.adminCityId!;
+    if (opts.enforceCity !== undefined && opts.enforceCity !== null && scopeCity !== opts.enforceCity) {
+      return { ok: false, status: 403, error: "city_scope_denied", message: "Your admin access is scoped to one city only." };
+    }
+    const admin = user.email;
+    db.appendAudit({ admin, action, reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId, ip: ctx.ip, cityId: opts.auditCity ?? scopeCity }, now);
+    return { ok: true, data: { scope: { kind: "city", cityId: scopeCity }, admin, accountId: user.id } };
+  }
+  return { ok: false, status: 401, error: "unauthorized" };
+}
+
+// ---------------------------------------------------- city admin management
+// Global Admin ONLY (owner or key admin): assignment/revocation of the
+// city_admin role with exactly one city scope. Never granted from any client
+// payload — only these audited endpoints.
+
+export interface CityAdminRow {
+  accountId: string;
+  name: string;
+  email: string;
+  cityId: string;
+  assignedAt: string;
+  roleBefore: AccountRole | null;
+}
+
+/** Global Admin list of current City Admin assignments. */
+export function listCityAdmins(db: Db, ctx: AdminCtx, now = new Date()): AdminResult<CityAdminRow[]> {
+  const auth = authorizeAdmin(db, ctx, "admin.city_admin_assign", null, now);
+  if (!auth.ok) return auth;
+  const rows: CityAdminRow[] = [];
+  for (const rec of db.listAccounts()) {
+    if (rec.deletedAt || !isCityAdminAccount(rec)) continue;
+    // Assignment time comes from the most recent assign audit entry.
+    const assignEntry = db
+      .listAudit(500)
+      .find((a) => a.action === "admin.city_admin_assign" && a.targetId === rec.id);
+    rows.push({
+      accountId: rec.id,
+      name: rec.name,
+      email: rec.email,
+      cityId: rec.adminCityId!,
+      assignedAt: assignEntry?.at ?? "",
+      roleBefore: rec.rolePriorAdmin,
+    });
+  }
+  rows.sort((a, b) => a.name.localeCompare(b.name));
+  return { ok: true, data: rows };
+}
+
+/**
+ * Global Admin assigns the city_admin role + exactly one city scope. The
+ * target must be an existing, non-deleted account (any status — a Global Admin
+ * may assign before the user completes verification; the scope takes effect on
+ * their next admin action).
+ */
+export function assignCityAdmin(
+  db: Db,
+  ctx: AdminCtx,
+  email: string,
+  cityId: string,
+  now = new Date(),
+): AdminResult<{ row: CityAdminRow }> {
+  const key = email.trim().toLowerCase();
+  if (!key || key.length > 120) return { ok: false, status: 400, error: "invalid_email" };
+  const rec = db.getAccountByEmail(key);
+  if (!rec || rec.deletedAt) {
+    return { ok: false, status: 404, error: "account_not_found", message: "No account found for that email." };
+  }
+  const city = db.getCity(cityId);
+  if (!city) return { ok: false, status: 400, error: "invalid_city", message: "That city isn't in the registry." };
+  // Authorize with the resolved target account so the audit entry carries it.
+  const auth = authorizeScoped(db, ctx, "admin.city_admin_assign", rec.id, now, { globalOnly: true, auditCity: cityId });
+  if (!auth.ok) return auth;
+  if (isCityAdminAccount(rec) && rec.adminCityId === cityId) {
+    // Re-assignment to the same city is a harmless no-op.
+    const entry = db.listAudit(500).find((a) => a.action === "admin.city_admin_assign" && a.targetId === rec.id);
+    return {
+      ok: true,
+      data: {
+        row: { accountId: rec.id, name: rec.name, email: rec.email, cityId, assignedAt: entry?.at ?? now.toISOString(), roleBefore: rec.rolePriorAdmin },
+      },
+    };
+  }
+  const roleBefore = rec.role === "city_admin" ? rec.rolePriorAdmin : rec.role;
+  const updated = db.updateAccount(rec.id, {
+    role: "city_admin",
+    adminCityId: cityId,
+    rolePriorAdmin: roleBefore === "city_admin" ? null : roleBefore,
+    lastActivityAt: now.toISOString(),
+  })!;
+  const entry = db.listAudit(500).find((a) => a.action === "admin.city_admin_assign" && a.targetId === rec.id);
+  return { ok: true, data: { row: { accountId: updated.id, name: updated.name, email: updated.email, cityId: updated.adminCityId!, assignedAt: entry?.at ?? now.toISOString(), roleBefore: updated.rolePriorAdmin } } };
+}
+
+/** Global Admin revokes the city_admin role + scope, restoring the prior role. */
+export function revokeCityAdmin(
+  db: Db,
+  ctx: AdminCtx,
+  accountId: string,
+  now = new Date(),
+): AdminResult<{ accountId: string }> {
+  const auth = authorizeAdmin(db, ctx, "admin.city_admin_revoke", accountId, now);
+  if (!auth.ok) return auth;
+  const rec = db.getAccount(accountId);
+  if (!rec || rec.deletedAt) return { ok: false, status: 404, error: "not_found" };
+  if (!isCityAdminAccount(rec)) return { ok: false, status: 409, error: "not_city_admin" };
+  const restored = rec.rolePriorAdmin === "group_leader" ? "group_leader" : "runner";
+  db.updateAccount(accountId, { role: restored, adminCityId: null, rolePriorAdmin: null, lastActivityAt: now.toISOString() });
+  const cityId = rec.adminCityId!;
+  db.appendAudit({ admin: auth.data.admin, action: "admin.city_admin_revoke", reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId: accountId, ip: ctx.ip, cityId }, now);
+  return { ok: true, data: { accountId } };
+}
+
 /** Admin login — issues a session id (caller sets the cookie). */
 export function adminLogin(
   db: Db,
@@ -481,4 +684,45 @@ export function adminAuditLog(db: Db, ctx: AdminCtx, limit = 100, now = new Date
   const auth = authorizeAdmin(db, ctx, "admin.audit", null, now);
   if (!auth.ok) return auth;
   return { ok: true, data: db.listAudit(limit) };
+}
+
+/**
+ * City Admin audit view — ONLY entries concerning the admin's scope city
+ * (their own actions and any other city-scoped entry for that city). Global
+ * audit records (no cityId) are never visible to City Admins. The access
+ * itself is reason-required and audited as `cityadmin.audit`.
+ */
+export function cityAdminAudit(db: Db, ctx: AdminCtx, limit = 100, now = new Date()): AdminResult<ReturnType<Db["listAudit"]>> {
+  const auth = authorizeScoped(db, ctx, "cityadmin.audit", null, now);
+  if (!auth.ok) return auth;
+  const cityId = auth.data.scope.kind === "city" ? auth.data.scope.cityId : null;
+  if (cityId === null) return { ok: false, status: 403, error: "city_scope_denied" };
+  const rows = db
+    .listAudit(Math.min(limit, 500))
+    .filter((a) => a.cityId === cityId || (a.admin === auth.data.admin && a.cityId === cityId));
+  return { ok: true, data: rows };
+}
+
+/**
+ * Resolve the admin access level for the current request WITHOUT auditing —
+ * the client probe used by the Admin UI to render the right surface
+ * (global admin control center vs city-admin panel vs nothing).
+ */
+export type AdminAccessLevel =
+  | { level: "global_admin"; admin: string }
+  | { level: "city_admin"; admin: string; cityId: string; accountId: string }
+  | { level: "none" };
+
+export function adminAccessLevel(db: Db, ctx: AdminCtx): AdminAccessLevel {
+  const adminSession = ctx.adminSessionId ? db.getSession(ctx.adminSessionId) : undefined;
+  if (adminSession && adminSession.accountId === "__admin__") {
+    return adminConfigured() ? { level: "global_admin", admin: adminEmail() } : { level: "none" };
+  }
+  const owner = ownerSessionAccount(db, ctx);
+  if (owner) return { level: "global_admin", admin: ownerEmail() };
+  const user = sessionAccount(db, ctx);
+  if (user && isCityAdminAccount(user)) {
+    return { level: "city_admin", admin: user.email, cityId: user.adminCityId!, accountId: user.id };
+  }
+  return { level: "none" };
 }
