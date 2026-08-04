@@ -60,7 +60,7 @@ describe("LoginPage — signup collects the username", () => {
       </MemoryRouter>,
     );
     expect(html).toContain("Username");
-    expect(html).toContain('autoComplete="username"');
+    expect(html).toMatch(/autocomplete="username"/i);
     expect(html).toContain(USERNAME_HINT);
   });
   it("login mode does not ask for a username", () => {
@@ -70,7 +70,7 @@ describe("LoginPage — signup collects the username", () => {
         <LoginPage />
       </MemoryRouter>,
     );
-    expect(html).not.toContain('autoComplete="username"');
+    expect(html).not.toMatch(/autocomplete="username"/i);
   });
 });
 
