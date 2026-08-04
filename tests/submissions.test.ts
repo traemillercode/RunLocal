@@ -108,32 +108,32 @@ describe("submission validation", () => {
   it("race rejects missing name, bad date, and non-URL registration", () => {
     const db = createMemoryStore();
     const rec = verified(db, "a@x.com");
-    expect((submitRace(db, rec.id, { ...RACE_INPUT, name: "" }, T0) as { ok: false }).error).toBe("invalid_name");
-    expect((submitRace(db, rec.id, { ...RACE_INPUT, date: "01/10/2026" }, T0) as { ok: false }).error).toBe("invalid_date");
-    expect((submitRace(db, rec.id, { ...RACE_INPUT, registrationUrl: "not-a-url" }, T0) as { ok: false }).error).toBe("invalid_url");
-    expect((submitRace(db, rec.id, { ...RACE_INPUT, distances: "" }, T0) as { ok: false }).error).toBe("invalid_distances");
+    expect((submitRace(db, rec.id, { ...RACE_INPUT, name: "" }, T0) as { ok: false; error: string }).error).toBe("invalid_name");
+    expect((submitRace(db, rec.id, { ...RACE_INPUT, date: "01/10/2026" }, T0) as { ok: false; error: string }).error).toBe("invalid_date");
+    expect((submitRace(db, rec.id, { ...RACE_INPUT, registrationUrl: "not-a-url" }, T0) as { ok: false; error: string }).error).toBe("invalid_url");
+    expect((submitRace(db, rec.id, { ...RACE_INPUT, distances: "" }, T0) as { ok: false; error: string }).error).toBe("invalid_distances");
     expect(submitRace(db, rec.id, RACE_INPUT, T0).ok).toBe(true);
   });
 
   it("group requires exactly the two allowed group types and valid links", () => {
     const db = createMemoryStore();
     const rec = verified(db, "g@x.com");
-    expect((submitGroup(db, rec.id, { ...GROUP_INPUT, groupType: "rrca" }, T0) as { ok: false }).error).toBe("invalid_group_type");
-    expect((submitGroup(db, rec.id, { ...GROUP_INPUT, groupType: "rrca-chartered" }, T0) as { ok: false }).error).not.toBe("invalid_group_type");
-    expect((submitGroup(db, rec.id, { ...GROUP_INPUT, facebookUrl: "facebook.com/x" }, T0) as { ok: false }).error).toBe("invalid_url");
+    expect((submitGroup(db, rec.id, { ...GROUP_INPUT, groupType: "rrca" }, T0) as { ok: false; error: string }).error).toBe("invalid_group_type");
+    expect((submitGroup(db, rec.id, { ...GROUP_INPUT, groupType: "rrca-chartered" }, T0) as { ok: false; error: string }).error).not.toBe("invalid_group_type");
+    expect((submitGroup(db, rec.id, { ...GROUP_INPUT, facebookUrl: "facebook.com/x" }, T0) as { ok: false; error: string }).error).toBe("invalid_url");
     expect(submitGroup(db, rec.id, GROUP_INPUT, T0).ok).toBe(true);
   });
 
   it("independent event validates type, date/day, time, and invite", () => {
     const db = createMemoryStore();
     const rec = verified(db, "e@x.com");
-    expect((submitEvent(db, rec.id, { ...EVENT_INPUT, type: "monthly" }, T0) as { ok: false }).error).toBe("invalid_type");
+    expect((submitEvent(db, rec.id, { ...EVENT_INPUT, type: "monthly" }, T0) as { ok: false; error: string }).error).toBe("invalid_type");
     // recurring requires dayOfWeek
-    expect((submitEvent(db, rec.id, { ...EVENT_INPUT, type: "recurring", dayOfWeek: null }, T0) as { ok: false }).error).toBe("invalid_day");
+    expect((submitEvent(db, rec.id, { ...EVENT_INPUT, type: "recurring", dayOfWeek: null }, T0) as { ok: false; error: string }).error).toBe("invalid_day");
     // one_time requires date, ignores dayOfWeek
-    expect((submitEvent(db, rec.id, { ...EVENT_INPUT, type: "one_time", dayOfWeek: null, date: "" }, T0) as { ok: false }).error).toBe("invalid_date");
-    expect((submitEvent(db, rec.id, { ...EVENT_INPUT, time: "six pm" }, T0) as { ok: false }).error).toBe("invalid_time");
-    expect((submitEvent(db, rec.id, { ...EVENT_INPUT, invite: "everyone" }, T0) as { ok: false }).error).toBe("invalid_invite");
+    expect((submitEvent(db, rec.id, { ...EVENT_INPUT, type: "one_time", dayOfWeek: null, date: "" }, T0) as { ok: false; error: string }).error).toBe("invalid_date");
+    expect((submitEvent(db, rec.id, { ...EVENT_INPUT, time: "six pm" }, T0) as { ok: false; error: string }).error).toBe("invalid_time");
+    expect((submitEvent(db, rec.id, { ...EVENT_INPUT, invite: "everyone" }, T0) as { ok: false; error: string }).error).toBe("invalid_invite");
     // one_time valid path
     const oneTime = { type: "one_time", title: "Fun Run", date: "2026-09-20", dayOfWeek: null, time: "9:00 AM", location: "Park", distanceLabel: "2 mi", invite: "Open to all" };
     expect(submitEvent(db, rec.id, oneTime, T0).ok).toBe(true);
@@ -406,6 +406,6 @@ describe("submission persistence", () => {
 function asKeyAdminSafe(sessionId: string, reason?: string): AdminCtx {
   return adminCtx(sessionId, undefined, reason);
 }
-function asKeyAdmin(sessionId: string, reason: string): AdminCtx {
+function asKeyAdmin(sessionId: string, reason?: string): AdminCtx {
   return adminCtx(sessionId, undefined, reason);
 }

@@ -93,6 +93,38 @@ export function AdminPage() {
   const [rrcaDrafts, setRrcaDrafts] = useState<Record<string, { badge: boolean; note: string }>>({});
   /** Per-flag suspension-days input (blank = indefinite). */
   const [suspendDays, setSuspendDays] = useState<Record<string, string>>({});
+  const [subRows, setSubRows] = useState<api.SubmissionQueueRow[] | null>(null);
+  const [subReason, setSubReason] = useState("");
+  const [subError, setSubError] = useState<string | null>(null);
+  const [subBusy, setSubBusy] = useState(false);
+  const [subAction, setSubAction] = useState<string | null>(null);
+  const loadSubmissions = async () => {
+    setSubError(null);
+    if (!subReason.trim() || subReason.trim().length < 5) {
+      setSubError("Enter a reason (min 5 characters) to load the submission queue.");
+      return;
+    }
+    setSubBusy(true);
+    const r = await api.adminGetSubmissions(null, subReason.trim());
+    setSubBusy(false);
+    if (r.ok) setSubRows(r.data.results);
+    else setSubError(r.error.message ?? "Couldn't load the queue.");
+  };
+  const decideSubmission = async (id: string, action: "approve" | "reject") => {
+    setSubError(null);
+    if (!subReason.trim() || subReason.trim().length < 5) {
+      setSubError(action === "reject" ? "Enter the rejection reason (min 5 chars) — the submitter will see it." : "Enter a reason (min 5 chars).");
+      return;
+    }
+    setSubAction(id);
+    const r = await api.adminDecideSubmission(id, action, subReason.trim());
+    setSubAction(null);
+    if (r.ok) {
+      setSubRows((rows) => (rows ? rows.filter((row) => row.id !== id) : rows));
+    } else {
+      setSubError(r.error.message ?? "Action failed.");
+    }
+  };
 
   const selfieCheckRef = useRef(false);
 
@@ -526,6 +558,48 @@ export function AdminPage() {
           )}
         </section>
       ) : null}
+
+      {/* Admin submission queue — owner OR key admin; audited with a reason */}
+      <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+        <h2 className="text-[15px] font-bold text-slate-900">Submission queue</h2>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Community-submitted races, groups, and independent events awaiting review. Approve publishes them publicly (groups grant the submitter the Group
+          Leader role); reject requires a reason the submitter will see. Every action is audited with the reason above.
+        </p>
+        <div className="mt-3 space-y-3">
+          <textarea rows={2} placeholder="Reason for loading/deciding the queue (required, audited; rejection reason goes to the submitter)" value={subReason} onChange={(e) => setSubReason(e.target.value)} className={reasonCls} />
+          <PillButton variant="primary" className="w-full" disabled={subBusy} onClick={() => void loadSubmissions()}>
+            <Icon name="search" className="h-4 w-4" /> {subBusy ? "Loading…" : "Load submission queue"}
+          </PillButton>
+          {subError ? <Err msg={subError} /> : null}
+        </div>
+        {subRows !== null && (
+          <ul className="mt-4 space-y-3">
+            {subRows.length === 0 ? <li className="py-2 text-sm text-slate-500">No pending submissions.</li> : null}
+            {subRows.map((row) => (
+              <li key={row.id} className="rounded-xl border border-slate-200 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-800">{row.title}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {row.kind === "race" ? "Race" : row.kind === "group" ? "Group" : "Independent run"} · {row.submitterName} · {row.summary}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">Pending</span>
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <PillButton variant="secondary" className="flex-1 px-3" disabled={subAction === row.id} onClick={() => void decideSubmission(row.id, "approve")}>
+                    Approve
+                  </PillButton>
+                  <PillButton variant="ghost" className="flex-1 px-3" disabled={subAction === row.id} onClick={() => void decideSubmission(row.id, "reject")}>
+                    Reject
+                  </PillButton>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {/* Owner-only dashboard: moderation, RRCA, featured/pinned */}
       {isOwner ? (

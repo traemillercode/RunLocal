@@ -269,7 +269,91 @@ export function getModerated(cityId: string): Promise<ApiResult<ModeratedState>>
   return request(`/api/moderated?city=${encodeURIComponent(cityId)}`);
 }
 
-// -------------------------------------------------- owner dashboard (admin)
+// ------------------------------------------------------------- submissions
+export type SubmissionKind = "race" | "group" | "event";
+export type SubmissionStatus = "pending" | "approved" | "rejected";
+
+/** A submitter's own submission row (statuses + rejection reason, own only). */
+export interface MySubmissionView {
+  id: string;
+  kind: SubmissionKind;
+  cityId: string;
+  status: SubmissionStatus;
+  title: string;
+  submittedAt: string;
+  decidedAt: string | null;
+  rejectionReason: string | null;
+}
+
+export function submitRace(input: {
+  cityId?: string; name: string; distances: string; date: string; location: string; registrationUrl: string; description?: string;
+}): Promise<ApiResult<{ submission: { id: string; status: string } }>> {
+  return request("/api/submissions/race", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function submitGroup(input: {
+  cityId?: string; name: string; description?: string; groupType: "rrca-chartered" | "community";
+  groupmeUrl?: string; facebookUrl?: string; instagramUrl?: string; websiteUrl?: string;
+}): Promise<ApiResult<{ submission: { id: string; status: string } }>> {
+  return request("/api/submissions/group", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function submitEvent(input: {
+  cityId?: string; type: "one_time" | "recurring"; title: string; date?: string | null; dayOfWeek?: number | null;
+  time: string; location: string; distanceLabel: string; invite: string; externalUrl?: string; description?: string;
+}): Promise<ApiResult<{ submission: { id: string; status: string } }>> {
+  return request("/api/submissions/event", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function getMySubmissions(): Promise<ApiResult<{ submissions: MySubmissionView[] }>> {
+  return request("/api/my/submissions");
+}
+
+/** Admin-only pending submission queue row (safe summaries). */
+export interface SubmissionQueueRow {
+  id: string;
+  kind: SubmissionKind;
+  cityId: string;
+  status: SubmissionStatus;
+  title: string;
+  submittedAt: string;
+  submitterName: string;
+  summary: string;
+}
+
+export function adminGetSubmissions(cityId: string | null, reason: string): Promise<ApiResult<{ results: SubmissionQueueRow[] }>> {
+  const q = cityId ? `?city=${encodeURIComponent(cityId)}` : "";
+  return adminRequest(`/api/admin/submissions${q}`, reason);
+}
+
+export function adminDecideSubmission(id: string, action: "approve" | "reject", reason: string): Promise<ApiResult<{ ok: true }>> {
+  return adminRequest(`/api/admin/submissions/${id}/${action}`, reason, { method: "POST" });
+}
+
+// -------------------------------------------------- public approved content
+export interface PublicUserRace {
+  id: string; kind: "race"; name: string; date: string; distance: string; location: string;
+  organizer: string; price: string; registrationUrl: string; registrationOpen: boolean;
+  registrationNote: string; description: string;
+}
+export interface PublicUserGroup {
+  id: string; kind: "group"; name: string; groupType: "rrca-chartered" | "community"; description: string;
+  groupmeUrl: string | null; facebookUrl: string | null; instagramUrl: string | null; websiteUrl: string | null;
+}
+export interface PublicUserEvent {
+  id: string; kind: "event"; title: string; type: "one_time" | "recurring"; date: string | null;
+  dayOfWeek: number | null; time: string; location: string; distanceLabel: string;
+  invite: "Open to all" | "Members + guests" | "RSVP requested"; externalUrl: string | null;
+  description: string; host: string;
+}
+export interface PublicApprovedContent {
+  cityId: string; races: PublicUserRace[]; groups: PublicUserGroup[]; events: PublicUserEvent[];
+}
+export function getPublicContent(cityId: string): Promise<ApiResult<PublicApprovedContent>> {
+  return request(`/api/content?city=${encodeURIComponent(cityId)}`);
+}
+
+// ------------------------------------------------- owner dashboard (admin)
 export interface DashboardFlagView {
   id: string;
   cityId: string;

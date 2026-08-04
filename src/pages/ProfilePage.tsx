@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { Chip, Icon, PillButton } from "../components/ui";
@@ -137,6 +137,62 @@ function UsernameEditor({ account, refresh }: { account: PublicAccount; refresh:
   );
 }
 
+const KIND_LABELS: Record<string, string> = { race: "Race", group: "Group", event: "Independent run" };
+const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
+  pending: { label: "Pending approval", cls: "bg-amber-100 text-amber-800" },
+  approved: { label: "Approved", cls: "bg-emerald-100 text-emerald-800" },
+  rejected: { label: "Rejected", cls: "bg-red-100 text-red-700" },
+};
+
+/** The signed-in user's OWN submissions (server returns this account's records only). */
+export function MySubmissions({ signedIn }: { signedIn: boolean }) {
+  const [rows, setRows] = useState<api.MySubmissionView[] | null>(null);
+  useEffect(() => {
+    if (!signedIn) return;
+    let alive = true;
+    void api.getMySubmissions().then((r) => {
+      if (alive && r.ok) setRows(r.data.submissions);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [signedIn]);
+  if (!signedIn) return null;
+  return (
+    <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+      <h2 className="text-[15px] font-bold text-slate-900">My submissions</h2>
+      <p className="mt-0.5 text-xs text-slate-500">Your race, group, and independent-run submissions — only you can see these.</p>
+      {rows === null ? (
+        <p className="mt-3 text-[13px] text-slate-400">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="mt-3 text-[13px] text-slate-500">Nothing submitted yet. Submit a race, group, or independent run from the Races and Events pages.</p>
+      ) : (
+        <ul className="mt-3 space-y-2.5">
+          {rows.map((r) => {
+            const st = STATUS_LABELS[r.status] ?? STATUS_LABELS.pending;
+            return (
+              <li key={r.id} className="rounded-xl border border-slate-200 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold text-slate-800">{r.title}</p>
+                    <p className="text-xs text-slate-500">{KIND_LABELS[r.kind] ?? r.kind}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${st.cls}`}>{st.label}</span>
+                </div>
+                {r.status === "rejected" && r.rejectionReason ? (
+                  <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-[12px] leading-relaxed text-red-700">
+                    <span className="font-semibold">Why it was rejected:</span> {r.rejectionReason}
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
   const navigate = useNavigate();
   const { me, backendAvailable, refresh } = useAccount();
@@ -233,6 +289,9 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
       ) : (
         <UsernameEditor account={signedIn} refresh={refresh} />
       )}
+
+      {/* My submissions — this account's own submissions only */}
+      <MySubmissions signedIn={!!signedIn} />
 
       {/* Home city — account-owned; change happens in Settings (server-validated) */}
       {signedIn ? (
