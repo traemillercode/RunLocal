@@ -28,11 +28,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
       credentials: "same-origin",
     });
     const text = await res.text();
-    let body: unknown = {};
+    let body: unknown;
     try {
-      body = text ? JSON.parse(text) : {};
+      body = text ? JSON.parse(text) : null;
     } catch {
-      body = { error: "invalid_response" };
+      return { ok: false, error: new ApiError(502, "invalid_response", "The server returned an invalid response. Please try again.") };
     }
     if (!res.ok) {
       const b = body && typeof body === "object" ? body as { error?: unknown; message?: unknown } : {};
@@ -96,8 +96,15 @@ export function getMe(): Promise<ApiResult<Me>> {
 }
 
 // ---------------------------------------------------------------- accounts
-export function createAccount(input: { name: string; username: string; email: string; phone?: string; birthdate: string; cityId: string; requestedRole?: "runner" | "group_leader"; noSession?: boolean }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
-  return request("/api/accounts", { method: "POST", body: JSON.stringify(input) });
+export function normalizeAccountResponse(body: unknown): ApiResult<{ account: import("./accounts").PublicAccount }> {
+  if (body && typeof body === "object" && "account" in body && body.account && typeof body.account === "object") {
+    return { ok: true, data: body as { account: import("./accounts").PublicAccount } };
+  }
+  return { ok: false, error: new ApiError(502, "invalid_response", "The server returned an invalid account response. Please try again.") };
+}
+export async function createAccount(input: { name: string; username: string; email: string; phone?: string; birthdate: string; cityId: string; requestedRole?: "runner" | "group_leader"; noSession?: boolean }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
+  const result = await request<unknown>("/api/accounts", { method: "POST", body: JSON.stringify(input) });
+  return result.ok ? normalizeAccountResponse(result.data) : result;
 }
 
 /** Set or change the signed-in user's unique public handle (server-normalized). */
