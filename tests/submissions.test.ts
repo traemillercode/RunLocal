@@ -34,7 +34,10 @@ function verified(db: Db, email: string, name = "Runner", role: "runner" | "grou
 }
 
 const RACE_INPUT = { name: "River 5K", distances: "5K", date: "2026-10-01", location: "Flat Branch", registrationUrl: "https://example.com/r", description: "A 5K along the MKT trail." };
-const GROUP_INPUT = { name: "Downtown Runners", description: "A friendly community group.", groupType: "community", facebookUrl: "https://facebook.com/x" };
+// Current group fixture includes all fields required by the server contract.
+// Legacy payloads intentionally remain rejected: migration callers must supply
+// explicit photo refs and membership mode rather than weakening submission validation.
+const GROUP_INPUT = { name: "Downtown Runners", description: "A friendly community group.", groupType: "community", facebookUrl: "https://facebook.com/x", coverPhoto: "cover.jpg", logoPhoto: "logo.jpg", membershipMode: "request" };
 const EVENT_INPUT = { type: "recurring", title: "Thursday Hills", dayOfWeek: 3, time: "6:00 PM", location: "Grindstone", distanceLabel: "3-5 mi", invite: "Open to all" };
 
 describe("submission permissions", () => {
@@ -113,6 +116,14 @@ describe("submission validation", () => {
     expect((submitRace(db, rec.id, { ...RACE_INPUT, registrationUrl: "not-a-url" }, T0) as { ok: false; error: string }).error).toBe("invalid_url");
     expect((submitRace(db, rec.id, { ...RACE_INPUT, distances: "" }, T0) as { ok: false; error: string }).error).toBe("invalid_distances");
     expect(submitRace(db, rec.id, RACE_INPUT, T0).ok).toBe(true);
+  });
+
+  it("group requires photos and membership mode with strict types", () => {
+    const db = createMemoryStore();
+    const rec = verified(db, "g-required@x.com");
+    expect((submitGroup(db, rec.id, { ...GROUP_INPUT, coverPhoto: undefined }, T0) as { ok: false; error: string }).error).toBe("photos_required");
+    expect((submitGroup(db, rec.id, { ...GROUP_INPUT, membershipMode: "members" }, T0) as { ok: false; error: string }).error).toBe("invalid_membership_mode");
+    expect((submitGroup(db, rec.id, { ...GROUP_INPUT, coverPhoto: 42 }, T0) as { ok: false; error: string }).error).toBe("photos_required");
   });
 
   it("group requires exactly the two allowed group types and valid links", () => {
