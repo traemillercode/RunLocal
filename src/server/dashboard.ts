@@ -1,14 +1,14 @@
 /**
- * Owner-only dashboard handlers: flagged-content moderation (dismiss / hide /
- * unhide), posting-blocking suspensions (with optional expiry), RRCA badge
- * notes, and featured/pinned toggles for events & races — plus the public-safe
- * moderated-state view the client renders against.
+ * Dashboard handlers: flagged-content moderation (dismiss / hide / unhide),
+ * posting-blocking suspensions (with optional expiry), RRCA badge notes, and
+ * featured/pinned toggles for events & races — plus the public-safe moderated
+ * state view the client renders against.
  *
  * Security model (mirrors admin.ts):
- *  - EVERY handler goes through `authorizeOwner` — the owner's signed-in user
- *    session (server-side email rule) is the ONLY identity that may use the
- *    dashboard. Key-based admin sessions, Group Leaders, and Verified Runners
- *    are rejected.
+ *  - Global dashboard and suspension controls use `authorizeScoped` with
+ *    `globalOnly`, allowing only Global Admin sessions (key or owner).
+ *    City Admins and runners are rejected server-side.
+ *  - City Admin moderation handlers remain explicitly city-scoped.
  *  - A reason (5–500 chars) is required for every action and every access is
  *    appended to the audit log (admin/timestamp/reason/action/target).
  *  - Dashboard payloads are redacted: content titles + author labels only.
@@ -148,7 +148,7 @@ export function dashboardOverview(
   cityId: string,
   now = new Date(),
 ): AdminResult<DashboardView> {
-  const auth = authorizeOwner(db, ctx, "admin.dashboard", null, now);
+  const auth = authorizeScoped(db, ctx, "admin.dashboard", null, now, { globalOnly: true, auditCity: cityId });
   if (!auth.ok) return auth;
   return dashboardRows(db, cityId, now, { suspensions: true });
 }
@@ -329,7 +329,7 @@ export function suspendAccount(
   days: number | null,
   now = new Date(),
 ): AdminResult<SuspensionView> {
-  const auth = authorizeOwner(db, ctx, "admin.suspend", accountId, now);
+  const auth = authorizeScoped(db, ctx, "admin.suspend", accountId, now, { globalOnly: true });
   if (!auth.ok) return auth;
   if (days !== null && (!Number.isInteger(days) || days < 1 || days > MAX_SUSPENSION_DAYS)) {
     return { ok: false, status: 400, error: "invalid_expiry", message: `Suspension days must be 1–${MAX_SUSPENSION_DAYS}, or blank for indefinite.` };
@@ -354,7 +354,7 @@ export function liftSuspension(
   accountId: string,
   now = new Date(),
 ): AdminResult<SuspensionView> {
-  const auth = authorizeOwner(db, ctx, "admin.unsuspend", accountId, now);
+  const auth = authorizeScoped(db, ctx, "admin.unsuspend", accountId, now, { globalOnly: true });
   if (!auth.ok) return auth;
   const rec = db.getAccount(accountId);
   if (!rec) return { ok: false, status: 404, error: "not_found" };
