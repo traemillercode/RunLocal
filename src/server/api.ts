@@ -64,6 +64,7 @@ import { decideSubmission,
   cityDecideSubmission,
 } from "./submissions";
 import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
+import { credentialType, parseProof, validTags, publicTrust, expireCredentials } from "./trust";
 
 export const SESSION_COOKIE = "runlocal_sid";
 export const ADMIN_COOKIE = "runlocal_admin";
@@ -798,6 +799,14 @@ async function handleApi(
     return ok(res, { submission: { id: result.data.id, status: result.data.status } }), true;
   }
 
+  // Credentials and trust: proof stays private and public responses are qualitative only.
+  if (url.pathname === "/api/credentials" && method === "GET") { const s=requireSession(db,cookies); if(!s)return err(res,{status:401,error:"sign_in_required"}),true; expireCredentials(db,now); return ok(res,{credentials:db.listCredentials(s.accountId).map(c=>({id:c.id,type:c.type,certifyingBody:c.certifyingBody,issuedOn:c.issuedOn,expiresOn:c.expiresOn,status:c.status,decisionReason:c.decisionReason}))}),true; }
+  if (url.pathname === "/api/credentials" && method === "POST") { const s=requireSession(db,cookies);if(!s)return err(res,{status:401,error:"sign_in_required"}),true;const b=await readJson(req) as Record<string,unknown>;if(!credentialType(b.type)||typeof b.certifyingBody!=="string")return err(res,{status:400,error:"invalid_credential"}),true;const p=parseProof(b);if(b.type==="coach_certification"&&!p)return err(res,{status:400,error:"proof_required"}),true;const c={id:crypto.randomUUID().replace(/-/g,""),accountId:s.accountId,type:b.type,certifyingBody:b.certifyingBody.trim().slice(0,120),proofRef:p?`credential-${crypto.randomUUID()}`:null,proofMime:p?.mime??null,proofBytes:p?.bytes.length??0,issuedOn:typeof b.issuedOn==="string"?b.issuedOn:null,expiresOn:typeof b.expiresOn==="string"?b.expiresOn:null,status:b.type==="first_aid_cpr"&&!p?"verified":"pending_review",verifiedBy:b.type==="first_aid_cpr"&&!p?"self":"",verifiedAt:b.type==="first_aid_cpr"&&!p?now.toISOString():null,decisionReason:null,renewalNotifiedAt:null,createdAt:now.toISOString(),updatedAt:now.toISOString()} as any;if(p)await db.writePrivateUpload(c.proofRef,p.bytes);db.addCredential(c);await db.persist();return ok(res,{credential:{id:c.id,type:c.type,status:c.status}}),true; }
+  if (url.pathname === "/api/profile/trust" && method === "GET") { const id=url.searchParams.get("accountId");if(!id)return err(res,{status:400,error:"account_required"}),true;return ok(res,publicTrust(db,id)),true; }
+  if (url.pathname === "/api/ratings" && method === "POST") { const s=requireSession(db,cookies);if(!s)return err(res,{status:401,error:"sign_in_required"}),true;const b=await readJson(req) as Record<string,unknown>;if(typeof b.revieweeId!=="string"||typeof b.eventId!=="string"||s.accountId===b.revieweeId||db.hasRating(s.accountId,b.revieweeId,b.eventId)||b.positive!==true||!validTags(b.tags))return err(res,{status:400,error:"invalid_rating"}),true;const r={id:crypto.randomUUID().replace(/-/g,""),reviewerId:s.accountId,revieweeId:b.revieweeId,eventId:b.eventId,positive:true,tags:b.tags,createdAt:now.toISOString()};db.addRating(r);await db.persist();return ok(res,{rating:{id:r.id}}),true; }
+  if (url.pathname === "/api/concerns" && method === "POST") { const s=requireSession(db,cookies);if(!s)return err(res,{status:401,error:"sign_in_required"}),true;const b=await readJson(req) as Record<string,unknown>;if(typeof b.subjectId!=="string"||typeof b.reason!=="string"||b.reason.trim().length<5||b.reason.length>500)return err(res,{status:400,error:"reason_required"}),true;const c={id:crypto.randomUUID().replace(/-/g,""),reporterId:s.accountId,subjectId:b.subjectId,eventId:typeof b.eventId==="string"?b.eventId:null,reason:b.reason.trim(),status:"open" as const,createdAt:now.toISOString()};db.addConcern(c);await db.persist();return ok(res,{submitted:true}),true; }
+  if (url.pathname === "/api/appeals" && method === "POST") { const s=requireSession(db,cookies);if(!s)return err(res,{status:401,error:"sign_in_required"}),true;const b=await readJson(req) as Record<string,unknown>;if(typeof b.reason!=="string"||b.reason.trim().length<5||db.listAppeals(s.accountId).some(a=>a.status==="open"))return err(res,{status:400,error:"invalid_appeal"}),true;const a={id:crypto.randomUUID().replace(/-/g,""),accountId:s.accountId,reason:b.reason.trim().slice(0,500),status:"open" as const,createdAt:now.toISOString(),decidedAt:null,decidedBy:null,decisionReason:null};db.addAppeal(a);await db.persist();return ok(res,{appeal:{id:a.id,status:a.status}}),true; }
+
   if (method === "GET" && url.pathname === "/api/config") return ok(res, { settings: publicSettings(db), cities: publicCities(db), integrations: integrations(db) }), true;
   // Public brand/city-header images: ONLY refs currently referenced by the
   // public config (logo, favicon, active-city headers). Everything else stays
@@ -880,6 +889,9 @@ async function handleAdmin(
   }
 
   // GET /api/admin/pending — owner-only pending-user queue (redacted rows)
+  if (method === "GET" && url.pathname === "/api/admin/credentials") { const a=authorizeAdmin(db,ctx,"admin.pending_list",null,now);if(!a.ok)return sendErr(a),true;return ok(res,{credentials:db.listCredentials().filter(c=>c.status==="pending_review").map(c=>({id:c.id,accountId:c.accountId,type:c.type,certifyingBody:c.certifyingBody,issuedOn:c.issuedOn,expiresOn:c.expiresOn}))}),true; }
+  const credentialDecision=/^\/api\/admin\/credentials\/([a-f0-9]{32})\/(approve|reject)$/.exec(url.pathname);
+  if (credentialDecision && method === "POST") { const [,id,decision]=credentialDecision; const a=authorizeAdmin(db,ctx,decision==="approve"?"admin.approve":"admin.reject",id,now);if(!a.ok)return sendErr(a),true;const b=await readJson(req) as Record<string,unknown>;if(decision==="reject"&&(typeof b.reason!=="string"||b.reason.trim().length<5))return err(res,{status:400,error:"reason_required"}),true;const c=db.updateCredential(id,{status:decision==="approve"?"verified":"rejected",verifiedBy:a.data.admin,verifiedAt:now.toISOString(),decisionReason:typeof b.reason==="string"?b.reason.trim().slice(0,500):null,updatedAt:now.toISOString()});if(!c)return err(res,{status:404,error:"not_found"}),true;await db.persist();return ok(res,{credential:{id:c.id,status:c.status}}),true; }
   if (method === "GET" && url.pathname === "/api/admin/pending") {
     const result = adminPending(db, ctx, now);
     if (!result.ok) return sendErr(result), true;

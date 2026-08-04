@@ -157,6 +157,11 @@ export class Db {
   private settings: import("./types").SiteSettings | undefined;
   private cities = new Map<string, import("./types").CmsCity>();
   private invitations = new Map<string, CityInvitationRecord>();
+  private credentials = new Map<string, import("./types").CredentialRecord>();
+  private ratings = new Map<string, import("./types").RatingRecord>();
+  private concerns = new Map<string, import("./types").ConcernRecord>();
+  private appeals = new Map<string, import("./types").AppealRecord>();
+  private recognitions = new Map<string, import("./types").RecognitionRecord>();
   /**
    * CMS image references (brand logo/favicon, city header images) keyed by
    * ref id. Bytes live on disk under uploads/private for file-backed stores
@@ -213,6 +218,11 @@ export class Db {
       this.settings = parsed.settings;
       for (const c of parsed.cities ?? []) this.cities.set(c.id, c);
       for (const i of parsed.invitations ?? []) this.invitations.set(i.id, i);
+      for (const c of parsed.credentials ?? []) this.credentials.set(c.id, c);
+      for (const r of parsed.ratings ?? []) this.ratings.set(r.id, r);
+      for (const c of parsed.concerns ?? []) this.concerns.set(c.id, c);
+      for (const a of parsed.appeals ?? []) this.appeals.set(a.id, a);
+      for (const r of parsed.recognitions ?? []) this.recognitions.set(`${r.accountId}:${r.role}`, r);
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -235,6 +245,11 @@ export class Db {
       settings: this.settings,
       cities: [...this.cities.values()],
       invitations: [...this.invitations.values()],
+      credentials: [...this.credentials.values()],
+      ratings: [...this.ratings.values()],
+      concerns: [...this.concerns.values()],
+      appeals: [...this.appeals.values()],
+      recognitions: [...this.recognitions.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -563,6 +578,23 @@ export class Db {
   getToken(accountId: string, provider: import("./activity").Provider) { return this.oauthTokens.get(`${accountId}:${provider}`); }
   setToken(t: import("./activity").OAuthToken) { this.oauthTokens.set(`${t.accountId}:${t.provider}`, t); }
   removeToken(accountId: string, provider: import("./activity").Provider) { this.oauthTokens.delete(`${accountId}:${provider}`); }
+
+  // ------------------------------------------------------ credentials & trust
+  listCredentials(accountId?: string) { return [...this.credentials.values()].filter(c => !accountId || c.accountId === accountId); }
+  getCredential(id: string) { return this.credentials.get(id); }
+  addCredential(c: import("./types").CredentialRecord) { this.credentials.set(c.id, c); return c; }
+  updateCredential(id: string, patch: Partial<import("./types").CredentialRecord>) { const c=this.credentials.get(id); if (!c) return undefined; const n={...c,...patch}; this.credentials.set(id,n); return n; }
+  listRatings() { return [...this.ratings.values()]; }
+  addRating(r: import("./types").RatingRecord) { this.ratings.set(r.id,r); return r; }
+  hasRating(reviewerId:string, revieweeId:string, eventId:string) { return [...this.ratings.values()].some(r=>r.reviewerId===reviewerId&&r.revieweeId===revieweeId&&r.eventId===eventId); }
+  listConcerns() { return [...this.concerns.values()]; }
+  addConcern(c: import("./types").ConcernRecord) { this.concerns.set(c.id,c); return c; }
+  updateConcern(id:string, patch: Partial<import("./types").ConcernRecord>) { const c=this.concerns.get(id); if(!c)return; const n={...c,...patch};this.concerns.set(id,n);return n; }
+  listAppeals(accountId?:string) { return [...this.appeals.values()].filter(a=>!accountId||a.accountId===accountId); }
+  addAppeal(a: import("./types").AppealRecord) { this.appeals.set(a.id,a);return a; }
+  updateAppeal(id:string, patch: Partial<import("./types").AppealRecord>) { const a=this.appeals.get(id);if(!a)return;const n={...a,...patch};this.appeals.set(id,n);return n; }
+  listRecognitions() { return [...this.recognitions.values()]; }
+  setRecognition(r: import("./types").RecognitionRecord) { this.recognitions.set(`${r.accountId}:${r.role}`,r);return r; }
 
   // ---------------------------------------------------------------- uploads
   private uploadDir(kind: "private" | "public"): string {

@@ -30,6 +30,7 @@ import { apiHandler, pruneSessionsWith } from "./src/server/api";
 import { purgeEligible } from "./src/server/retention";
 import { seedContentRegistry, seedSampleFlags } from "./src/server/contentSeed";
 import { seedCmsCities } from "./src/server/cms";
+import { expireCredentials } from "./src/server/trust";
 
 const root = normalize(process.env.RUN_LOCAL_ROOT ?? join(import.meta.dirname, "dist"));
 const port = Number(process.env.RUN_LOCAL_PORT ?? 3000);
@@ -52,6 +53,7 @@ await db.persist();
 let lastPurge = 0;
 async function runRetentionPurge(): Promise<void> {
   const started = Date.now();
+  expireCredentials(db, new Date());
   const { purged } = await purgeEligible(db, new Date());
   const removedSessions = pruneSessionsWith(db);
   await db.persist();

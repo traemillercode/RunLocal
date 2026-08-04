@@ -220,7 +220,29 @@ export interface PersistedDb {
   settings?: SiteSettings;
   cities?: CmsCity[];
   invitations?: CityInvitationRecord[];
+  credentials?: CredentialRecord[];
+  ratings?: RatingRecord[];
+  concerns?: ConcernRecord[];
+  appeals?: AppealRecord[];
+  recognitions?: RecognitionRecord[];
 }
+
+export type CredentialType = "coach_certification" | "first_aid_cpr";
+export type CredentialStatus = "pending_review" | "verified" | "rejected" | "expired";
+export interface CredentialRecord {
+  id: string; accountId: string; type: CredentialType; certifyingBody: string;
+  proofRef: string | null; proofMime: string | null; proofBytes: number;
+  issuedOn: string | null; expiresOn: string | null; status: CredentialStatus;
+  verifiedBy: string | null; verifiedAt: string | null; decisionReason: string | null;
+  renewalNotifiedAt: string | null; createdAt: string; updatedAt: string;
+}
+export const ALLOWED_TRUST_TAGS = ["reliable", "welcoming", "safety-minded", "knowledgeable", "well-organized"] as const;
+export type TrustTag = typeof ALLOWED_TRUST_TAGS[number];
+export interface RatingRecord { id:string; reviewerId:string; revieweeId:string; eventId:string; positive:boolean; tags:TrustTag[]; createdAt:string; }
+export interface ConcernRecord { id:string; reporterId:string; subjectId:string; eventId:string|null; reason:string; status:"open"|"resolved"; createdAt:string; }
+export interface AppealRecord { id:string; accountId:string; reason:string; status:"open"|"reinstated"|"upheld"; createdAt:string; decidedAt:string|null; decidedBy:string|null; decisionReason:string|null; }
+export interface RecognitionRecord { accountId:string; cityId:string; role:"coach"|"host"; tier:"recognized"; updatedAt:string; }
+
 export interface SiteSettings { title:string; wordmark:string; tagline:string; primary:string; accent:string; surface:string; strings:Record<string,string>; tags:Record<string,string[]>; providers:Record<string,boolean>; bottomNav:string[]; announcement:{text:string;link?:string}|null; logoRef:string|null; faviconRef:string|null; }
 
 /**
