@@ -20,6 +20,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { RecoveryPage } from "./pages/RecoveryPage";
 import { ConfirmationPage } from "./pages/ConfirmationPage";
+import { MyRunsPage } from "./pages/MyRunsPage";
 import { cleanCallbackUrl, parseAuthCallback } from "./lib/recovery";
 import * as supabase from "./lib/supabase";
 
@@ -54,6 +55,7 @@ function Shell() {
             <Route path="/events/:eventId" element={<EventDetailPage city={city} store={store} />} />
             <Route path="/races" element={<RacesPage city={city} />} />
             <Route path="/forum" element={<ForumPage city={city} />} />
+            <Route path="/my-runs" element={<MyRunsPage />} />
             <Route path="/profile" element={<ProfilePage city={city} store={store} />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/login" element={<LoginPage />} />

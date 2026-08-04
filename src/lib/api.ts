@@ -548,6 +548,9 @@ export function getRecognitions(cityId: string): Promise<ApiResult<{ recognition
   return request(`/api/recognitions?city=${encodeURIComponent(cityId)}`);
 }
 
+export interface MyRunView { id: string; eventId: string; cityId: string; title: string; date: string; time: string; location: string; groupId: string; rsvpedAt: string; }
+export function getMyRuns(): Promise<ApiResult<{ runs: MyRunView[] }>> { return request("/api/my/runs"); }
+
 /** Server-side RSVP — the shared-attendance basis for rating eligibility. */
 export function rsvpEvent(eventId: string, rsvp: boolean = true): Promise<ApiResult<{ rsvped: boolean }>> {
   return request("/api/events/rsvp", { method: "POST", body: JSON.stringify({ eventId, rsvp }) });
