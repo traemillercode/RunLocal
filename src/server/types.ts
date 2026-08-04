@@ -110,6 +110,16 @@ export interface AccountRecord {
   suspended: boolean;
   suspendedUntil: string | null;
   suspensionReason: string | null;
+  /**
+   * Community-trust review state: set automatically (never client-side) when
+   * the combined count of negative ratings + open concerns against this
+   * account reaches the configurable threshold (see `SiteSettings.trust`).
+   * While true the account may browse, RSVP, and comment, but cannot host
+   * events or post coach/club content. Cleared ONLY by an admin appeal
+   * decision (`reinstate`) — never automatically.
+   */
+  underReview: boolean;
+  underReviewAt: string | null;
 }
 
 export interface SessionRecord {
@@ -162,6 +172,11 @@ export type AdminAction =
   | "admin.city_admin_revoke"
   | "admin.invitation_create"
   | "admin.invitation_revoke"
+  | "admin.view_credential_proof"
+  | "admin.appeal_list"
+  | "admin.appeal_reinstate"
+  | "admin.appeal_uphold"
+  | "admin.trust_threshold"
   | "cityadmin.dashboard"
   | "cityadmin.submission_list"
   | "cityadmin.submission_approve"
@@ -220,8 +235,50 @@ export interface PersistedDb {
   settings?: SiteSettings;
   cities?: CmsCity[];
   invitations?: CityInvitationRecord[];
+  credentials?: CredentialRecord[];
+  ratings?: RatingRecord[];
+  concerns?: ConcernRecord[];
+  appeals?: AppealRecord[];
+  recognitions?: RecognitionRecord[];
+  /**
+   * Shared event attendance (RSVP or host) — the server-side basis for rating
+   * eligibility ("did both people actually share this event?"). RSVPs are
+   * created by the runner; host records are created when an admin approves an
+   * event submission (the submitter is the host of that event).
+   */
+  attendance?: AttendanceRecord[];
 }
-export interface SiteSettings { title:string; wordmark:string; tagline:string; primary:string; accent:string; surface:string; strings:Record<string,string>; tags:Record<string,string[]>; providers:Record<string,boolean>; bottomNav:string[]; announcement:{text:string;link?:string}|null; logoRef:string|null; faviconRef:string|null; }
+
+export type CredentialType = "coach_certification" | "first_aid_cpr";
+export type CredentialStatus = "pending_review" | "verified" | "rejected" | "expired";
+export interface CredentialRecord {
+  id: string; accountId: string; type: CredentialType; certifyingBody: string;
+  proofRef: string | null; proofMime: string | null; proofBytes: number;
+  issuedOn: string | null; expiresOn: string | null; status: CredentialStatus;
+  verifiedBy: string | null; verifiedAt: string | null; decisionReason: string | null;
+  renewalNotifiedAt: string | null; createdAt: string; updatedAt: string;
+}
+export const ALLOWED_TRUST_TAGS = ["reliable", "welcoming", "safety-minded", "knowledgeable", "well-organized"] as const;
+export type TrustTag = typeof ALLOWED_TRUST_TAGS[number];
+export interface RatingRecord { id:string; reviewerId:string; revieweeId:string; eventId:string; positive:boolean; tags:TrustTag[]; createdAt:string; /** Required when positive === false — the reviewer's stated reason (admin-only, never public). */ reason:string|null; }
+export interface ConcernRecord { id:string; reporterId:string; subjectId:string; eventId:string|null; reason:string; status:"open"|"resolved"; createdAt:string; }
+export interface AppealRecord { id:string; accountId:string; reason:string; status:"open"|"reinstated"|"upheld"; createdAt:string; decidedAt:string|null; decidedBy:string|null; decisionReason:string|null; }
+export interface RecognitionRecord { accountId:string; cityId:string; role:"coach"|"host"; tier:"recognized"; updatedAt:string; }
+/**
+ * Shared event attendance. `rsvp` = the runner is coming to the event;
+ * `host` = the account hosted the event (created server-side when an admin
+ * approves that account's event submission). Both are the eligibility basis
+ * for ratings: a reviewer may rate a reviewee only for an event BOTH of them
+ * attended (shared RSVP/host-attendance).
+ */
+export interface AttendanceRecord { id:string; accountId:string; eventId:string; role:"rsvp"|"host"; createdAt:string; }
+
+export interface SiteSettings { title:string; wordmark:string; tagline:string; primary:string; accent:string; surface:string; strings:Record<string,string>; tags:Record<string,string[]>; providers:Record<string,boolean>; bottomNav:string[]; announcement:{text:string;link?:string}|null; logoRef:string|null; faviconRef:string|null; /**
+   * Community-trust policy, configurable by a Global Admin. `underReviewThreshold`
+   * is the combined number of negative ratings + open concerns against one
+   * account that moves it into `under_review` (default 3). The value itself is
+   * non-sensitive policy and may appear in the public settings payload.
+   */ trust:{ underReviewThreshold:number }; }
 
 /**
  * City lifecycle status (server-authoritative runtime registry):

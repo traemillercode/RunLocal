@@ -34,6 +34,7 @@ function account(patch: Partial<PublicAccount> = {}): PublicAccount {
     role: "runner",
     isOwner: false,
     suspended: false,
+    underReview: false,
     profilePhotoUrl: null,
     ...patch,
   };

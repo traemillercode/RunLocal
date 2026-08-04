@@ -486,3 +486,148 @@ export interface PublicActivityCard { id: string; type: string; distanceMeters: 
 export function getActivityFeed(city: string): Promise<ApiResult<{ cards: PublicActivityCard[] }>> { return request(`/api/activity/feed?city=${encodeURIComponent(city)}`); }
 export function getConnection(provider: ActivityProvider): Promise<ApiResult<{ authorizeUrl?: string; connected?: boolean; shareMode?: ShareMode }>> { return request(`/api/connections/${provider}`); }
 export function disconnectConnection(provider: ActivityProvider, deleteActivities: boolean): Promise<ApiResult<{ disconnected: boolean; deletedActivities: boolean }>> { return request(`/api/connections/${provider}/disconnect`, { method: "POST", body: JSON.stringify({ deleteActivities }) }); }
+
+// ------------------------------------------------------- credentials & trust
+// Privacy contract: the client only ever sees QUALITATIVE trust data and its
+// OWN credential rows (no proof bytes, no reviewer identity, no raw counts).
+export type CredentialType = "coach_certification" | "first_aid_cpr";
+export type CredentialStatus = "pending_review" | "verified" | "rejected" | "expired";
+export interface CredentialView {
+  id: string;
+  type: CredentialType;
+  certifyingBody: string;
+  issuedOn: string | null;
+  expiresOn: string | null;
+  status: CredentialStatus;
+  /** Decision reason — only ever shown to the credential's own account. */
+  decisionReason: string | null;
+  /** Whether a proof file exists (viewable only by the owner, protected route). */
+  hasProof: boolean;
+}
+export function getMyCredentials(): Promise<ApiResult<{ credentials: CredentialView[] }>> {
+  return request("/api/credentials");
+}
+export function submitCredential(input: {
+  type: CredentialType;
+  certifyingBody: string;
+  issuedOn?: string;
+  expiresOn?: string;
+  proof?: string;
+  proofMime?: string;
+}): Promise<ApiResult<{ credential: { id: string; type: string; status: string } }>> {
+  return request("/api/credentials", { method: "POST", body: JSON.stringify(input) });
+}
+/** Protected proof URL — only the credential owner (same session) can open it. */
+export function credentialProofUrl(id: string): string {
+  return `/api/credentials/${encodeURIComponent(id)}/proof`;
+}
+
+/** Qualitative trust view of any account — never counts, scores, or reports. */
+export interface PublicTrustView {
+  tier: "new" | "recognized" | "well-regarded";
+  coach: boolean;
+  host: boolean;
+  recognitions: { role: "coach" | "host"; tier: "recognized" }[];
+  /** Present only when viewing your own account. */
+  underReview?: boolean;
+  restrictions?: { hosting: boolean; coachPost: boolean };
+}
+export function getPublicTrust(accountId: string): Promise<ApiResult<PublicTrustView>> {
+  return request(`/api/profile/trust?accountId=${encodeURIComponent(accountId)}`);
+}
+/** Public, non-ranked qualitative recognition list for a city. */
+export interface RecognitionView {
+  accountId: string;
+  name: string;
+  username: string | null;
+  roles: ("coach" | "host")[];
+  tier: "new" | "recognized" | "well-regarded";
+}
+export function getRecognitions(cityId: string): Promise<ApiResult<{ recognitions: RecognitionView[] }>> {
+  return request(`/api/recognitions?city=${encodeURIComponent(cityId)}`);
+}
+
+/** Server-side RSVP — the shared-attendance basis for rating eligibility. */
+export function rsvpEvent(eventId: string, rsvp: boolean = true): Promise<ApiResult<{ rsvped: boolean }>> {
+  return request("/api/events/rsvp", { method: "POST", body: JSON.stringify({ eventId, rsvp }) });
+}
+
+export function submitRating(input: {
+  revieweeId: string;
+  eventId: string;
+  positive: boolean;
+  tags?: string[];
+  reason?: string;
+}): Promise<ApiResult<{ rating: { id: string } }>> {
+  return request("/api/ratings", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function submitConcern(input: { subjectId: string; eventId: string; reason: string }): Promise<ApiResult<{ submitted: boolean }>> {
+  return request("/api/concerns", { method: "POST", body: JSON.stringify(input) });
+}
+
+export interface AppealView {
+  id: string;
+  reason: string;
+  status: "open" | "reinstated" | "upheld";
+  createdAt: string;
+  decidedAt: string | null;
+  decisionReason: string | null;
+}
+export function getMyAppeals(): Promise<ApiResult<{ appeals: AppealView[] }>> {
+  return request("/api/appeals");
+}
+export function submitAppeal(reason: string): Promise<ApiResult<{ appeal: { id: string; status: string } }>> {
+  return request("/api/appeals", { method: "POST", body: JSON.stringify({ reason }) });
+}
+
+// ------------------------------------------------------- admin trust tooling
+export interface AdminCredentialRow {
+  id: string;
+  accountId: string;
+  type: CredentialType;
+  certifyingBody: string;
+  issuedOn: string | null;
+  expiresOn: string | null;
+}
+export function adminGetCredentials(reason: string): Promise<ApiResult<{ credentials: AdminCredentialRow[] }>> {
+  return adminRequest("/api/admin/credentials", reason);
+}
+export function adminDecideCredential(id: string, action: "approve" | "reject", reason: string): Promise<ApiResult<{ credential: { id: string; status: string } }>> {
+  return adminRequest(`/api/admin/credentials/${id}/${action}`, reason, { method: "POST", body: JSON.stringify({ reason }) });
+}
+/** Audited admin-only proof URL (proof bytes never enter any JSON payload). */
+export function adminCredentialProofUrl(id: string): string {
+  return `/api/admin/credentials/${encodeURIComponent(id)}/proof`;
+}
+
+export interface AdminAppealRow {
+  id: string;
+  accountId: string;
+  accountName: string;
+  accountEmail: string;
+  reason: string;
+  status: "open" | "reinstated" | "upheld";
+  createdAt: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+  decisionReason: string | null;
+}
+export function adminGetAppeals(reason: string): Promise<ApiResult<{ appeals: AdminAppealRow[] }>> {
+  return adminRequest("/api/admin/appeals", reason);
+}
+/** Decide an appeal: reinstate clears under_review; uphold keeps it. */
+export function adminDecideAppeal(id: string, action: "reinstate" | "uphold", auditReason: string, decisionReason: string): Promise<ApiResult<{ appeal: { id: string; status: string } }>> {
+  return adminRequest(`/api/admin/appeals/${id}/${action}`, auditReason, { method: "POST", body: JSON.stringify({ reason: decisionReason }) });
+}
+
+export interface AdminTrustView {
+  threshold: number;
+  underReview: { accountId: string; name: string; email: string; underReviewAt: string | null }[];
+}
+export function adminGetTrust(reason: string): Promise<ApiResult<AdminTrustView>> {
+  return adminRequest("/api/admin/trust", reason);
+}
+export function adminSetTrustThreshold(threshold: number, reason: string): Promise<ApiResult<{ threshold: number; newlyUnderReview: number }>> {
+  return adminRequest("/api/admin/trust/threshold", reason, { method: "POST", body: JSON.stringify({ threshold }) });
+}

@@ -60,6 +60,12 @@ export interface PublicAccount {
    * time. The client may only see the boolean — never the expiry or reason.
    */
   suspended: boolean;
+  /**
+   * Community-trust review state (server-computed). While true the account
+   * may still browse, RSVP, and comment, but hosting and club/coach posting
+   * are paused. Never a count or score — just the state boolean.
+   */
+  underReview: boolean;
   profilePhotoUrl: string | null;
 }
 

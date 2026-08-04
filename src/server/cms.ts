@@ -21,7 +21,7 @@ import type { CmsCity, CmsCityStatus, SiteSettings } from "./types";
 
 export const CITY_STATUSES: CmsCityStatus[] = ["active", "coming_soon", "invite_only", "inactive"];
 
-export const DEFAULT_SETTINGS: SiteSettings = { title:"Run Local", wordmark:"Run Local", tagline:"Find your local run.", primary:"#0b2b22", accent:"#c8f169", surface:"#f7f8f3", strings:{}, tags:{runTypes:["Social run","Track","Trail","Long run"],credentialBodies:["RRCA"],qa:["Training","Shoes","Routes"],ratings:["Easy","Moderate","Hard"]}, providers:{strava:true,garmin:true,coros:true,suunto:true}, bottomNav:["home","races","clubs","forum"], announcement:null, logoRef:null, faviconRef:null };
+export const DEFAULT_SETTINGS: SiteSettings = { title:"Run Local", wordmark:"Run Local", tagline:"Find your local run.", primary:"#0b2b22", accent:"#c8f169", surface:"#f7f8f3", strings:{}, tags:{runTypes:["Social run","Track","Trail","Long run"],credentialBodies:["RRCA"],qa:["Training","Shoes","Routes"],ratings:["Easy","Moderate","Hard"]}, providers:{strava:true,garmin:true,coros:true,suunto:true}, bottomNav:["home","races","clubs","forum"], announcement:null, logoRef:null, faviconRef:null, trust:{ underReviewThreshold: 3 } };
 
 export const BOTTOM_NAV_KEYS = ["home", "races", "clubs", "forum"] as const;
 export const PROVIDER_KEYS = ["strava", "garmin", "coros", "suunto"] as const;
@@ -107,6 +107,11 @@ function validateSettings(next: SiteSettings): string | null {
   for (const ref of [next.logoRef, next.faviconRef]) {
     if (ref !== null && !(typeof ref === "string" && ref.length <= 200)) return "invalid_ref";
   }
+  // Community-trust policy: an integer threshold in [1, 10] (default 3).
+  const trust = next.trust as { underReviewThreshold?: unknown } | undefined;
+  if (!trust || typeof trust !== "object") return "invalid_trust_threshold";
+  const t = trust.underReviewThreshold;
+  if (typeof t !== "number" || !Number.isInteger(t) || t < 1 || t > 10) return "invalid_trust_threshold";
   return null;
 }
 
@@ -120,6 +125,7 @@ export function updateSettings(db: Db, ctx: AdminCtx, input: Partial<SiteSetting
     strings: { ...prev.strings, ...(input.strings ?? {}) },
     tags: { ...prev.tags, ...(input.tags ?? {}) },
     providers: { ...prev.providers, ...(input.providers ?? {}) },
+    trust: { ...DEFAULT_SETTINGS.trust, ...(input.trust ?? prev.trust) },
   };
   const invalid = validateSettings(next);
   if (invalid) return { ok: false, status: 400, error: invalid };

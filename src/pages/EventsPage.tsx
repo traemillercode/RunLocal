@@ -4,6 +4,7 @@ import { HomeCityBanner } from "../components/HomeCityBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { GroupSubmissionSheet, IndependentEventSheet } from "../components/SubmissionSheets";
 import { Chip, Icon, PillButton } from "../components/ui";
+import * as api from "../lib/api";
 import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS } from "../lib/dates";
 import { canDo, roleLabel } from "../lib/accounts";
 import type { AppStore } from "../lib/store";
@@ -91,8 +92,15 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
       return;
     }
     const nowRsvped = !store.state.rsvped[eventId];
-    store.toggleRsvp(eventId);
-    toast(nowRsvped ? `You're in for "${title}"!` : `RSVP removed for "${title}".`, nowRsvped ? "success" : "neutral");
+    // Server-side RSVP: shared-attendance record (rating eligibility basis).
+    void api.rsvpEvent(eventId, nowRsvped).then((r) => {
+      if (!r.ok) {
+        toast(r.error.message ?? "Couldn't save your RSVP. Try again.", "info");
+        return;
+      }
+      store.toggleRsvp(eventId);
+      toast(nowRsvped ? `You're in for "${title}"!` : `RSVP removed for "${title}".`, nowRsvped ? "success" : "neutral");
+    });
   };
 
   const openEvent = () => {
