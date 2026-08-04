@@ -54,6 +54,8 @@ export interface HealthInfo {
   supabaseConfigured: boolean;
   /** Names of missing provider vars only — never values, never secrets. */
   supabaseMissing: string[];
+  /** Whether VITE_AUTH_REDIRECT_URL was explicitly supplied at startup. */
+  authRedirectConfigured: boolean;
   adminConfigured: boolean;
   retentionYears: number;
   retention: { retentionYears: number; eligibleForPurge: number; totalAccounts: number };

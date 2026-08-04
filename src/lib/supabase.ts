@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { normalizeErrorMessage } from "./errors";
 
 export const SUPABASE_REQUIRED_ENV = ["VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY"] as const;
-export interface SupabaseClientConfig { configured: boolean; missing: string[]; urlInvalid: boolean; url: string | null; anonKey: string | null; redirectUrl: string; emailDelivery: "provider-managed" | "not-configured" }
+export interface SupabaseClientConfig { configured: boolean; missing: string[]; urlInvalid: boolean; url: string | null; anonKey: string | null; redirectUrl: string; redirectConfigured: boolean; emailDelivery: "provider-managed" | "not-configured" }
 
 export const productionOrigin = "https://runlocal.ctonew.app";
 export function authRedirectUrl(env: Record<string, string | undefined> = import.meta.env as Record<string, string | undefined>): string {
@@ -14,7 +14,8 @@ export function supabaseClientConfig(env: Record<string, string | undefined> = i
   let valid = false; try { const u = new URL(rawUrl); valid = u.protocol === "https:" || (u.protocol === "http:" && ["localhost", "127.0.0.1"].includes(u.hostname)); } catch {}
   if (!rawUrl || !valid) missing.push("VITE_SUPABASE_URL");
   if (!anonKey) missing.push("VITE_SUPABASE_ANON_KEY");
-  return { configured: missing.length === 0, missing, urlInvalid: Boolean(rawUrl && !valid), url: valid ? rawUrl : null, anonKey: anonKey || null, redirectUrl: authRedirectUrl(env), emailDelivery: env.VITE_SUPABASE_SMTP_CONFIGURED === "true" ? "provider-managed" : "not-configured" };
+  const redirectConfigured = Boolean(env.VITE_AUTH_REDIRECT_URL?.trim());
+  return { configured: missing.length === 0, missing, urlInvalid: Boolean(rawUrl && !valid), url: valid ? rawUrl : null, anonKey: anonKey || null, redirectUrl: authRedirectUrl(env), redirectConfigured, emailDelivery: env.VITE_SUPABASE_SMTP_CONFIGURED === "true" ? "provider-managed" : "not-configured" };
 }
 export interface SupabaseAuthLike {
   signUp?: SupabaseClient["auth"]["signUp"];
@@ -52,10 +53,11 @@ function mapError(rawError: unknown): AuthResult {
   if (/rate|too many|security purposes/i.test(message)) return { ok:false, code:"rate_limited", message:"Too many attempts. Wait a moment and try again." };
   return { ok:false, code:"failed", message };
 }
-export async function signUp(email: string, password: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}): Promise<AuthResult> {
+export interface SignupProfileMetadata { username: string; display_name: string }
+export async function signUp(email: string, password: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike; data?: SignupProfileMetadata } = {}): Promise<AuthResult> {
   const c = cfg(opts.env); if (!c.configured) return { ok:false, code:"unconfigured", message:missingMessage };
   try {
-    const outcome = await withTimeout((opts.auth ?? authFor(c)).signUp!({ email, password, options: { emailRedirectTo: c.redirectUrl } }));
+    const outcome = await withTimeout((opts.auth ?? authFor(c)).signUp!({ email, password, options: { emailRedirectTo: c.redirectUrl, ...(opts.data ? { data: { username: opts.data.username, display_name: opts.data.display_name } } : {}) } }));
     if (outcome === "timeout") return { ok:false, code:"timeout", message:SIGNUP_TIMEOUT_MESSAGE };
     const { data, error } = outcome;
     if (error) return mapError(error);
