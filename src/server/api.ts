@@ -78,8 +78,9 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-function err(res: ServerResponse, e: ApiError): void {
+function err(res: ServerResponse, e: ApiError): true {
   json(res, e.status, { error: e.error, message: e.message });
+  return true;
 }
 
 function ok(res: ServerResponse, body: unknown): void {

@@ -1,4 +1,4 @@
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 export type Provider = "strava" | "garmin" | "coros" | "suunto";
 export type ShareMode = "auto" | "manual" | "private";
