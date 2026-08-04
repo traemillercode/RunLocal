@@ -26,6 +26,7 @@ import { MyRunsPage } from "./pages/MyRunsPage";
 import { PersonalRunsPage } from "./pages/PersonalRunsPage";
 import { PastEventsPage } from "./pages/PastEventsPage";
 import { GroupsPage } from "./pages/GroupsPage";
+import { MarketingPage } from "./pages/MarketingPage";
 import { GroupDetailPage } from "./pages/GroupDetailPage";
 import { cleanCallbackUrl, parseAuthCallback } from "./lib/recovery";
 import * as supabase from "./lib/supabase";
@@ -72,6 +73,8 @@ function Shell() {
           <PublicContentProvider cityId={city.id}>
             <Routes>
             <Route path="/" element={<EventsPage city={city} store={store} />} />
+            <Route path="/landing" element={<MarketingPage />} />
+            <Route path="/events" element={<EventsPage city={city} store={store} />} />
             <Route path="/events/:eventId" element={<EventDetailPage city={city} store={store} />} />
             <Route path="/past-events" element={<PastEventsPage city={city} />} />
             <Route path="/groups" element={<GroupsPage city={city} />} />
