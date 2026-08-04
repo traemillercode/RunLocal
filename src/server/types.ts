@@ -177,6 +177,8 @@ export type AdminAction =
   | "admin.appeal_reinstate"
   | "admin.appeal_uphold"
   | "admin.trust_threshold"
+  | "admin.safety_report_list"
+  | "admin.safety_report_resolve"
   | "cityadmin.dashboard"
   | "cityadmin.submission_list"
   | "cityadmin.submission_approve"
@@ -253,6 +255,8 @@ export interface PersistedDb {
   blocks?: BlockRecord[];
   /** Per-account JoinRequest timestamps (epoch ms), persisted for restart/shared enforcement. */
   joinRequestRate?: Record<string, number[]>;
+  safetyReports?: SafetyReportRecord[];
+  safetyReportRate?: Record<string, number[]>;
 }
 
 export interface MatchingPreferencesRecord {
@@ -299,6 +303,8 @@ export const ALLOWED_TRUST_TAGS = ["reliable", "welcoming", "safety-minded", "kn
 export type TrustTag = typeof ALLOWED_TRUST_TAGS[number];
 export interface RatingRecord { id:string; reviewerId:string; revieweeId:string; eventId:string; positive:boolean; tags:TrustTag[]; createdAt:string; /** Required when positive === false — the reviewer's stated reason (admin-only, never public). */ reason:string|null; }
 export interface ConcernRecord { id:string; reporterId:string; subjectId:string; eventId:string|null; reason:string; status:"open"|"resolved"; createdAt:string; }
+export type SafetyReportStatus = "open" | "under_review" | "resolved" | "dismissed";
+export interface SafetyReportRecord { id:string; reporterId:string; subjectId:string; cityId:string; contextType:"join_request"|"event"|"personal_run"; contextId:string; reason:string; status:SafetyReportStatus; createdAt:string; updatedAt:string; resolvedAt:string|null; }
 export interface AppealRecord { id:string; accountId:string; reason:string; status:"open"|"reinstated"|"upheld"; createdAt:string; decidedAt:string|null; decidedBy:string|null; decisionReason:string|null; }
 export interface RecognitionRecord { accountId:string; cityId:string; role:"coach"|"host"; tier:"recognized"; updatedAt:string; }
 /**

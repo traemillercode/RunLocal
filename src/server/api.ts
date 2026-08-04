@@ -1075,6 +1075,24 @@ async function handleApi(
     return ok(res, { submitted: true }), true;
   }
 
+  // ---- scoped safety reports: verified runners only -----------------------
+  if (url.pathname === "/api/safety-reports" && method === "POST") {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const reporter = db.getAccount(s.accountId); if (!reporter || reporter.deletedAt || reporter.status !== "verified" || reporter.underReview) return err(res, { status: 403, error: "verified_runner_required" }), true;
+    if (!db.consumeSafetyReportRate(s.accountId, now.getTime())) return err(res, { status: 429, error: "rate_limited" }), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    if (typeof b.subjectId !== "string" || typeof b.contextType !== "string" || typeof b.contextId !== "string" || typeof b.reason !== "string" || !["join_request","event","personal_run"].includes(b.contextType)) return err(res, { status: 400, error: "invalid_report" }), true;
+    const reasonText = b.reason.trim(); if (reasonText.length < 5 || reasonText.length > 500) return err(res, { status: 400, error: "invalid_reason" }), true;
+    const subject = db.getAccount(b.subjectId); if (!subject || subject.deletedAt || subject.id === reporter.id) return err(res, { status: 404, error: "not_found" }), true;
+    let cityId: string | null = null;
+    if (b.contextType === "join_request") { const jr = db.getJoinRequest(b.contextId); if (!jr || (jr.requesterId !== reporter.id && jr.recipientId !== reporter.id) || (jr.requesterId !== b.subjectId && jr.recipientId !== b.subjectId) || db.isBlocked(reporter.id, b.subjectId)) return err(res, { status: 403, error: "invalid_context" }), true; const run = jr.contextType === "personal_run" ? db.getPersonalRun(jr.contextId) : null; cityId = run?.cityId ?? reporter.cityId; }
+    else if (b.contextType === "personal_run") { const run = db.getPersonalRun(b.contextId); if (!run || run.deletedAt || run.accountId !== b.subjectId || reporter.cityId !== run.cityId || db.isBlocked(reporter.id, b.subjectId)) return err(res, { status: 403, error: "invalid_context" }), true; cityId = run.cityId; }
+    else { if (!db.hasAttendance(reporter.id, b.contextId) || !db.hasAttendance(subject.id, b.contextId)) return err(res, { status: 403, error: "invalid_context" }), true; cityId = reporter.cityId; }
+    if (!cityId || (db.listSafetyReports().some(r => r.reporterId === reporter.id && r.subjectId === subject.id && r.contextType === b.contextType && r.contextId === b.contextId && r.status !== "dismissed"))) return err(res, { status: 409, error: "duplicate_report" }), true;
+    const report = { id: newId(), reporterId: reporter.id, subjectId: subject.id, cityId, contextType: b.contextType as any, contextId: b.contextId, reason: reasonText.slice(0, 500), status: "open" as const, createdAt: now.toISOString(), updatedAt: now.toISOString(), resolvedAt: null };
+    db.addSafetyReport(report); await db.persist(); return ok(res, { report: { id: report.id, status: report.status } }), true;
+  }
+
   // ---- my appeals (own records only) --------------------------------------
   if (url.pathname === "/api/appeals" && method === "GET") {
     const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
