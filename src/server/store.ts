@@ -153,6 +153,16 @@ export class Db {
   private submissions = new Map<string, SubmissionRecord>();
   private activities = new Map<string, import("./activity").Activity>();
   private oauthTokens = new Map<string, import("./activity").OAuthToken>();
+  private settings: import("./types").SiteSettings | undefined;
+  private cities = new Map<string, import("./types").CmsCity>();
+  /**
+   * CMS image references (brand logo/favicon, city header images) keyed by
+   * ref id. Bytes live on disk under uploads/private for file-backed stores
+   * (never in db.json) and in this map for in-memory/test stores. Refs are
+   * opaque ids — settings/cities only ever carry the ref string, never the
+   * image bytes or data URLs.
+   */
+  private refs = new Map<string, Buffer>();
   private loaded = false;
 
   constructor(opts: DbOptions = {}) {
@@ -193,6 +203,8 @@ export class Db {
       for (const s of parsed.submissions ?? []) this.submissions.set(s.id, s);
       for (const a of parsed.activities ?? []) this.activities.set(a.id, a);
       for (const t of parsed.oauthTokens ?? []) this.oauthTokens.set(`${t.accountId}:${t.provider}`, t);
+      this.settings = parsed.settings;
+      for (const c of parsed.cities ?? []) this.cities.set(c.id, c);
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -212,6 +224,8 @@ export class Db {
       submissions: [...this.submissions.values()],
       activities: [...this.activities.values()],
       oauthTokens: [...this.oauthTokens.values()],
+      settings: this.settings,
+      cities: [...this.cities.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -315,6 +329,38 @@ export class Db {
   removeAccount(id: string): void {
     this.accounts.delete(id);
     this.deleteCode(id);
+  }
+
+  getSettings<T>(fallback:T): T { return (this.settings ?? fallback) as T; }
+  setSettings(settings: import("./types").SiteSettings): void { this.settings = settings; }
+  getCity(id:string): import("./types").CmsCity | undefined { return this.cities.get(id); }
+  listCities(): import("./types").CmsCity[] { return [...this.cities.values()]; }
+  setCity(city:import("./types").CmsCity): void { this.cities.set(city.id, city); }
+
+  // ------------------------------------------------------------ cms image refs
+  /**
+   * Store CMS image bytes under an opaque ref. File-backed stores write to
+   * uploads/private (like selfies) so image data never appears in db.json;
+   * in-memory stores keep the bytes in the map. The ref is the ONLY value
+   * that settings/cities ever carry.
+   */
+  async saveRef(ref: string, bytes: Buffer): Promise<void> {
+    this.refs.set(ref, bytes);
+    if (!this.dataDir) return;
+    const dir = this.uploadDir("private");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, `cms-${ref}`), bytes);
+  }
+  /** Read CMS image bytes by ref (memory first, then disk). */
+  async readRef(ref: string): Promise<Buffer | null> {
+    const mem = this.refs.get(ref);
+    if (mem) return mem;
+    if (!this.dataDir) return null;
+    try {
+      return await readFile(join(this.uploadDir("private"), `cms-${ref}`));
+    } catch {
+      return null;
+    }
   }
 
   // ---------------------------------------------------------------- sessions

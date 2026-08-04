@@ -145,6 +145,8 @@ export type AdminAction =
   | "admin.submission_list"
   | "admin.submission_approve"
   | "admin.submission_reject"
+  | "admin.cms_settings"
+  | "admin.cms_city"
   | "account.delete";
 
 export interface AuditEntry {
@@ -184,7 +186,11 @@ export interface PersistedDb {
   submissions: SubmissionRecord[];
   activities?: import("./activity").Activity[];
   oauthTokens?: import("./activity").OAuthToken[];
+  settings?: SiteSettings;
+  cities?: CmsCity[];
 }
+export interface SiteSettings { title:string; wordmark:string; tagline:string; primary:string; accent:string; surface:string; strings:Record<string,string>; tags:Record<string,string[]>; providers:Record<string,boolean>; bottomNav:string[]; announcement:{text:string;link?:string}|null; logoRef:string|null; faviconRef:string|null; }
+export interface CmsCity { id:string; name:string; state:string; slug:string; status:"active"|"inactive"; headerImageRef:string|null; accent:string|null; }
 
 /** What kind of seeded content a moderation record refers to. */
 export type ContentKind = "event" | "race" | "post";

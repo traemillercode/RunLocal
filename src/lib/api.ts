@@ -124,6 +124,46 @@ export function loginCheck(token: string): Promise<ApiResult<{ status: string; a
   return request("/api/login/check", { method: "POST", body: JSON.stringify({ token }) });
 }
 
+// ---------------------------------------------------------------- CMS / site configuration
+export interface SiteSettingsView {
+  title: string;
+  wordmark: string;
+  tagline: string;
+  primary: string;
+  accent: string;
+  surface: string;
+  strings: Record<string, string>;
+  tags: Record<string, string[]>;
+  providers: Record<string, boolean>;
+  bottomNav: string[];
+  announcement: { text: string; link?: string } | null;
+  logoRef: string | null;
+  faviconRef: string | null;
+}
+export interface SiteConfig { settings: SiteSettingsView; cities: Array<{id:string;name:string;state:string;slug:string;status:string;headerImageRef:string|null;accent:string|null}>; integrations?: CmsIntegration[] }
+export interface CmsIntegration {
+  /** Provider id (strava/garmin/coros/suunto). */
+  provider: string;
+  /** CMS toggle — offered to runners on this site. */
+  offered: boolean;
+  /** Deployment-managed — whether server env credentials exist for OAuth. */
+  configured: boolean;
+  /** Names of missing env vars ONLY (never values, never secrets). */
+  missing: string[];
+}
+export interface AdminCmsOverview { settings: SiteSettingsView; cities: SiteConfig["cities"]; integrations: CmsIntegration[] }
+export function getSiteConfig(): Promise<ApiResult<SiteConfig>> { return request("/api/config"); }
+export function adminCmsOverview(reason: string): Promise<ApiResult<AdminCmsOverview>> { return adminRequest("/api/admin/cms/settings", reason); }
+export function adminSaveCmsSettings(settings: Partial<SiteSettingsView>, reason: string): Promise<ApiResult<{ settings: SiteSettingsView }>> { return adminRequest("/api/admin/cms/settings", reason, { method: "POST", body: JSON.stringify(settings) }); }
+export function adminSaveCity(city: Record<string, unknown>, reason: string): Promise<ApiResult<{ city: SiteConfig["cities"][number] }>> { return adminRequest("/api/admin/cms/city", reason, { method: "POST", body: JSON.stringify(city) }); }
+export function adminDeactivateCity(id: string, reason: string): Promise<ApiResult<{ city: SiteConfig["cities"][number] }>> { return adminRequest(`/api/admin/cms/city/${encodeURIComponent(id)}/deactivate`, reason, { method: "POST" }); }
+/** Upload a CMS image (data URL) — returns an opaque ref; bytes never round-trip. */
+export function adminCmsUpload(dataUrl: string, reason: string): Promise<ApiResult<{ ref: string }>> { return adminRequest("/api/admin/cms/upload", reason, { method: "POST", body: JSON.stringify({ ref: dataUrl }) }); }
+/** Public URL for a ref — only serves refs referenced by the public config. */
+export function cmsRefUrl(ref: string): string { return `/api/cms/refs/${encodeURIComponent(ref)}`; }
+/** Audited admin-only preview URL for any stored ref. */
+export function adminCmsRefUrl(ref: string): string { return `/api/admin/cms/refs/${encodeURIComponent(ref)}`; }
+
 // -------------------------------------------------------------------- admin
 export interface AdminSearchRow {
   id: string;
