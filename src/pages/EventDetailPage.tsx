@@ -8,7 +8,7 @@
  * tests can render the real detail markup with react-dom/server; the page
  * resolves the event from the weekly model and wires up navigation + RSVP.
  */
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Chip, Icon } from "../components/ui";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
@@ -132,15 +132,15 @@ export function EventDetailView({
           >
             {rsvped ? (
               <>
-                <Icon name="check" className="h-4 w-4" /> You're in — see you there
+                <Icon name="check" className="h-4 w-4" /> Remove from My Runs
               </>
             ) : canRsvp ? (
               <>
-                <Icon name="rsvp" className="h-4 w-4" /> RSVP for this run
+                <Icon name="rsvp" className="h-4 w-4" /> Add to My Runs
               </>
             ) : (
               <>
-                <Icon name="lock" className="h-4 w-4" /> Verified runners only
+                <Icon name="rsvp" className="h-4 w-4" /> Add to My Runs
               </>
             )}
           </button>
@@ -150,7 +150,7 @@ export function EventDetailView({
   );
 }
 
-export function EventDetailPage({ city, store }: { city: City; store: AppStore }) {
+export function EventDetailPage({ city }: { city: City; store: AppStore }) {
   const toast = useToast();
   const { role } = useAccount();
   const { hidden, highlights, groupBadges } = useModerated();
@@ -158,7 +158,12 @@ export function EventDetailPage({ city, store }: { city: City; store: AppStore }
   const { eventId } = useParams();
   const navigate = useNavigate();
   const [gateOpen, setGateOpen] = useState(false);
+  const [myRunIds, setMyRunIds] = useState<Set<string>>(new Set());
   const canRsvp = canDo(role, "rsvp");
+  useEffect(() => {
+    if (!canRsvp) { setMyRunIds(new Set()); return; }
+    void api.getMyRuns().then((r) => { if (r.ok) setMyRunIds(new Set(r.data.runs.map((run) => run.eventId))); });
+  }, [canRsvp]);
 
   // Same weekly resolution as the home/Events feed so an EventCard link always
   // resolves here. Only recurring events render as EventCards; independent
@@ -203,7 +208,7 @@ export function EventDetailPage({ city, store }: { city: City; store: AppStore }
       setGateOpen(true);
       return;
     }
-    const nowRsvped = !store.state.rsvped[event.id];
+    const nowRsvped = !myRunIds.has(event.id);
     // Server-side RSVP: records shared attendance (rating eligibility basis).
     // Under-review accounts may still RSVP — the server permits it.
     void api.rsvpEvent(event.id, nowRsvped).then((r) => {
@@ -211,7 +216,7 @@ export function EventDetailPage({ city, store }: { city: City; store: AppStore }
         toast(r.error.message ?? "Couldn't save your RSVP. Try again.", "info");
         return;
       }
-      store.toggleRsvp(event.id);
+      setMyRunIds((ids) => { const next = new Set(ids); if (nowRsvped) next.add(event.id); else next.delete(event.id); return next; });
       toast(nowRsvped ? `You're in for "${event.title}"!` : `RSVP removed for "${event.title}".`, nowRsvped ? "success" : "neutral");
     });
   };
@@ -221,7 +226,7 @@ export function EventDetailPage({ city, store }: { city: City; store: AppStore }
       <EventDetailView
         event={event}
         city={city}
-        rsvped={!!store.state.rsvped[event.id]}
+        rsvped={myRunIds.has(event.id)}
         canRsvp={canRsvp}
         onRsvp={onRsvp}
         onBack={() => navigate(-1)}
@@ -229,7 +234,7 @@ export function EventDetailPage({ city, store }: { city: City; store: AppStore }
         pinned={hl?.pinned}
         groupBadge={groupBadges.get(event.groupId)}
       />
-      <VerifiedGateSheet open={gateOpen} onClose={() => setGateOpen(false)} role={role} actionLabel="RSVPing" pendingLabel="Your profile is still in review." />
+      <VerifiedGateSheet open={gateOpen} onClose={() => setGateOpen(false)} role={role} actionLabel="adding this run to My Runs" pendingLabel="Your profile is still in review." />
     </>
   );
 }
