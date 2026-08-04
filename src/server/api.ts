@@ -36,7 +36,7 @@ import {
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
-import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType } from "./cms";
+import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import {
   dashboardOverview,
   liftSuspension,
@@ -64,7 +64,20 @@ import { decideSubmission,
   cityDecideSubmission,
 } from "./submissions";
 import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
-import { credentialType, parseProof, validTags, publicTrust, expireCredentials } from "./trust";
+import {
+  credentialType,
+  evaluateTrustStatus,
+  expireCredentials,
+  parseProof,
+  publicRecognitions,
+  publicTrust,
+  ratingEligibility,
+  reconcileTrustStatus,
+  resolveEventId,
+  trustThreshold,
+  validTags,
+  validTrustReason,
+} from "./trust";
 
 export const SESSION_COOKIE = "runlocal_sid";
 export const ADMIN_COOKIE = "runlocal_admin";
@@ -799,13 +812,158 @@ async function handleApi(
     return ok(res, { submission: { id: result.data.id, status: result.data.status } }), true;
   }
 
-  // Credentials and trust: proof stays private and public responses are qualitative only.
-  if (url.pathname === "/api/credentials" && method === "GET") { const s=requireSession(db,cookies); if(!s)return err(res,{status:401,error:"sign_in_required"}),true; expireCredentials(db,now); return ok(res,{credentials:db.listCredentials(s.accountId).map(c=>({id:c.id,type:c.type,certifyingBody:c.certifyingBody,issuedOn:c.issuedOn,expiresOn:c.expiresOn,status:c.status,decisionReason:c.decisionReason}))}),true; }
-  if (url.pathname === "/api/credentials" && method === "POST") { const s=requireSession(db,cookies);if(!s)return err(res,{status:401,error:"sign_in_required"}),true;const b=await readJson(req) as Record<string,unknown>;if(!credentialType(b.type)||typeof b.certifyingBody!=="string")return err(res,{status:400,error:"invalid_credential"}),true;const p=parseProof(b);if(b.type==="coach_certification"&&!p)return err(res,{status:400,error:"proof_required"}),true;const c={id:crypto.randomUUID().replace(/-/g,""),accountId:s.accountId,type:b.type,certifyingBody:b.certifyingBody.trim().slice(0,120),proofRef:p?`credential-${crypto.randomUUID()}`:null,proofMime:p?.mime??null,proofBytes:p?.bytes.length??0,issuedOn:typeof b.issuedOn==="string"?b.issuedOn:null,expiresOn:typeof b.expiresOn==="string"?b.expiresOn:null,status:b.type==="first_aid_cpr"&&!p?"verified":"pending_review",verifiedBy:b.type==="first_aid_cpr"&&!p?"self":"",verifiedAt:b.type==="first_aid_cpr"&&!p?now.toISOString():null,decisionReason:null,renewalNotifiedAt:null,createdAt:now.toISOString(),updatedAt:now.toISOString()} as any;if(p)await db.writePrivateUpload(c.proofRef,p.bytes);db.addCredential(c);await db.persist();return ok(res,{credential:{id:c.id,type:c.type,status:c.status}}),true; }
-  if (url.pathname === "/api/profile/trust" && method === "GET") { const id=url.searchParams.get("accountId");if(!id)return err(res,{status:400,error:"account_required"}),true;return ok(res,publicTrust(db,id)),true; }
-  if (url.pathname === "/api/ratings" && method === "POST") { const s=requireSession(db,cookies);if(!s)return err(res,{status:401,error:"sign_in_required"}),true;const b=await readJson(req) as Record<string,unknown>;if(typeof b.revieweeId!=="string"||typeof b.eventId!=="string"||s.accountId===b.revieweeId||db.hasRating(s.accountId,b.revieweeId,b.eventId)||b.positive!==true||!validTags(b.tags))return err(res,{status:400,error:"invalid_rating"}),true;const r={id:crypto.randomUUID().replace(/-/g,""),reviewerId:s.accountId,revieweeId:b.revieweeId,eventId:b.eventId,positive:true,tags:b.tags,createdAt:now.toISOString()};db.addRating(r);await db.persist();return ok(res,{rating:{id:r.id}}),true; }
-  if (url.pathname === "/api/concerns" && method === "POST") { const s=requireSession(db,cookies);if(!s)return err(res,{status:401,error:"sign_in_required"}),true;const b=await readJson(req) as Record<string,unknown>;if(typeof b.subjectId!=="string"||typeof b.reason!=="string"||b.reason.trim().length<5||b.reason.length>500)return err(res,{status:400,error:"reason_required"}),true;const c={id:crypto.randomUUID().replace(/-/g,""),reporterId:s.accountId,subjectId:b.subjectId,eventId:typeof b.eventId==="string"?b.eventId:null,reason:b.reason.trim(),status:"open" as const,createdAt:now.toISOString()};db.addConcern(c);await db.persist();return ok(res,{submitted:true}),true; }
-  if (url.pathname === "/api/appeals" && method === "POST") { const s=requireSession(db,cookies);if(!s)return err(res,{status:401,error:"sign_in_required"}),true;const b=await readJson(req) as Record<string,unknown>;if(typeof b.reason!=="string"||b.reason.trim().length<5||db.listAppeals(s.accountId).some(a=>a.status==="open"))return err(res,{status:400,error:"invalid_appeal"}),true;const a={id:crypto.randomUUID().replace(/-/g,""),accountId:s.accountId,reason:b.reason.trim().slice(0,500),status:"open" as const,createdAt:now.toISOString(),decidedAt:null,decidedBy:null,decisionReason:null};db.addAppeal(a);await db.persist();return ok(res,{appeal:{id:a.id,status:a.status}}),true; }
+  // ==================== CREDENTIALS & COMMUNITY TRUST ======================
+  // Privacy invariants for this whole block:
+  //  - Proof bytes are private uploads — never in any JSON payload; served
+  //    ONLY to the credential owner or an audited admin via dedicated routes.
+  //  - Reviewer identity, rating/concern reasons, and raw counts/scores are
+  //    never exposed in any public payload — the public surface is qualitative
+  //    (tier labels, coach/host booleans, recognition roles).
+  //  - Rating/concern eligibility is server-derived from SHARED attendance
+  //    (RSVP or host) — a stranger can never rate or report another runner.
+
+  // ---- my credentials (owner-only view; no proof bytes, no reviewer data) --
+  if (url.pathname === "/api/credentials" && method === "GET") {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    expireCredentials(db, now);
+    return ok(res, { credentials: db.listCredentials(s.accountId).map((c) => ({ id: c.id, type: c.type, certifyingBody: c.certifyingBody, issuedOn: c.issuedOn, expiresOn: c.expiresOn, status: c.status, decisionReason: c.decisionReason, hasProof: c.proofRef !== null })) }), true;
+  }
+
+  // ---- submit a credential (coach certification requires proof) -----------
+  if (url.pathname === "/api/credentials" && method === "POST") {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(s.accountId); if (!rec || rec.deletedAt || rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    if (!credentialType(b.type) || typeof b.certifyingBody !== "string" || !b.certifyingBody.trim()) return err(res, { status: 400, error: "invalid_credential" }), true;
+    const p = parseProof(b);
+    if (b.type === "coach_certification" && !p) return err(res, { status: 400, error: "proof_required" }), true;
+    const proofRef = p ? `credential-${crypto.randomUUID()}` : null;
+    const c = {
+      id: crypto.randomUUID().replace(/-/g, ""),
+      accountId: s.accountId,
+      type: b.type,
+      certifyingBody: b.certifyingBody.trim().slice(0, 120),
+      proofRef,
+      proofMime: p?.mime ?? null,
+      proofBytes: p?.bytes.length ?? 0,
+      issuedOn: typeof b.issuedOn === "string" ? b.issuedOn : null,
+      expiresOn: typeof b.expiresOn === "string" ? b.expiresOn : null,
+      status: b.type === "first_aid_cpr" && !p ? "verified" : "pending_review",
+      verifiedBy: b.type === "first_aid_cpr" && !p ? "self" : null,
+      verifiedAt: b.type === "first_aid_cpr" && !p ? now.toISOString() : null,
+      decisionReason: null,
+      renewalNotifiedAt: null,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    } as import("./types").CredentialRecord;
+    if (p && proofRef) await db.writePrivateUpload(proofRef, p.bytes);
+    db.addCredential(c);
+    await db.persist();
+    return ok(res, { credential: { id: c.id, type: c.type, status: c.status } }), true;
+  }
+
+  // ---- protected proof view (credential owner only) -----------------------
+  // The proof file is served ONLY to the credential's own account — it is
+  // never in any listing payload and never served to third parties.
+  const credentialProof = /^\/api\/credentials\/([a-f0-9]{32})\/proof$/.exec(url.pathname);
+  if (method === "GET" && credentialProof) {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const c = db.getCredential(credentialProof[1]);
+    if (!c || c.accountId !== s.accountId || !c.proofRef) return err(res, { status: 404, error: "not_found" }), true;
+    const bytes = await db.readPrivateUpload(c.proofRef);
+    if (!bytes) return err(res, { status: 404, error: "not_found" }), true;
+    res.writeHead(200, { "content-type": c.proofMime ?? "application/octet-stream", "cache-control": "private, no-store" });
+    res.end(bytes);
+    return true;
+  }
+
+  // ---- qualitative trust view (public; owner extras only for self) --------
+  if (url.pathname === "/api/profile/trust" && method === "GET") {
+    const id = url.searchParams.get("accountId");
+    if (!id) return err(res, { status: 400, error: "account_required" }), true;
+    const sess = requireSession(db, cookies);
+    const viewerId = sess ? sess.accountId : null;
+    return ok(res, publicTrust(db, id, viewerId)), true;
+  }
+
+  // ---- public recognitions: NON-RANKED qualitative list for a city --------
+  if (url.pathname === "/api/recognitions" && method === "GET") {
+    const cityId = url.searchParams.get("city") ?? "";
+    if (!cityId) return err(res, { status: 400, error: "invalid_city" }), true;
+    return ok(res, { recognitions: publicRecognitions(db, cityId) }), true;
+  }
+
+  // ---- RSVP to an event (server-side shared attendance) -------------------
+  // Verified runners may RSVP — INCLUDING under-review accounts (RSVP is
+  // preserved while under review). The record feeds rating eligibility and is
+  // idempotent.
+  if (url.pathname === "/api/events/rsvp" && method === "POST") {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(s.accountId); if (!rec || rec.deletedAt || rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    const registryId = resolveEventId(db, typeof b.eventId === "string" ? b.eventId : "");
+    if (!registryId) return err(res, { status: 400, error: "invalid_event", message: "That event isn't in the current listings." }), true;
+    if (!db.hasAttendance(s.accountId, registryId)) {
+      db.addAttendance({ id: crypto.randomUUID().replace(/-/g, ""), accountId: s.accountId, eventId: registryId, role: "rsvp", createdAt: now.toISOString() });
+      await db.persist();
+    }
+    return ok(res, { rsvped: true }), true;
+  }
+
+  // ---- ratings (server-eligible: shared RSVP/host attendance only) --------
+  if (url.pathname === "/api/ratings" && method === "POST") {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(s.accountId); if (!rec || rec.deletedAt || rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    if (typeof b.revieweeId !== "string" || typeof b.eventId !== "string" || typeof b.positive !== "boolean") return err(res, { status: 400, error: "invalid_rating" }), true;
+    const elig = ratingEligibility(db, s.accountId, b.revieweeId, b.eventId);
+    if (!elig.ok) return err(res, { status: elig.status, error: elig.error, message: elig.message }), true;
+    if (db.hasRating(s.accountId, b.revieweeId, elig.data.eventId)) return err(res, { status: 409, error: "already_rated", message: "You already rated this runner for this event." }), true;
+    const positive = b.positive === true;
+    if (positive && !validTags(b.tags)) return err(res, { status: 400, error: "invalid_tags" }), true;
+    if (!positive && !validTrustReason(b.reason)) return err(res, { status: 400, error: "reason_required", message: "A reason (5-500 chars) is required for a negative rating — admins review it privately." }), true;
+    const r = { id: crypto.randomUUID().replace(/-/g, ""), reviewerId: s.accountId, revieweeId: b.revieweeId, eventId: elig.data.eventId, positive, tags: positive ? b.tags : [], reason: positive ? null : (b.reason as string).trim().slice(0, 500), createdAt: now.toISOString() } as import("./types").RatingRecord;
+    db.addRating(r);
+    if (!positive) evaluateTrustStatus(db, b.revieweeId, now); // auto under-review at threshold
+    await db.persist();
+    return ok(res, { rating: { id: r.id } }), true;
+  }
+
+  // ---- private concerns (shared-attendance eligibility, admin-only) -------
+  if (url.pathname === "/api/concerns" && method === "POST") {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(s.accountId); if (!rec || rec.deletedAt || rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    if (typeof b.subjectId !== "string" || typeof b.eventId !== "string") return err(res, { status: 400, error: "invalid_concern" }), true;
+    if (!validTrustReason(b.reason)) return err(res, { status: 400, error: "reason_required", message: "Describe the concern (5-500 chars) — it goes to admins only, never public." }), true;
+    const elig = ratingEligibility(db, s.accountId, b.subjectId, b.eventId);
+    if (!elig.ok) return err(res, { status: elig.status, error: elig.error, message: elig.message }), true;
+    const c = { id: crypto.randomUUID().replace(/-/g, ""), reporterId: s.accountId, subjectId: b.subjectId, eventId: elig.data.eventId, reason: (b.reason as string).trim().slice(0, 500), status: "open" as const, createdAt: now.toISOString() } as import("./types").ConcernRecord;
+    db.addConcern(c);
+    evaluateTrustStatus(db, b.subjectId, now);
+    await db.persist();
+    return ok(res, { submitted: true }), true;
+  }
+
+  // ---- my appeals (own records only) --------------------------------------
+  if (url.pathname === "/api/appeals" && method === "GET") {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    return ok(res, { appeals: db.listAppeals(s.accountId).map((a) => ({ id: a.id, reason: a.reason, status: a.status, createdAt: a.createdAt, decidedAt: a.decidedAt, decisionReason: a.decisionReason })) }), true;
+  }
+
+  // ---- file an appeal (only while under review; one open appeal at a time)
+  if (url.pathname === "/api/appeals" && method === "POST") {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(s.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    if (rec.underReview !== true) return err(res, { status: 409, error: "nothing_to_appeal", message: "Your account is not under community review right now." }), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    if (!validTrustReason(b.reason)) return err(res, { status: 400, error: "invalid_appeal", message: "Explain your appeal (5-500 chars)." }), true;
+    if (db.listAppeals(s.accountId).some((a) => a.status === "open")) return err(res, { status: 409, error: "appeal_open", message: "You already have an open appeal." }), true;
+    const a = { id: crypto.randomUUID().replace(/-/g, ""), accountId: s.accountId, reason: (b.reason as string).trim().slice(0, 500), status: "open" as const, createdAt: now.toISOString(), decidedAt: null, decidedBy: null, decisionReason: null } as import("./types").AppealRecord;
+    db.addAppeal(a);
+    await db.persist();
+    return ok(res, { appeal: { id: a.id, status: a.status } }), true;
+  }
 
   if (method === "GET" && url.pathname === "/api/config") return ok(res, { settings: publicSettings(db), cities: publicCities(db), integrations: integrations(db) }), true;
   // Public brand/city-header images: ONLY refs currently referenced by the
@@ -892,6 +1050,90 @@ async function handleAdmin(
   if (method === "GET" && url.pathname === "/api/admin/credentials") { const a=authorizeAdmin(db,ctx,"admin.pending_list",null,now);if(!a.ok)return sendErr(a),true;return ok(res,{credentials:db.listCredentials().filter(c=>c.status==="pending_review").map(c=>({id:c.id,accountId:c.accountId,type:c.type,certifyingBody:c.certifyingBody,issuedOn:c.issuedOn,expiresOn:c.expiresOn}))}),true; }
   const credentialDecision=/^\/api\/admin\/credentials\/([a-f0-9]{32})\/(approve|reject)$/.exec(url.pathname);
   if (credentialDecision && method === "POST") { const [,id,decision]=credentialDecision; const a=authorizeAdmin(db,ctx,decision==="approve"?"admin.approve":"admin.reject",id,now);if(!a.ok)return sendErr(a),true;const b=await readJson(req) as Record<string,unknown>;if(decision==="reject"&&(typeof b.reason!=="string"||b.reason.trim().length<5))return err(res,{status:400,error:"reason_required"}),true;const c=db.updateCredential(id,{status:decision==="approve"?"verified":"rejected",verifiedBy:a.data.admin,verifiedAt:now.toISOString(),decisionReason:typeof b.reason==="string"?b.reason.trim().slice(0,500):null,updatedAt:now.toISOString()});if(!c)return err(res,{status:404,error:"not_found"}),true;await db.persist();return ok(res,{credential:{id:c.id,status:c.status}}),true; }
+  // GET /api/admin/credentials/:id/proof — audited admin proof view. The
+  // proof bytes are private uploads: only an authorized admin (with a reason)
+  // can retrieve them, and they never appear in any JSON payload.
+  const adminCredentialProof = /^\/api\/admin\/credentials\/([a-f0-9]{32})\/proof$/.exec(url.pathname);
+  if (adminCredentialProof && method === "GET") {
+    const a = authorizeAdmin(db, ctx, "admin.view_credential_proof", adminCredentialProof[1], now);
+    if (!a.ok) return sendErr(a), true;
+    const c = db.getCredential(adminCredentialProof[1]);
+    if (!c || !c.proofRef) return err(res, { status: 404, error: "not_found" }), true;
+    const bytes = await db.readPrivateUpload(c.proofRef);
+    if (!bytes) return err(res, { status: 404, error: "not_found" }), true;
+    res.writeHead(200, { "content-type": c.proofMime ?? "application/octet-stream", "cache-control": "private, no-store" });
+    res.end(bytes);
+    return true;
+  }
+
+  // GET /api/admin/appeals — appeal queue (open first, then recent). The
+  // appellant's own text plus public account identity; never reviewer data.
+  if (method === "GET" && url.pathname === "/api/admin/appeals") {
+    const a = authorizeAdmin(db, ctx, "admin.appeal_list", null, now);
+    if (!a.ok) return sendErr(a), true;
+    const rows = db
+      .listAppeals()
+      .sort((x, y) => (x.status === "open" ? 0 : 1) - (y.status === "open" ? 0 : 1) || y.createdAt.localeCompare(x.createdAt))
+      .map((ap) => {
+        const acct = db.getAccount(ap.accountId);
+        return { id: ap.id, accountId: ap.accountId, accountName: acct?.name ?? "Deleted account", accountEmail: acct?.email ?? "", reason: ap.reason, status: ap.status, createdAt: ap.createdAt, decidedAt: ap.decidedAt, decidedBy: ap.decidedBy, decisionReason: ap.decisionReason };
+      });
+    return ok(res, { appeals: rows }), true;
+  }
+
+  // POST /api/admin/appeals/:id/reinstate | uphold — decide an appeal.
+  // Reinstate clears the account's under_review state; uphold keeps it.
+  // Both require the audit reason header (authorizeAdmin) AND a decision
+  // reason body field (5-500 chars) that is shown to the appellant.
+  const appealDecision = /^\/api\/admin\/appeals\/([a-f0-9]{32})\/(reinstate|uphold)\/?$/.exec(url.pathname);
+  if (appealDecision && method === "POST") {
+    const [, id, decision] = appealDecision;
+    const a = authorizeAdmin(db, ctx, decision === "reinstate" ? "admin.appeal_reinstate" : "admin.appeal_uphold", id, now);
+    if (!a.ok) return sendErr(a), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    const decisionReason = typeof b.reason === "string" ? b.reason.trim() : "";
+    if (decisionReason.length < 5 || decisionReason.length > 500) {
+      return err(res, { status: 400, error: "reason_required", message: "A decision reason (5-500 chars) is required — it's shown to the appellant." }), true;
+    }
+    const appeal = db.getAppeal(id);
+    if (!appeal) return err(res, { status: 404, error: "not_found" }), true;
+    if (appeal.status !== "open") return err(res, { status: 409, error: "already_decided" }), true;
+    const updated = db.updateAppeal(id, { status: decision === "reinstate" ? "reinstated" : "upheld", decidedAt: now.toISOString(), decidedBy: a.data.admin, decisionReason })!;
+    if (decision === "reinstate") {
+      const target = db.getAccount(appeal.accountId);
+      if (target && !target.deletedAt) db.updateAccount(target.id, { underReview: false });
+    }
+    await db.persist();
+    return ok(res, { appeal: { id: updated.id, status: updated.status } }), true;
+  }
+
+  // GET /api/admin/trust — trust policy + under-review roster (audited).
+  if (method === "GET" && url.pathname === "/api/admin/trust") {
+    const a = authorizeAdmin(db, ctx, "admin.trust_threshold", null, now);
+    if (!a.ok) return sendErr(a), true;
+    const underReview = db
+      .listAccounts()
+      .filter((r) => !r.deletedAt && r.underReview === true)
+      .map((r) => ({ accountId: r.id, name: r.name, email: r.email, underReviewAt: r.underReviewAt }));
+    return ok(res, { threshold: trustThreshold(db), underReview }), true;
+  }
+
+  // POST /api/admin/trust/threshold — reconfigure the combined negative-rating
+  // + concern threshold. Auto-marks accounts that are now at/above the new
+  // threshold; never auto-clears (only an appeal decision clears).
+  if (method === "POST" && url.pathname === "/api/admin/trust/threshold") {
+    const a = authorizeAdmin(db, ctx, "admin.trust_threshold", null, now);
+    if (!a.ok) return sendErr(a), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    const t = Number(b.threshold);
+    if (!Number.isInteger(t) || t < 1 || t > 10) return err(res, { status: 400, error: "invalid_threshold" }), true;
+    const settings = db.getSettings(DEFAULT_SETTINGS);
+    db.setSettings({ ...settings, trust: { underReviewThreshold: t } });
+    const newlyUnderReview = reconcileTrustStatus(db, now);
+    await db.persist();
+    return ok(res, { threshold: t, newlyUnderReview }), true;
+  }
+
   if (method === "GET" && url.pathname === "/api/admin/pending") {
     const result = adminPending(db, ctx, now);
     if (!result.ok) return sendErr(result), true;

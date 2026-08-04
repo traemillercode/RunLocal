@@ -97,6 +97,12 @@ export interface PublicAccount {
    * reason (moderation data stays owner-only).
    */
   suspended: boolean;
+  /**
+   * Community-trust review state (see AccountRecord.underReview). Visible to
+   * the account itself (and the admin) — the account may still browse, RSVP,
+   * and comment, but hosting and coach/club posting are restricted.
+   */
+  underReview: boolean;
   profilePhotoUrl: string | null;
 }
 
@@ -130,6 +136,7 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new D
     role: rec.role,
     isOwner,
     suspended: isSuspended(rec, now),
+    underReview: rec.underReview === true,
     profilePhotoUrl: rec.profilePhotoRef ? `/uploads/public/${rec.profilePhotoRef}` : null,
   };
 }
@@ -162,6 +169,13 @@ export class Db {
   private concerns = new Map<string, import("./types").ConcernRecord>();
   private appeals = new Map<string, import("./types").AppealRecord>();
   private recognitions = new Map<string, import("./types").RecognitionRecord>();
+  private attendance = new Map<string, import("./types").AttendanceRecord>();
+  /**
+   * Private upload bytes (credential proofs) kept in memory so in-memory/test
+   * stores can serve them back; file-backed stores mirror the bytes to disk
+   * under uploads/private (never in db.json) exactly like selfies and CMS refs.
+   */
+  private privateUploads = new Map<string, Buffer>();
   /**
    * CMS image references (brand logo/favicon, city header images) keyed by
    * ref id. Bytes live on disk under uploads/private for file-backed stores
@@ -203,6 +217,10 @@ export class Db {
         // multi-city foundation lack them — treat as `null` (not a City Admin).
         a.adminCityId = a.adminCityId ?? null;
         a.rolePriorAdmin = a.rolePriorAdmin ?? null;
+        // Same for the community-trust review state: accounts persisted before
+        // it existed lack the fields — treat as not under review.
+        a.underReview = a.underReview === true;
+        a.underReviewAt = a.underReviewAt ?? null;
         this.accounts.set(a.id, a);
       }
       for (const s of parsed.sessions ?? []) this.sessions.set(s.id, s);
@@ -223,6 +241,7 @@ export class Db {
       for (const c of parsed.concerns ?? []) this.concerns.set(c.id, c);
       for (const a of parsed.appeals ?? []) this.appeals.set(a.id, a);
       for (const r of parsed.recognitions ?? []) this.recognitions.set(`${r.accountId}:${r.role}`, r);
+      for (const a of parsed.attendance ?? []) this.attendance.set(a.id, a);
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -250,6 +269,7 @@ export class Db {
       concerns: [...this.concerns.values()],
       appeals: [...this.appeals.values()],
       recognitions: [...this.recognitions.values()],
+      attendance: [...this.attendance.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -323,6 +343,8 @@ export class Db {
       suspended: false,
       suspendedUntil: null,
       suspensionReason: null,
+      underReview: false,
+      underReviewAt: null,
     };
     this.accounts.set(rec.id, rec);
     return rec;
@@ -591,10 +613,16 @@ export class Db {
   addConcern(c: import("./types").ConcernRecord) { this.concerns.set(c.id,c); return c; }
   updateConcern(id:string, patch: Partial<import("./types").ConcernRecord>) { const c=this.concerns.get(id); if(!c)return; const n={...c,...patch};this.concerns.set(id,n);return n; }
   listAppeals(accountId?:string) { return [...this.appeals.values()].filter(a=>!accountId||a.accountId===accountId); }
+  getAppeal(id:string) { return this.appeals.get(id); }
   addAppeal(a: import("./types").AppealRecord) { this.appeals.set(a.id,a);return a; }
   updateAppeal(id:string, patch: Partial<import("./types").AppealRecord>) { const a=this.appeals.get(id);if(!a)return;const n={...a,...patch};this.appeals.set(id,n);return n; }
   listRecognitions() { return [...this.recognitions.values()]; }
   setRecognition(r: import("./types").RecognitionRecord) { this.recognitions.set(`${r.accountId}:${r.role}`,r);return r; }
+  // ------------------------------------------------------- shared attendance
+  listAttendance(accountId?: string) { return [...this.attendance.values()].filter(a => !accountId || a.accountId === accountId); }
+  listAttendanceByEvent(eventId: string) { return [...this.attendance.values()].filter(a => a.eventId === eventId); }
+  hasAttendance(accountId: string, eventId: string) { return [...this.attendance.values()].some(a => a.accountId === accountId && a.eventId === eventId); }
+  addAttendance(a: import("./types").AttendanceRecord) { this.attendance.set(a.id, a); return a; }
 
   // ---------------------------------------------------------------- uploads
   private uploadDir(kind: "private" | "public"): string {
@@ -602,12 +630,16 @@ export class Db {
   }
 
   async writePrivateUpload(filename: string, buffer: Buffer): Promise<void> {
+    // Keep bytes in memory so in-memory/test stores can serve proofs back.
+    this.privateUploads.set(filename, buffer);
     if (!this.dataDir) return;
     const dir = this.uploadDir("private");
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, filename), buffer);
   }
   async readPrivateUpload(filename: string): Promise<Buffer | null> {
+    const mem = this.privateUploads.get(filename);
+    if (mem) return mem;
     if (!this.dataDir) return null;
     try {
       return await readFile(join(this.uploadDir("private"), filename));
@@ -616,6 +648,7 @@ export class Db {
     }
   }
   async deletePrivateUpload(filename: string): Promise<void> {
+    this.privateUploads.delete(filename);
     if (!this.dataDir) return;
     try {
       await unlink(join(this.uploadDir("private"), filename));

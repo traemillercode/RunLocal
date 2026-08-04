@@ -27,6 +27,7 @@ import type { AdminCtx, AdminResult } from "./admin";
 import { authorizeAdmin, authorizeScoped } from "./admin";
 import { REASON_MAX, REASON_MIN } from "./admin";
 import { cityAcceptsSubmissions, cityNotOpenError, cityStatus } from "./cms";
+import { trustRestrictions } from "./trust";
 import type {
   AccountRecord,
   EventSubmissionPayload,
@@ -209,6 +210,17 @@ export interface GroupSubmitInput {
 export function submitGroup(db: Db, accountId: string, input: GroupSubmitInput, now = new Date()): AdminResult<SubmissionRecord> {
   const auth = requireVerifiedSubmitter(db, accountId);
   if (!auth.ok) return auth;
+  // Under-review accounts may browse/RSVP/comment, but cannot host or post
+  // club/coach content (server-enforced; see trust.ts trustRestrictions).
+  const trust = trustRestrictions(auth.data);
+  if (trust.coachPost || trust.hosting) {
+    return {
+      ok: false,
+      status: 403,
+      error: "under_review",
+      message: "Your account is under community review — hosting and club/coach posting are paused. You can still browse, RSVP, and comment.",
+    };
+  }
   const city = resolveCity(db, auth.data, input.cityId);
   if (!city.ok) return city;
   const name = sliceTrim(input.name, MAX_NAME);
@@ -264,6 +276,17 @@ export interface EventSubmitInput {
 export function submitEvent(db: Db, accountId: string, input: EventSubmitInput, now = new Date()): AdminResult<SubmissionRecord> {
   const auth = requireVerifiedSubmitter(db, accountId);
   if (!auth.ok) return auth;
+  // Under-review accounts may browse/RSVP/comment, but cannot host events
+  // (server-enforced; see trust.ts trustRestrictions).
+  const trust = trustRestrictions(auth.data);
+  if (trust.hosting) {
+    return {
+      ok: false,
+      status: 403,
+      error: "under_review",
+      message: "Your account is under community review — hosting is paused. You can still browse, RSVP, and comment.",
+    };
+  }
   if (auth.data.role === "group_leader") {
     return {
       ok: false,
@@ -520,6 +543,18 @@ function decideSubmissionCore(
       hidden: false,
       hiddenAt: null,
     });
+    // The approved event's submitter HOSTS it — record host-attendance so
+    // they can rate runners who RSVP'd to their event (and vice versa). This
+    // is server-authoritative: only an admin approval creates host records.
+    if (rec.kind === "event") {
+      db.addAttendance({
+        id: newId(),
+        accountId: rec.submitterAccountId,
+        eventId: `event:${refId}`,
+        role: "host",
+        createdAt: now.toISOString(),
+      });
+    }
   } else {
     // group — create the group record (never grants the RRCA badge) and
     // grant the submitter the Group Leader role for that group.
