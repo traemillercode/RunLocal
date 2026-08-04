@@ -59,14 +59,20 @@ describe("owner dashboard authorization", () => {
     expect(db.listAudit(10).some((a) => a.action === "admin.dashboard" && a.reason === "dashboard review")).toBe(true);
   });
 
-  it("key-based admin sessions are rejected (owner-only dashboard)", () => {
+  it("key-based Global Admin sessions can load the dashboard", () => {
     const db = createMemoryStore();
     const login = adminLogin(db, KEY, "198.51.100.7", T0);
     if (!login.ok) throw new Error("login failed");
-    const r = dashboardOverview(db, ctx(login.data.sessionId, null, "I am the admin"), CITY, T0);
+    const r = dashboardOverview(db, ctx(login.data.sessionId, null, "global dashboard review"), CITY, T0);
+    expect(r.ok).toBe(true);
+    expect(db.listAudit(10).some((a) => a.action === "admin.dashboard" && a.reason === "global dashboard review")).toBe(true);
+  });
+
+  it("an unauthenticated session with a reason is rejected", () => {
+    const db = createMemoryStore();
+    const r = dashboardOverview(db, ctx(null, null, "unauthenticated attempt"), CITY, T0);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe("unauthorized");
-    expect(db.listAudit(10).some((a) => a.action === "admin.dashboard")).toBe(false);
   });
 
   it("a verified runner's session is rejected", () => {
@@ -167,6 +173,33 @@ describe("suspensions (posting-blocking, optional expiry)", () => {
     db.updateAccount(rec.id, { status: "verified", phase: "pending_review", selfieRef: `${rec.id}_selfie.jpg` });
     return rec;
   }
+
+  it("Global Admin can suspend an account in another city", () => {
+    const db = createMemoryStore();
+    const rec = runner(db, "stl-runner@example.com");
+    db.updateAccount(rec.id, { cityId: "stl-mo" });
+    const login = adminLogin(db, KEY, "198.51.100.7", T0);
+    if (!login.ok) throw new Error("login failed");
+    const r = suspendAccount(db, ctx(login.data.sessionId, null, "cross-city safety action"), rec.id, null, T0);
+    expect(r.ok).toBe(true);
+    expect(db.getAccount(rec.id)!.suspended).toBe(true);
+  });
+
+  it("City Admin cannot use global dashboard or suspension controls", () => {
+    const db = createMemoryStore();
+    const admin = db.createAccount({ name: "City Admin", email: "city-admin@example.com" });
+    db.updateAccount(admin.id, { role: "city_admin", adminCityId: CITY, status: "verified" });
+    const session = db.createSession(admin.id, "198.51.100.7", T0);
+    const rec = runner(db, "target@example.com");
+    const cityCtx = ctx(null, session.id, "city admin attempt");
+    const dashboard = dashboardOverview(db, cityCtx, CITY, T0);
+    expect(dashboard.ok).toBe(false);
+    if (!dashboard.ok) expect(dashboard.error).toBe("unauthorized");
+    const suspension = suspendAccount(db, cityCtx, rec.id, null, T0);
+    expect(suspension.ok).toBe(false);
+    if (!suspension.ok) expect(suspension.error).toBe("unauthorized");
+    expect(db.getAccount(rec.id)!.suspended).toBe(false);
+  });
 
   it("indefinite suspension blocks posting until lifted", () => {
     const db = createMemoryStore();
