@@ -170,6 +170,7 @@ export class Db {
   private appeals = new Map<string, import("./types").AppealRecord>();
   private recognitions = new Map<string, import("./types").RecognitionRecord>();
   private attendance = new Map<string, import("./types").AttendanceRecord>();
+  private personalRuns = new Map<string, import("./types").PersonalRunRecord>();
   /**
    * Private upload bytes (credential proofs) kept in memory so in-memory/test
    * stores can serve them back; file-backed stores mirror the bytes to disk
@@ -242,6 +243,7 @@ export class Db {
       for (const a of parsed.appeals ?? []) this.appeals.set(a.id, a);
       for (const r of parsed.recognitions ?? []) this.recognitions.set(`${r.accountId}:${r.role}`, r);
       for (const a of parsed.attendance ?? []) this.attendance.set(a.id, a);
+      for (const r of parsed.personalRuns ?? []) this.personalRuns.set(r.id, r);
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -270,6 +272,7 @@ export class Db {
       appeals: [...this.appeals.values()],
       recognitions: [...this.recognitions.values()],
       attendance: [...this.attendance.values()],
+      personalRuns: [...this.personalRuns.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -624,6 +627,10 @@ export class Db {
   hasAttendance(accountId: string, eventId: string) { return [...this.attendance.values()].some(a => a.accountId === accountId && a.eventId === eventId); }
   addAttendance(a: import("./types").AttendanceRecord) { this.attendance.set(a.id, a); return a; }
   removeAttendance(id: string) { this.attendance.delete(id); }
+  listPersonalRuns(accountId?: string) { return [...this.personalRuns.values()].filter(r => !accountId || r.accountId === accountId); }
+  getPersonalRun(id: string) { return this.personalRuns.get(id); }
+  addPersonalRun(r: import("./types").PersonalRunRecord) { this.personalRuns.set(r.id, r); return r; }
+  updatePersonalRun(id: string, patch: Partial<import("./types").PersonalRunRecord>) { const r=this.personalRuns.get(id); if (!r) return undefined; const next={...r,...patch}; this.personalRuns.set(id,next); return next; }
 
   // ---------------------------------------------------------------- uploads
   private uploadDir(kind: "private" | "public"): string {

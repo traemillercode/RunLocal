@@ -247,6 +247,15 @@ export interface PersistedDb {
    * event submission (the submitter is the host of that event).
    */
   attendance?: AttendanceRecord[];
+  personalRuns?: PersonalRunRecord[];
+}
+
+export const PERSONAL_RUN_CONSENT_VERSION = "2026-08-04.v1";
+export interface PersonalRunRecord {
+  id: string; accountId: string; cityId: string; title: string; startsAt: string;
+  locationLabel: string | null; distanceLabel: string | null; notes: string | null;
+  visibility: "private"; consentVersion: string; consentedAt: string;
+  createdAt: string; updatedAt: string; deletedAt: string | null;
 }
 
 export type CredentialType = "coach_certification" | "first_aid_cpr";
