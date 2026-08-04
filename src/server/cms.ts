@@ -127,7 +127,10 @@ export function updateSettings(db: Db, ctx: AdminCtx, input: Partial<SiteSetting
 }
 
 export function saveCity(db: Db, ctx: AdminCtx, input: Partial<CmsCity> & { id?: string }, now = new Date()): AdminResult<{ city: CmsCity }> {
-  const auth = authorizeAdmin(db, ctx, "admin.cms_city", input.id ?? null, now);
+  // Generate the target id BEFORE authorizing so the audit entry carries the
+  // city id that the action creates or updates.
+  const id = input.id ?? newId();
+  const auth = authorizeAdmin(db, ctx, "admin.cms_city", id, now);
   if (!auth.ok) return auth as AdminResult<{ city: CmsCity }>;
   if (typeof input.name !== "string" || typeof input.state !== "string" || typeof input.slug !== "string") return { ok: false, status: 400, error: "invalid_city" };
   const name = input.name.trim().slice(0, 80);
@@ -142,7 +145,7 @@ export function saveCity(db: Db, ctx: AdminCtx, input: Partial<CmsCity> & { id?:
   const headerImageRef = input.headerImageRef === undefined ? (prev?.headerImageRef ?? null) : typeof input.headerImageRef === "string" && input.headerImageRef.length <= 200 ? input.headerImageRef : null;
   const accent = input.accent === undefined ? (prev?.accent ?? null) : hex(input.accent) ? input.accent : null;
   const city: CmsCity = {
-    id: input.id ?? newId(),
+    id,
     name,
     state,
     slug,
