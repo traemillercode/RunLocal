@@ -248,7 +248,7 @@ export class Db {
       for (const a of parsed.attendance ?? []) this.attendance.set(a.id, a);
       for (const r of parsed.personalRuns ?? []) this.personalRuns.set(r.id, r);
       for (const p of parsed.matchingPreferences ?? []) this.matchingPreferences.set(p.accountId, p);
-      for (const j of parsed.joinRequests ?? []) this.joinRequests.set(j.id, j);
+      for (const j of parsed.joinRequests ?? []) this.joinRequests.set(j.id, { requesterAccepted: false, recipientAccepted: false, ...j });
       for (const b of parsed.blocks ?? []) this.blocks.set(`${b.blockerId}:${b.blockedId}`, b);
     } catch {
       // First run — empty store. db.json is created on first persist().

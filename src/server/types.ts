@@ -268,8 +268,10 @@ export type JoinRequestState = "pending" | "accepted" | "declined" | "cancelled"
 export interface JoinRequestRecord {
   id: string; requesterId: string; recipientId: string;
   contextType: "event" | "personal_run"; contextId: string;
-  state: JoinRequestState; createdAt: string; expiresAt: string;
-  updatedAt: string;
+  /** State is accepted only after BOTH participants explicitly accept. */
+  state: JoinRequestState;
+  requesterAccepted: boolean; recipientAccepted: boolean;
+  createdAt: string; expiresAt: string; updatedAt: string;
 }
 export interface BlockRecord { blockerId: string; blockedId: string; createdAt: string; }
 
