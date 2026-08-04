@@ -1321,7 +1321,7 @@ async function handleAdmin(
   }
 
   if (method === "GET" && url.pathname === "/api/admin/pending") {
-    const result = adminPending(db, ctx, now);
+    const result = adminPending(db, ctx);
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, { results: result.data }), true;
