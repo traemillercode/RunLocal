@@ -19,25 +19,79 @@ export interface SupabaseAuthLike {
   signUp?: SupabaseClient["auth"]["signUp"];
   signInWithPassword?: SupabaseClient["auth"]["signInWithPassword"];
   resetPasswordForEmail?: SupabaseClient["auth"]["resetPasswordForEmail"];
+  resend?: SupabaseClient["auth"]["resend"];
   updateUser?: SupabaseClient["auth"]["updateUser"];
   setSession?: SupabaseClient["auth"]["setSession"];
 }
 const missingMessage = "Password sign-in is not configured on this deployment (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are missing).";
 function authFor(cfg: SupabaseClientConfig): SupabaseAuthLike { return createClient(cfg.url!, cfg.anonKey!).auth; }
 function cfg(opts?: Record<string, string | undefined>) { return supabaseClientConfig(opts ?? (import.meta.env as Record<string, string | undefined>)); }
-export type AuthResult = { ok: true; accessToken: string | null; emailConfirmationRequired: boolean } | { ok: false; code: "unconfigured" | "invalid_credentials" | "email_not_confirmed" | "email_taken" | "rate_limited" | "failed"; message: string };
+export type AuthResult = { ok: true; accessToken: string | null; emailConfirmationRequired: boolean } | { ok: false; code: "unconfigured" | "invalid_credentials" | "email_not_confirmed" | "email_taken" | "rate_limited" | "timeout" | "failed"; message: string };
+
+/** Upper bound for a single Supabase Auth call so a hung provider can't leave a busy spinner running forever. */
+export const AUTH_TIMEOUT_MS = 15000;
+const SIGNUP_TIMEOUT_MESSAGE = "Sign-up is taking too long to complete. Check your connection and try again.";
+const LOGIN_TIMEOUT_MESSAGE = "Sign-in is taking too long to complete. Check your connection and try again.";
+const EMAIL_TIMEOUT_MESSAGE = "The email service is taking too long to respond. Check your connection and try again.";
+
+/** Race a provider call against a timer; resolves "timeout" if the call hangs. */
+async function withTimeout<T>(promise: Promise<T>, ms: number = AUTH_TIMEOUT_MS): Promise<T | "timeout"> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([promise, new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), ms); })]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
 function mapError(message: string): AuthResult { if (/invalid login credentials/i.test(message)) return { ok:false, code:"invalid_credentials", message:"Email or password is incorrect." }; if (/email not confirmed/i.test(message)) return { ok:false, code:"email_not_confirmed", message:"Confirm your email from the message Supabase sent, then try again." }; if (/already registered|already exists/i.test(message)) return { ok:false, code:"email_taken", message:"That email already has an account. Log in instead." }; if (/rate|too many|security purposes/i.test(message)) return { ok:false, code:"rate_limited", message:"Too many attempts. Wait a moment and try again." }; return { ok:false, code:"failed", message: message || "Supabase could not complete that request." }; }
 export async function signUp(email: string, password: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}): Promise<AuthResult> {
   const c = cfg(opts.env); if (!c.configured) return { ok:false, code:"unconfigured", message:missingMessage };
-  try { const { data, error } = await (opts.auth ?? authFor(c)).signUp!({ email, password, options: { emailRedirectTo: c.redirectUrl } }); if (error) return mapError(error.message); return { ok:true, accessToken:data.session?.access_token ?? null, emailConfirmationRequired:!data.session }; } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
+  try {
+    const outcome = await withTimeout((opts.auth ?? authFor(c)).signUp!({ email, password, options: { emailRedirectTo: c.redirectUrl } }));
+    if (outcome === "timeout") return { ok:false, code:"timeout", message:SIGNUP_TIMEOUT_MESSAGE };
+    const { data, error } = outcome;
+    if (error) return mapError(error.message);
+    return { ok:true, accessToken:data.session?.access_token ?? null, emailConfirmationRequired:!data.session };
+  } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
 }
 export async function signInWithPassword(email: string, password: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}): Promise<AuthResult> {
   const c = cfg(opts.env); if (!c.configured) return { ok:false, code:"unconfigured", message:missingMessage };
-  try { const { data, error } = await (opts.auth ?? authFor(c)).signInWithPassword!({ email, password }); if (error) return mapError(error.message); const token=data.session?.access_token; return token ? {ok:true,accessToken:token,emailConfirmationRequired:false} : {ok:false,code:"failed",message:"Supabase returned no session token."}; } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
+  try {
+    const outcome = await withTimeout((opts.auth ?? authFor(c)).signInWithPassword!({ email, password }));
+    if (outcome === "timeout") return { ok:false, code:"timeout", message:LOGIN_TIMEOUT_MESSAGE };
+    const { data, error } = outcome;
+    if (error) return mapError(error.message);
+    const token=data.session?.access_token;
+    return token ? {ok:true,accessToken:token,emailConfirmationRequired:false} : {ok:false,code:"failed",message:"Supabase returned no session token."};
+  } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
 }
-export async function resetPasswordForEmail(email: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}): Promise<{ok:true}|{ok:false;code:"unconfigured"|"failed";message:string}> {
+export async function resetPasswordForEmail(email: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}): Promise<{ok:true}|{ok:false;code:"unconfigured"|"failed"|"timeout";message:string}> {
   const c=cfg(opts.env); if(!c.configured) return {ok:false,code:"unconfigured",message:missingMessage};
-  try { const {error}=await (opts.auth??authFor(c)).resetPasswordForEmail!(email, { redirectTo: c.redirectUrl }); return error ? {ok:false,code:"failed",message:"Supabase could not send a reset email. Check the address and try again."}:{ok:true}; } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
+  try {
+    const outcome=await withTimeout((opts.auth??authFor(c)).resetPasswordForEmail!(email, { redirectTo: c.redirectUrl }));
+    if (outcome === "timeout") return {ok:false,code:"timeout",message:EMAIL_TIMEOUT_MESSAGE};
+    const {error}=outcome;
+    return error ? {ok:false,code:"failed",message:"Supabase could not send a reset email. Check the address and try again."}:{ok:true};
+  } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
+}
+/**
+ * Request a fresh signup confirmation email for an existing address. Uses the
+ * same explicit emailRedirectTo as signUp so the new link lands on the same
+ * callback. Honest by contract: `ok: true` only means the provider accepted the
+ * request — delivery is never claimed, and a provider failure or timeout is
+ * surfaced as an error with a retry instruction.
+ */
+export type ResendConfirmationResult = { ok: true } | { ok: false; code: "unconfigured" | "rate_limited" | "timeout" | "failed"; message: string };
+export async function resendConfirmationEmail(email: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}): Promise<ResendConfirmationResult> {
+  const c=cfg(opts.env); if(!c.configured) return {ok:false,code:"unconfigured",message:missingMessage};
+  try {
+    const outcome = await withTimeout((opts.auth ?? authFor(c)).resend!({ type: "signup", email, options: { emailRedirectTo: c.redirectUrl } }));
+    if (outcome === "timeout") return {ok:false,code:"timeout",message:EMAIL_TIMEOUT_MESSAGE};
+    const { error } = outcome;
+    if (!error) return { ok: true };
+    if (/rate|too many|security purposes/i.test(error.message)) return { ok:false, code:"rate_limited", message:"Too many requests. Wait a moment and try again." };
+    return { ok:false, code:"failed", message:"Supabase could not resend the confirmation email. Check the address and try again." };
+  } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
 }
 export async function setRecoverySession(accessToken: string, refreshToken: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}) {
   const c=cfg(opts.env); if(!c.configured) return {ok:false as const, code:"unconfigured", message:missingMessage};

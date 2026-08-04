@@ -151,7 +151,7 @@ describe("applySupabaseIdentity (secure bridge rules)", () => {
 const { createClientMock } = vi.hoisted(() => ({ createClientMock: vi.fn() }));
 vi.mock("@supabase/supabase-js", () => ({ createClient: createClientMock }));
 
-import { sendOtp, signInWithPassword, signUp, resetPasswordForEmail, setRecoverySession, supabaseClientConfig, updatePassword, verifyOtp, type SupabaseAuthLike } from "../src/lib/supabase";
+import { AUTH_TIMEOUT_MS, resendConfirmationEmail, sendOtp, signInWithPassword, signUp, resetPasswordForEmail, setRecoverySession, supabaseClientConfig, updatePassword, verifyOtp, type SupabaseAuthLike } from "../src/lib/supabase";
 
 const CLIENT_ENV = {
   VITE_SUPABASE_URL: "https://abcd1234.supabase.co",
@@ -164,6 +164,7 @@ function authStub(): SupabaseAuthLike & {
   signUp: ReturnType<typeof vi.fn>;
   signInWithPassword: ReturnType<typeof vi.fn>;
   resetPasswordForEmail: ReturnType<typeof vi.fn>;
+  resend: ReturnType<typeof vi.fn>;
   updateUser: ReturnType<typeof vi.fn>;
   setSession: ReturnType<typeof vi.fn>;
 } {
@@ -173,6 +174,7 @@ function authStub(): SupabaseAuthLike & {
     signUp: vi.fn().mockResolvedValue({ data: { session: { access_token: "tok-abc" } }, error: null }),
     signInWithPassword: vi.fn().mockResolvedValue({ data: { session: { access_token: "tok-abc" } }, error: null }),
     resetPasswordForEmail: vi.fn().mockResolvedValue({ data: {}, error: null }),
+    resend: vi.fn().mockResolvedValue({ data: {}, error: null }),
     updateUser: vi.fn().mockResolvedValue({ data: { user: {} }, error: null }),
     setSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
   };
@@ -390,5 +392,133 @@ describe("recovery session + updatePassword (browser adapter)", () => {
     expect(await setRecoverySession("a", "b", { env: {} })).toMatchObject({ ok: false, code: "unconfigured" });
     expect(await updatePassword("x", { env: {} })).toMatchObject({ ok: false, code: "unconfigured" });
     expect(createClientMock).not.toHaveBeenCalled();
+  });
+});
+
+// ------------------------------------------------- resend confirmation email
+describe("resendConfirmationEmail (browser adapter)", () => {
+  it("fails closed as unconfigured and never builds a client", async () => {
+    createClientMock.mockClear();
+    const result = await resendConfirmationEmail("runner@example.com", { env: {} });
+    expect(result).toMatchObject({ ok: false, code: "unconfigured" });
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  it("requests a signup-type resend with the same explicit emailRedirectTo as signUp", async () => {
+    const auth = authStub();
+    createClientMock.mockReturnValue({ auth });
+    const result = await resendConfirmationEmail("runner@example.com", { env: CLIENT_ENV, auth });
+    expect(result).toEqual({ ok: true });
+    expect(auth.resend).toHaveBeenCalledWith({
+      type: "signup",
+      email: "runner@example.com",
+      options: { emailRedirectTo: "https://runlocal.ctonew.app" },
+    });
+  });
+
+  it("maps a rate-limited provider response to rate_limited", async () => {
+    const auth = authStub();
+    auth.resend.mockResolvedValue({ data: {}, error: { message: "For security purposes, you can only request this after 60 seconds." } });
+    const result = await resendConfirmationEmail("runner@example.com", { env: CLIENT_ENV, auth });
+    expect(result).toMatchObject({ ok: false, code: "rate_limited" });
+  });
+
+  it("maps a provider error to an honest send-failure — never claims delivery", async () => {
+    const auth = authStub();
+    auth.resend.mockResolvedValue({ data: {}, error: { message: "Email provider rejected" } });
+    const result = await resendConfirmationEmail("runner@example.com", { env: CLIENT_ENV, auth });
+    expect(result).toMatchObject({ ok: false, code: "failed" });
+    if (!result.ok) {
+      expect(result.message).not.toMatch(/sent|delivered/i);
+      expect(result.message).toMatch(/resend/i);
+    }
+  });
+
+  it("surfaces a network throw as failed", async () => {
+    const auth = authStub();
+    auth.resend.mockRejectedValue(new Error("offline"));
+    const result = await resendConfirmationEmail("runner@example.com", { env: CLIENT_ENV, auth });
+    expect(result).toMatchObject({ ok: false, code: "failed" });
+  });
+});
+
+// ------------------------------------------------- bounded timeout on provider calls
+describe("bounded timeout on auth network operations", () => {
+  it("times out a hung signUp instead of leaving the caller busy forever", async () => {
+    vi.useFakeTimers();
+    try {
+      const auth = authStub();
+      auth.signUp.mockReturnValue(new Promise(() => {}));
+      createClientMock.mockReturnValue({ auth });
+      const pending = signUp("runner@example.com", "s3cret-pass", { env: CLIENT_ENV, auth });
+      const assertion = pending.then((r) => {
+        expect(r).toMatchObject({ ok: false, code: "timeout" });
+        if (!r.ok) expect(r.message).toMatch(/try again/i);
+      });
+      await vi.advanceTimersByTimeAsync(AUTH_TIMEOUT_MS + 50);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("times out a hung signInWithPassword", async () => {
+    vi.useFakeTimers();
+    try {
+      const auth = authStub();
+      auth.signInWithPassword.mockReturnValue(new Promise(() => {}));
+      createClientMock.mockReturnValue({ auth });
+      const pending = signInWithPassword("runner@example.com", "s3cret-pass", { env: CLIENT_ENV, auth });
+      const assertion = pending.then((r) => expect(r).toMatchObject({ ok: false, code: "timeout" }));
+      await vi.advanceTimersByTimeAsync(AUTH_TIMEOUT_MS + 50);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("times out a hung resetPasswordForEmail", async () => {
+    vi.useFakeTimers();
+    try {
+      const auth = authStub();
+      auth.resetPasswordForEmail.mockReturnValue(new Promise(() => {}));
+      createClientMock.mockReturnValue({ auth });
+      const pending = resetPasswordForEmail("runner@example.com", { env: CLIENT_ENV, auth });
+      const assertion = pending.then((r) => expect(r).toMatchObject({ ok: false, code: "timeout" }));
+      await vi.advanceTimersByTimeAsync(AUTH_TIMEOUT_MS + 50);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("times out a hung resendConfirmationEmail", async () => {
+    vi.useFakeTimers();
+    try {
+      const auth = authStub();
+      auth.resend.mockReturnValue(new Promise(() => {}));
+      createClientMock.mockReturnValue({ auth });
+      const pending = resendConfirmationEmail("runner@example.com", { env: CLIENT_ENV, auth });
+      const assertion = pending.then((r) => expect(r).toMatchObject({ ok: false, code: "timeout" }));
+      await vi.advanceTimersByTimeAsync(AUTH_TIMEOUT_MS + 50);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resolves immediately when the provider responds before the timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const auth = authStub();
+      createClientMock.mockReturnValue({ auth });
+      const pending = resendConfirmationEmail("runner@example.com", { env: CLIENT_ENV, auth });
+      const assertion = pending.then((r) => expect(r).toEqual({ ok: true }));
+      // Microtasks flush the mock's already-resolved promise without any timer.
+      await Promise.resolve();
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -26,6 +26,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Chip, Icon, PillButton } from "../components/ui";
+import { ResendConfirmationBox } from "../components/ResendConfirmationBox";
 import * as api from "../lib/api";
 import { validateBirthdate } from "../lib/birthdate";
 import * as supabase from "../lib/supabase";
@@ -35,6 +36,26 @@ import { useAccount } from "../state/account";
 
 const inputCls =
   "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+
+/**
+ * Explicit, honest caveat shown whenever we tell a user an email is coming but
+ * this deployment hasn't confirmed an email-delivery provider. Never claims
+ * delivery that isn't guaranteed.
+ */
+export function emailDeliveryCaveat(deliveryState: "provider-managed" | "not-configured"): string {
+  return deliveryState === "not-configured"
+    ? " Email delivery isn't confirmed on this deployment — if no email arrives, use the resend option below."
+    : "";
+}
+
+/** Signup success notice for the email-confirmation-required path (caveat-aware). */
+export function signupConfirmationNotice(deliveryState: "provider-managed" | "not-configured", photoIncluded: boolean): string {
+  return (
+    "Account created. Check your email and tap the confirmation link, then log in with your password." +
+    emailDeliveryCaveat(deliveryState) +
+    (photoIncluded ? " You can add your profile photo right after your first sign-in." : "")
+  );
+}
 
 /**
  * Map the URL's `mode` search param to the login/signup mode. The URL is the
@@ -105,6 +126,33 @@ export function LoginPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [emailDeliveryState] = useState(() => supabase.supabaseClientConfig().emailDelivery);
+  // Email of the account whose confirmation link hasn't arrived yet — when set,
+  // a visible "Resend confirmation email" action is rendered. Set on the
+  // email-confirmation-required signup path and on the email-not-confirmed
+  // login error; cleared on mode switch and on each fresh submit.
+  const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendError, setResendError] = useState<string | null>(null);
+  const [resendNotice, setResendNotice] = useState<string | null>(null);
+
+  /**
+   * Resend the signup confirmation email to the address used at signup. Success
+   * means the provider accepted the request — delivery is never claimed, and
+   * the not-configured caveat stays visible via the box.
+   */
+  const resendConfirmation = async () => {
+    if (!pendingConfirmationEmail) return;
+    setResendError(null);
+    setResendNotice(null);
+    setResending(true);
+    const r = await supabase.resendConfirmationEmail(pendingConfirmationEmail);
+    setResending(false);
+    if (!r.ok) {
+      setResendError(r.message);
+      return;
+    }
+    setResendNotice("Confirmation email requested. If that address exists, check your inbox (and spam folder) — delivery depends on the configured email provider.");
+  };
 
   /**
    * Best-effort profile photo upload. Only called AFTER a valid Run Local
@@ -172,6 +220,9 @@ export function LoginPage() {
       }
     }
     setBusy(true);
+    setPendingConfirmationEmail(null);
+    setResendError(null);
+    setResendNotice(null);
 
     if (mode === "signup") {
       const r = await supabase.signUp(e, password);
@@ -188,10 +239,8 @@ export function LoginPage() {
         const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined, noSession: true });
         setBusy(false);
         if (created.ok || created.error.code === "email_taken") {
-          setNotice(
-            "Account created. Check your email and tap the confirmation link, then log in with your password. " +
-              (photoDataUrl ? "You can add your profile photo right after your first sign-in." : ""),
-          );
+          setPendingConfirmationEmail(e);
+          setNotice(signupConfirmationNotice(emailDeliveryState, Boolean(photoDataUrl)));
           setSearchParams({}, { replace: true });
           setPassword("");
           setConfirm("");
@@ -205,8 +254,10 @@ export function LoginPage() {
         } else if (created.error.code === "invalid_city" || created.error.code === "city_required") {
           setCityError(created.error.message ?? "Pick a supported city.");
         } else {
+          setPendingConfirmationEmail(e);
           setNotice(
-            "Your Supabase account was created, but Run Local couldn't save your profile right now. Confirm your email and log in — your account will finish setting up then.",
+            "Your Supabase account was created, but Run Local couldn't save your profile right now. Confirm your email and log in — your account will finish setting up then." +
+              emailDeliveryCaveat(emailDeliveryState),
           );
           setSearchParams({}, { replace: true });
           setPassword("");
@@ -248,6 +299,10 @@ export function LoginPage() {
     if (!r.ok) {
       setBusy(false);
       setError(r.message);
+      // An unconfirmed email blocks login — offer the resend action right here
+      // instead of leaving the runner stuck ("Confirm your email... then try
+      // again" with no way to get a fresh link).
+      if (r.code === "email_not_confirmed") setPendingConfirmationEmail(e);
       return;
     }
     if (!r.accessToken) {
@@ -479,6 +534,16 @@ export function LoginPage() {
           )}
           {error && <p className="rounded-xl bg-red-50 p-3.5 text-[13px] text-red-800">{error}</p>}
           {notice && <p className="rounded-xl bg-emerald-50 p-3.5 text-[13px] text-emerald-900">{notice}</p>}
+          {pendingConfirmationEmail && (
+            <ResendConfirmationBox
+              email={pendingConfirmationEmail}
+              deliveryState={emailDeliveryState}
+              resending={resending}
+              error={resendError}
+              notice={resendNotice}
+              onResend={() => void resendConfirmation()}
+            />
+          )}
           <PillButton variant="primary" className="w-full" disabled={busy} onClick={() => void submit()}>
             {busy ? (mode === "login" ? "Logging in…" : "Creating account…") : mode === "login" ? "Log in" : "Create account"}
           </PillButton>
@@ -500,6 +565,9 @@ export function LoginPage() {
                 setError(null);
                 setNotice(null);
                 setCityError(null);
+                setPendingConfirmationEmail(null);
+                setResendError(null);
+                setResendNotice(null);
               }}
               className="font-semibold text-[#0b2b22] underline"
             >
