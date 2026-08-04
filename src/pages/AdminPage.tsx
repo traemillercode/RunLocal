@@ -416,7 +416,10 @@ export function AdminPage() {
     }
     // Stream via authed fetch (audited server-side) and display as object URL.
     try {
-      const res = await fetch(api.adminSelfieUrl(record.id), { credentials: "same-origin" });
+      const res = await fetch(api.adminSelfieUrl(record.id), {
+        credentials: "same-origin",
+        headers: { "x-audit-reason": reason.trim() },
+      });
       if (!res.ok) {
         setDetailError(res.status === 401 ? "Admin session expired — sign in again." : "Selfie could not be loaded.");
         return;
