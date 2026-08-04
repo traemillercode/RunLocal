@@ -769,6 +769,29 @@ async function handleApi(
     return ok(res, { submissions: mySubmissions(db, sess.accountId) }), true;
   }
 
+  // ---- private My Runs (RSVP attendance only; never host records) ---------
+  if (method === "GET" && url.pathname === "/api/my/runs") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(sess.accountId);
+    if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const mine = db.listAttendance(sess.accountId).filter((a) => a.role === "rsvp");
+    const { CITIES } = await import("../data/cities");
+    const { resolveWeekEvents } = await import("../lib/dates");
+    const nowDate = now;
+    const runs = mine.flatMap((a) => {
+      const eventId = a.eventId.replace(/^event:/, "");
+      for (const city of CITIES) {
+        const event = city.events.find((e) => e.id === eventId);
+        if (!event) continue;
+        const dated = resolveWeekEvents([event], nowDate)[0];
+        if (!dated) return [];
+        return [{ id: a.id, eventId, cityId: city.id, title: dated.title, date: dated.date.toISOString().slice(0, 10), time: dated.time, location: dated.location, groupId: dated.groupId, rsvpedAt: a.createdAt }];
+      }
+      return [];
+    }).sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`) || a.eventId.localeCompare(b.eventId));
+    return ok(res, { runs }), true;
+  }
   // ---- submit a race ------------------------------------------------------
   if (method === "POST" && url.pathname === "/api/submissions/race") {
     const sess = requireSession(db, cookies);
