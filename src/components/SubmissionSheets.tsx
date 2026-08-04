@@ -80,14 +80,30 @@ export function RaceSubmissionSheet({ open, onClose, onSubmitted, cityId }: { op
 
 /** Group submission: verified runners. RRCA option is a request, not a claim. */
 export function GroupSubmissionSheet({ open, onClose, onSubmitted, cityId }: { open: boolean; onClose: () => void; onSubmitted?: () => void; cityId: string }) {
-  const { busy, error, submit } = useSubmit();
+  const { busy, error, setError, submit } = useSubmit();
+  const [uploading, setUploading] = useState(false);
   const [f, setF] = useState({ name: "", description: "", groupType: "community", groupmeUrl: "", facebookUrl: "", instagramUrl: "", websiteUrl: "", coverPhoto: "", logoPhoto: "", membershipMode: "request" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const save = async () => {
-    if (!f.coverPhoto || !f.logoPhoto) return;
+    if (!f.coverPhoto || !f.logoPhoto) {
+      setError("Choose both a cover photo and a logo before submitting.");
+      return;
+    }
+    setUploading(true);
+    setError(null);
     const cover = await api.uploadGroupPhoto(f.coverPhoto);
+    if (!cover.ok) {
+      setUploading(false);
+      setError(cover.error.message ?? "Cover photo upload failed. Please choose another image and try again.");
+      return;
+    }
     const logo = await api.uploadGroupPhoto(f.logoPhoto);
-    if (!cover.ok || !logo.ok) return;
+    if (!logo.ok) {
+      setUploading(false);
+      setError(logo.error.message ?? "Logo photo upload failed. Please choose another image and try again.");
+      return;
+    }
+    setUploading(false);
     const ok = await submit(() =>
       api.submitGroup({
         cityId, name: f.name, description: f.description, groupType: f.groupType as "rrca-chartered" | "community",
@@ -130,8 +146,8 @@ export function GroupSubmissionSheet({ open, onClose, onSubmitted, cityId }: { o
         <Field label="Cover photo (required)"><input type="file" accept="image/jpeg,image/png,image/webp" className={inputCls} onChange={(e) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = () => setF({ ...f, coverPhoto: String(reader.result) }); reader.readAsDataURL(file); } }} /></Field>
         <Field label="Logo photo (required)"><input type="file" accept="image/jpeg,image/png,image/webp" className={inputCls} onChange={(e) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = () => setF({ ...f, logoPhoto: String(reader.result) }); reader.readAsDataURL(file); } }} /></Field>
         <Err msg={error} />
-        <PillButton variant="primary" className="w-full" disabled={busy} onClick={() => void save()}>
-          <Icon name="check" className="h-4 w-4" /> {busy ? "Submitting…" : "Submit for approval"}
+        <PillButton variant="primary" className="w-full" disabled={busy || uploading} onClick={() => void save()}>
+          <Icon name="check" className="h-4 w-4" /> {uploading ? "Uploading photos…" : busy ? "Submitting…" : "Submit for approval"}
         </PillButton>
         <p className="text-center text-xs text-slate-400">Once approved, you're granted the Group Leader role for this group.</p>
       </div>

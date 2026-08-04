@@ -66,6 +66,7 @@ import { decideSubmission,
   submissionQueue,
   citySubmissionQueue,
   cityDecideSubmission,
+  requireVerifiedSubmitter,
 } from "./submissions";
 import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
 import {
@@ -602,7 +603,10 @@ async function handleApi(
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const body = (await readJson(req)) as { photo?: unknown };
     const rec = db.getAccount(sess.accountId);
-    if (!rec || rec.deletedAt || typeof body.photo !== "string") return err(res, { status: 400, error: "invalid_image" }), true;
+    if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const verified = requireVerifiedSubmitter(db, sess.accountId);
+    if (!verified.ok) return err(res, { status: verified.status, error: verified.error, message: verified.message }), true;
+    if (typeof body.photo !== "string") return err(res, { status: 400, error: "invalid_image" }), true;
     const img = decodeImage(body.photo);
     if (!img.ok) return err(res, { status: 400, error: img.error }), true;
     const filename = `${rec.id}_group_${newId()}.${img.ext}`;
