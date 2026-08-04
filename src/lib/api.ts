@@ -48,8 +48,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
 }
 
 // ------------------------------------------------------- username availability
-export function checkUsernameAvailability(username: string): Promise<ApiResult<{ valid: boolean; available: boolean }>> {
-  return request(`/api/username/availability?username=${encodeURIComponent(username)}`);
+export interface UsernameAvailability {
+  valid: boolean;
+  available: boolean;
+}
+
+/**
+ * Validate the availability payload instead of treating an unexpected 2xx body
+ * as "taken". A stale proxy/server can return the SPA HTML with a 200, and a
+ * malformed payload must leave signup in the explicit error state.
+ */
+export function normalizeUsernameAvailabilityResponse(body: unknown): ApiResult<UsernameAvailability> {
+  if (body && typeof body === "object") {
+    const candidate = body as { valid?: unknown; available?: unknown };
+    if (typeof candidate.valid === "boolean" && typeof candidate.available === "boolean") {
+      return { ok: true, data: { valid: candidate.valid, available: candidate.available } };
+    }
+  }
+  return { ok: false, error: new ApiError(502, "invalid_response", "The server returned an invalid username availability response.") };
+}
+
+export async function checkUsernameAvailability(username: string): Promise<ApiResult<UsernameAvailability>> {
+  const result = await request<unknown>(`/api/username/availability?username=${encodeURIComponent(username)}`);
+  return result.ok ? normalizeUsernameAvailabilityResponse(result.data) : result;
 }
 
 // ------------------------------------------------------------------ health
