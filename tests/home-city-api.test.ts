@@ -111,7 +111,7 @@ describe("POST /api/accounts — home city is required and validated", () => {
   });
   it("rejects an unknown city id with 400 invalid_city and creates nothing", async () => {
     const db = createMemoryStore();
-    for (const bad of ["atlantis", "columbia", "MO", "", "  "]) {
+    for (const bad of ["atlantis", "columbia", "columbia-mo ", "  columbia-mo  ", "MO", "", "  "]) {
       const fake = await post(db, "/api/accounts", { ...VALID, email: `x-${bad.length}@example.com`, cityId: bad });
       expect(fake.status, `cityId=${JSON.stringify(bad)}`).toBe(400);
       const body = JSON.parse(fake.body) as { error: string; message: string };
@@ -120,11 +120,12 @@ describe("POST /api/accounts — home city is required and validated", () => {
     }
     expect(db.listAccounts().length).toBe(0);
   });
-  it("trims surrounding whitespace before validating (a padded known id is accepted)", async () => {
+  it("does not silently normalize whitespace at signup (a padded known id is malformed → 400 invalid_city)", async () => {
     const db = createMemoryStore();
     const fake = await post(db, "/api/accounts", { ...VALID, cityId: "  columbia-mo  " });
-    expect(fake.status).toBe(200);
-    expect(db.getAccountByEmail(VALID.email)!.cityId).toBe("columbia-mo");
+    expect(fake.status).toBe(400);
+    expect(JSON.parse(fake.body).error).toBe("invalid_city");
+    expect(db.listAccounts().length).toBe(0);
   });
   it("persists the chosen cityId on the account and returns it in the public payload", async () => {
     const db = createMemoryStore();

@@ -282,11 +282,15 @@ async function handleApi(
     // Home city is REQUIRED for new signups and validated HERE against the
     // known city entities (src/data/cities.ts) — the server is authoritative,
     // never the client. Missing and unknown ids get distinct, clear errors.
-    const cityId = typeof body.cityId === "string" ? body.cityId.trim() : "";
+    // The id must arrive EXACT: surrounding whitespace is malformed input, not
+    // silently normalized (a padded id would mask a buggy client). Whitespace-
+    // only counts as missing; any other mismatch is invalid_city.
+    const rawCityId = typeof body.cityId === "string" ? body.cityId : "";
+    const cityId = rawCityId.trim();
     if (!cityId) {
       return err(res, { status: 400, error: "city_required", message: "Choose your home city — Run Local is city-scoped and your community content defaults to it." }), true;
     }
-    if (!isSupportedCityId(cityId)) {
+    if (rawCityId !== cityId || !isSupportedCityId(cityId)) {
       return err(res, { status: 400, error: "invalid_city", message: "That city isn't supported yet — pick one from the list." }), true;
     }
     // Username is REQUIRED for new signups and validated/normalized here —
