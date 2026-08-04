@@ -46,7 +46,7 @@ function maskIp(ip: string | null): string {
 
 export function AdminPage() {
   const navigate = useNavigate();
-  const { me } = useAccount();
+  const { me, refresh: refreshAccount } = useAccount();
   // The owner/super-admin (server-derived isOwner flag from /api/me) gets the
   // control center through their normal signed-in session — no key needed.
   // Everyone else sees the key-based safety tool login exactly as before.
@@ -202,11 +202,7 @@ export function AdminPage() {
   // ---- owner-only pending queue -----------------------------------------
   const loadQueue = async () => {
     setQueueError(null);
-    if (!reason.trim() || reason.trim().length < 5) {
-      setQueueError("Enter a reason (min 5 characters) to load the pending queue.");
-      return;
-    }
-    const r = await api.adminPending(reason.trim());
+    const r = await api.adminPending();
     if (r.ok) {
       setPending(r.data.results);
       setQueueError(null);
@@ -239,6 +235,7 @@ export function AdminPage() {
     const r = await api.adminSetStatus(row.id, "approve", reason.trim(), role);
     if (r.ok) {
       setQueueError(null);
+      await refreshAccount();
       void loadQueue();
     } else if (r.error.code === "verification_incomplete") {
       setQueueError("Approval blocked: the required verification state (email + selfie, pending_review) isn't complete.");
@@ -505,11 +502,11 @@ export function AdminPage() {
         <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <h2 className="text-[15px] font-bold text-slate-900">Pending users</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            Accounts awaiting verification, newest first. Rows are redacted — no phone, selfie, or IP data here.
+            Read-only queue access for Super Admin. Approve and reject actions require an audited reason below. Accounts awaiting verification, newest first. Rows are redacted — no phone, selfie, or IP data here.
             Approve only after the user reached the "Under review" state (email + selfie submitted).
           </p>
           <div className="mt-3 space-y-3">
-            <textarea rows={2} placeholder="Reason for accessing the queue (required, audited)" value={reason} onChange={(e) => setReason(e.target.value)} className={reasonCls} />
+            <textarea rows={2} placeholder="Reason for approval or rejection (required, audited)" value={reason} onChange={(e) => setReason(e.target.value)} className={reasonCls} />
             <PillButton variant="primary" className="w-full" onClick={() => void loadQueue()}>
               <Icon name="search" className="h-4 w-4" /> Load pending queue
             </PillButton>

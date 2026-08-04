@@ -279,9 +279,10 @@ export function adminSetStatus(id: string, action: "approve" | "reject", reason:
   return adminRequest(`/api/admin/records/${id}/${action}?role=${role}`, reason, { method: "POST" });
 }
 
-/** Owner-only: fetch the pending-users queue (audited with the reason). */
-export function adminPending(reason: string): Promise<ApiResult<{ results: PendingQueueRow[] }>> {
-  return adminRequest("/api/admin/pending", reason);
+/** Owner-only read: fetch the pending-users queue. Read access is authorized
+ * server-side without an audit reason; decisions remain reason-required. */
+export function adminPending(): Promise<ApiResult<{ results: PendingQueueRow[] }>> {
+  return request("/api/admin/pending");
 }
 
 export function adminDeleteRecord(id: string, reason: string): Promise<ApiResult<{ ok: true }>> {
