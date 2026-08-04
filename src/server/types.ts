@@ -182,6 +182,8 @@ export interface PersistedDb {
    * public content, and rejection reasons are shown ONLY to the submitter.
    */
   submissions: SubmissionRecord[];
+  activities?: import("./activity").Activity[];
+  oauthTokens?: import("./activity").OAuthToken[];
 }
 
 /** What kind of seeded content a moderation record refers to. */

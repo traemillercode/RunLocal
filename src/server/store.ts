@@ -151,6 +151,8 @@ export class Db {
   private groups = new Map<string, GroupModRecord>();
   private flags: FlagRecord[] = [];
   private submissions = new Map<string, SubmissionRecord>();
+  private activities = new Map<string, import("./activity").Activity>();
+  private oauthTokens = new Map<string, import("./activity").OAuthToken>();
   private loaded = false;
 
   constructor(opts: DbOptions = {}) {
@@ -189,6 +191,8 @@ export class Db {
       for (const g of parsed.groups ?? []) this.groups.set(g.id, g);
       this.flags = parsed.flags ?? [];
       for (const s of parsed.submissions ?? []) this.submissions.set(s.id, s);
+      for (const a of parsed.activities ?? []) this.activities.set(a.id, a);
+      for (const t of parsed.oauthTokens ?? []) this.oauthTokens.set(`${t.accountId}:${t.provider}`, t);
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -206,6 +210,8 @@ export class Db {
       groups: [...this.groups.values()],
       flags: this.flags,
       submissions: [...this.submissions.values()],
+      activities: [...this.activities.values()],
+      oauthTokens: [...this.oauthTokens.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -470,6 +476,14 @@ export class Db {
     this.submissions.set(id, next);
     return next;
   }
+
+  // ------------------------------------------------------------- activities
+  listActivities(accountId?: string) { return [...this.activities.values()].filter(a => !accountId || a.accountId === accountId); }
+  addActivity(a: import("./activity").Activity) { this.activities.set(a.id, a); return a; }
+  removeActivities(accountId: string, provider: import("./activity").Provider) { for (const [id,a] of this.activities) if (a.accountId===accountId && a.provider===provider) this.activities.delete(id); }
+  getToken(accountId: string, provider: import("./activity").Provider) { return this.oauthTokens.get(`${accountId}:${provider}`); }
+  setToken(t: import("./activity").OAuthToken) { this.oauthTokens.set(`${t.accountId}:${t.provider}`, t); }
+  removeToken(accountId: string, provider: import("./activity").Provider) { this.oauthTokens.delete(`${accountId}:${provider}`); }
 
   // ---------------------------------------------------------------- uploads
   private uploadDir(kind: "private" | "public"): string {
