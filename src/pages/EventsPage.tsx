@@ -157,7 +157,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
           placeholder="Search runs, routes, or groups"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="h-12 w-full appearance-none rounded-full border border-slate-200 bg-white pl-11 pr-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60 [&::-webkit-search-cancel-button]:appearance-none"
+          className="h-12 w-full appearance-none rounded-full border border-slate-200 bg-white pl-11 pr-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60 [&::-webkit-search-cancel-button]:appearance-none"
         />
       </div>
       {groups.length === 0 ? (
@@ -195,8 +195,8 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
                         </div>
                         {e.externalUrl ? (
                           <div className="border-t border-slate-100 px-4 py-2.5">
-                            <a href={e.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#0b2b22] text-sm font-semibold text-white">
-                              Details <Icon name="external" className="h-4 w-4 text-[#c8f169]" />
+                            <a href={e.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#14171C] text-sm font-semibold text-white">
+                              Details <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
                             </a>
                           </div>
                         ) : null}
@@ -242,8 +242,8 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
                     <div className="space-y-1.5 px-4 pb-4 text-[13px] text-slate-600">
                       <p className="flex items-center gap-2"><Icon name="mapPin" className="h-4 w-4 text-slate-400" />{e.location}</p>
                       {e.externalUrl ? (
-                        <a href={e.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full bg-[#0b2b22] text-sm font-semibold text-white">
-                          Details <Icon name="external" className="h-4 w-4 text-[#c8f169]" />
+                        <a href={e.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full bg-[#14171C] text-sm font-semibold text-white">
+                          Details <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
                         </a>
                       ) : null}
                     </div>

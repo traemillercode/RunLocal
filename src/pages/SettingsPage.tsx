@@ -214,7 +214,7 @@ export function SettingsPage() {
                 className="flex min-h-11 w-full items-center justify-between gap-3 px-5 text-left active:bg-slate-50"
               >
                 <span className="text-[14px] font-medium text-slate-700">Verification</span>
-                <span className="flex items-center gap-1 text-[14px] font-semibold text-[#0b2b22]">
+                <span className="flex items-center gap-1 text-[14px] font-semibold text-[#14171C]">
                   {verified ? "View status" : "Continue"} <Icon name="chevronRight" className="h-4 w-4 text-slate-300" />
                 </span>
               </button>
@@ -255,7 +255,7 @@ export function SettingsPage() {
               className="flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3.5 text-left active:bg-slate-50"
             >
               <span className="text-[14px] font-medium text-slate-700">Reminders & notifications</span>
-              <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${notificationsOn ? "bg-[#0b2b22]" : "bg-slate-300"}`}>
+              <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${notificationsOn ? "bg-[#14171C]" : "bg-slate-300"}`}>
                 <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${notificationsOn ? "left-6" : "left-1"}`} />
               </span>
             </button>
@@ -295,12 +295,12 @@ export function SettingsPage() {
                       setCitySaveError(null);
                     }}
                     className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
-                      active ? "border-[#0b2b22] bg-[#0b2b22] text-white" : "border-slate-200 bg-white text-slate-800"
+                      active ? "border-[#14171C] bg-[#14171C] text-white" : "border-slate-200 bg-white text-slate-800"
                     } ${disabled ? "opacity-60" : "active:bg-slate-50"}`}
                   >
                     <span
                       className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
-                        active ? "bg-white/15 text-[#c8f169]" : "bg-slate-100 text-slate-500"
+                        active ? "bg-white/15 text-[#FF5741]" : "bg-slate-100 text-slate-500"
                       }`}
                     >
                       <Icon name="pin" className="h-4 w-4" />
@@ -311,7 +311,7 @@ export function SettingsPage() {
                       </span>
                       <span className={`block truncate text-[11px] ${active ? "text-white/70" : "text-slate-500"}`}>{c.tagline}</span>
                     </span>
-                    {active ? <Icon name="check" className="h-4 w-4 shrink-0 text-[#c8f169]" /> : disabled ? <Chip tone="amber">Coming soon</Chip> : null}
+                    {active ? <Icon name="check" className="h-4 w-4 shrink-0 text-[#FF5741]" /> : disabled ? <Chip tone="amber">Coming soon</Chip> : null}
                   </button>
                 </li>
               );
@@ -341,9 +341,9 @@ export function SettingsPage() {
 
       {/* Owner-only */}
       {isOwner ? (
-        <section className="mt-4 overflow-hidden rounded-2xl bg-[#0b2b22] text-white shadow-sm ring-1 ring-[#0b2b22]/20">
+        <section className="mt-4 overflow-hidden rounded-2xl bg-[#14171C] text-white shadow-sm ring-1 ring-[#14171C]/20">
           <h2 className="flex items-center gap-2 border-b border-white/10 px-5 py-3.5 text-[15px] font-bold">
-            <Icon name="lock" className="h-4 w-4 text-[#c8f169]" /> Owner / Super Admin
+            <Icon name="lock" className="h-4 w-4 text-[#FF5741]" /> Owner / Super Admin
           </h2>
           <ul className="divide-y divide-white/10">
             <li>
@@ -356,7 +356,7 @@ export function SettingsPage() {
                   <span className="block text-[14px] font-semibold">Admin control center</span>
                   <span className="block text-xs text-white/60">Pending users, approval & audit</span>
                 </span>
-                <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-[#c8f169]" />
+                <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-[#FF5741]" />
               </button>
             </li>
             <li className="px-5 py-3.5">

@@ -20,7 +20,7 @@ import { normalizeErrorMessage } from "../lib/errors";
 import { useAccount } from "../state/account";
 
 const inputCls =
-  "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+  "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -92,7 +92,7 @@ export function ConfirmationPage() {
             onResend={() => void resend()}
           />
         </div>
-        <button type="button" onClick={() => navigate("/login")} className="mt-4 block w-full text-center text-sm font-semibold text-[#0b2b22] underline">
+        <button type="button" onClick={() => navigate("/login")} className="mt-4 block w-full text-center text-sm font-semibold text-[#14171C] underline">
           Go to log in
         </button>
       </section>

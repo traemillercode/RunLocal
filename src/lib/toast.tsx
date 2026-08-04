@@ -47,7 +47,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             type="button"
             onClick={() => dismiss(t.id)}
             className={`pointer-events-auto w-full max-w-sm rounded-xl px-4 py-3 text-left text-sm font-medium text-white shadow-lg shadow-black/15 ${
-              t.tone === "success" ? "bg-emerald-700" : t.tone === "info" ? "bg-[#0b2b22]" : "bg-slate-800"
+              t.tone === "success" ? "bg-emerald-700" : t.tone === "info" ? "bg-[#14171C]" : "bg-slate-800"
             }`}
           >
             {t.message}

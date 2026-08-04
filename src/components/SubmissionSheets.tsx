@@ -10,7 +10,7 @@ import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
 
 const inputCls =
-  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 const labelCls = "mb-1.5 block text-sm font-semibold text-slate-700";
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -189,8 +189,8 @@ export function IndependentEventSheet({ open, onClose, onSubmitted, cityId }: { 
         ) : null}
         <Field label="Schedule">
           <div className="flex gap-2">
-            <button type="button" onClick={() => setF({ ...f, type: "recurring" })} className={`h-11 flex-1 rounded-xl text-sm font-semibold ${f.type === "recurring" ? "bg-[#0b2b22] text-white" : "bg-slate-100 text-slate-600"}`}>Recurring (weekly)</button>
-            <button type="button" onClick={() => setF({ ...f, type: "one_time" })} className={`h-11 flex-1 rounded-xl text-sm font-semibold ${f.type === "one_time" ? "bg-[#0b2b22] text-white" : "bg-slate-100 text-slate-600"}`}>One-time</button>
+            <button type="button" onClick={() => setF({ ...f, type: "recurring" })} className={`h-11 flex-1 rounded-xl text-sm font-semibold ${f.type === "recurring" ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-600"}`}>Recurring (weekly)</button>
+            <button type="button" onClick={() => setF({ ...f, type: "one_time" })} className={`h-11 flex-1 rounded-xl text-sm font-semibold ${f.type === "one_time" ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-600"}`}>One-time</button>
           </div>
         </Field>
         <Field label="Run title"><input className={inputCls} placeholder="e.g. Thursday Hills" value={f.title} onChange={set("title")} /></Field>

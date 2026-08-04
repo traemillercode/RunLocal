@@ -66,7 +66,7 @@ export function authErrorText(value: unknown): string {
 }
 
 const inputCls =
-  "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+  "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
 /**
  * Explicit, honest caveat shown whenever we tell a user an email is coming but
@@ -398,7 +398,7 @@ export function LoginPage() {
     return (
       <div className="mx-auto w-full max-w-md px-4 pb-32 pt-6">
         <div className="rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200/70">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[#c8f169] text-[#0b2b22]">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[#FF5741] text-[#14171C]">
             <Icon name="check" className="h-7 w-7" />
           </span>
           <h1 className="mt-3 text-xl font-extrabold">You're signed in</h1>
@@ -538,12 +538,12 @@ export function LoginPage() {
                             setCityError(null);
                           }}
                           className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
-                            active ? "border-[#0b2b22] bg-[#0b2b22] text-white" : "border-slate-200 bg-white text-slate-800"
+                            active ? "border-[#14171C] bg-[#14171C] text-white" : "border-slate-200 bg-white text-slate-800"
                           } ${disabled ? "opacity-60" : "active:bg-slate-50"}`}
                         >
                           <span
                             className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
-                              active ? "bg-white/15 text-[#c8f169]" : "bg-slate-100 text-slate-500"
+                              active ? "bg-white/15 text-[#FF5741]" : "bg-slate-100 text-slate-500"
                             }`}
                           >
                             <Icon name="pin" className="h-4 w-4" />
@@ -555,7 +555,7 @@ export function LoginPage() {
                             <span className={`block truncate text-[11px] ${active ? "text-white/70" : "text-slate-500"}`}>{c.tagline}</span>
                           </span>
                           {active ? (
-                            <Icon name="check" className="h-4 w-4 shrink-0 text-[#c8f169]" />
+                            <Icon name="check" className="h-4 w-4 shrink-0 text-[#FF5741]" />
                           ) : disabled ? (
                             <Chip tone="amber">Coming soon</Chip>
                           ) : null}
@@ -614,7 +614,7 @@ export function LoginPage() {
             {busy ? (mode === "login" ? "Logging in…" : "Creating account…") : mode === "login" ? "Log in" : "Create account"}
           </PillButton>
           {mode === "login" && (
-            <button type="button" disabled={busy} onClick={() => void reset()} className="block w-full text-center text-sm font-semibold text-[#0b2b22] underline">
+            <button type="button" disabled={busy} onClick={() => void reset()} className="block w-full text-center text-sm font-semibold text-[#14171C] underline">
               Forgot password?
             </button>
           )}
@@ -635,7 +635,7 @@ export function LoginPage() {
                 setResendError(null);
                 setResendNotice(null);
               }}
-              className="font-semibold text-[#0b2b22] underline"
+              className="font-semibold text-[#14171C] underline"
             >
               {mode === "login" ? "Create an account" : "Log in instead"}
             </button>

@@ -2,8 +2,8 @@
 
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --color-ink: #0b2b22;
-  --color-volt: #c8f169;
+  --color-ink: #14171C;
+  --color-volt: #FF5741;
 }
 
 html {
@@ -13,7 +13,7 @@ html {
 
 body {
   font-family: var(--font-sans);
-  background-color: #f5f6f2;
+  background-color: #f7f7f5;
   overscroll-behavior-y: none;
 }
 
@@ -71,4 +71,29 @@ select {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+
+/* Run Local visual system: coral energy on an ink foundation. Keep semantic
+   status colors below intact; these tokens are for brand and interaction UI. */
+:root {
+  --rl-coral: #FF5741;
+  --rl-coral-soft: #fff0ec;
+  --rl-ink: #14171C;
+  --rl-canvas: #f7f7f5;
+}
+
+::selection { background: var(--rl-coral); color: var(--rl-ink); }
+
+:focus-visible {
+  outline: 3px solid var(--rl-coral);
+  outline-offset: 3px;
+}
+
+button, a, input, textarea, select {
+  -webkit-tap-highlight-color: color-mix(in srgb, var(--rl-coral) 18%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

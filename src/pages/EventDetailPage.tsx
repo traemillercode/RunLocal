@@ -65,8 +65,8 @@ export function EventDetailView({
       </button>
 
       <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
-        <div className="bg-[#0b2b22] p-5 text-white">
-          <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-[#c8f169]">
+        <div className="bg-[#14171C] p-5 text-white">
+          <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-[#FF5741]">
             {dayLabel(event.date, new Date())} · {event.time}
             {event.isToday ? (
               <Chip tone="volt">
@@ -111,9 +111,9 @@ export function EventDetailView({
               href={event.externalUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#0b2b22] text-sm font-semibold text-white active:bg-[#124d3c]"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#14171C] text-sm font-semibold text-white active:bg-[#252a31]"
             >
-              External details <Icon name="external" className="h-4 w-4 text-[#c8f169]" />
+              External details <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
             </a>
           ) : null}
         </div>
@@ -126,7 +126,7 @@ export function EventDetailView({
               rsvped
                 ? "bg-emerald-100 text-emerald-800"
                 : canRsvp
-                  ? "bg-[#c8f169] text-[#0b2b22] active:bg-[#b9e355]"
+                  ? "bg-[#FF5741] text-[#14171C] active:bg-[#e94735]"
                   : "bg-slate-100 text-slate-500 active:bg-slate-200"
             }`}
           >
@@ -195,7 +195,7 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
         </span>
         <h1 className="mt-3 text-xl font-extrabold">Run not found</h1>
         <p className="mt-1 text-sm text-slate-500">This run isn't in the current week, or it's no longer listed.</p>
-        <Link to="/" className="mt-4 inline-block rounded-full bg-[#0b2b22] px-5 py-3 text-sm font-semibold text-white">
+        <Link to="/" className="mt-4 inline-block rounded-full bg-[#14171C] px-5 py-3 text-sm font-semibold text-white">
           Back to this week
         </Link>
       </div>
