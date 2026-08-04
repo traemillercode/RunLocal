@@ -775,6 +775,7 @@ async function handleApi(
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const rec = db.getAccount(sess.accountId);
     if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
     const mine = db.listAttendance(sess.accountId).filter((a) => a.role === "rsvp");
     const { CITIES } = await import("../data/cities");
     const { resolveWeekEvents } = await import("../lib/dates");
