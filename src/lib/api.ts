@@ -47,6 +47,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
   }
 }
 
+// ------------------------------------------------------- username availability
+export function checkUsernameAvailability(username: string): Promise<ApiResult<{ valid: boolean; available: boolean }>> {
+  return request(`/api/username/availability?username=${encodeURIComponent(username)}`);
+}
+
 // ------------------------------------------------------------------ health
 export interface HealthInfo {
   ok: true;

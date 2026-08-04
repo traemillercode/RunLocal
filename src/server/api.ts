@@ -375,6 +375,17 @@ async function handleApi(
     db.addActivity(a); await db.persist(); ok(res, { card: publicActivityCard(a) }); return true;
   }
 
+  // ---- public username availability (format + uniqueness only) -----------
+  // This endpoint is intentionally narrow: usernames are public profile identity,
+  // and the response contains no account metadata or sensitive information.
+  if (method === "GET" && url.pathname === "/api/username/availability") {
+    const raw = url.searchParams.get("username") ?? "";
+    const username = normalizeUsername(raw);
+    if (!username) return ok(res, { valid: false, available: false }), true;
+    const taken = db.getAccountByUsername(username);
+    return ok(res, { valid: true, available: !taken || Boolean(taken.deletedAt) }), true;
+  }
+
   // ---- account creation (signup completion) ------------------------------
   // Used by the password signup flow AFTER Supabase created the auth user:
   // the local Pending profile carries only profile metadata (name, email,
