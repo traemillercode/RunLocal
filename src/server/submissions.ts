@@ -197,6 +197,9 @@ export interface GroupSubmitInput {
   facebookUrl?: unknown;
   instagramUrl?: unknown;
   websiteUrl?: unknown;
+  coverPhoto?: unknown;
+  logoPhoto?: unknown;
+  membershipMode?: unknown;
 }
 
 /**
@@ -238,6 +241,11 @@ export function submitGroup(db: Db, accountId: string, input: GroupSubmitInput, 
   if (!instagram.ok) return { ok: false, status: 400, error: instagram.error };
   const website = optionalUrl(input.websiteUrl);
   if (!website.ok) return { ok: false, status: 400, error: website.error };
+  const membershipMode = input.membershipMode === "open" || input.membershipMode === "request" ? input.membershipMode : null;
+  if (!membershipMode) return { ok: false, status: 400, error: "invalid_membership_mode" };
+  const coverPhotoRef = typeof input.coverPhoto === "string" && input.coverPhoto.trim() ? input.coverPhoto.trim().slice(0, 200) : null;
+  const logoPhotoRef = typeof input.logoPhoto === "string" && input.logoPhoto.trim() ? input.logoPhoto.trim().slice(0, 200) : null;
+  if (!coverPhotoRef || !logoPhotoRef) return { ok: false, status: 400, error: "photos_required", message: "Cover and logo photos are required." };
   const payload: GroupSubmissionPayload = {
     kind: "group",
     name,
@@ -248,6 +256,9 @@ export function submitGroup(db: Db, accountId: string, input: GroupSubmitInput, 
     facebookUrl: facebook.url,
     instagramUrl: instagram.url,
     websiteUrl: website.url,
+    coverPhotoRef,
+    logoPhotoRef,
+    membershipMode,
   };
   return { ok: true, data: db.appendSubmission(newSubmission("group", city.data, accountId, payload, now)) };
 }
@@ -565,6 +576,18 @@ function decideSubmissionCore(
       rrcaBadge: false,
       rrcaNote: null,
       rrcaNoteUpdatedAt: null,
+      description: (rec.payload as GroupSubmissionPayload).description,
+      groupType: (rec.payload as GroupSubmissionPayload).groupType,
+      websiteUrl: (rec.payload as GroupSubmissionPayload).websiteUrl,
+      groupmeUrl: (rec.payload as GroupSubmissionPayload).groupmeUrl,
+      facebookUrl: (rec.payload as GroupSubmissionPayload).facebookUrl,
+      instagramUrl: (rec.payload as GroupSubmissionPayload).instagramUrl,
+      coverPhotoRef: (rec.payload as GroupSubmissionPayload).coverPhotoRef,
+      logoPhotoRef: (rec.payload as GroupSubmissionPayload).logoPhotoRef,
+      membershipMode: (rec.payload as GroupSubmissionPayload).membershipMode,
+      status: "published",
+      ownerId: rec.submitterAccountId,
+      leaderIds: [rec.submitterAccountId],
     });
     const submitter = db.getAccount(rec.submitterAccountId);
     if (submitter && !submitter.deletedAt) {
@@ -605,6 +628,7 @@ export interface PublicUserGroup {
   facebookUrl: string | null;
   instagramUrl: string | null;
   websiteUrl: string | null;
+  coverPhotoUrl?: string; logoPhotoUrl?: string; membershipMode?: "open" | "request"; rrcaVerified?: boolean; leaders?: { id:string; name:string }[];
 }
 export interface PublicUserEvent {
   id: string;
@@ -692,6 +716,11 @@ export function publicApprovedContent(db: Db, cityId: string): PublicApprovedCon
         facebookUrl: p.facebookUrl,
         instagramUrl: p.instagramUrl,
         websiteUrl: p.websiteUrl,
+        coverPhotoUrl: p.coverPhotoRef ? `/uploads/public/${p.coverPhotoRef}` : "",
+        logoPhotoUrl: p.logoPhotoRef ? `/uploads/public/${p.logoPhotoRef}` : "",
+        membershipMode: p.membershipMode ?? "open",
+        rrcaVerified: db.getGroup(s.publicRefId ?? `user-${s.id}`)?.rrcaBadge ?? false,
+        leaders: [{ id: s.submitterAccountId, name: host }],
       });
     }
   }

@@ -25,11 +25,15 @@ import { ConfirmationPage } from "./pages/ConfirmationPage";
 import { MyRunsPage } from "./pages/MyRunsPage";
 import { PersonalRunsPage } from "./pages/PersonalRunsPage";
 import { PastEventsPage } from "./pages/PastEventsPage";
+import { GroupsPage } from "./pages/GroupsPage";
+import { GroupDetailPage } from "./pages/GroupDetailPage";
 import { cleanCallbackUrl, parseAuthCallback } from "./lib/recovery";
 import * as supabase from "./lib/supabase";
 
 /** Routes that get a chrome-free wizard layout (no bottom nav). */
 const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login", "/recovery", "/confirmation"]);
+
+function GroupRoute() { const location = useLocation(); const id = location.pathname.split("/").pop() ?? ""; return <GroupDetailPage id={id} />; }
 
 function Shell() {
   const store = useAppState();
@@ -70,6 +74,8 @@ function Shell() {
             <Route path="/" element={<EventsPage city={city} store={store} />} />
             <Route path="/events/:eventId" element={<EventDetailPage city={city} store={store} />} />
             <Route path="/past-events" element={<PastEventsPage city={city} />} />
+            <Route path="/groups" element={<GroupsPage city={city} />} />
+            <Route path="/groups/:groupId" element={<GroupRoute />} />
             <Route path="/races" element={<RacesPage city={city} />} />
             <Route path="/forum" element={<ForumPage city={city} />} />
             <Route path="/my-runs" element={<MyRunsPage />} />

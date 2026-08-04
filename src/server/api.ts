@@ -39,6 +39,7 @@ import {
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
+import { publicGroups, publicGroup } from "./groups";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import {
   dashboardOverview,
@@ -308,6 +309,14 @@ async function handleApi(
   // Only APPROVED submissions ever appear here (pending/rejected never leave
   // the server), and owner-hidden content is excluded. No emails, phones, IPs,
   // or rejection reasons — just the public listing facts.
+  if (method === "GET" && url.pathname === "/api/groups") {
+    const cityId = url.searchParams.get("city") ?? "";
+    if (!cityId || !cityExists(db, cityId)) return err(res, { status: 400, error: "invalid_city" }), true;
+    return ok(res, { cityId, groups: publicGroups(db, cityId) }), true;
+  }
+  const groupDetail = /^\/api\/groups\/([a-f0-9-]+)$/.exec(url.pathname);
+  if (method === "GET" && groupDetail) { const group = publicGroup(db, groupDetail[1]); if (!group) return err(res,{status:404,error:"not_found"}),true; return ok(res,{group}),true; }
+
   if (method === "GET" && url.pathname === "/api/content") {
     const cityId = url.searchParams.get("city") ?? "";
     // Any KNOWN city serves its content history — deactivated and invite-only
@@ -831,7 +840,7 @@ async function handleApi(
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const body = (await readJson(req)) as {
       cityId?: unknown; name?: unknown; description?: unknown; groupType?: unknown;
-      groupmeUrl?: unknown; facebookUrl?: unknown; instagramUrl?: unknown; websiteUrl?: unknown;
+      groupmeUrl?: unknown; facebookUrl?: unknown; instagramUrl?: unknown; websiteUrl?: unknown; coverPhoto?: unknown; logoPhoto?: unknown; membershipMode?: unknown;
     };
     const result = submitGroup(db, sess.accountId, body, now);
     if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;

@@ -385,16 +385,14 @@ export interface ContentRecord {
   hiddenAt: string | null;
 }
 
+export type GroupStatus = "pending_approval" | "published" | "suspended";
+export type MembershipMode = "open" | "request";
 export interface GroupModRecord {
-  /** Seed group id (e.g. "ctc"). */
-  id: string;
-  cityId: string;
-  name: string;
-  /** Whether the public "RRCA-Chartered Club" label is warranted (owner-set). */
-  rrcaBadge: boolean;
-  /** Internal (owner-only) note explaining the charter/badge, e.g. "Charter #…". */
-  rrcaNote: string | null;
-  rrcaNoteUpdatedAt: string | null;
+  id: string; cityId: string; name: string; description?: string;
+  groupType?: GroupType; websiteUrl?: string|null; groupmeUrl?: string|null; facebookUrl?: string|null; instagramUrl?: string|null;
+  coverPhotoRef?: string|null; logoPhotoRef?: string|null; ownerId?: string; leaderIds?: string[]; membershipMode?: MembershipMode; status?: GroupStatus;
+  rrcaBadge: boolean; rrcaNote: string | null; rrcaNoteUpdatedAt: string | null;
+  rejectionReason?: string|null;
 }
 
 export type FlagStatus = "open" | "dismissed" | "hidden";
@@ -454,6 +452,9 @@ export interface GroupSubmissionPayload {
   facebookUrl: string | null;
   instagramUrl: string | null;
   websiteUrl: string | null;
+  coverPhotoRef?: string;
+  logoPhotoRef?: string;
+  membershipMode?: MembershipMode;
 }
 
 /** Independent-event submission payload — a run NOT tied to a group. */
