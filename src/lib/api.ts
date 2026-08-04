@@ -6,6 +6,7 @@
  * client-side; sessions are HttpOnly cookies set by the server.
  */
 import type { Me } from "./accounts";
+import { normalizeErrorCode, normalizeErrorMessage } from "./errors";
 
 export class ApiError extends Error {
   constructor(
@@ -34,8 +35,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
       body = { error: "invalid_response" };
     }
     if (!res.ok) {
-      const b = body as { error?: string; message?: string };
-      return { ok: false, error: new ApiError(res.status, b.error ?? "request_failed", b.message) };
+      const b = body && typeof body === "object" ? body as { error?: unknown; message?: unknown } : {};
+      return { ok: false, error: new ApiError(res.status, normalizeErrorCode(b.error), normalizeErrorMessage(b.message, normalizeErrorMessage(b.error))) };
     }
     return { ok: true, data: body as T };
   } catch {
