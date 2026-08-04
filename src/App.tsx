@@ -19,23 +19,26 @@ import { RacesPage } from "./pages/RacesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { RecoveryPage } from "./pages/RecoveryPage";
-import { parseRecoveryHash } from "./lib/recovery";
+import { ConfirmationPage } from "./pages/ConfirmationPage";
+import { cleanCallbackUrl, parseAuthCallback } from "./lib/recovery";
 import * as supabase from "./lib/supabase";
 
 /** Routes that get a chrome-free wizard layout (no bottom nav). */
-const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login", "/recovery"]);
+const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login", "/recovery", "/confirmation"]);
 
 function Shell() {
   const store = useAppState();
   const navigate = useNavigate();
   const { city, selectCity } = useSelectedCity();
   const [recoveryError, setRecoveryError] = useState<string>();
+  const [confirmationError, setConfirmationError] = useState<string>();
   useEffect(() => {
-    const parsed = parseRecoveryHash(window.location.hash);
+    const parsed = parseAuthCallback(window.location.href);
     if (!parsed) return;
-    window.history.replaceState(null, "", window.location.pathname + window.location.search + "#/recovery");
-    navigate("/recovery", { replace: true });
-    if ("error" in parsed) { setRecoveryError(parsed.error); return; }
+    window.history.replaceState(null, "", cleanCallbackUrl(window.location.href));
+    if (parsed.kind === "confirmation") { navigate("/confirmation", { replace: true }); return; }
+    navigate(parsed.kind === "recovery" ? "/recovery" : "/confirmation?error=" + encodeURIComponent(parsed.error), { replace: true });
+    if (parsed.kind === "error") { if (parsed.flow === "recovery") setRecoveryError(parsed.error); else setConfirmationError(parsed.error); return; }
     void supabase.setRecoverySession(parsed.accessToken, parsed.refreshToken).then((result) => { if (!result.ok) setRecoveryError(result.message); });
   }, [navigate]);
   const [cityOpen, setCityOpen] = useState(false);
@@ -56,6 +59,7 @@ function Shell() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/recovery" element={<RecoveryPage sessionError={recoveryError} />} />
+            <Route path="/confirmation" element={<ConfirmationPage />} />
             <Route path="/verify" element={<VerifyPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

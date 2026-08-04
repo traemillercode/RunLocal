@@ -2,13 +2,18 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export const SUPABASE_REQUIRED_ENV = ["VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY"] as const;
-export interface SupabaseClientConfig { configured: boolean; missing: string[]; urlInvalid: boolean; url: string | null; anonKey: string | null }
+export interface SupabaseClientConfig { configured: boolean; missing: string[]; urlInvalid: boolean; url: string | null; anonKey: string | null; redirectUrl: string; emailDelivery: "provider-managed" | "not-configured" }
+
+export const productionOrigin = "https://runlocal.ctonew.app";
+export function authRedirectUrl(env: Record<string, string | undefined> = import.meta.env as Record<string, string | undefined>): string {
+  return env.VITE_AUTH_REDIRECT_URL?.trim() || (typeof window !== "undefined" ? window.location.origin : productionOrigin);
+}
 export function supabaseClientConfig(env: Record<string, string | undefined> = import.meta.env as Record<string, string | undefined>): SupabaseClientConfig {
   const missing: string[] = [], rawUrl = env.VITE_SUPABASE_URL?.trim() ?? "", anonKey = env.VITE_SUPABASE_ANON_KEY?.trim() ?? "";
   let valid = false; try { const u = new URL(rawUrl); valid = u.protocol === "https:" || (u.protocol === "http:" && ["localhost", "127.0.0.1"].includes(u.hostname)); } catch {}
   if (!rawUrl || !valid) missing.push("VITE_SUPABASE_URL");
   if (!anonKey) missing.push("VITE_SUPABASE_ANON_KEY");
-  return { configured: missing.length === 0, missing, urlInvalid: Boolean(rawUrl && !valid), url: valid ? rawUrl : null, anonKey: anonKey || null };
+  return { configured: missing.length === 0, missing, urlInvalid: Boolean(rawUrl && !valid), url: valid ? rawUrl : null, anonKey: anonKey || null, redirectUrl: authRedirectUrl(env), emailDelivery: env.VITE_SUPABASE_SMTP_CONFIGURED === "true" ? "provider-managed" : "not-configured" };
 }
 export interface SupabaseAuthLike {
   signUp?: SupabaseClient["auth"]["signUp"];
@@ -24,7 +29,7 @@ export type AuthResult = { ok: true; accessToken: string | null; emailConfirmati
 function mapError(message: string): AuthResult { if (/invalid login credentials/i.test(message)) return { ok:false, code:"invalid_credentials", message:"Email or password is incorrect." }; if (/email not confirmed/i.test(message)) return { ok:false, code:"email_not_confirmed", message:"Confirm your email from the message Supabase sent, then try again." }; if (/already registered|already exists/i.test(message)) return { ok:false, code:"email_taken", message:"That email already has an account. Log in instead." }; if (/rate|too many|security purposes/i.test(message)) return { ok:false, code:"rate_limited", message:"Too many attempts. Wait a moment and try again." }; return { ok:false, code:"failed", message: message || "Supabase could not complete that request." }; }
 export async function signUp(email: string, password: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}): Promise<AuthResult> {
   const c = cfg(opts.env); if (!c.configured) return { ok:false, code:"unconfigured", message:missingMessage };
-  try { const { data, error } = await (opts.auth ?? authFor(c)).signUp!({ email, password }); if (error) return mapError(error.message); return { ok:true, accessToken:data.session?.access_token ?? null, emailConfirmationRequired:!data.session }; } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
+  try { const { data, error } = await (opts.auth ?? authFor(c)).signUp!({ email, password, options: { emailRedirectTo: c.redirectUrl } }); if (error) return mapError(error.message); return { ok:true, accessToken:data.session?.access_token ?? null, emailConfirmationRequired:!data.session }; } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
 }
 export async function signInWithPassword(email: string, password: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}): Promise<AuthResult> {
   const c = cfg(opts.env); if (!c.configured) return { ok:false, code:"unconfigured", message:missingMessage };
@@ -32,7 +37,7 @@ export async function signInWithPassword(email: string, password: string, opts: 
 }
 export async function resetPasswordForEmail(email: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}): Promise<{ok:true}|{ok:false;code:"unconfigured"|"failed";message:string}> {
   const c=cfg(opts.env); if(!c.configured) return {ok:false,code:"unconfigured",message:missingMessage};
-  try { const {error}=await (opts.auth??authFor(c)).resetPasswordForEmail!(email, { redirectTo: "https://runlocal.ctonew.app" }); return error ? {ok:false,code:"failed",message:"Supabase could not send a reset email. Check the address and try again."}:{ok:true}; } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
+  try { const {error}=await (opts.auth??authFor(c)).resetPasswordForEmail!(email, { redirectTo: c.redirectUrl }); return error ? {ok:false,code:"failed",message:"Supabase could not send a reset email. Check the address and try again."}:{ok:true}; } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
 }
 export async function setRecoverySession(accessToken: string, refreshToken: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}) {
   const c=cfg(opts.env); if(!c.configured) return {ok:false as const, code:"unconfigured", message:missingMessage};

@@ -284,7 +284,7 @@ describe("signUp (browser adapter)", () => {
     createClientMock.mockReturnValue({ auth });
     const result = await signUp("runner@example.com", "s3cret-pass", { env: CLIENT_ENV, auth });
     expect(result).toEqual({ ok: true, accessToken: "tok-abc", emailConfirmationRequired: false });
-    expect(auth.signUp).toHaveBeenCalledWith({ email: "runner@example.com", password: "s3cret-pass" });
+    expect(auth.signUp).toHaveBeenCalledWith({ email: "runner@example.com", password: "s3cret-pass", options: { emailRedirectTo: "https://runlocal.ctonew.app" } });
   });
 
   it("reports email-confirmation-required when Supabase returns no session", async () => {
