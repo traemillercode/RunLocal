@@ -611,12 +611,14 @@ async function handleApi(
       return err(res, { status: e.status, error: e.error, message: e.message }), true;
     }
     const invitationToken = status === "invite_only" ? (typeof body.invitationToken === "string" ? body.invitationToken.trim() : "") : "";
+    let invitationId: string | null = null;
     if (status === "invite_only") {
       const v = validateInvitation(db, cityId, rec.email, invitationToken, now);
       if (!v.ok) return err(res, { status: v.status, error: v.error, message: v.message }), true;
+      invitationId = db.findInvitation(cityId, rec.email)?.id ?? null;
     }
     db.updateAccount(rec.id, { cityId, lastActivityAt: now.toISOString() });
-    if (status === "invite_only") {
+    if (status === "invite_only" && invitationId) {
       // Consume the invitation (one-time) — validated above in the same
       // synchronous turn, so this can only fail on an interleaving race, which
       // the single-threaded store rules out.

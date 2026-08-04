@@ -327,7 +327,7 @@ export function assignCityAdmin(
   const city = db.getCity(cityId);
   if (!city) return { ok: false, status: 400, error: "invalid_city", message: "That city isn't in the registry." };
   // Authorize with the resolved target account so the audit entry carries it.
-  const auth = authorizeAdmin(db, ctx, "admin.city_admin_assign", rec.id, now);
+  const auth = authorizeScoped(db, ctx, "admin.city_admin_assign", rec.id, now, { globalOnly: true, auditCity: cityId });
   if (!auth.ok) return auth;
   if (isCityAdminAccount(rec) && rec.adminCityId === cityId) {
     // Re-assignment to the same city is a harmless no-op.
