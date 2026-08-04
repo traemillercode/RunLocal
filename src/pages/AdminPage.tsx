@@ -21,10 +21,10 @@ import { CITIES } from "../data/cities";
 import { useAccount } from "../state/account";
 
 const inputCls =
-  "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+  "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
 const reasonCls =
-  "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+  "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
 function Err({ msg }: { msg: string }) {
   return <p className="flex items-start gap-2 rounded-xl bg-red-50 p-3.5 text-[13px] leading-relaxed text-red-800">{msg}</p>;
@@ -492,7 +492,7 @@ export function AdminPage() {
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Admin control center</h1>
           <p className="text-sm font-medium text-slate-500">
             Signed in as {adminName}
-            {isOwner ? <span className="ml-1.5 font-semibold text-[#0b2b22]">(Super Admin)</span> : null}
+            {isOwner ? <span className="ml-1.5 font-semibold text-[#14171C]">(Super Admin)</span> : null}
           </p>
         </div>
         <button type="button" onClick={() => void doLogout()} className="min-h-11 rounded-full px-4 text-sm font-semibold text-slate-600 active:bg-slate-100">
@@ -613,7 +613,7 @@ export function AdminPage() {
                 Moderation, RRCA badges, and highlights for one city. Every action is reason-required and audited.
               </p>
             </div>
-            <button type="button" onClick={goLookup} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-[#0b2b22] px-4 text-xs font-semibold text-white active:bg-[#124d3c]">
+            <button type="button" onClick={goLookup} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-[#14171C] px-4 text-xs font-semibold text-white active:bg-[#20262E]">
               <Icon name="search" className="h-4 w-4" /> Verification lookup
             </button>
           </div>
@@ -626,7 +626,7 @@ export function AdminPage() {
                   setDashCity(e.target.value);
                   setDash(null);
                 }}
-                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-[#0b2b22]"
+                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-[#14171C]"
               >
                 {CITIES.filter((c) => c.live).map((c) => (
                   <option key={c.id} value={c.id}>
@@ -792,7 +792,7 @@ export function AdminPage() {
                             type="checkbox"
                             checked={draft.badge}
                             onChange={(e) => setRrcaDrafts((m) => ({ ...m, [g.id]: { ...draft, badge: e.target.checked } }))}
-                            className="h-4 w-4 accent-[#0b2b22]"
+                            className="h-4 w-4 accent-[#14171C]"
                           />
                           {g.name}
                           {g.rrcaBadge ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-800">RRCA badge on</span> : null}
@@ -802,7 +802,7 @@ export function AdminPage() {
                           placeholder="Internal charter note (e.g. charter number + date verified)"
                           value={draft.note}
                           onChange={(e) => setRrcaDrafts((m) => ({ ...m, [g.id]: { ...draft, note: e.target.value } }))}
-                          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-[#0b2b22]"
+                          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-[#14171C]"
                         />
                         <PillButton
                           variant="ghost"
@@ -841,7 +841,7 @@ export function AdminPage() {
                                 type="button"
                                 disabled={busy}
                                 onClick={() => void dashAction(c.id, "toggle featured", () => api.adminSetHighlight(c.id, { featured: !c.featured }, dashReason.trim()))}
-                                className={`min-h-9 rounded-full px-3 text-xs font-semibold transition-colors ${c.featured ? "bg-[#c8f169] text-[#0b2b22]" : "bg-slate-100 text-slate-500 active:bg-slate-200"}`}
+                                className={`min-h-9 rounded-full px-3 text-xs font-semibold transition-colors ${c.featured ? "bg-[#FF5741] text-[#14171C]" : "bg-slate-100 text-slate-500 active:bg-slate-200"}`}
                               >
                                 Featured
                               </button>

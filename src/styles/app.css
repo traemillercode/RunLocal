@@ -2,8 +2,8 @@
 
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --color-ink: #0b2b22;
-  --color-volt: #c8f169;
+  --color-ink: #14171C;
+  --color-volt: #FF5741;
 }
 
 html {
@@ -13,7 +13,7 @@ html {
 
 body {
   font-family: var(--font-sans);
-  background-color: #f5f6f2;
+  background-color: #F7F8FA;
   overscroll-behavior-y: none;
 }
 
@@ -71,4 +71,28 @@ select {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Run Local visual system: coral activity energy on a charcoal foundation. */
+:root {
+  --rl-coral: #FF5741;
+  --rl-coral-dark: #B82D20;
+  --rl-charcoal: #14171C;
+  --rl-surface: #F7F8FA;
+  --rl-muted: #52606D;
+}
+
+/* Consistent keyboard visibility across every surface. */
+:where(a, button, input, textarea, select):focus-visible {
+  outline: 3px solid var(--rl-coral);
+  outline-offset: 2px;
+}
+
+/* Activity hierarchy helpers used by cards and page headers. */
+.rl-activity-rail { border-left: 4px solid var(--rl-coral); }
+.rl-activity-wash { background: linear-gradient(135deg, #fff 0%, #fff5f2 100%); }
+.rl-coral-action { background: var(--rl-coral); color: var(--rl-charcoal); }
+.rl-coral-action:hover { background: var(--rl-coral-dark); color: #fff; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

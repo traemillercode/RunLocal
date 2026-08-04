@@ -65,7 +65,7 @@ function Shell() {
   const location = useLocation();
   const noNav = NO_NAV_PATHS.has(location.pathname);
   return (
-    <div className="min-h-dvh bg-[#f5f6f2] text-slate-900">
+    <div className="min-h-dvh bg-[#F7F8FA] text-slate-900">
       <Header city={city} onOpenCitySheet={() => setCityOpen(true)} />
       <main key={location.pathname}>
         <ModeratedProvider cityId={city.id}>

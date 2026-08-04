@@ -25,7 +25,7 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
   return (
     <article
       className={`relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 transition-shadow ${
-        event.isToday ? "ring-2 ring-[#c8f169]" : "ring-slate-200/70"
+        event.isToday ? "ring-2 ring-[#FF5741]" : "ring-slate-200/70"
       }`}
     >
       {/* The whole card body is the primary tappable action — it navigates to the
@@ -36,7 +36,7 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
           {/* Date block */}
           <div
             className={`flex w-14 shrink-0 flex-col items-center justify-center rounded-xl py-2 ${
-              event.isToday ? "bg-[#0b2b22] text-[#c8f169]" : "bg-slate-100 text-slate-700"
+              event.isToday ? "bg-[#14171C] text-[#FF5741]" : "bg-slate-100 text-slate-700"
             }`}
           >
             <span className="text-[10px] font-bold uppercase tracking-wider">{event.dayAbbrev}</span>
@@ -106,7 +106,7 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
             rsvped
               ? "bg-emerald-100 text-emerald-800"
               : canRsvp
-                ? "bg-[#c8f169] text-[#0b2b22] active:bg-[#b9e355]"
+                ? "bg-[#FF5741] text-[#14171C] active:bg-[#E44735]"
                 : "bg-slate-100 text-slate-500 active:bg-slate-200"
           }`}
         >

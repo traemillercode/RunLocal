@@ -21,7 +21,7 @@ function GuestLoginCta() {
       type="button"
       onClick={() => navigate("/login")}
       aria-label="Log in"
-      className="flex h-9 shrink-0 items-center rounded-full bg-[#c8f169] px-2 text-[12px] font-extrabold text-[#0b2b22] active:bg-[#b9e355] min-[400px]:px-3 min-[400px]:text-[13px]"
+      className="flex h-9 shrink-0 items-center rounded-full bg-[#FF5741] px-2 text-[12px] font-extrabold text-[#14171C] active:bg-[#E44735] min-[400px]:px-3 min-[400px]:text-[13px]"
     >
       Log in
     </button>
@@ -30,7 +30,7 @@ function GuestLoginCta() {
 
 export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet: () => void }) {
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b2b22] text-white shadow-sm">
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#14171C] text-white shadow-sm">
       <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between gap-2 px-3">
         {/* Clickable logo / title — always returns to the city home feed. The
             wordmark is sized down on narrow screens (and hidden entirely only
@@ -41,11 +41,11 @@ export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet:
           aria-label="Run Local — home"
           className="flex min-w-0 items-center gap-2 rounded-lg active:opacity-80 min-[420px]:gap-2.5"
         >
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#c8f169] text-[#0b2b22] min-[420px]:h-8 min-[420px]:w-8">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#FF5741] text-[#14171C] min-[420px]:h-8 min-[420px]:w-8">
             <Icon name="pin" className="h-5 w-5" />
           </span>
           <span className="hidden whitespace-nowrap text-[15px] font-extrabold tracking-tight min-[360px]:inline min-[420px]:text-[16px] sm:text-[17px]">
-            Run <span className="text-[#c8f169]">Local</span>
+            Run <span className="text-[#FF5741]">Local</span>
           </span>
         </Link>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -58,7 +58,7 @@ export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet:
             <span className="max-w-[72px] truncate min-[400px]:max-w-24">
               {city.name}, {city.state}
             </span>
-            <Icon name="chevronDown" className="h-3.5 w-3.5 text-[#c8f169] min-[400px]:h-4 min-[400px]:w-4" />
+            <Icon name="chevronDown" className="h-3.5 w-3.5 text-[#FF5741] min-[400px]:h-4 min-[400px]:w-4" />
           </button>
           <GuestLoginCta />
           <AccountMenuButton />
@@ -96,12 +96,12 @@ export function CitySheet({
                   if (c.live) onSelect(c);
                 }}
                 className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3.5 text-left transition-colors ${
-                  active ? "border-[#0b2b22] bg-[#0b2b22] text-white" : "border-slate-200 bg-white text-slate-800"
+                  active ? "border-[#14171C] bg-[#14171C] text-white" : "border-slate-200 bg-white text-slate-800"
                 } ${!c.live ? "opacity-60" : "active:bg-slate-50"}`}
               >
                 <span
                   className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
-                    active ? "bg-white/15 text-[#c8f169]" : "bg-slate-100 text-slate-500"
+                    active ? "bg-white/15 text-[#FF5741]" : "bg-slate-100 text-slate-500"
                   }`}
                 >
                   <Icon name="pin" className="h-4.5 w-4.5" />
@@ -114,7 +114,7 @@ export function CitySheet({
                 </span>
                 {active ? (
                   <span className="shrink-0">
-                    <Icon name="check" className="h-5 w-5 text-[#c8f169]" />
+                    <Icon name="check" className="h-5 w-5 text-[#FF5741]" />
                   </span>
                 ) : !c.live ? (
                   <Chip tone={active ? "volt" : "amber"}>Coming soon</Chip>

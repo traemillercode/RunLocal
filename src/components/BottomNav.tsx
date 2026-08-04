@@ -26,14 +26,14 @@ export function BottomNav() {
             end={t.to === "/"}
             className={({ isActive }) =>
               `flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-semibold transition-colors ${
-                isActive ? "text-[#0b2b22]" : "text-slate-400 active:text-slate-600"
+                isActive ? "text-[#14171C]" : "text-slate-400 active:text-slate-600"
               }`
             }
           >
             {({ isActive }) => (
               <>
                 <span
-                  className={`grid h-7 w-12 place-items-center rounded-full ${isActive ? "bg-[#c8f169]" : ""}`}
+                  className={`grid h-7 w-12 place-items-center rounded-full ${isActive ? "bg-[#FF5741]" : ""}`}
                 >
                   <Icon name={t.icon} className="h-5 w-5" />
                 </span>

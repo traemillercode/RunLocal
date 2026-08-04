@@ -14,7 +14,7 @@ import { CREDENTIAL_TYPE_LABELS } from "./TrustProfileSection";
 import { Chip, Icon, PillButton } from "./ui";
 
 const inputCls =
-  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
 /** Presentational: pending credential review queue. */
 export function CredentialQueue({
@@ -58,7 +58,7 @@ export function CredentialQueue({
                   value={reasons[r.id] ?? ""}
                   onChange={(e) => setReasons((m) => ({ ...m, [r.id]: e.target.value }))}
                   placeholder={r.type === "coach_certification" ? "Decision note (required to reject)…" : "Decision note (optional)…"}
-                  className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-[#0b2b22]"
+                  className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-[#14171C]"
                 />
                 <PillButton variant="secondary" className="min-h-10 px-4" disabled={busyId === r.id} onClick={() => onDecide(r.id, "approve", (reasons[r.id] ?? "").trim())}>
                   Approve
@@ -114,7 +114,7 @@ export function AppealQueue({
                   value={reasons[a.id] ?? ""}
                   onChange={(e) => setReasons((m) => ({ ...m, [a.id]: e.target.value }))}
                   placeholder="Decision reason (required, shown to appellant)…"
-                  className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-[#0b2b22]"
+                  className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-[#14171C]"
                 />
                 <PillButton variant="secondary" className="min-h-10 px-4" disabled={busyId === a.id} onClick={() => onDecide(a.id, "reinstate", (reasons[a.id] ?? "").trim())}>
                   Reinstate

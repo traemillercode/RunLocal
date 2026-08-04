@@ -50,10 +50,10 @@ function RaceCard({ race, featured = false, pinned = false }: { race: Race; feat
           href={race.registrationUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#0b2b22] text-sm font-semibold text-white active:bg-[#124d3c]"
+          className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#14171C] text-sm font-semibold text-white active:bg-[#20262E]"
         >
           {race.registrationOpen ? "Register" : "View details"}
-          <Icon name="external" className="h-4 w-4 text-[#c8f169]" />
+          <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
         </a>
         <p className="mt-1.5 text-center text-[11px] text-slate-400">{race.registrationNote ?? "Opens on the organizer's site"}</p>
       </div>
