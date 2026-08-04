@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { HomeCityBanner } from "../components/HomeCityBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { Chip, Icon, PillButton, Sheet } from "../components/ui";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
+import { getActivityFeed, type PublicActivityCard } from "../lib/api";
 import { useModerated } from "../state/moderated";
 import { FORUM_SECTIONS, type City, type ForumPost, type ForumSection, type QaSort } from "../types";
 
@@ -97,6 +98,8 @@ export function ForumPage({ city }: { city: City }) {
     return [...list].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
   }, [city.forum, hidden, section, qaSort]);
 
+  const [activityCards, setActivityCards] = useState<PublicActivityCard[]>([]);
+  useEffect(() => { let live = true; void getActivityFeed(city.id).then((r) => { if (live && r.ok) setActivityCards(r.data.cards); }); return () => { live = false; }; }, [city.id]);
   const onReply = (title: string) => {
     toast(`Replies need a verified profile — "${title}"`, "info");
     setGateOpen(true);
@@ -142,6 +145,11 @@ export function ForumPage({ city }: { city: City }) {
       <p className="mt-2 text-xs text-slate-500">{FORUM_SECTIONS.find((s) => s.id === section)?.blurb}</p>
 
       <HomeCityBanner />
+      {activityCards.length > 0 ? <section aria-label="Community activity" className="mt-4 space-y-2">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Community activity</h2>
+        {activityCards.map((card) => <article key={card.id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70"><div className="flex items-center justify-between"><strong className="text-slate-900">{card.type} · {(card.distanceMeters / 1000).toFixed(1)} km</strong><span className="text-xs font-semibold text-slate-500">{card.attribution}</span></div><p className="mt-1 text-xs text-slate-500">{Math.round(card.durationSeconds / 60)} min · shared activity</p></article>)}
+      </section> : null}
+
 
       {/* Q&A sorting controls — visible only on the Q&A tab */}
       {section === "qa" ? (

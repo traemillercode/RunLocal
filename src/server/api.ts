@@ -299,10 +299,38 @@ async function handleApi(
     return err(res,{status:400,error:"oauth_required"}),true;
   }
   const callback = /^\/api\/connections\/([^/]+)\/callback$/.exec(url.pathname);
-  if (method === "GET" && callback && validProvider(callback[1])) { const p=callback[1]; const sess=requireSession(db,cookies); if(!sess)return err(res,{status:401,error:"sign_in_required"}),true; if(!adapters[p].configured())return err(res,{status:503,...configError(p)}),true; const state=url.searchParams.get("state")??""; if(!stateValid(state,sess.accountId,p))return err(res,{status:403,error:"invalid_oauth_state"}),true; try { const t=await adapters[p].exchange(url.searchParams.get("code")??""); db.setToken({accountId:sess.accountId,provider:p,accessToken:t.accessToken,refreshToken:t.refreshToken??null,expiresAt:t.expiresAt??null,providerUserId:t.providerUserId??null}); await db.persist(); return ok(res,{connected:true,provider:p}); } catch { return err(res,{status:502,error:"oauth_exchange_failed"}), true; } }
+  if (method === "GET" && callback && validProvider(callback[1])) {
+    const p = callback[1];
+    const sess = requireSession(db, cookies);
+    if (!sess) { err(res, { status: 401, error: "sign_in_required" }); return true; }
+    if (!adapters[p].configured()) { err(res, { status: 503, ...configError(p) }); return true; }
+    const state = url.searchParams.get("state") ?? "";
+    if (!stateValid(state, sess.accountId, p)) { err(res, { status: 403, error: "invalid_oauth_state" }); return true; }
+    try {
+      const t = await adapters[p].exchange(url.searchParams.get("code") ?? "");
+      db.setToken({ accountId: sess.accountId, provider: p, accessToken: t.accessToken, refreshToken: t.refreshToken ?? null, expiresAt: t.expiresAt ?? null, providerUserId: t.providerUserId ?? null });
+      await db.persist();
+      return ok(res, { connected: true, provider: p });
+    } catch { err(res, { status: 502, error: "oauth_exchange_failed" }); return true; }
+  }
   const disconnect = /^\/api\/connections\/([^/]+)\/disconnect$/.exec(url.pathname);
-  if (method === "POST" && disconnect && validProvider(disconnect[1])) { const p=disconnect[1]; const sess=requireSession(db,cookies); if(!sess)return err(res,{status:401,error:"sign_in_required"}),true; const t=db.getToken(sess.accountId,p); if(t) await adapters[p].revoke(t.accessToken).catch(()=>{}); db.removeToken(sess.accountId,p); const body=await readJson(req) as Record<string,unknown>; if(body.deleteActivities===true) db.removeActivities(sess.accountId,p); await db.persist(); return ok(res,{disconnected:true,deletedActivities:body.deleteActivities===true}); }
-  if (method === "POST" && url.pathname === "/api/activity/manual") { const sess=requireSession(db,cookies); if(!sess)return err(res,{status:401,error:"sign_in_required"}),true; const account=db.getAccount(sess.accountId); if(!account||account.status!=="verified")return err(res,{status:403,error:"verified_runner_required"}),true; const body=await readJson(req) as Record<string,unknown>; const p=body.provider as Provider; if(!validProvider(p))return err(res,{status:400,error:"invalid_provider"}),true; let normalized; try{normalized=normalizeActivity(p,body.activity)}catch{return err(res,{status:400,error:"invalid_activity"}),true;} const a={...normalized,id:newId(),accountId:sess.accountId,shareMode:"manual" as ShareMode,caption:typeof body.caption==="string"?body.caption.slice(0,280):null}; db.addActivity(a); await db.persist(); return ok(res,{card:publicActivityCard(a)}); }
+  if (method === "POST" && disconnect && validProvider(disconnect[1])) {
+    const p = disconnect[1]; const sess = requireSession(db, cookies);
+    if (!sess) { err(res, { status: 401, error: "sign_in_required" }); return true; }
+    const t = db.getToken(sess.accountId, p); if (t) await adapters[p].revoke(t.accessToken).catch(() => {});
+    db.removeToken(sess.accountId, p); const body = await readJson(req) as Record<string, unknown>;
+    if (body.deleteActivities === true) db.removeActivities(sess.accountId, p); await db.persist();
+    return ok(res, { disconnected: true, deletedActivities: body.deleteActivities === true });
+  }
+  if (method === "POST" && url.pathname === "/api/activity/manual") {
+    const sess = requireSession(db, cookies); if (!sess) { err(res, { status: 401, error: "sign_in_required" }); return true; }
+    const account = db.getAccount(sess.accountId); if (!account || account.status !== "verified") { err(res, { status: 403, error: "verified_runner_required" }); return true; }
+    const body = await readJson(req) as Record<string, unknown>; const p = body.provider as Provider;
+    if (!validProvider(p)) { err(res, { status: 400, error: "invalid_provider" }); return true; }
+    let normalized; try { normalized = normalizeActivity(p, body.activity); } catch { err(res, { status: 400, error: "invalid_activity" }); return true; }
+    const a = { ...normalized, id: newId(), accountId: sess.accountId, shareMode: "manual" as ShareMode, caption: typeof body.caption === "string" ? body.caption.slice(0, 280) : null };
+    db.addActivity(a); await db.persist(); return ok(res, { card: publicActivityCard(a) });
+  }
 
   // ---- account creation (signup completion) ------------------------------
   // Used by the password signup flow AFTER Supabase created the auth user:
