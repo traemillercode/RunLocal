@@ -6,6 +6,8 @@ import { GroupSubmissionSheet, IndependentEventSheet } from "../components/Submi
 import { Chip, Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
 import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS } from "../lib/dates";
+import { filterOneTimeEvents } from "../lib/activityDates";
+import { Link } from "react-router-dom";
 import { canDo, roleLabel } from "../lib/accounts";
 import type { AppStore } from "../lib/store";
 import { useToast } from "../lib/toast";
@@ -43,7 +45,10 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
         invite: e.invite,
         externalUrl: e.externalUrl ?? undefined,
       }));
-    const resolved = resolveWeekEvents([...city.events, ...recurring], new Date())
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const resolved = resolveWeekEvents([...city.events, ...recurring], today)
+      .filter((e) => e.date >= todayStart)
       .filter((e) => !hidden.has(`event:${e.id}`))
       .sort((a, b) => {
         const ha = highlights.get(`event:${a.id}`);
@@ -77,8 +82,8 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
   const oneOffThisWeek = useMemo(() => {
     const start = startOfWeek(new Date());
     const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6, 23, 59, 59);
-    return userEvents
-      .filter((e) => e.type === "one_time" && e.date)
+    return filterOneTimeEvents(userEvents, "upcoming")
+      .filter((e) => e.date)
       .filter((e) => {
         const d = new Date(`${e.date}T00:00:00`);
         return d >= start && d <= end && !hidden.has(`event:${e.id}`);
@@ -136,6 +141,7 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
         </PillButton>
       </div>
       <HomeCityBanner />
+      <Link to="/past-events" className="mt-3 inline-flex min-h-10 items-center gap-1 rounded-full bg-slate-100 px-3 text-xs font-bold text-slate-700">View past events <Icon name="chevronRight" className="h-4 w-4" /></Link>
       <div className="relative mt-4">
         <Icon name="search" className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
         <input
