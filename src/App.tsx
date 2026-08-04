@@ -24,6 +24,7 @@ import { RecoveryPage } from "./pages/RecoveryPage";
 import { ConfirmationPage } from "./pages/ConfirmationPage";
 import { MyRunsPage } from "./pages/MyRunsPage";
 import { PersonalRunsPage } from "./pages/PersonalRunsPage";
+import { PastEventsPage } from "./pages/PastEventsPage";
 import { cleanCallbackUrl, parseAuthCallback } from "./lib/recovery";
 import * as supabase from "./lib/supabase";
 
@@ -68,6 +69,7 @@ function Shell() {
             <Routes>
             <Route path="/" element={<EventsPage city={city} store={store} />} />
             <Route path="/events/:eventId" element={<EventDetailPage city={city} store={store} />} />
+            <Route path="/past-events" element={<PastEventsPage city={city} />} />
             <Route path="/races" element={<RacesPage city={city} />} />
             <Route path="/forum" element={<ForumPage city={city} />} />
             <Route path="/my-runs" element={<MyRunsPage />} />
