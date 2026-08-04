@@ -106,6 +106,7 @@ export function SettingsPage() {
         </section>
       ) : null}
 
+      {signedIn && account ? <ActivityConnections /> : null}
       {/* Account */}
       <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
         <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Account</h2>
@@ -341,4 +342,11 @@ export function SettingsPage() {
       ) : null}
     </div>
   );
+}
+
+function ActivityConnections() {
+  const providers = [{ id: "strava", label: "Strava" }, { id: "garmin", label: "Garmin" }, { id: "coros", label: "Coros" }, { id: "suunto", label: "Suunto" }] as const;
+  const [status, setStatus] = useState<Record<string, string>>({});
+  const [mode, setMode] = useState("manual");
+  return <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70"><h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Activity connections</h2><p className="px-5 py-3 text-xs leading-relaxed text-slate-500">Manual sharing is the default. Auto sharing is opt-in; Private keeps activities off the community feed.</p>{providers.map((p) => <div key={p.id} className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-3"><div><strong className="text-sm text-slate-800">{p.label}</strong><p className="text-xs text-slate-500">{status[p.id] ?? (p.id === "strava" ? "Not connected · Strava credentials are not configured" : "Not connected · partner API scaffold")}</p></div><PillButton variant="ghost" onClick={() => void api.getConnection(p.id).then((r) => setStatus((x) => ({ ...x, [p.id]: r.ok ? "Connected" : (r.error.message ?? "Not configured") })))}>Connect</PillButton></div>)}<label className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-sm font-medium">Share mode<select aria-label="Activity share mode" className="rounded-lg border border-slate-300 px-2 py-1" value={mode} onChange={(e) => setMode(e.target.value)}><option value="manual">Manual</option><option value="auto">Auto</option><option value="private">Private</option></select></label></section>;
 }

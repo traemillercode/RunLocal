@@ -439,3 +439,10 @@ export function adminSetGroupRrca(groupId: string, badge: boolean, note: string,
 export function adminSetHighlight(contentId: string, patch: { featured?: boolean; pinned?: boolean }, reason: string): Promise<ApiResult<{ ok: true; content: DashboardContentView }>> {
   return adminRequest(`/api/admin/content/${contentId}/highlight`, reason, { method: "POST", body: JSON.stringify(patch) });
 }
+
+export type ActivityProvider = "strava" | "garmin" | "coros" | "suunto";
+export type ShareMode = "auto" | "manual" | "private";
+export interface PublicActivityCard { id: string; type: string; distanceMeters: number; durationSeconds: number; provider: ActivityProvider; attribution: string; sharedAt: string; }
+export function getActivityFeed(city: string): Promise<ApiResult<{ cards: PublicActivityCard[] }>> { return request(`/api/activity/feed?city=${encodeURIComponent(city)}`); }
+export function getConnection(provider: ActivityProvider): Promise<ApiResult<{ authorizeUrl?: string; connected?: boolean; shareMode?: ShareMode }>> { return request(`/api/connections/${provider}`); }
+export function disconnectConnection(provider: ActivityProvider, deleteActivities: boolean): Promise<ApiResult<{ disconnected: boolean; deletedActivities: boolean }>> { return request(`/api/connections/${provider}/disconnect`, { method: "POST", body: JSON.stringify({ deleteActivities }) }); }

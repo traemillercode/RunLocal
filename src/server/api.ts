@@ -8,7 +8,7 @@
  * IP) is ever included in a public payload or written to logs.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { Db, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPublicAccount, MIN_AGE } from "./store";
+import { Db, newId, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPublicAccount, MIN_AGE } from "./store";
 import type { AccountRecord } from "./types";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
 import { isSupportedCityId } from "../data/cities";
@@ -40,8 +40,8 @@ import {
   suspendAccount,
   unhideContent,
 } from "./dashboard";
-import {
-  decideSubmission,
+import { adapters, configError, oauthState, stateValid, normalizeActivity, publicActivityCard, type Provider, type ShareMode } from "./activity";
+import { decideSubmission,
   mySubmissions,
   publicApprovedContent,
   submitEvent,
@@ -78,8 +78,9 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-function err(res: ServerResponse, e: ApiError): void {
+function err(res: ServerResponse, e: ApiError): true {
   json(res, e.status, { error: e.error, message: e.message });
+  return true;
 }
 
 function ok(res: ServerResponse, body: unknown): void {
@@ -277,6 +278,58 @@ async function handleApi(
       return err(res, { status: 400, error: "invalid_city" }), true;
     }
     return ok(res, publicApprovedContent(db, cityId)), true;
+  }
+
+  // ---- activity integrations (provider-neutral public shapes) -------------
+  const provider = url.pathname.match(/^\/api\/connections\/([^/]+)/)?.[1] as Provider | undefined;
+  const validProvider = (p: string | undefined): p is Provider => Boolean(p && p in adapters);
+  if (method === "GET" && url.pathname === "/api/activity/feed") {
+    const cityId = url.searchParams.get("city") ?? "";
+    const cards = db.listActivities().filter(a => a.shareMode !== "private").flatMap(a => { const owner=db.getAccount(a.accountId); return owner?.cityId===cityId ? [publicActivityCard(a)] : []; });
+    return ok(res, { cards }), true;
+  }
+  if ((method === "GET" || method === "POST") && provider && validProvider(provider) && url.pathname === `/api/connections/${provider}`) {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const account=db.getAccount(sess.accountId); if (!account || account.status!=="verified") return err(res,{status:403,error:"verified_runner_required"}),true;
+    if (method === "GET") { if (!adapters[provider].configured()) return err(res,{status:503,...configError(provider)}),true; const state=oauthState(sess.accountId,provider); return ok(res,{authorizeUrl:adapters[provider].authorizeUrl(state)}), true; }
+    const body=await readJson(req) as Record<string,unknown>; const mode=body.shareMode;
+    if (mode!==undefined && mode!=="auto" && mode!=="manual" && mode!=="private") return err(res,{status:400,error:"invalid_share_mode"}),true;
+    if (!adapters[provider].configured()) return err(res,{status:503,...configError(provider)}),true;
+    const token= db.getToken(sess.accountId,provider); if (token) return ok(res,{connected:true,shareMode:mode??"manual"}),true;
+    return err(res,{status:400,error:"oauth_required"}),true;
+  }
+  const callback = /^\/api\/connections\/([^/]+)\/callback$/.exec(url.pathname);
+  if (method === "GET" && callback && validProvider(callback[1])) {
+    const p = callback[1];
+    const sess = requireSession(db, cookies);
+    if (!sess) { err(res, { status: 401, error: "sign_in_required" }); return true; }
+    if (!adapters[p].configured()) { err(res, { status: 503, ...configError(p) }); return true; }
+    const state = url.searchParams.get("state") ?? "";
+    if (!stateValid(state, sess.accountId, p)) { err(res, { status: 403, error: "invalid_oauth_state" }); return true; }
+    try {
+      const t = await adapters[p].exchange(url.searchParams.get("code") ?? "");
+      db.setToken({ accountId: sess.accountId, provider: p, accessToken: t.accessToken, refreshToken: t.refreshToken ?? null, expiresAt: t.expiresAt ?? null, providerUserId: t.providerUserId ?? null });
+      await db.persist();
+      ok(res, { connected: true, provider: p }); return true;
+    } catch { err(res, { status: 502, error: "oauth_exchange_failed" }); return true; }
+  }
+  const disconnect = /^\/api\/connections\/([^/]+)\/disconnect$/.exec(url.pathname);
+  if (method === "POST" && disconnect && validProvider(disconnect[1])) {
+    const p = disconnect[1]; const sess = requireSession(db, cookies);
+    if (!sess) { err(res, { status: 401, error: "sign_in_required" }); return true; }
+    const t = db.getToken(sess.accountId, p); if (t) await adapters[p].revoke(t.accessToken).catch(() => {});
+    db.removeToken(sess.accountId, p); const body = await readJson(req) as Record<string, unknown>;
+    if (body.deleteActivities === true) db.removeActivities(sess.accountId, p); await db.persist();
+    ok(res, { disconnected: true, deletedActivities: body.deleteActivities === true }); return true;
+  }
+  if (method === "POST" && url.pathname === "/api/activity/manual") {
+    const sess = requireSession(db, cookies); if (!sess) { err(res, { status: 401, error: "sign_in_required" }); return true; }
+    const account = db.getAccount(sess.accountId); if (!account || account.status !== "verified") { err(res, { status: 403, error: "verified_runner_required" }); return true; }
+    const body = await readJson(req) as Record<string, unknown>; const p = body.provider as Provider;
+    if (!validProvider(p)) { err(res, { status: 400, error: "invalid_provider" }); return true; }
+    let normalized; try { normalized = normalizeActivity(p, body.activity); } catch { err(res, { status: 400, error: "invalid_activity" }); return true; }
+    const a = { ...normalized, id: newId(), accountId: sess.accountId, shareMode: "manual" as ShareMode, caption: typeof body.caption === "string" ? body.caption.slice(0, 280) : null };
+    db.addActivity(a); await db.persist(); ok(res, { card: publicActivityCard(a) }); return true;
   }
 
   // ---- account creation (signup completion) ------------------------------
