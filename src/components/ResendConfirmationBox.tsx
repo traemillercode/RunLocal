@@ -7,6 +7,7 @@
  */
 import type { SupabaseClientConfig } from "../lib/supabase";
 import { PillButton } from "./ui";
+import { normalizeErrorMessage } from "../lib/errors";
 
 export function ResendConfirmationBox({
   email,
@@ -38,7 +39,7 @@ export function ResendConfirmationBox({
       {notice ? <p className="mt-2 rounded-lg bg-emerald-50 p-2.5 text-emerald-900">{notice}</p> : null}
       {error ? (
         <p role="alert" className="mt-2 rounded-lg bg-red-50 p-2.5 text-red-800">
-          {error}
+          {normalizeErrorMessage(error)}
         </p>
       ) : null}
     </div>

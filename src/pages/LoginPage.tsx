@@ -31,6 +31,7 @@ import * as api from "../lib/api";
 import { validateBirthdate } from "../lib/birthdate";
 import * as supabase from "../lib/supabase";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
+import { normalizeErrorMessage } from "../lib/errors";
 import { CITIES } from "../data/cities";
 import { useAccount } from "../state/account";
 
@@ -532,7 +533,7 @@ export function LoginPage() {
               <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className={inputCls} />
             </label>
           )}
-          {error && <p className="rounded-xl bg-red-50 p-3.5 text-[13px] text-red-800">{error}</p>}
+          {error && <p className="rounded-xl bg-red-50 p-3.5 text-[13px] text-red-800">{normalizeErrorMessage(error)}</p>}
           {notice && <p className="rounded-xl bg-emerald-50 p-3.5 text-[13px] text-emerald-900">{notice}</p>}
           {pendingConfirmationEmail && (
             <ResendConfirmationBox
