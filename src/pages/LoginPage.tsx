@@ -104,6 +104,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [emailDeliveryState] = useState(() => supabase.supabaseClientConfig().emailDelivery);
 
   /**
    * Best-effort profile photo upload. Only called AFTER a valid Run Local
@@ -276,7 +277,7 @@ export function LoginPage() {
     setBusy(true);
     const r = await supabase.resetPasswordForEmail(email.trim());
     setBusy(false);
-    if (r.ok) setNotice("If that email has a Run Local account, Supabase will send password reset instructions.");
+    if (r.ok) setNotice(`If that email has a Run Local account, Supabase will send password reset instructions. ${emailDeliveryState === "not-configured" ? "Email delivery provider status is not configured in this deployment; delivery is not guaranteed." : "Delivery is handled by the configured provider."}`);
     else setError(r.message);
   };
 
