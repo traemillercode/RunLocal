@@ -623,6 +623,7 @@ export class Db {
   listAttendanceByEvent(eventId: string) { return [...this.attendance.values()].filter(a => a.eventId === eventId); }
   hasAttendance(accountId: string, eventId: string) { return [...this.attendance.values()].some(a => a.accountId === accountId && a.eventId === eventId); }
   addAttendance(a: import("./types").AttendanceRecord) { this.attendance.set(a.id, a); return a; }
+  removeAttendance(id: string) { this.attendance.delete(id); }
 
   // ---------------------------------------------------------------- uploads
   private uploadDir(kind: "private" | "public"): string {

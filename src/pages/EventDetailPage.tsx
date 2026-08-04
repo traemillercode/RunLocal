@@ -12,6 +12,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Chip, Icon } from "../components/ui";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
+import * as api from "../lib/api";
 import { dayLabel, monthDayLabel, resolveWeekEvents, type DatedRunEvent } from "../lib/dates";
 import { canDo } from "../lib/accounts";
 import type { AppStore } from "../lib/store";
@@ -203,8 +204,16 @@ export function EventDetailPage({ city, store }: { city: City; store: AppStore }
       return;
     }
     const nowRsvped = !store.state.rsvped[event.id];
-    store.toggleRsvp(event.id);
-    toast(nowRsvped ? `You're in for "${event.title}"!` : `RSVP removed for "${event.title}".`, nowRsvped ? "success" : "neutral");
+    // Server-side RSVP: records shared attendance (rating eligibility basis).
+    // Under-review accounts may still RSVP — the server permits it.
+    void api.rsvpEvent(event.id, nowRsvped).then((r) => {
+      if (!r.ok) {
+        toast(r.error.message ?? "Couldn't save your RSVP. Try again.", "info");
+        return;
+      }
+      store.toggleRsvp(event.id);
+      toast(nowRsvped ? `You're in for "${event.title}"!` : `RSVP removed for "${event.title}".`, nowRsvped ? "success" : "neutral");
+    });
   };
 
   return (

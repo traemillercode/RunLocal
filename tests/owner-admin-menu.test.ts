@@ -206,6 +206,7 @@ describe("profile menu states", () => {
         role: "runner",
         isOwner: false,
         suspended: false,
+        underReview: false,
         profilePhotoUrl: null,
         ...accountPatch,
       },

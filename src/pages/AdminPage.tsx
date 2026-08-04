@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GlobalAdminSection } from "../components/GlobalAdminSection";
+import { AdminTrustSection } from "../components/AdminTrustSection";
 import { Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
 import type { AdminRecordView, AdminSearchRow, AuditEntryView, DashboardView, PendingQueueRow } from "../lib/api";
@@ -867,6 +868,8 @@ export function AdminPage() {
 
       {/* Global Admin — site settings & CMS (key admin or owner; audited) */}
       <GlobalAdminSection />
+      {/* Global Admin — community trust & credentials (audited) */}
+      <AdminTrustSection />
 
       {/* Search */}
       <section id="lookup" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">

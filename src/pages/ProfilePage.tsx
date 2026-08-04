@@ -11,6 +11,7 @@ import type { AppStore } from "../lib/store";
 import { normalizeUsername, USERNAME_HINT, USERNAME_PROMPT } from "../lib/username";
 import { useAccount } from "../state/account";
 import { useSelectedCity } from "../state/city";
+import { TrustProfileSection } from "../components/TrustProfileSection";
 
 function initials(name: string): string {
   return name
@@ -292,6 +293,13 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
 
       {/* My submissions — this account's own submissions only */}
       <MySubmissions signedIn={!!signedIn} />
+
+      {/* Community trust & credentials — own records, qualitative view only */}
+      {signedIn ? (
+        <TrustProfileSection
+          me={{ id: signedIn.id, name: signedIn.name, email: signedIn.email, underReview: signedIn.underReview === true }}
+        />
+      ) : null}
 
       {/* Home city — account-owned; change happens in Settings (server-validated) */}
       {signedIn ? (

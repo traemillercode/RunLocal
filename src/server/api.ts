@@ -903,11 +903,22 @@ async function handleApi(
     const b = await readJson(req) as Record<string, unknown>;
     const registryId = resolveEventId(db, typeof b.eventId === "string" ? b.eventId : "");
     if (!registryId) return err(res, { status: 400, error: "invalid_event", message: "That event isn't in the current listings." }), true;
-    if (!db.hasAttendance(s.accountId, registryId)) {
-      db.addAttendance({ id: crypto.randomUUID().replace(/-/g, ""), accountId: s.accountId, eventId: registryId, role: "rsvp", createdAt: now.toISOString() });
-      await db.persist();
+    const want = b.rsvp !== false;
+    if (want) {
+      if (!db.hasAttendance(s.accountId, registryId)) {
+        db.addAttendance({ id: crypto.randomUUID().replace(/-/g, ""), accountId: s.accountId, eventId: registryId, role: "rsvp", createdAt: now.toISOString() });
+        await db.persist();
+      }
+    } else {
+      // Un-RSVP removes ONLY the runner's own rsvp record; host records
+      // (created by admin approval) are never removed this way.
+      const mine = db.listAttendance(s.accountId).find((a) => a.eventId === registryId && a.role === "rsvp");
+      if (mine) {
+        db.removeAttendance(mine.id);
+        await db.persist();
+      }
     }
-    return ok(res, { rsvped: true }), true;
+    return ok(res, { rsvped: want }), true;
   }
 
   // ---- ratings (server-eligible: shared RSVP/host attendance only) --------
