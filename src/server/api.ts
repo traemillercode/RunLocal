@@ -40,6 +40,15 @@ import {
   suspendAccount,
   unhideContent,
 } from "./dashboard";
+import {
+  decideSubmission,
+  mySubmissions,
+  publicApprovedContent,
+  submitEvent,
+  submitGroup,
+  submitRace,
+  submissionQueue,
+} from "./submissions";
 
 export const SESSION_COOKIE = "runlocal_sid";
 export const ADMIN_COOKIE = "runlocal_admin";
@@ -256,6 +265,18 @@ async function handleApi(
   if (method === "GET" && url.pathname === "/api/moderated") {
     const cityId = url.searchParams.get("city") ?? "";
     return ok(res, publicModerated(db, cityId)), true;
+  }
+
+  // ---- public approved community content (no auth) -------------------------
+  // Only APPROVED submissions ever appear here (pending/rejected never leave
+  // the server), and owner-hidden content is excluded. No emails, phones, IPs,
+  // or rejection reasons — just the public listing facts.
+  if (method === "GET" && url.pathname === "/api/content") {
+    const cityId = url.searchParams.get("city") ?? "";
+    if (!cityId || !isSupportedCityId(cityId)) {
+      return err(res, { status: 400, error: "invalid_city" }), true;
+    }
+    return ok(res, publicApprovedContent(db, cityId)), true;
   }
 
   // ---- account creation (signup completion) ------------------------------
@@ -593,6 +614,64 @@ async function handleApi(
     return ok(res, { status: "deleted" }), true;
   }
 
+  // ==================== COMMUNITY SUBMISSIONS ==============================
+  // Race / group / independent-event submissions. All permission + field
+  // validation is server-side (src/server/submissions.ts) — the client never
+  // decides who may submit or what is valid. Submissions enter the pending
+  // queue; only an admin approval makes them public.
+
+  // ---- my submissions (submitter's own records only) ----------------------
+  if (method === "GET" && url.pathname === "/api/my/submissions") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(sess.accountId);
+    if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    return ok(res, { submissions: mySubmissions(db, sess.accountId) }), true;
+  }
+
+  // ---- submit a race ------------------------------------------------------
+  if (method === "POST" && url.pathname === "/api/submissions/race") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as {
+      cityId?: unknown; name?: unknown; distances?: unknown; date?: unknown;
+      location?: unknown; registrationUrl?: unknown; description?: unknown;
+    };
+    const result = submitRace(db, sess.accountId, body, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { submission: { id: result.data.id, status: result.data.status } }), true;
+  }
+
+  // ---- submit a group -----------------------------------------------------
+  if (method === "POST" && url.pathname === "/api/submissions/group") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as {
+      cityId?: unknown; name?: unknown; description?: unknown; groupType?: unknown;
+      groupmeUrl?: unknown; facebookUrl?: unknown; instagramUrl?: unknown; websiteUrl?: unknown;
+    };
+    const result = submitGroup(db, sess.accountId, body, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { submission: { id: result.data.id, status: result.data.status } }), true;
+  }
+
+  // ---- submit an independent event (one-time or recurring) ----------------
+  if (method === "POST" && url.pathname === "/api/submissions/event") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as {
+      cityId?: unknown; type?: unknown; title?: unknown; date?: unknown; dayOfWeek?: unknown;
+      time?: unknown; location?: unknown; distanceLabel?: unknown; invite?: unknown;
+      externalUrl?: unknown; description?: unknown;
+    };
+    const result = submitEvent(db, sess.accountId, body, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { submission: { id: result.data.id, status: result.data.status } }), true;
+  }
+
   // ============================ ADMIN =====================================
   if (url.pathname.startsWith("/api/admin")) {
     return handleAdmin(req, res, db, url, method, cookies, ip, secure, now);
@@ -648,6 +727,28 @@ async function handleAdmin(
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, { results: result.data }), true;
+  }
+
+  // GET /api/admin/submissions?city= — admin-only pending-submission queue
+  // (owner OR key-based admin; safe summaries only, audited with a reason).
+  if (method === "GET" && url.pathname === "/api/admin/submissions") {
+    const cityId = url.searchParams.get("city")?.trim() || null;
+    const result = submissionQueue(db, ctx, cityId, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { results: result.data }), true;
+  }
+
+  // POST /api/admin/submissions/:id/approve|reject — decide a submission.
+  // Approve publishes the record (and grants the Group Leader role for
+  // groups); reject stores the audit reason as the submitter-visible
+  // rejection reason. Both require the audited reason header.
+  const submissionMatch = /^\/api\/admin\/submissions\/([a-f0-9]{32})\/(approve|reject)\/?$/.exec(url.pathname);
+  if (submissionMatch && method === "POST") {
+    const result = decideSubmission(db, ctx, submissionMatch[1], submissionMatch[2] as "approve" | "reject", now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, submission: { id: result.data.id, status: result.data.status } }), true;
   }
 
   // GET /api/admin/dashboard?city= — owner-only moderation dashboard overview

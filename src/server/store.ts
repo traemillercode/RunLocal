@@ -21,6 +21,7 @@ import type {
   GroupModRecord,
   PersistedDb,
   SessionRecord,
+  SubmissionRecord,
   VerifyPhase,
 } from "./types";
 
@@ -149,6 +150,7 @@ export class Db {
   private content = new Map<string, ContentRecord>();
   private groups = new Map<string, GroupModRecord>();
   private flags: FlagRecord[] = [];
+  private submissions = new Map<string, SubmissionRecord>();
   private loaded = false;
 
   constructor(opts: DbOptions = {}) {
@@ -186,6 +188,7 @@ export class Db {
       for (const r of parsed.content ?? []) this.content.set(r.id, r);
       for (const g of parsed.groups ?? []) this.groups.set(g.id, g);
       this.flags = parsed.flags ?? [];
+      for (const s of parsed.submissions ?? []) this.submissions.set(s.id, s);
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -202,6 +205,7 @@ export class Db {
       content: [...this.content.values()],
       groups: [...this.groups.values()],
       flags: this.flags,
+      submissions: [...this.submissions.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -440,6 +444,30 @@ export class Db {
     if (idx === -1) return undefined;
     const next = { ...this.flags[idx], ...patch };
     this.flags[idx] = next;
+    return next;
+  }
+
+  // ------------------------------------------------------------- submissions
+  listSubmissions(): SubmissionRecord[] {
+    return [...this.submissions.values()];
+  }
+  getSubmission(id: string): SubmissionRecord | undefined {
+    return this.submissions.get(id);
+  }
+  listSubmissionsBySubmitter(accountId: string): SubmissionRecord[] {
+    return this.listSubmissions()
+      .filter((s) => s.submitterAccountId === accountId)
+      .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+  }
+  appendSubmission(rec: SubmissionRecord): SubmissionRecord {
+    this.submissions.set(rec.id, rec);
+    return rec;
+  }
+  updateSubmission(id: string, patch: Partial<SubmissionRecord>): SubmissionRecord | undefined {
+    const rec = this.submissions.get(id);
+    if (!rec) return undefined;
+    const next = { ...rec, ...patch };
+    this.submissions.set(id, next);
     return next;
   }
 

@@ -7,6 +7,7 @@ import { ToastProvider } from "./lib/toast";
 import { useAppState } from "./lib/store";
 import { AccountProvider } from "./state/account";
 import { ModeratedProvider } from "./state/moderated";
+import { PublicContentProvider } from "./state/content";
 import { useSelectedCity } from "./state/city";
 import { AdminPage } from "./pages/AdminPage";
 import { EventsPage } from "./pages/EventsPage";
@@ -44,7 +45,8 @@ function Shell() {
       <Header city={city} onOpenCitySheet={() => setCityOpen(true)} />
       <main key={location.pathname}>
         <ModeratedProvider cityId={city.id}>
-          <Routes>
+          <PublicContentProvider cityId={city.id}>
+            <Routes>
             <Route path="/" element={<EventsPage city={city} store={store} />} />
             <Route path="/races" element={<RacesPage city={city} />} />
             <Route path="/forum" element={<ForumPage city={city} />} />
@@ -55,7 +57,8 @@ function Shell() {
             <Route path="/verify" element={<VerifyPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+            </Routes>
+          </PublicContentProvider>
         </ModeratedProvider>
       </main>
       {!noNav ? <BottomNav /> : null}

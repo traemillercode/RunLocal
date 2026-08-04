@@ -12,6 +12,8 @@
  *  - Login IP history is a rolling 90-day window (pruned on every login).
  */
 
+import type { GroupType, InviteLabel } from "../types";
+
 export type AccountStatus = "pending" | "verified" | "rejected";
 /** Server-tracked stage of the verification funnel. */
 export type VerifyPhase = "email" | "code" | "selfie" | "pending_review";
@@ -140,6 +142,9 @@ export type AdminAction =
   | "admin.unsuspend"
   | "admin.group_rrca"
   | "admin.content_highlight"
+  | "admin.submission_list"
+  | "admin.submission_approve"
+  | "admin.submission_reject"
   | "account.delete";
 
 export interface AuditEntry {
@@ -171,6 +176,12 @@ export interface PersistedDb {
   groups: GroupModRecord[];
   /** Content flags (reports). Reasons are owner-only, never public. */
   flags: FlagRecord[];
+  /**
+   * Community submissions (races / groups / independent events). Pending until
+   * an admin approves or rejects them; only approved records ever become
+   * public content, and rejection reasons are shown ONLY to the submitter.
+   */
+  submissions: SubmissionRecord[];
 }
 
 /** What kind of seeded content a moderation record refers to. */
@@ -226,4 +237,88 @@ export interface FlagRecord {
   status: FlagStatus;
   resolvedAt: string | null;
   resolvedAction: "dismiss" | "hide" | null;
+}
+
+// ------------------------------------------------------------- submissions
+
+/** What a community member can submit for admin review. */
+export type SubmissionKind = "race" | "group" | "event";
+export type SubmissionStatus = "pending" | "approved" | "rejected";
+
+/** Race submission payload — one-off race listing with external registration. */
+export interface RaceSubmissionPayload {
+  kind: "race";
+  name: string;
+  /** Free-text distance description, e.g. "5K / 10K" (same shape as Race.distance). */
+  distances: string;
+  /** ISO yyyy-mm-dd race date. */
+  date: string;
+  location: string;
+  /** External registration URL (http/https). */
+  registrationUrl: string;
+  description: string;
+}
+
+/** Group submission payload — a local run group the submitter runs. */
+export interface GroupSubmissionPayload {
+  kind: "group";
+  name: string;
+  description: string;
+  /** Validated supported city id (server-side, never client-trusted). */
+  cityId: string;
+  /**
+   * Exactly "rrca-chartered" | "community". The RRCA option is a REQUEST —
+   * the charter claim is only ever assigned by an admin at/after approval
+   * (see GroupModRecord.rrcaBadge) and may be adjusted by the admin.
+   */
+  groupType: GroupType;
+  groupmeUrl: string | null;
+  facebookUrl: string | null;
+  instagramUrl: string | null;
+  websiteUrl: string | null;
+}
+
+/** Independent-event submission payload — a run NOT tied to a group. */
+export interface EventSubmissionPayload {
+  kind: "event";
+  /** One-time (absolute date) or recurring (weekly day-of-week slot). */
+  type: "one_time" | "recurring";
+  title: string;
+  /** ISO yyyy-mm-dd — required when type === "one_time", null otherwise. */
+  date: string | null;
+  /** 0 (Mon) … 6 (Sun) — required when type === "recurring", null otherwise. */
+  dayOfWeek: number | null;
+  time: string;
+  location: string;
+  distanceLabel: string;
+  invite: InviteLabel;
+  externalUrl: string | null;
+  description: string;
+}
+
+export type SubmissionPayload = RaceSubmissionPayload | GroupSubmissionPayload | EventSubmissionPayload;
+
+export interface SubmissionRecord {
+  id: string;
+  kind: SubmissionKind;
+  cityId: string;
+  status: SubmissionStatus;
+  /** The account that submitted this entry (their own records only are visible to them). */
+  submitterAccountId: string;
+  submittedAt: string;
+  decidedAt: string | null;
+  /** Admin identity that decided (email), null until decided. */
+  decidedBy: string | null;
+  /**
+   * Required when status === "rejected" (the admin's rejection reason). Sent
+   * back ONLY to the submitter of this record — never in any public payload.
+   */
+  rejectionReason: string | null;
+  payload: SubmissionPayload;
+  /**
+   * When approved, the id of the public record created:
+   *  - race/event: moderation registry id ("race:user-<sid>" / "event:user-<sid>");
+   *  - group: group record id ("user-<sid>"). Null until approved.
+   */
+  publicRefId: string | null;
 }
