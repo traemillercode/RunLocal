@@ -9,6 +9,8 @@ import { AccountProvider } from "./state/account";
 import { ModeratedProvider } from "./state/moderated";
 import { PublicContentProvider } from "./state/content";
 import { useSelectedCity } from "./state/city";
+import { useAccount } from "./state/account";
+import * as api from "./lib/api";
 import { AdminPage } from "./pages/AdminPage";
 import { EventsPage } from "./pages/EventsPage";
 import { EventDetailPage } from "./pages/EventDetailPage";
@@ -31,13 +33,25 @@ const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login", "/recovery", "/conf
 function Shell() {
   const store = useAppState();
   const navigate = useNavigate();
+  const { refresh } = useAccount();
   const { city, selectCity } = useSelectedCity();
   const [recoveryError, setRecoveryError] = useState<string>();
   useEffect(() => {
     const parsed = parseAuthCallback(window.location.href);
     if (!parsed) return;
     window.history.replaceState(null, "", cleanCallbackUrl(window.location.href));
-    if (parsed.kind === "confirmation") { navigate("/confirmation", { replace: true }); return; }
+    if (parsed.kind === "confirmation") {
+      navigate("/confirmation", { replace: true });
+      void supabase.getConfirmationSession(parsed).then(async (session) => {
+        if (!session.ok) return;
+        const linked = await api.loginCheck(session.accessToken);
+        if (linked.ok) {
+          await refresh();
+          navigate(linked.data.account.status === "verified" ? "/profile" : "/verify", { replace: true });
+        }
+      });
+      return;
+    }
     navigate(parsed.kind === "recovery" ? "/recovery" : "/confirmation?error=" + encodeURIComponent(parsed.error), { replace: true });
     if (parsed.kind === "error") { if (parsed.flow === "recovery") setRecoveryError(parsed.error); return; }
     void supabase.setRecoverySession(parsed.accessToken, parsed.refreshToken).then((result) => { if (!result.ok) setRecoveryError(result.message); });
