@@ -29,6 +29,7 @@ import { Db } from "./src/server/store";
 import { apiHandler, pruneSessionsWith } from "./src/server/api";
 import { purgeEligible } from "./src/server/retention";
 import { seedContentRegistry, seedSampleFlags } from "./src/server/contentSeed";
+import { seedCmsCities } from "./src/server/cms";
 
 const root = normalize(process.env.RUN_LOCAL_ROOT ?? join(import.meta.dirname, "dist"));
 const port = Number(process.env.RUN_LOCAL_PORT ?? 3000);
@@ -42,6 +43,9 @@ await db.load();
 // preserves owner decisions) and seed the labeled sample flags once.
 seedContentRegistry(db);
 seedSampleFlags(db);
+// Mirror known city entities into the CMS store (idempotent, preserves admin
+// edits; non-launched cities start inactive so only live cities are public).
+seedCmsCities(db);
 await db.persist();
 
 // Retention purge on boot, then daily. Never keep verification data forever.

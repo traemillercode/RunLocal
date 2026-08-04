@@ -11,7 +11,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Db, newId, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPublicAccount, MIN_AGE } from "./store";
 import type { AccountRecord } from "./types";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
-import { isSupportedCityId } from "../data/cities";
+
 import { supabaseConfig, verifySupabaseToken, applySupabaseIdentity } from "./supabase";
 import {
   adminConfigured,
@@ -31,7 +31,7 @@ import {
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
-import { publicSettings, updateSettings, saveCity, deleteCity, validateUpload } from "./cms";
+import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, citySupported, CMS_REF_PATTERN, refContentType } from "./cms";
 import {
   dashboardOverview,
   liftSuspension,
@@ -276,7 +276,7 @@ async function handleApi(
   // or rejection reasons — just the public listing facts.
   if (method === "GET" && url.pathname === "/api/content") {
     const cityId = url.searchParams.get("city") ?? "";
-    if (!cityId || !isSupportedCityId(cityId)) {
+    if (!cityId || !citySupported(db, cityId)) {
       return err(res, { status: 400, error: "invalid_city" }), true;
     }
     return ok(res, publicApprovedContent(db, cityId)), true;
@@ -293,6 +293,9 @@ async function handleApi(
   if ((method === "GET" || method === "POST") && provider && validProvider(provider) && url.pathname === `/api/connections/${provider}`) {
     const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
     const account=db.getAccount(sess.accountId); if (!account || account.status!=="verified") return err(res,{status:403,error:"verified_runner_required"}),true;
+    // CMS provider toggle: a disabled provider is not offered on this site,
+    // regardless of whether deployment credentials exist.
+    if (!providerEnabled(db, provider)) return err(res,{status:403,error:"provider_disabled"}),true;
     if (method === "GET") { if (!adapters[provider].configured()) return err(res,{status:503,...configError(provider)}),true; const state=oauthState(sess.accountId,provider); return ok(res,{authorizeUrl:adapters[provider].authorizeUrl(state)}), true; }
     const body=await readJson(req) as Record<string,unknown>; const mode=body.shareMode;
     if (mode!==undefined && mode!=="auto" && mode!=="manual" && mode!=="private") return err(res,{status:400,error:"invalid_share_mode"}),true;
@@ -305,6 +308,7 @@ async function handleApi(
     const p = callback[1];
     const sess = requireSession(db, cookies);
     if (!sess) { err(res, { status: 401, error: "sign_in_required" }); return true; }
+    if (!providerEnabled(db, p)) { err(res, { status: 403, error: "provider_disabled" }); return true; }
     if (!adapters[p].configured()) { err(res, { status: 503, ...configError(p) }); return true; }
     const state = url.searchParams.get("state") ?? "";
     if (!stateValid(state, sess.accountId, p)) { err(res, { status: 403, error: "invalid_oauth_state" }); return true; }
@@ -329,6 +333,7 @@ async function handleApi(
     const account = db.getAccount(sess.accountId); if (!account || account.status !== "verified") { err(res, { status: 403, error: "verified_runner_required" }); return true; }
     const body = await readJson(req) as Record<string, unknown>; const p = body.provider as Provider;
     if (!validProvider(p)) { err(res, { status: 400, error: "invalid_provider" }); return true; }
+    if (!providerEnabled(db, p)) { err(res, { status: 403, error: "provider_disabled" }); return true; }
     let normalized; try { normalized = normalizeActivity(p, body.activity); } catch { err(res, { status: 400, error: "invalid_activity" }); return true; }
     const a = { ...normalized, id: newId(), accountId: sess.accountId, shareMode: "manual" as ShareMode, caption: typeof body.caption === "string" ? body.caption.slice(0, 280) : null };
     db.addActivity(a); await db.persist(); ok(res, { card: publicActivityCard(a) }); return true;
@@ -366,7 +371,7 @@ async function handleApi(
     if (!cityId) {
       return err(res, { status: 400, error: "city_required", message: "Choose your home city — Run Local is city-scoped and your community content defaults to it." }), true;
     }
-    if (rawCityId !== cityId || !isSupportedCityId(cityId)) {
+    if (rawCityId !== cityId || !citySupported(db, cityId)) {
       return err(res, { status: 400, error: "invalid_city", message: "That city isn't supported yet — pick one from the list." }), true;
     }
     // Username is REQUIRED for new signups and validated/normalized here —
@@ -547,7 +552,7 @@ async function handleApi(
     if (!cityId) {
       return err(res, { status: 400, error: "city_required", message: "Choose your home city — Run Local is city-scoped and your community content defaults to it." }), true;
     }
-    if (!isSupportedCityId(cityId)) {
+    if (!citySupported(db, cityId)) {
       return err(res, { status: 400, error: "invalid_city", message: "That city isn't supported yet — pick one from the list." }), true;
     }
     if (rec.cityId !== cityId) {
@@ -727,7 +732,20 @@ async function handleApi(
     return ok(res, { submission: { id: result.data.id, status: result.data.status } }), true;
   }
 
-  if (method === "GET" && url.pathname === "/api/config") return ok(res, { settings: publicSettings(db), cities: db.listCities().filter(c=>c.status === "active") }), true;
+  if (method === "GET" && url.pathname === "/api/config") return ok(res, { settings: publicSettings(db), cities: db.listCities().filter(c=>c.status === "active"), integrations: integrations(db) }), true;
+  // Public brand/city-header images: ONLY refs currently referenced by the
+  // public config (logo, favicon, active-city headers). Everything else stays
+  // private behind the audited admin route.
+  const publicRef = /^\/api\/cms\/refs\/([A-Za-z0-9._-]+)$/.exec(url.pathname);
+  if (method === "GET" && publicRef) {
+    const ref = publicRef[1];
+    if (!CMS_REF_PATTERN.test(ref) || !publicRefAllowed(db, ref)) return err(res, { status: 404, error: "not_found" }), true;
+    const bytes = await db.readRef(ref);
+    if (!bytes) return err(res, { status: 404, error: "not_found" }), true;
+    res.writeHead(200, { "content-type": refContentType(ref), "cache-control": "public, max-age=3600" });
+    res.end(bytes);
+    return true;
+  }
   // ============================ ADMIN =====================================
   if (url.pathname.startsWith("/api/admin")) {
     return handleAdmin(req, res, db, url, method, cookies, ip, secure, now);
@@ -754,11 +772,24 @@ async function handleAdmin(
   const sendErr = (r: { ok: false; error: string; status: number; message?: string }) =>
     err(res, { status: r.status, error: r.error, message: r.message });
 
-  if (method === "GET" && url.pathname === "/api/admin/cms/settings") { const a=authorizeAdmin(db,ctx,"admin.cms_settings",null,now); if(!a.ok)return sendErr(a),true; return ok(res,{settings:publicSettings(db)}),true; }
+  if (method === "GET" && url.pathname === "/api/admin/cms/settings") { const a=authorizeAdmin(db,ctx,"admin.cms_settings",null,now); if(!a.ok)return sendErr(a),true; return ok(res,{settings:publicSettings(db),cities:db.listCities(),integrations:integrations(db)}),true; }
   if (method === "POST" && url.pathname === "/api/admin/cms/settings") { const body=await readJson(req) as Record<string,unknown>; const r=updateSettings(db,ctx,body as any,now); if(!r.ok)return sendErr(r),true; await db.persist(); return ok(res,r.data),true; }
   if (method === "POST" && url.pathname === "/api/admin/cms/city") { const body=await readJson(req) as any; const r=saveCity(db,ctx,body,now); if(!r.ok)return sendErr(r),true; await db.persist(); return ok(res,r.data),true; }
   if (method === "POST" && url.pathname.startsWith("/api/admin/cms/city/") && url.pathname.endsWith("/deactivate")) { const id=url.pathname.split("/").at(-2)!; const r=deleteCity(db,ctx,id,now); if(!r.ok)return sendErr(r),true; await db.persist(); return ok(res,r.data),true; }
-  if (method === "POST" && url.pathname === "/api/admin/cms/upload") { const a=authorizeAdmin(db,ctx,"admin.cms_settings",null,now); if(!a.ok)return sendErr(a),true; const body=await readJson(req) as any; if(!validateUpload(body.ref))return err(res,{status:400,error:"invalid_image"}),true; return ok(res,{ref:`pending-upload-${newId()}`}),true; }
+  if (method === "POST" && url.pathname === "/api/admin/cms/upload") { const a=authorizeAdmin(db,ctx,"admin.cms_settings",null,now); if(!a.ok)return sendErr(a),true; const body=await readJson(req) as { ref?: unknown }; const r=await storeCmsUpload(db,body.ref); if(!r.ok)return err(res,{status:400,error:r.error}),true; await db.persist(); return ok(res,{ref:r.ref}),true; }
+  // Audited admin preview of ANY stored CMS ref (unreferenced uploads are
+  // never public — this is the only way to inspect them).
+  const adminRef = /^\/api\/admin\/cms\/refs\/([A-Za-z0-9._-]+)$/.exec(url.pathname);
+  if (method === "GET" && adminRef) {
+    const ref = adminRef[1];
+    const a = authorizeAdmin(db, ctx, "admin.cms_settings", ref, now); if (!a.ok) return sendErr(a), true;
+    if (!CMS_REF_PATTERN.test(ref)) return err(res, { status: 404, error: "not_found" }), true;
+    const bytes = await db.readRef(ref);
+    if (!bytes) return err(res, { status: 404, error: "not_found" }), true;
+    res.writeHead(200, { "content-type": refContentType(ref), "cache-control": "private, no-store" });
+    res.end(bytes);
+    return true;
+  }
   // POST /api/admin/login
   if (method === "POST" && url.pathname === "/api/admin/login") {
     if (!adminConfigured()) {

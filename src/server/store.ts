@@ -155,6 +155,14 @@ export class Db {
   private oauthTokens = new Map<string, import("./activity").OAuthToken>();
   private settings: import("./types").SiteSettings | undefined;
   private cities = new Map<string, import("./types").CmsCity>();
+  /**
+   * CMS image references (brand logo/favicon, city header images) keyed by
+   * ref id. Bytes live on disk under uploads/private for file-backed stores
+   * (never in db.json) and in this map for in-memory/test stores. Refs are
+   * opaque ids — settings/cities only ever carry the ref string, never the
+   * image bytes or data URLs.
+   */
+  private refs = new Map<string, Buffer>();
   private loaded = false;
 
   constructor(opts: DbOptions = {}) {
@@ -328,6 +336,32 @@ export class Db {
   getCity(id:string): import("./types").CmsCity | undefined { return this.cities.get(id); }
   listCities(): import("./types").CmsCity[] { return [...this.cities.values()]; }
   setCity(city:import("./types").CmsCity): void { this.cities.set(city.id, city); }
+
+  // ------------------------------------------------------------ cms image refs
+  /**
+   * Store CMS image bytes under an opaque ref. File-backed stores write to
+   * uploads/private (like selfies) so image data never appears in db.json;
+   * in-memory stores keep the bytes in the map. The ref is the ONLY value
+   * that settings/cities ever carry.
+   */
+  async saveRef(ref: string, bytes: Buffer): Promise<void> {
+    this.refs.set(ref, bytes);
+    if (!this.dataDir) return;
+    const dir = this.uploadDir("private");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, `cms-${ref}`), bytes);
+  }
+  /** Read CMS image bytes by ref (memory first, then disk). */
+  async readRef(ref: string): Promise<Buffer | null> {
+    const mem = this.refs.get(ref);
+    if (mem) return mem;
+    if (!this.dataDir) return null;
+    try {
+      return await readFile(join(this.uploadDir("private"), `cms-${ref}`));
+    } catch {
+      return null;
+    }
+  }
 
   // ---------------------------------------------------------------- sessions
   getSession(id: string): SessionRecord | undefined {
