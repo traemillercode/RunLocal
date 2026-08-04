@@ -146,6 +146,13 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
           <Icon name="users" className="h-3.5 w-3.5" /> Start a group
         </PillButton>
       </div>
+      <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[#14171C] p-3.5 text-white shadow-sm">
+        <img src="/icons/icon-192.png" alt="" className="h-11 w-11 shrink-0 rounded-xl" />
+        <div className="min-w-0">
+          <p className="text-sm font-extrabold tracking-tight">Run <span className="text-[#FF5741]">Local</span></p>
+          <p className="mt-0.5 text-xs leading-relaxed text-white/70">Local runs, races, and community — starting in {city.name}.</p>
+        </div>
+      </div>
       <HomeCityBanner />
       <Link to="/past-events" className="mt-3 inline-flex min-h-10 items-center gap-1 rounded-full bg-slate-100 px-3 text-xs font-bold text-slate-700">View past events <Icon name="chevronRight" className="h-4 w-4" /></Link>
       <div className="relative mt-4">
