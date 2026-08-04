@@ -81,18 +81,23 @@ export function RaceSubmissionSheet({ open, onClose, onSubmitted, cityId }: { op
 /** Group submission: verified runners. RRCA option is a request, not a claim. */
 export function GroupSubmissionSheet({ open, onClose, onSubmitted, cityId }: { open: boolean; onClose: () => void; onSubmitted?: () => void; cityId: string }) {
   const { busy, error, submit } = useSubmit();
-  const [f, setF] = useState({ name: "", description: "", groupType: "community", groupmeUrl: "", facebookUrl: "", instagramUrl: "", websiteUrl: "" });
+  const [f, setF] = useState({ name: "", description: "", groupType: "community", groupmeUrl: "", facebookUrl: "", instagramUrl: "", websiteUrl: "", coverPhoto: "", logoPhoto: "", membershipMode: "request" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const save = async () => {
+    if (!f.coverPhoto || !f.logoPhoto) return;
+    const cover = await api.uploadGroupPhoto(f.coverPhoto);
+    const logo = await api.uploadGroupPhoto(f.logoPhoto);
+    if (!cover.ok || !logo.ok) return;
     const ok = await submit(() =>
       api.submitGroup({
         cityId, name: f.name, description: f.description, groupType: f.groupType as "rrca-chartered" | "community",
         groupmeUrl: f.groupmeUrl || undefined, facebookUrl: f.facebookUrl || undefined,
         instagramUrl: f.instagramUrl || undefined, websiteUrl: f.websiteUrl || undefined,
+        coverPhoto: cover.data.photoRef, logoPhoto: logo.data.photoRef, membershipMode: f.membershipMode as "open" | "request",
       }),
     );
     if (ok) {
-      setF({ name: "", description: "", groupType: "community", groupmeUrl: "", facebookUrl: "", instagramUrl: "", websiteUrl: "" });
+      setF({ name: "", description: "", groupType: "community", groupmeUrl: "", facebookUrl: "", instagramUrl: "", websiteUrl: "", coverPhoto: "", logoPhoto: "", membershipMode: "request" });
       onClose();
       onSubmitted?.();
     }
@@ -117,7 +122,13 @@ export function GroupSubmissionSheet({ open, onClose, onSubmitted, cityId }: { o
         <Field label="GroupMe link (optional)"><input className={inputCls} placeholder="https://groupme.com/…" inputMode="url" value={f.groupmeUrl} onChange={set("groupmeUrl")} /></Field>
         <Field label="Facebook link (optional)"><input className={inputCls} placeholder="https://facebook.com/…" inputMode="url" value={f.facebookUrl} onChange={set("facebookUrl")} /></Field>
         <Field label="Instagram link (optional)"><input className={inputCls} placeholder="https://instagram.com/…" inputMode="url" value={f.instagramUrl} onChange={set("instagramUrl")} /></Field>
-        <Field label="Website link (optional)"><input className={inputCls} placeholder="https://…" inputMode="url" value={f.websiteUrl} onChange={set("websiteUrl")} /></Field>
+        <Field label="Membership mode">
+          <select className={inputCls} value={f.membershipMode} onChange={set("membershipMode")}>
+            <option value="request">Request to join</option><option value="open">Open membership</option>
+          </select>
+        </Field>
+        <Field label="Cover photo (required)"><input type="file" accept="image/jpeg,image/png,image/webp" className={inputCls} onChange={(e) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = () => setF({ ...f, coverPhoto: String(reader.result) }); reader.readAsDataURL(file); } }} /></Field>
+        <Field label="Logo photo (required)"><input type="file" accept="image/jpeg,image/png,image/webp" className={inputCls} onChange={(e) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = () => setF({ ...f, logoPhoto: String(reader.result) }); reader.readAsDataURL(file); } }} /></Field>
         <Err msg={error} />
         <PillButton variant="primary" className="w-full" disabled={busy} onClick={() => void save()}>
           <Icon name="check" className="h-4 w-4" /> {busy ? "Submitting…" : "Submit for approval"}

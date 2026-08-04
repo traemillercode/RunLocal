@@ -597,6 +597,18 @@ async function handleApi(
   // deterministically on the normalized case-insensitive form. The check +
   // write run in one synchronous turn of the single-threaded store, so a
   // concurrent request can never claim the same name in between.
+  if (method === "POST" && url.pathname === "/api/group/photo") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { photo?: unknown };
+    const rec = db.getAccount(sess.accountId);
+    if (!rec || rec.deletedAt || typeof body.photo !== "string") return err(res, { status: 400, error: "invalid_image" }), true;
+    const img = decodeImage(body.photo);
+    if (!img.ok) return err(res, { status: 400, error: img.error }), true;
+    const filename = `${rec.id}_group_${newId()}.${img.ext}`;
+    await db.writePublicUpload(filename, img.bytes);
+    return ok(res, { photoRef: filename }), true;
+  }
   if (method === "POST" && url.pathname === "/api/profile/username") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;

@@ -120,6 +120,9 @@ export function setHomeCity(cityId: string): Promise<ApiResult<{ account: import
 export function uploadProfilePhoto(photoDataUrl: string): Promise<ApiResult<{ photoUrl: string }>> {
   return request("/api/profile/photo", { method: "POST", body: JSON.stringify({ photo: photoDataUrl }) });
 }
+export function uploadGroupPhoto(photoDataUrl: string): Promise<ApiResult<{ photoRef: string }>> {
+  return request("/api/group/photo", { method: "POST", body: JSON.stringify({ photo: photoDataUrl }) });
+}
 
 // -------------------------------------------------------------- verification
 /**
