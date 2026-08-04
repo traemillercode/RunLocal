@@ -7,21 +7,94 @@
  * verification, admin key, retention) from the public /api/health endpoint —
  * no secrets.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { Chip, Icon, PillButton } from "../components/ui";
 import { CITIES } from "../data/cities";
-import { phaseLabel, roleLabel } from "../lib/accounts";
+import { phaseLabel, roleLabel, type PublicAccount } from "../lib/accounts";
 import * as api from "../lib/api";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
 import { useSelectedCity } from "../state/city";
 
+
+const PHOTO_MAX_BYTES = 4 * 1024 * 1024;
+const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function ProfilePhotoSettings({ account, refresh }: { account: PublicAccount; refresh: () => Promise<void> }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(account.profilePhotoUrl);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setPreview(account.profilePhotoUrl);
+  }, [account.profilePhotoUrl]);
+
+  const choose = (file: File | undefined) => {
+    setError(null);
+    setSaved(false);
+    if (!file) return;
+    if (!PHOTO_TYPES.has(file.type)) {
+      setError("Choose a JPG, PNG, or WebP image.");
+      return;
+    }
+    if (file.size > PHOTO_MAX_BYTES) {
+      setError("That image is too large. Choose a photo under 4 MB.");
+      return;
+    }
+    const nextPreview = URL.createObjectURL(file);
+    setPreview(nextPreview);
+    setBusy(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const value = typeof reader.result === "string" ? reader.result : "";
+      const result = value ? await api.uploadProfilePhoto(value) : { ok: false as const, error: new api.ApiError(400, "invalid_image", "Choose a valid image.") };
+      URL.revokeObjectURL(nextPreview);
+      setBusy(false);
+      if (result.ok) {
+        setSaved(true);
+        await refresh();
+      } else {
+        setPreview(account.profilePhotoUrl);
+        setError(result.error.message ?? "Could not save your profile photo. Try again.");
+      }
+    };
+    reader.onerror = () => {
+      URL.revokeObjectURL(nextPreview);
+      setBusy(false);
+      setPreview(account.profilePhotoUrl);
+      setError("Could not read that image. Try another photo.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+      <div className="border-b border-slate-100 px-5 py-3.5">
+        <h2 className="text-[15px] font-bold text-slate-900">Profile photo</h2>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">Add a photo to personalize your public runner profile.</p>
+      </div>
+      <div className="flex items-center gap-4 px-5 py-4">
+        {preview ? <img src={preview} alt="Profile photo preview" className="h-20 w-20 shrink-0 rounded-full object-cover ring-2 ring-slate-100" /> : <div className="grid h-20 w-20 shrink-0 place-items-center rounded-full bg-slate-100 text-2xl font-bold text-slate-400" aria-label="No profile photo">?</div>}
+        <div className="min-w-0 flex-1">
+          <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" capture="user" className="sr-only" onChange={(e) => { choose(e.target.files?.[0]); e.target.value = ""; }} />
+          <PillButton variant="secondary" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? "Saving…" : account.profilePhotoUrl ? "Change photo" : "Add photo"}</PillButton>
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-400">JPG, PNG, or WebP · up to 4 MB. On supported phones, you can use the front camera.</p>
+          {saved ? <p role="status" className="mt-2 text-xs font-semibold text-emerald-700">Profile photo saved.</p> : null}
+          {error ? <p role="alert" className="mt-2 text-xs font-semibold text-red-600">{error}</p> : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function SettingsPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { me, backendAvailable, signOut, deleteMyAccount } = useAccount();
+  const { me, backendAvailable, signOut, deleteMyAccount, refresh } = useAccount();
   const { city, cityId, signedIn, hasHomeCity, selectCity } = useSelectedCity();
   const [notificationsOn, setNotificationsOn] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -106,6 +179,7 @@ export function SettingsPage() {
         </section>
       ) : null}
 
+      {signedIn && account ? <ProfilePhotoSettings account={account} refresh={refresh} /> : null}
       {signedIn && account ? <ActivityConnections /> : null}
       {/* Account */}
       <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
