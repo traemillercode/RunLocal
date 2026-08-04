@@ -16,6 +16,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { PillButton } from "../components/ui";
 import { ResendConfirmationBox } from "../components/ResendConfirmationBox";
 import * as supabase from "../lib/supabase";
+import { normalizeErrorMessage } from "../lib/errors";
 
 const inputCls =
   "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
@@ -25,7 +26,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export function ConfirmationPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const error = params.get("error");
+  const rawError = params.get("error");
+  const error = rawError ? normalizeErrorMessage(rawError, "Confirmation link unavailable. Please request a new one.") : null;
   const [email, setEmail] = useState(params.get("email") ?? "");
   const [resending, setResending] = useState(false);
   const [resendError, setResendError] = useState<string | null>(null);
