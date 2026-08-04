@@ -74,7 +74,7 @@ async function get(db: ReturnType<typeof createMemoryStore>, path: string, cooki
   return fake;
 }
 
-const VALID = { name: "Jordan Lee", username: "jordanlee", email: "runner@example.com", birthdate: "1998-05-05" };
+const VALID = { name: "Jordan Lee", username: "jordanlee", email: "runner@example.com", birthdate: "1998-05-05", cityId: "columbia-mo" };
 
 describe("POST /api/accounts — signup requires and normalizes the username", () => {
   it("rejects a missing username with 400 invalid_username and creates nothing", async () => {

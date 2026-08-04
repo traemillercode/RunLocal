@@ -10,6 +10,7 @@ import * as api from "../lib/api";
 import type { AppStore } from "../lib/store";
 import { normalizeUsername, USERNAME_HINT, USERNAME_PROMPT } from "../lib/username";
 import { useAccount } from "../state/account";
+import { useSelectedCity } from "../state/city";
 
 function initials(name: string): string {
   return name
@@ -139,6 +140,7 @@ function UsernameEditor({ account, refresh }: { account: PublicAccount; refresh:
 export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
   const navigate = useNavigate();
   const { me, backendAvailable, refresh } = useAccount();
+  const { hasHomeCity } = useSelectedCity();
 
   const rsvps = useMemo(() => {
     const all = resolveWeekEvents(city.events, new Date());
@@ -178,7 +180,7 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
               <p className="truncate text-[13px] font-semibold leading-tight text-[#c8f169]">@{signedIn.username}</p>
             ) : null}
             <p className="mt-0.5 text-[13px] text-white/70">
-              {city.name}, {city.state}
+              {signedIn ? (hasHomeCity ? `Home: ${city.name}, ${city.state}` : "Home city: not set") : `${city.name}, ${city.state}`}
             </p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {verified ? (
@@ -231,6 +233,34 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
       ) : (
         <UsernameEditor account={signedIn} refresh={refresh} />
       )}
+
+      {/* Home city — account-owned; change happens in Settings (server-validated) */}
+      {signedIn ? (
+        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-[15px] font-bold text-slate-900">Home city</h2>
+              {hasHomeCity ? (
+                <p className="truncate text-[13px] font-semibold text-[#0b2b22]">
+                  {city.name}, {city.state}
+                </p>
+              ) : (
+                <p className="text-[13px] font-semibold text-amber-700">Not set yet — choose your home city</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/settings")}
+              className="shrink-0 rounded-full bg-slate-100 px-4 py-2 text-[13px] font-semibold text-slate-700 active:bg-slate-200"
+            >
+              {hasHomeCity ? "Change" : "Choose"}
+            </button>
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+            Your events, races, and forum default to your home city. Changing it re-scopes your community content.
+          </p>
+        </section>
+      ) : null}
 
       {/* Pending resume */}
       {signedIn && !verified ? (

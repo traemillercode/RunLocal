@@ -35,6 +35,16 @@ export interface AccountRecord {
    * is enforced server-side on the normalized form (case-insensitive).
    */
   username: string | null;
+  /**
+   * The account's home city id — a supported city from the known city entity
+   * list (src/data/cities.ts). REQUIRED for new signups (validated server-side
+   * against known entities; never trusted from the client), nullable ONLY for
+   * legacy accounts created before home cities existed — they stay fully
+   * functional, browse via the guest city selector, and are clearly prompted
+   * to choose a home city (which persists here). Public profile identity,
+   * never sensitive data.
+   */
+  cityId: string | null;
   status: AccountStatus;
   /** Funnel stage; only meaningful while status === "pending". */
   phase: VerifyPhase;

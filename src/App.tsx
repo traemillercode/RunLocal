@@ -7,6 +7,7 @@ import { ToastProvider } from "./lib/toast";
 import { useAppState } from "./lib/store";
 import { AccountProvider } from "./state/account";
 import { ModeratedProvider } from "./state/moderated";
+import { useSelectedCity } from "./state/city";
 import { AdminPage } from "./pages/AdminPage";
 import { EventsPage } from "./pages/EventsPage";
 import { ForumPage } from "./pages/ForumPage";
@@ -25,6 +26,7 @@ const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login", "/recovery"]);
 function Shell() {
   const store = useAppState();
   const navigate = useNavigate();
+  const { city, selectCity } = useSelectedCity();
   const [recoveryError, setRecoveryError] = useState<string>();
   useEffect(() => {
     const parsed = parseRecoveryHash(window.location.hash);
@@ -35,7 +37,6 @@ function Shell() {
     void supabase.setRecoverySession(parsed.accessToken, parsed.refreshToken).then((result) => { if (!result.ok) setRecoveryError(result.message); });
   }, [navigate]);
   const [cityOpen, setCityOpen] = useState(false);
-  const city = CITIES.find((c) => c.id === store.state.cityId) ?? CITIES[0];
   const location = useLocation();
   const noNav = NO_NAV_PATHS.has(location.pathname);
   return (
@@ -64,8 +65,7 @@ function Shell() {
         cities={CITIES}
         currentCityId={city.id}
         onSelect={(c) => {
-          store.setCityId(c.id);
-          setCityOpen(false);
+          void selectCity(c.id).then(() => setCityOpen(false));
         }}
       />
     </div>

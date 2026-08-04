@@ -23,8 +23,8 @@ describe("permission gating (canDo)", () => {
 describe("roleOf", () => {
   it("maps guest / pending / verified me payloads to roles", () => {
     const guest: Me = { status: "guest" };
-    const pending: Me = { status: "signed_in", account: { id: "a", name: "N", email: "n@x.com", username: "n_runner", status: "pending", phase: "pending_review", badge: null, role: "runner", isOwner: false, suspended: false, profilePhotoUrl: null } };
-    const verified: Me = { status: "signed_in", account: { id: "b", name: "V", email: "v@x.com", username: "v_runner", status: "verified", phase: null, badge: "verified", role: "runner", isOwner: false, suspended: false, profilePhotoUrl: null } };
+    const pending: Me = { status: "signed_in", account: { id: "a", name: "N", email: "n@x.com", username: "n_runner", cityId: "columbia-mo", status: "pending", phase: "pending_review", badge: null, role: "runner", isOwner: false, suspended: false, profilePhotoUrl: null } };
+    const verified: Me = { status: "signed_in", account: { id: "b", name: "V", email: "v@x.com", username: "v_runner", cityId: "columbia-mo", status: "verified", phase: null, badge: "verified", role: "runner", isOwner: false, suspended: false, profilePhotoUrl: null } };
     expect(roleOf(guest)).toBe("guest");
     expect(roleOf(pending)).toBe("pending");
     expect(roleOf(verified)).toBe("verified");
@@ -59,6 +59,9 @@ describe("public payloads never leak sensitive verification data", () => {
     const json = JSON.stringify(pub);
     expect(pub.badge).toBe("verified");
     expect(pub.profilePhotoUrl).toBeNull();
+    // The home city id is PUBLIC profile identity (never sensitive) and is
+    // surfaced as null for legacy accounts that have not chosen one.
+    expect(pub.cityId).toBeNull();
     // Sensitive values must not appear anywhere in the public payload.
     expect(json).not.toContain("+15735550123");
     expect(json).not.toContain("573555");
@@ -69,16 +72,18 @@ describe("public payloads never leak sensitive verification data", () => {
     expect(json).not.toContain("purgeAt");
     expect(json).not.toContain("verifiedAt");
     // Only the badge, role label, server-computed owner flag, and suspension
-    // boolean are exposed (plus the public handle `username`).
-    expect(Object.keys(pub).sort()).toEqual(["badge", "email", "id", "isOwner", "name", "phase", "profilePhotoUrl", "role", "status", "suspended", "username"].sort());
+    // boolean are exposed (plus the public handle `username` and home `cityId`).
+    expect(Object.keys(pub).sort()).toEqual(["badge", "cityId", "email", "id", "isOwner", "name", "phase", "profilePhotoUrl", "role", "status", "suspended", "username"].sort());
   });
 
   it("legacy accounts without a username surface username: null and keep every other field", () => {
     const db = createMemoryStore();
     const rec = db.createAccount({ name: "Legacy", email: "legacy@example.com" });
     expect(rec.username).toBeNull();
+    expect(rec.cityId).toBeNull();
     const pub = toPublicAccount(db.getAccount(rec.id)!);
     expect(pub.username).toBeNull();
+    expect(pub.cityId).toBeNull();
     // Legacy fields still resolve exactly as before — nothing else changed.
     expect(pub.name).toBe("Legacy");
     expect(pub.email).toBe("legacy@example.com");

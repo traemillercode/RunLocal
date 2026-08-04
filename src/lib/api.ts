@@ -67,13 +67,18 @@ export function getMe(): Promise<ApiResult<Me>> {
 }
 
 // ---------------------------------------------------------------- accounts
-export function createAccount(input: { name: string; username: string; email: string; phone?: string; birthdate: string; requestedRole?: "runner" | "group_leader"; noSession?: boolean }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
+export function createAccount(input: { name: string; username: string; email: string; phone?: string; birthdate: string; cityId: string; requestedRole?: "runner" | "group_leader"; noSession?: boolean }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
   return request("/api/accounts", { method: "POST", body: JSON.stringify(input) });
 }
 
 /** Set or change the signed-in user's unique public handle (server-normalized). */
 export function setUsername(username: string): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
   return request("/api/profile/username", { method: "POST", body: JSON.stringify({ username }) });
+}
+
+/** Set or change the signed-in user's home city (server-validated against known city entities). */
+export function setHomeCity(cityId: string): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
+  return request("/api/profile/city", { method: "POST", body: JSON.stringify({ cityId }) });
 }
 
 export function uploadProfilePhoto(photoDataUrl: string): Promise<ApiResult<{ photoUrl: string }>> {

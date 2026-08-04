@@ -14,18 +14,22 @@ import { Chip, Icon, PillButton } from "../components/ui";
 import { CITIES } from "../data/cities";
 import { phaseLabel, roleLabel } from "../lib/accounts";
 import * as api from "../lib/api";
-import { useAppState } from "../lib/store";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
+import { useSelectedCity } from "../state/city";
 
 export function SettingsPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const store = useAppState();
   const { me, backendAvailable, signOut, deleteMyAccount } = useAccount();
+  const { city, cityId, signedIn, hasHomeCity, selectCity } = useSelectedCity();
   const [notificationsOn, setNotificationsOn] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [health, setHealth] = useState<api.HealthInfo | null>(null);
+  // In-progress home-city selection (null = not editing / unchanged).
+  const [pendingCityId, setPendingCityId] = useState<string | null>(null);
+  const [cityBusy, setCityBusy] = useState(false);
+  const [citySaveError, setCitySaveError] = useState<string | null>(null);
 
   useEffect(() => {
     void api.getHealth().then((r) => {
@@ -36,7 +40,36 @@ export function SettingsPage() {
   const account = me?.status === "signed_in" ? me.account : null;
   const verified = account?.status === "verified";
   const isOwner = account?.isOwner === true;
-  const city = CITIES.find((c) => c.id === store.state.cityId) ?? CITIES[0];
+
+  /**
+   * Persist the pending home-city selection through the server (which
+   * re-validates the id against the known city entities) and surface its
+   * verdicts clearly.
+   */
+  const saveHomeCity = async () => {
+    const target = pendingCityId;
+    if (!target || target === cityId) {
+      setPendingCityId(null);
+      setCitySaveError(null);
+      return;
+    }
+    setCityBusy(true);
+    setCitySaveError(null);
+    const r = await selectCity(target);
+    setCityBusy(false);
+    if (r.ok) {
+      setPendingCityId(null);
+      toast("Home city updated.", "success");
+    } else if (r.error.code === "invalid_city") {
+      setCitySaveError("That city isn't supported yet — pick one from the list.");
+    } else if (r.error.code === "city_required") {
+      setCitySaveError("Choose a city first.");
+    } else if (r.error.code === "sign_in_required") {
+      setCitySaveError("Your session expired — log in again to save your home city.");
+    } else {
+      setCitySaveError(r.error.message ?? "Couldn't save your home city. Try again.");
+    }
+  };
 
   const doDelete = async () => {
     if (!confirmingDelete) {
@@ -137,6 +170,7 @@ export function SettingsPage() {
             <span className="text-[14px] font-medium text-slate-700">City</span>
             <span className="text-[14px] text-slate-500">
               {city.name}, {city.state}
+              {signedIn && hasHomeCity ? " (home)" : ""}
             </span>
           </li>
           <li>
@@ -153,9 +187,82 @@ export function SettingsPage() {
           </li>
         </ul>
         <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
-          Preferences are saved on this device only. Verification records are never stored on your device.
+          Guest city choice and notification preferences are saved on this device only. Your home city is saved to your
+          account. Verification records are never stored on your device.
         </p>
       </section>
+
+      {/* Home city — account-owned, server-validated */}
+      {signedIn ? (
+        <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+          <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Home city</h2>
+          {!hasHomeCity ? (
+            <div className="border-b border-amber-100 bg-amber-50 px-5 py-3.5">
+              <p className="flex items-start gap-2 text-[13px] font-semibold leading-relaxed text-amber-900">
+                <Icon name="pin" className="mt-0.5 h-4 w-4 shrink-0" />
+                You haven't chosen a home city yet — your runs, races, and forum default to it.
+              </p>
+            </div>
+          ) : null}
+          <ul className="space-y-2 p-4" role="radiogroup" aria-label="Home city">
+            {CITIES.map((c) => {
+              const active = (pendingCityId ?? (hasHomeCity ? cityId : null)) === c.id;
+              const disabled = !c.live;
+              return (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={disabled}
+                    onClick={() => {
+                      setPendingCityId(c.id);
+                      setCitySaveError(null);
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
+                      active ? "border-[#0b2b22] bg-[#0b2b22] text-white" : "border-slate-200 bg-white text-slate-800"
+                    } ${disabled ? "opacity-60" : "active:bg-slate-50"}`}
+                  >
+                    <span
+                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
+                        active ? "bg-white/15 text-[#c8f169]" : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      <Icon name="pin" className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[14px] font-bold">
+                        {c.name}, {c.state}
+                      </span>
+                      <span className={`block truncate text-[11px] ${active ? "text-white/70" : "text-slate-500"}`}>{c.tagline}</span>
+                    </span>
+                    {active ? <Icon name="check" className="h-4 w-4 shrink-0 text-[#c8f169]" /> : disabled ? <Chip tone="amber">Coming soon</Chip> : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {citySaveError ? (
+            <p role="alert" className="px-4 pb-1 text-xs font-medium text-red-600">
+              {citySaveError}
+            </p>
+          ) : null}
+          <div className="flex gap-2 border-t border-slate-100 px-4 py-3.5">
+            <PillButton variant="primary" className="flex-1" disabled={cityBusy || pendingCityId === null || pendingCityId === cityId} onClick={() => void saveHomeCity()}>
+              {cityBusy ? "Saving…" : "Save home city"}
+            </PillButton>
+            {pendingCityId !== null ? (
+              <PillButton variant="ghost" onClick={() => { setPendingCityId(null); setCitySaveError(null); }}>
+                Cancel
+              </PillButton>
+            ) : null}
+          </div>
+          <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
+            One home city, validated server-side against the supported city list. Changing it re-scopes your community
+            content (events, races, forum).
+          </p>
+        </section>
+      ) : null}
 
       {/* Owner-only */}
       {isOwner ? (

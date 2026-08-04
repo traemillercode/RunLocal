@@ -199,6 +199,7 @@ describe("profile menu states", () => {
         name: "Taylor",
         email: "t@example.com",
         username: "taylor_runs",
+        cityId: "columbia-mo",
         status: "pending",
         phase: "pending_review",
         badge: null,

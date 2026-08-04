@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { EventCard } from "../components/EventCard";
+import { HomeCityBanner } from "../components/HomeCityBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { Icon, PillButton, Sheet } from "../components/ui";
 import { resolveWeekEvents, startOfWeek, weekRangeLabel } from "../lib/dates";
@@ -76,6 +77,7 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
           <Icon name="plus" className="h-4 w-4" /> Host a run
         </PillButton>
       </div>
+      <HomeCityBanner />
       <div className="relative mt-4">
         <Icon name="search" className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
         <input

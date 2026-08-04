@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Chip, Icon } from "../components/ui";
+import { HomeCityBanner } from "../components/HomeCityBanner";
 import { formatRaceDate } from "../lib/dates";
 import { useModerated } from "../state/moderated";
 import type { City, Race } from "../types";
@@ -78,6 +79,7 @@ export function RacesPage({ city }: { city: City }) {
       <p className="mt-0.5 text-sm font-medium text-slate-500">
         Upcoming races in {city.name}, {city.state} — registration on the organizer's site.
       </p>
+      <HomeCityBanner />
 
       <ul className="mt-4 space-y-3">
         {races.map((r) => {

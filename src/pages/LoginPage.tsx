@@ -25,11 +25,12 @@
  */
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Icon, PillButton } from "../components/ui";
+import { Chip, Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
 import { validateBirthdate } from "../lib/birthdate";
 import * as supabase from "../lib/supabase";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
+import { CITIES } from "../data/cities";
 import { useAccount } from "../state/account";
 
 const inputCls =
@@ -76,6 +77,11 @@ export function LoginPage() {
   const [phone, setPhone] = useState("");
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  // Required home city — exactly one supported city, chosen at signup. The
+  // server re-validates it against the known city entities; this state is
+  // only the in-form selection.
+  const [cityId, setCityId] = useState<string | null>(null);
+  const [cityError, setCityError] = useState<string | null>(null);
   const [mode, setMode] = useState<"login" | "signup">(() => (searchParams.get("mode") === "signup" ? "signup" : "login"));
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -123,6 +129,13 @@ export function LoginPage() {
         setError("Choose a username — 3–24 characters: letters, numbers, _ or -, starting with a letter.");
         return;
       }
+      // Exactly one supported city must be chosen before signup proceeds; the
+      // server re-validates the id against the known city entities.
+      if (!cityId) {
+        setCityError("Choose your home city — this is required.");
+        return;
+      }
+      setCityError(null);
       const birthdateCheck = validateBirthdate(birthdate);
       if (!birthdateCheck.ok) {
         setBirthdateError(birthdateCheck.message);
@@ -153,7 +166,7 @@ export function LoginPage() {
         // the local Pending profile WITHOUT a Run Local session — signed-in
         // status is never claimed without a valid Supabase session. The
         // account links to the confirmed identity on first login.
-        const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, phone: phone.trim() || undefined, noSession: true });
+        const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined, noSession: true });
         setBusy(false);
         if (created.ok || created.error.code === "email_taken") {
           setNotice(
@@ -170,6 +183,8 @@ export function LoginPage() {
           setError("That username is already taken — try another.");
         } else if (created.error.code === "invalid_username") {
           setError(created.error.message ?? "Pick a valid username.");
+        } else if (created.error.code === "invalid_city" || created.error.code === "city_required") {
+          setCityError(created.error.message ?? "Pick a supported city.");
         } else {
           setNotice(
             "Your Supabase account was created, but Run Local couldn't save your profile right now. Confirm your email and log in — your account will finish setting up then.",
@@ -187,12 +202,13 @@ export function LoginPage() {
       }
       // Immediate session: create the local Pending account (this establishes
       // the Run Local session cookie) — never the password, only metadata.
-      const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, phone: phone.trim() || undefined });
+      const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined });
       if (!created.ok) {
         setBusy(false);
         if (created.error.code === "email_taken") setError("That email already has an account. Log in instead.");
         else if (created.error.code === "username_taken") setError("That username is already taken — try another.");
         else if (created.error.code === "invalid_username") setError(created.error.message ?? "Pick a valid username.");
+        else if (created.error.code === "invalid_city" || created.error.code === "city_required") setCityError(created.error.message ?? "Pick a supported city.");
         else setError(created.error.message ?? "Could not create your Run Local profile. Try again.");
         return;
       }
@@ -366,6 +382,60 @@ export function LoginPage() {
                 {photoError ? <p className="mt-1.5 text-xs font-medium text-red-600">{photoError}</p> : null}
                 <span className="mt-1 block text-[11px] text-slate-400">Optional — you can add it later. This photo is public.</span>
               </label>
+              <div>
+                <span className="mb-1.5 block text-sm font-semibold">Home city</span>
+                <ul className="space-y-2" role="radiogroup" aria-label="Home city">
+                  {CITIES.map((c) => {
+                    const active = cityId === c.id;
+                    const disabled = !c.live;
+                    return (
+                      <li key={c.id}>
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          disabled={disabled}
+                          onClick={() => {
+                            setCityId(c.id);
+                            setCityError(null);
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
+                            active ? "border-[#0b2b22] bg-[#0b2b22] text-white" : "border-slate-200 bg-white text-slate-800"
+                          } ${disabled ? "opacity-60" : "active:bg-slate-50"}`}
+                        >
+                          <span
+                            className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
+                              active ? "bg-white/15 text-[#c8f169]" : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            <Icon name="pin" className="h-4 w-4" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[14px] font-bold">
+                              {c.name}, {c.state}
+                            </span>
+                            <span className={`block truncate text-[11px] ${active ? "text-white/70" : "text-slate-500"}`}>{c.tagline}</span>
+                          </span>
+                          {active ? (
+                            <Icon name="check" className="h-4 w-4 shrink-0 text-[#c8f169]" />
+                          ) : disabled ? (
+                            <Chip tone="amber">Coming soon</Chip>
+                          ) : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {cityError ? (
+                  <p role="alert" className="mt-1.5 text-xs font-medium text-red-600">
+                    {cityError}
+                  </p>
+                ) : null}
+                <span className="mt-1 block text-[11px] leading-relaxed text-slate-400">
+                  Run Local is city-scoped — this is the community your home, events, races, and forum default to. You can
+                  change it later in Settings.
+                </span>
+              </div>
             </>
           )}
           <label className="block">
@@ -406,6 +476,7 @@ export function LoginPage() {
                 setMode(mode === "login" ? "signup" : "login");
                 setError(null);
                 setNotice(null);
+                setCityError(null);
               }}
               className="font-semibold text-[#0b2b22] underline"
             >
