@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { HomeCityBanner } from "../components/HomeCityBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { Chip, Icon, PillButton, Sheet } from "../components/ui";
 import { useToast } from "../lib/toast";
@@ -139,6 +140,8 @@ export function ForumPage({ city }: { city: City }) {
         })}
       </div>
       <p className="mt-2 text-xs text-slate-500">{FORUM_SECTIONS.find((s) => s.id === section)?.blurb}</p>
+
+      <HomeCityBanner />
 
       {/* Q&A sorting controls — visible only on the Q&A tab */}
       {section === "qa" ? (

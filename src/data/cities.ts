@@ -275,3 +275,19 @@ export const CITIES: City[] = [
     forum: [] as ForumPost[],
   })),
 ];
+
+/**
+ * True when `id` names a KNOWN city entity in the supported-city list above.
+ * This is the single source of truth the server uses to validate home-city ids
+ * (signup and profile changes) — driven entirely by the city data model, so
+ * adding a city needs no validation code changes. The client uses it only for
+ * UX hints; the server is authoritative.
+ */
+export function isSupportedCityId(id: string): boolean {
+  return CITIES.some((c) => c.id === id);
+}
+
+/** Look up a known city entity by id (undefined when unknown). */
+export function getCityById(id: string): City | undefined {
+  return CITIES.find((c) => c.id === id);
+}

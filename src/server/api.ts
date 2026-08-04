@@ -11,6 +11,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Db, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPublicAccount, MIN_AGE } from "./store";
 import type { AccountRecord } from "./types";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
+import { isSupportedCityId } from "../data/cities";
 import { supabaseConfig, verifySupabaseToken, applySupabaseIdentity } from "./supabase";
 import {
   adminConfigured,
@@ -267,7 +268,7 @@ async function handleApi(
   // without a valid Supabase session. The account links to the verified
   // Supabase identity on the user's first confirmed login (/api/login/check).
   if (method === "POST" && url.pathname === "/api/accounts") {
-    const body = (await readJson(req)) as { name?: unknown; username?: unknown; email?: unknown; phone?: unknown; birthdate?: unknown; requestedRole?: unknown; noSession?: unknown };
+    const body = (await readJson(req)) as { name?: unknown; username?: unknown; email?: unknown; phone?: unknown; birthdate?: unknown; cityId?: unknown; requestedRole?: unknown; noSession?: unknown };
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const phone = typeof body.phone === "string" ? normalizePhone(body.phone) : null;
@@ -277,6 +278,20 @@ async function handleApi(
     if (name.length < 1 || name.length > 60) return err(res, { status: 400, error: "invalid_name" }), true;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) {
       return err(res, { status: 400, error: "invalid_email" }), true;
+    }
+    // Home city is REQUIRED for new signups and validated HERE against the
+    // known city entities (src/data/cities.ts) — the server is authoritative,
+    // never the client. Missing and unknown ids get distinct, clear errors.
+    // The id must arrive EXACT: surrounding whitespace is malformed input, not
+    // silently normalized (a padded id would mask a buggy client). Whitespace-
+    // only counts as missing; any other mismatch is invalid_city.
+    const rawCityId = typeof body.cityId === "string" ? body.cityId : "";
+    const cityId = rawCityId.trim();
+    if (!cityId) {
+      return err(res, { status: 400, error: "city_required", message: "Choose your home city — Run Local is city-scoped and your community content defaults to it." }), true;
+    }
+    if (rawCityId !== cityId || !isSupportedCityId(cityId)) {
+      return err(res, { status: 400, error: "invalid_city", message: "That city isn't supported yet — pick one from the list." }), true;
     }
     // Username is REQUIRED for new signups and validated/normalized here —
     // the server is authoritative, never the client. Legacy accounts without
@@ -299,7 +314,7 @@ async function handleApi(
     // Role requests are label-only and strictly validated server-side; the
     // owner/operator assigns the real role at approval time.
     const requestedRole = body.requestedRole === "group_leader" ? "group_leader" : body.requestedRole === "runner" ? "runner" : null;
-    const rec = db.createAccount({ name, username, email, phone, birthdate, requestedRole });
+    const rec = db.createAccount({ name, username, email, phone, birthdate, cityId, requestedRole });
     rec.signupIp = ip;
     rec.signupAt = now.toISOString();
     db.appendLoginIp(rec.id, ip, now);
@@ -438,6 +453,31 @@ async function handleApi(
     }
     db.updateAccount(rec.id, { username, lastActivityAt: now.toISOString() });
     await db.persist();
+    return ok(res, { account: toPublicAccount(db.getAccount(rec.id)!, isOwnerEmail(rec.email)) }), true;
+  }
+
+  // ---- home city (public profile preference) ------------------------------
+  // Signed-in users set or change the single home city their community content
+  // defaults to. Validated HERE against the known city entities — the server is
+  // authoritative, never the client. Missing and unknown ids get distinct,
+  // clear errors; re-submitting your own current city is a harmless no-op.
+  if (method === "POST" && url.pathname === "/api/profile/city") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { cityId?: unknown };
+    const rec = db.getAccount(sess.accountId);
+    if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const cityId = typeof body.cityId === "string" ? body.cityId.trim() : "";
+    if (!cityId) {
+      return err(res, { status: 400, error: "city_required", message: "Choose your home city — Run Local is city-scoped and your community content defaults to it." }), true;
+    }
+    if (!isSupportedCityId(cityId)) {
+      return err(res, { status: 400, error: "invalid_city", message: "That city isn't supported yet — pick one from the list." }), true;
+    }
+    if (rec.cityId !== cityId) {
+      db.updateAccount(rec.id, { cityId, lastActivityAt: now.toISOString() });
+      await db.persist();
+    }
     return ok(res, { account: toPublicAccount(db.getAccount(rec.id)!, isOwnerEmail(rec.email)) }), true;
   }
 

@@ -77,6 +77,11 @@ export interface PublicAccount {
    * not claimed one yet). Public profile identity — never sensitive data.
    */
   username: string | null;
+  /**
+   * Home city id (null = legacy account that has not chosen one yet — the UI
+   * prompts them clearly). Public profile identity, never sensitive.
+   */
+  cityId: string | null;
   status: AccountRecord["status"];
   phase: VerifyPhase | null;
   badge: "verified" | null;
@@ -116,6 +121,7 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new D
     name: rec.name,
     email: rec.email,
     username: rec.username ?? null,
+    cityId: rec.cityId ?? null,
     status: rec.status,
     phase: rec.status === "pending" ? rec.phase : null,
     badge: rec.status === "verified" ? "verified" : null,
@@ -168,6 +174,10 @@ export class Db {
         // existed simply lack the field — treat it as `null` (not set) so they
         // keep working and can claim a username from their profile later.
         a.username = a.username ?? null;
+        // Same for home cities: accounts created before home-city selection
+        // existed lack the field — treat it as `null` (not set) so they keep
+        // working and are prompted to choose a city (see /api/profile/city).
+        a.cityId = a.cityId ?? null;
         this.accounts.set(a.id, a);
       }
       for (const s of parsed.sessions ?? []) this.sessions.set(s.id, s);
@@ -224,6 +234,8 @@ export class Db {
     name: string;
     email: string;
     username?: string | null;
+    /** Home city id — REQUIRED for new signups (validated in the API layer against known city entities). */
+    cityId?: string | null;
     phone?: string | null;
     birthdate?: string | null;
     requestedRole?: "runner" | "group_leader" | null;
@@ -236,6 +248,7 @@ export class Db {
       // check-then-write is atomic in-process). The store keeps the value as
       // given — callers are expected to pass the normalized form.
       username: input.username ?? null,
+      cityId: input.cityId ?? null,
       status: "pending",
       phase: "email",
       role: "runner",

@@ -36,6 +36,12 @@ export interface PublicAccount {
    * fully functional and can claim one from their profile at any time.
    */
   username: string | null;
+  /**
+   * Home city id — a supported city from the known city entities. `null` for
+   * legacy accounts that have not chosen one yet (they are clearly prompted).
+   * Public profile identity, never sensitive.
+   */
+  cityId: string | null;
   status: "pending" | "verified" | "rejected";
   /** Funnel stage for pending accounts: email | code | selfie | pending_review. */
   phase: "email" | "code" | "selfie" | "pending_review" | null;

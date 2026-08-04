@@ -12,6 +12,20 @@ export interface AppState {
 }
 const STORAGE_KEY = "runlocal:state:v2";
 const DEFAULT_CITY = "columbia-mo";
+
+/**
+ * The city the app should render content for.
+ *
+ * Signed-in accounts own a home city (server-validated, persisted with the
+ * account): when it is set, it ALWAYS wins — the app defaults its home /
+ * community / events / races / forum and the selected-city UI to it. Guests
+ * (and legacy signed-in accounts that have not chosen a home city yet) fall
+ * back to the guest city switcher (localStorage), preserving guest switching.
+ */
+export function effectiveCityId(accountCityId: string | null | undefined, storedCityId: string): string {
+  return accountCityId ?? storedCityId;
+}
+
 function load(): AppState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

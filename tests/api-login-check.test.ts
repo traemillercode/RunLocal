@@ -112,7 +112,7 @@ describe("POST /api/accounts — signup completion", () => {
     const { res, fake } = makeRes();
     await apiHandler(
       makeReq("POST", "/api/accounts", {
-        body: { name: "Jordan Lee", username: "jordanlee", email: "runner@example.com", birthdate: "1998-05-05", phone: "(573) 555-0123" },
+        body: { name: "Jordan Lee", username: "jordanlee", email: "runner@example.com", birthdate: "1998-05-05", cityId: "columbia-mo", phone: "(573) 555-0123" },
       }),
       res,
       db,
@@ -133,7 +133,7 @@ describe("POST /api/accounts — signup completion", () => {
     const { res, fake } = makeRes();
     await apiHandler(
       makeReq("POST", "/api/accounts", {
-        body: { name: "Jordan Lee", username: "jordanlee", email: "runner@example.com", birthdate: "1998-05-05", noSession: true },
+        body: { name: "Jordan Lee", username: "jordanlee", email: "runner@example.com", birthdate: "1998-05-05", cityId: "columbia-mo", noSession: true },
       }),
       res,
       db,
