@@ -84,7 +84,8 @@ describe("admin authorization", () => {
     const keyDenied = adminPending(db, ctx(keyLogin.data.sessionId), T0);
     expect(keyDenied.ok).toBe(false);
     if (!keyDenied.ok) expect(keyDenied.error).toBe("unauthorized");
-    const cityAdmin = db.createAccount({ name: "City Admin", email: "city@example.com", role: "city_admin", adminCityId: "columbia-mo" });
+    const cityAdmin = db.createAccount({ name: "City Admin", email: "city@example.com" });
+    db.updateAccount(cityAdmin.id, { role: "city_admin", adminCityId: "columbia-mo" });
     const userSession = db.createSession(cityAdmin.id, "198.51.100.8", T0);
     const cityDenied = adminPending(db, ctx(null, userSession.id), T0);
     expect(cityDenied.ok).toBe(false);
