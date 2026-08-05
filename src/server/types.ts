@@ -273,8 +273,14 @@ export interface PersistedDb {
   joinRequestRate?: Record<string, number[]>;
   safetyReports?: SafetyReportRecord[];
   safetyReportRate?: Record<string, number[]>;
+  notificationPreferences?: NotificationPreferenceRecord[];
+  notifications?: NotificationRecord[];
 }
 
+export const NOTIFICATION_CATEGORIES = ["run_reminders", "community_updates", "account_alerts"] as const;
+export type NotificationCategory = typeof NOTIFICATION_CATEGORIES[number];
+export interface NotificationPreferenceRecord { accountId: string; run_reminders: boolean; community_updates: boolean; account_alerts: boolean; updatedAt: string; }
+export interface NotificationRecord { id: string; accountId: string; category: NotificationCategory; title: string; body: string; createdAt: string; readAt: string | null; }
 export interface MatchingPreferencesRecord {
   accountId: string;
   enabled: boolean;

@@ -390,6 +390,15 @@ async function handleApi(
     db.addActivity(a); await db.persist(); ok(res, { card: publicActivityCard(a) }); return true;
   }
 
+  // ---- account-owned notification preferences and inbox -------------------
+  if (url.pathname.startsWith("/api/notifications")) {
+    const sess=requireSession(db,cookies); if(!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    if (method === "GET" && url.pathname === "/api/notifications/preferences") return ok(res,{preferences:db.getNotificationPreferences(sess.accountId)}),true;
+    if (method === "PATCH" && url.pathname === "/api/notifications/preferences") { const b=await readJson(req) as Record<string,unknown>; const allowed=["run_reminders","community_updates","account_alerts"] as const; const patch: Record<string,boolean>={}; for(const k of allowed) if(b[k]!==undefined){if(typeof b[k]!=="boolean") return err(res,{status:400,error:"invalid_preferences"}),true; patch[k]=b[k] as boolean;} const preferences=db.setNotificationPreferences(sess.accountId,patch); await db.persist(); return ok(res,{preferences}),true; }
+    if (method === "GET" && url.pathname === "/api/notifications") { const items=db.listNotifications(sess.accountId); return ok(res,{notifications:items,unreadCount:items.filter(n=>!n.readAt).length}),true; }
+    if (method === "POST" && url.pathname === "/api/notifications/read-all") { db.markAllNotificationsRead(sess.accountId); await db.persist(); return ok(res,{status:"ok"}),true; }
+    const m=/^\/api\/notifications\/([^/]+)\/read$/.exec(url.pathname); if(method==="POST"&&m){ if(!db.updateNotification(m[1],sess.accountId,{readAt:new Date().toISOString()})) return err(res,{status:404,error:"not_found"}),true; await db.persist(); return ok(res,{status:"ok"}),true; }
+  }
   // ---- public username availability (format + uniqueness only) -----------
   // This endpoint is intentionally narrow: usernames are public profile identity,
   // and the response contains no account metadata or sensitive information.
