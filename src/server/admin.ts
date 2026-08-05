@@ -55,6 +55,11 @@ export function validReason(reason: string | undefined): boolean {
   return Boolean(reason && reason.trim().length >= REASON_MIN && reason.trim().length <= REASON_MAX);
 }
 
+/** Routine reads remain audited, but do not require an operator-entered reason. */
+export function routineAdminCtx(ctx: AdminCtx): AdminCtx {
+  return { ...ctx, reason: ctx.reason?.trim() || "Routine admin read" };
+}
+
 export function keyMatches(input: string, expected: string): boolean {
   const a = createHash("sha256").update(input).digest();
   const b = createHash("sha256").update(expected).digest();
@@ -393,6 +398,7 @@ export interface AdminSearchRow {
   id: string;
   name: string;
   email: string;
+  username: string | null;
   status: AccountRecord["status"];
   phase: AccountRecord["phase"] | null;
   phoneLast4: string | null;
@@ -406,6 +412,7 @@ function searchRow(rec: AccountRecord): AdminSearchRow {
     id: rec.id,
     name: rec.name,
     email: rec.email,
+    username: rec.username ?? null,
     status: rec.status,
     phase: rec.status === "pending" ? rec.phase : null,
     phoneLast4: digits.length >= 4 ? digits.slice(-4) : null,
@@ -421,12 +428,12 @@ export function adminSearch(
   query: string,
   now = new Date(),
 ): AdminResult<AdminSearchRow[]> {
-  const auth = authorizeAdmin(db, ctx, "admin.search", null, now);
+  const auth = authorizeAdmin(db, routineAdminCtx(ctx), "admin.search", null, now);
   if (!auth.ok) return auth;
   const q = query.trim().toLowerCase();
   const rows = db
     .listAccounts()
-    .filter((a) => !a.deletedAt && (a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q)))
+    .filter((a) => !a.deletedAt && (a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q) || (a.username?.toLowerCase().includes(q) ?? false)))
     .slice(0, 25)
     .map(searchRow);
   return { ok: true, data: rows };
@@ -451,8 +458,9 @@ export interface PendingQueueRow {
  */
 /** Read-only owner queue access. Reads are authorized but not audit mutations;
  * consequential decisions below still require authorizeAdmin + a reason. */
-export function adminPending(db: Db, ctx: AdminCtx, _now = new Date()): AdminResult<PendingQueueRow[]> {
-  if (!ownerSessionAccount(db, ctx)) return { ok: false, status: 401, error: "unauthorized" };
+export function adminPending(db: Db, ctx: AdminCtx, now = new Date()): AdminResult<PendingQueueRow[]> {
+  const auth = authorizeOwner(db, routineAdminCtx(ctx), "admin.pending_list", null, now);
+  if (!auth.ok) return auth;
   const rows = db
     .listAccounts()
     .filter((a) => !a.deletedAt && a.status === "pending")
@@ -501,6 +509,7 @@ export function adminGetRecord(
       id: rec.id,
       name: rec.name,
       email: rec.email,
+      username: rec.username ?? null,
       status: rec.status,
       phase: rec.status === "pending" ? rec.phase : null,
       phoneLast4: digits.length >= 4 ? digits.slice(-4) : null,
@@ -608,6 +617,7 @@ export function adminExportRows(
         id: rec.id,
         name: rec.name,
         email: rec.email,
+        username: rec.username ?? null,
         status: rec.status,
         phase: rec.status === "pending" ? rec.phase : null,
         phoneLast4: digits.length >= 4 ? digits.slice(-4) : null,

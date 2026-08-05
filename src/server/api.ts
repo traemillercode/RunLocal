@@ -1609,7 +1609,9 @@ async function handleAdmin(
     if (!ctx.adminSessionId) return err(res, { status: 401, error: "unauthorized" }), true;
     if (!validReason(ctx.reason)) return err(res, { status: 400, error: "reason_required" }), true;
     const session = db.getSession(ctx.adminSessionId);
-    if (!session) return err(res, { status: 401, error: "unauthorized" }), true;
+    // Never treat a normal user session copied into the admin cookie as an
+    // admin session. This prevents cookie-name confusion on the purge path.
+    if (!session || session.accountId !== "__admin__") return err(res, { status: 401, error: "unauthorized" }), true;
     if (!adminConfigured()) return err(res, { status: 503, error: "admin_unconfigured" }), true;
     const result = await purgeEligible(db, now);
     db.appendAudit({ admin: adminEmail(), action: "admin.purge", reason: ctx.reason!.trim().slice(0, 500), targetId: null, ip }, now);

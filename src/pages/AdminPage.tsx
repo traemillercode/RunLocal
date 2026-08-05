@@ -66,7 +66,6 @@ export function AdminPage() {
   // search
   const [query, setQuery] = useState("");
   const [reason, setReason] = useState("");
-  const [overviewReason, setOverviewReason] = useState("");
   const [results, setResults] = useState<AdminSearchRow[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -206,12 +205,8 @@ export function AdminPage() {
 
   const loadOverview = async () => {
     setOverviewError(null);
-    if (!overviewReason.trim() || overviewReason.trim().length < 5) {
-      setOverviewError("Enter a reason (min 5 characters) to load the overview.");
-      return;
-    }
     setOverviewBusy(true);
-    const r = await api.adminGetOverview(overviewReason.trim());
+    const r = await api.adminGetOverview();
     setOverviewBusy(false);
     if (r.ok) setOverview(r.data);
     else setOverviewError(r.error.status === 401 ? "Your admin session expired — sign in again." : r.error.message ?? "Could not load the overview.");
@@ -228,9 +223,7 @@ export function AdminPage() {
       setQueueError(
         r.error.status === 401
           ? "Only the owner/super-admin can view the pending queue."
-          : r.error.code === "reason_required"
-            ? "A reason is required to load the queue."
-            : r.error.message ?? "Could not load the queue.",
+          : r.error.message ?? "Could not load the queue.",
       );
     }
   };
@@ -280,11 +273,7 @@ export function AdminPage() {
 
   const doSearch = async () => {
     setSearchError(null);
-    if (!reason.trim() || reason.trim().length < 5) {
-      setSearchError("A reason is required before searching (min 5 characters).");
-      return;
-    }
-    const r = await api.adminSearch(query, reason.trim());
+    const r = await api.adminSearch(query);
     if (r.ok) {
       setResults(r.data.results);
       setRecord(null);
@@ -293,9 +282,7 @@ export function AdminPage() {
       setSearchError(
         r.error.status === 401
           ? "Your admin session expired — sign in again."
-          : r.error.code === "reason_required"
-            ? "A reason is required for every search."
-            : r.error.message ?? "Search failed.",
+          : r.error.message ?? "Search failed.",
       );
     }
   };
@@ -522,11 +509,7 @@ export function AdminPage() {
         <div className="flex items-start justify-between gap-3">
           <div><h2 id="admin-overview-heading" className="text-[15px] font-bold text-slate-900">Attention overview</h2>
           <p className="mt-0.5 text-xs text-slate-500">Server-derived queue counts for your permitted scope. No private run or identity details.</p></div>
-          <div className="flex shrink-0 items-start gap-2">
-            <label className="sr-only" htmlFor="overview-reason">Reason for refreshing overview</label>
-            <input id="overview-reason" value={overviewReason} onChange={(e) => setOverviewReason(e.target.value)} placeholder="Reason (required)" className={`${inputCls} h-9 w-40 px-2 text-xs`} />
-            <PillButton variant="secondary" className="min-h-9 px-3 text-xs" disabled={overviewBusy} onClick={() => void loadOverview()}>{overviewBusy ? "Refreshing…" : "Refresh"}</PillButton>
-          </div>
+          <PillButton variant="secondary" className="min-h-9 shrink-0 px-3 text-xs" disabled={overviewBusy} onClick={() => void loadOverview()}>{overviewBusy ? "Refreshing…" : "Refresh"}</PillButton>
         </div>
         {overview ? <><p className="mt-3 text-[11px] text-slate-500">Updated {fmt(overview.generatedAt)} · {overview.scope.kind === "global" ? "All cities" : "Assigned city"}</p>
           <div className="mt-3 grid grid-cols-2 gap-2">{([["Pending verification", overview.queues.pendingVerification, "pending-users"],["Pending submissions", overview.queues.pendingSubmissions, "submissions"],["Open safety reports", overview.queues.openSafetyReports, "dashboard"],["Content to review", overview.queues.contentNeedingReview, "dashboard"]] as const).map(([label,count,target]) => <button type="button" key={label} onClick={() => document.getElementById(target)?.scrollIntoView({behavior:"smooth"})} className="rounded-xl border border-slate-200 p-3 text-left hover:border-slate-400"><span className="block text-2xl font-bold text-slate-900">{count}</span><span className="text-xs font-semibold text-slate-600">{label}</span></button>)}</div>
