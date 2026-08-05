@@ -5,7 +5,6 @@ import { Chip, Icon, PillButton } from "../components/ui";
 import type { City } from "../types";
 import { resolveWeekEvents } from "../lib/dates";
 import { phaseLabel, roleLabel } from "../lib/accounts";
-import type { PublicAccount } from "../lib/accounts";
 import * as api from "../lib/api";
 import type { AppStore } from "../lib/store";
 import { useAccount } from "../state/account";
@@ -20,9 +19,6 @@ function initials(name: string): string {
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("") || "R";
 }
-
-const editorInputCls =
-  "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
 const KIND_LABELS: Record<string, string> = { race: "Race", group: "Group", event: "Independent run" };
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
@@ -82,7 +78,7 @@ export function MySubmissions({ signedIn }: { signedIn: boolean }) {
 
 export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
   const navigate = useNavigate();
-  const { me, backendAvailable, refresh } = useAccount();
+  const { me, backendAvailable } = useAccount();
   const { hasHomeCity } = useSelectedCity();
 
   const rsvps = useMemo(() => {
