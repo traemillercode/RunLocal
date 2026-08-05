@@ -34,6 +34,10 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
 .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
 
+/* Desktop navigation is opt-in at the desktop breakpoint; never let the
+   fixed sidebar participate in the mobile document flow. */
+.desktop-sidebar { display: none; }
+
 @media (min-width: 1024px) {
   .desktop-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 50; display: flex; width: 240px; flex-direction: column; border-right: 1px solid #273039; background: #14171c; padding: 28px 18px 20px; color: white; }
   .desktop-brand { display: flex; align-items: center; gap: 10px; padding: 0 10px 34px; color: white; font-size: 20px; font-weight: 800; letter-spacing: -0.03em; }

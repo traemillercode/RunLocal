@@ -3,10 +3,14 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 describe("desktop layout layer", () => {
-  it("keeps desktop chrome behind the 1024px breakpoint", () => {
+  it("hides the sidebar by default and restores its desktop flex layout at 1024px", () => {
     const css = readFileSync(resolve(process.cwd(), "src/styles/app.css"), "utf8");
-    expect(css).toContain("@media (min-width: 1024px)");
-    expect(css).toContain(".desktop-sidebar");
+    const breakpoint = css.indexOf("@media (min-width: 1024px)");
+    expect(breakpoint).toBeGreaterThan(0);
+    expect(css.slice(0, breakpoint)).toContain(".desktop-sidebar { display: none; }");
+    expect(css.slice(breakpoint)).toContain(
+      ".desktop-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 50; display: flex; width: 240px;",
+    );
     expect(css).toContain(".app-shell-header, .app-shell-nav { display: none; }");
     expect(css).toContain("grid-template-columns: minmax(0, 1fr) 320px");
     expect(css).toContain("--rl-control-radius: 10px");
@@ -38,8 +42,14 @@ describe("desktop layout layer", () => {
     const sidebar = readFileSync(resolve(process.cwd(), "src/components/DesktopSidebar.tsx"), "utf8");
     const forum = readFileSync(resolve(process.cwd(), "src/pages/ForumPage.tsx"), "utf8");
     const detail = readFileSync(resolve(process.cwd(), "src/pages/EventDetailPage.tsx"), "utf8");
+    const login = readFileSync(resolve(process.cwd(), "src/pages/LoginPage.tsx"), "utf8");
+    expect(app).toContain("<Header");
     expect(app).toContain("<DesktopSidebar");
+    expect(app).toContain("<BottomNav");
     expect(sidebar).toContain('aria-label="Primary navigation"');
+    expect(login).not.toContain("desktop-sidebar");
+    expect(login).not.toContain("app-shell-header");
+    expect(login).not.toContain("app-shell-nav");
     expect(forum).toContain("desktop-forum-layout");
     expect(detail).toContain("desktop-detail-layout");
   });
