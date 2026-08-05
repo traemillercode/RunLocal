@@ -80,3 +80,16 @@ export function formatRaceDate(iso: string): string {
   const dow = (date.getDay() + 6) % 7; // Monday-first index
   return `${DAY_ABBREV[dow]}, ${MONTHS[date.getMonth()]} ${date.getDate()}, ${y}`;
 }
+
+/** Whether a resolved occurrence has started, including time on today's date. */
+export function occurrenceHasStarted(event: Pick<DatedRunEvent, "date" | "time">, now = new Date()): boolean {
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (event.date.getTime() < day.getTime()) return true;
+  if (event.date.getTime() > day.getTime()) return false;
+  const match = event.time.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return false;
+  let hour = Number(match[1]);
+  if (match[3].toUpperCase() === "PM" && hour < 12) hour += 12;
+  if (match[3].toUpperCase() === "AM" && hour === 12) hour = 0;
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, Number(match[2])).getTime() <= now.getTime();
+}

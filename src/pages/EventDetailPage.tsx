@@ -8,8 +8,8 @@
  * tests can render the real detail markup with react-dom/server; the page
  * resolves the event from the weekly model and wires up navigation + RSVP.
  */
-import { useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Chip, Icon } from "../components/ui";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import * as api from "../lib/api";
@@ -59,14 +59,14 @@ export function EventDetailView({
   const rrca = groupBadge ?? group?.groupType === "rrca-chartered";
   const label = group ? (rrca ? GROUP_TYPE_LABELS["rrca-chartered"] : GROUP_TYPE_LABELS.community) : null;
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
       <button type="button" onClick={onBack} className="mb-3 flex items-center gap-1 text-[13px] font-semibold text-slate-500">
         <Icon name="chevronRight" className="h-4 w-4 rotate-180" /> Back to this week
       </button>
 
       <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
-        <div className="bg-[#0b2b22] p-5 text-white">
-          <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-[#c8f169]">
+        <div className="bg-[#14171C] p-5 text-white">
+          <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-[#FF5741]">
             {dayLabel(event.date, new Date())} · {event.time}
             {event.isToday ? (
               <Chip tone="volt">
@@ -111,9 +111,9 @@ export function EventDetailView({
               href={event.externalUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#0b2b22] text-sm font-semibold text-white active:bg-[#124d3c]"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[#14171C] text-sm font-semibold text-white active:bg-[#252a31]"
             >
-              External details <Icon name="external" className="h-4 w-4 text-[#c8f169]" />
+              External details <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
             </a>
           ) : null}
         </div>
@@ -126,21 +126,21 @@ export function EventDetailView({
               rsvped
                 ? "bg-emerald-100 text-emerald-800"
                 : canRsvp
-                  ? "bg-[#c8f169] text-[#0b2b22] active:bg-[#b9e355]"
+                  ? "bg-[#FF5741] text-[#14171C] active:bg-[#e94735]"
                   : "bg-slate-100 text-slate-500 active:bg-slate-200"
             }`}
           >
             {rsvped ? (
               <>
-                <Icon name="check" className="h-4 w-4" /> You're in — see you there
+                <Icon name="check" className="h-4 w-4" /> Remove from My Runs
               </>
             ) : canRsvp ? (
               <>
-                <Icon name="rsvp" className="h-4 w-4" /> RSVP for this run
+                <Icon name="rsvp" className="h-4 w-4" /> Add to My Runs
               </>
             ) : (
               <>
-                <Icon name="lock" className="h-4 w-4" /> Verified runners only
+                <Icon name="rsvp" className="h-4 w-4" /> Add to My Runs
               </>
             )}
           </button>
@@ -150,15 +150,35 @@ export function EventDetailView({
   );
 }
 
-export function EventDetailPage({ city, store }: { city: City; store: AppStore }) {
+export function DiscussionPanel({ eventId, occurrenceId, eligible, unavailable=false }: { eventId:string; occurrenceId:string; eligible:boolean; unavailable?:boolean }) {
+  const { me } = useAccount();
+  const [items,setItems]=useState<api.DiscussionView[]>([]); const [loading,setLoading]=useState(false); const [error,setError]=useState(false); const [body,setBody]=useState(""); const [title,setTitle]=useState(""); const [replyTo,setReplyTo]=useState<string|null>(null);
+  const load=()=>{setLoading(true);setError(false);void api.getOccurrenceDiscussion(eventId,occurrenceId).then(r=>{if(r.ok)setItems(r.data.discussion);else setError(true);setLoading(false);});};
+  useEffect(()=>{if(eligible)load();},[eligible,eventId,occurrenceId]);
+  if(unavailable)return <section className="mt-6 rounded-2xl bg-slate-100 p-5"><h2 className="font-extrabold">Run-day discussion</h2><p className="mt-2 text-sm text-slate-500">This discussion is unavailable because the run is hidden, archived, or no longer available.</p></section>;
+  if(!eligible)return <section className="mt-6 rounded-2xl bg-slate-100 p-5"><h2 className="font-extrabold">Run-day discussion</h2><p className="mt-2 text-sm text-slate-500">Discussion is available to verified runners who RSVP for this occurrence.</p></section>;
+  const submit=(e:React.FormEvent)=>{e.preventDefault();if(!body.trim())return;void api.createDiscussion(eventId,occurrenceId,{body:body.trim(),...(replyTo?{parentId:replyTo}:{title:title.trim()} )}).then(r=>{if(r.ok){setBody("");setTitle("");setReplyTo(null);load();}else setError(true);});};
+  return <section aria-label="Run-day discussion" className="mt-6 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"><h2 className="font-extrabold">Run-day discussion</h2>{loading?<p className="mt-3 text-sm text-slate-500">Loading discussion…</p>:error?<div className="mt-3"><p className="text-sm text-slate-600">We couldn't load the discussion.</p><button type="button" onClick={load} className="mt-2 text-sm font-bold text-emerald-800">Try again</button></div>:items.length===0?<p className="mt-3 text-sm text-slate-500">No discussion yet. Start the conversation for this run.</p>:<div className="mt-3 space-y-3">{items.map(i=><article key={i.id} className="rounded-xl bg-slate-50 p-3"><p className="text-sm font-bold">{i.title ?? "Comment"}</p><p className="mt-1 text-sm text-slate-700">{i.body}</p><div className="mt-2 flex gap-3"><button type="button" onClick={()=>setReplyTo(i.id)} className="text-xs font-bold text-emerald-800">Reply</button>{me?.status === "signed_in" && i.authorId === me.account.id ? <button type="button" onClick={()=>void api.deleteDiscussion(eventId,occurrenceId,i.id).then(r=>{if(r.ok)load();else setError(true);})} className="text-xs font-bold text-rose-700">Delete</button> : null}</div></article>)}</div>}<form onSubmit={submit} className="mt-4 space-y-2">{!replyTo&&<input aria-label="Thread title" value={title} onChange={e=>setTitle(e.target.value)} placeholder="Thread title" className="w-full rounded-xl border border-slate-200 p-3 text-sm"/>}<textarea aria-label="Discussion message" value={body} onChange={e=>setBody(e.target.value)} placeholder={replyTo?"Write a comment…":"Write a thread…"} className="min-h-20 w-full rounded-xl border border-slate-200 p-3 text-sm"/><button className="rounded-[10px] bg-[#FF5741] px-4 py-2 text-sm font-bold">{replyTo?"Post comment":"Post thread"}</button></form></section>;
+}
+
+export function EventDetailPage({ city }: { city: City; store: AppStore }) {
   const toast = useToast();
   const { role } = useAccount();
   const { hidden, highlights, groupBadges } = useModerated();
   const { events: userEvents } = usePublicContent();
   const { eventId } = useParams();
+  const location = useLocation();
+  const discussionOccurrenceId = new URLSearchParams(location.search).get("discussion");
   const navigate = useNavigate();
   const [gateOpen, setGateOpen] = useState(false);
+  const [myRuns, setMyRuns] = useState<api.MyRunView[]>([]);
+  const [canonicalEvents, setCanonicalEvents] = useState<api.CanonicalEvent[]>([]);
   const canRsvp = canDo(role, "rsvp");
+  useEffect(() => {
+    if (!canRsvp) { setMyRuns([]); return; }
+    void api.getMyRuns().then((r) => { if (r.ok) setMyRuns(r.data.runs); });
+  }, [canRsvp]);
+  useEffect(() => { void api.getCanonicalEvents(city.id).then((r) => { if (r.ok) setCanonicalEvents(r.data.events); }); }, [city.id]);
 
   // Same weekly resolution as the home/Events feed so an EventCard link always
   // resolves here. Only recurring events render as EventCards; independent
@@ -177,8 +197,9 @@ export function EventDetailPage({ city, store }: { city: City; store: AppStore }
         invite: e.invite,
         externalUrl: e.externalUrl ?? undefined,
       }));
-    return resolveWeekEvents([...city.events, ...recurring], new Date()).filter((e) => !hidden.has(`event:${e.id}`));
-  }, [city, hidden, userEvents]);
+    const canonical = canonicalEvents.filter((e) => e.status === "published" && !e.hidden && !e.archivedAt).map((e) => ({ id:e.id, groupId:e.groupId, title:e.title, dayOfWeek:e.dayOfWeek, time:e.time, location:e.location, distanceLabel:e.distanceLabel, invite:e.invite, externalUrl:e.externalUrl ?? undefined }));
+    return resolveWeekEvents([...city.events, ...canonical, ...recurring], new Date()).filter((e) => !hidden.has(`event:${e.id}`));
+  }, [city, hidden, userEvents, canonicalEvents]);
 
   const event = events.find((e) => e.id === eventId) ?? null;
 
@@ -190,7 +211,7 @@ export function EventDetailPage({ city, store }: { city: City; store: AppStore }
         </span>
         <h1 className="mt-3 text-xl font-extrabold">Run not found</h1>
         <p className="mt-1 text-sm text-slate-500">This run isn't in the current week, or it's no longer listed.</p>
-        <Link to="/" className="mt-4 inline-block rounded-full bg-[#0b2b22] px-5 py-3 text-sm font-semibold text-white">
+        <Link to="/" className="mt-4 inline-block rounded-[10px] bg-[#14171C] px-5 py-3 text-sm font-semibold text-white">
           Back to this week
         </Link>
       </div>
@@ -203,25 +224,31 @@ export function EventDetailPage({ city, store }: { city: City; store: AppStore }
       setGateOpen(true);
       return;
     }
-    const nowRsvped = !store.state.rsvped[event.id];
+    const occurrenceId = discussionOccurrenceId ?? `event:${event.id}:${event.date.toISOString().slice(0,10)}`;
+    const runDate = occurrenceId.slice(occurrenceId.lastIndexOf(":") + 1);
+    const nowRsvped = !myRuns.some((run) => run.eventId === event.id && run.occurrenceId === occurrenceId);
     // Server-side RSVP: records shared attendance (rating eligibility basis).
     // Under-review accounts may still RSVP — the server permits it.
-    void api.rsvpEvent(event.id, nowRsvped).then((r) => {
+    void api.rsvpEvent(event.id, nowRsvped, runDate).then((r) => {
       if (!r.ok) {
         toast(r.error.message ?? "Couldn't save your RSVP. Try again.", "info");
         return;
       }
-      store.toggleRsvp(event.id);
+      setMyRuns((runs) => nowRsvped
+        ? [...runs, { eventId: event.id, occurrenceId, date: runDate } as api.MyRunView]
+        : runs.filter((run) => !(run.eventId === event.id && run.occurrenceId === occurrenceId)));
       toast(nowRsvped ? `You're in for "${event.title}"!` : `RSVP removed for "${event.title}".`, nowRsvped ? "success" : "neutral");
     });
   };
 
   return (
     <>
+      <div className="desktop-detail-layout">
+      <div>
       <EventDetailView
         event={event}
         city={city}
-        rsvped={!!store.state.rsvped[event.id]}
+        rsvped={myRuns.some((run) => run.eventId === event.id && run.occurrenceId === (discussionOccurrenceId ?? `event:${event.id}:${event.date.toISOString().slice(0,10)}`))}
         canRsvp={canRsvp}
         onRsvp={onRsvp}
         onBack={() => navigate(-1)}
@@ -229,7 +256,16 @@ export function EventDetailPage({ city, store }: { city: City; store: AppStore }
         pinned={hl?.pinned}
         groupBadge={groupBadges.get(event.groupId)}
       />
-      <VerifiedGateSheet open={gateOpen} onClose={() => setGateOpen(false)} role={role} actionLabel="RSVPing" pendingLabel="Your profile is still in review." />
+      <DiscussionPanel eventId={event.id} occurrenceId={discussionOccurrenceId ?? `event:${event.id}:${event.date.toISOString().slice(0,10)}`} eligible={canRsvp && !!discussionOccurrenceId && myRuns.some((run) => run.eventId === event.id && run.occurrenceId === discussionOccurrenceId)} unavailable={!!discussionOccurrenceId && !myRuns.some((run) => run.eventId === event.id && run.occurrenceId === discussionOccurrenceId)} />
+      </div>
+      <aside className="desktop-detail-panel" aria-label="Run details summary">
+        <p className="text-[11px] font-extrabold uppercase tracking-[.12em] text-[#FF5741]">Run details</p>
+        <h2 className="mt-2 text-lg font-extrabold tracking-tight text-slate-900">Plan your arrival</h2>
+        <p className="mt-2 text-[13px] leading-relaxed text-slate-600">Review the start time, location, and distance before adding this run to My Runs.</p>
+        <div className="mt-4 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-500"><strong className="text-slate-700">Local note:</strong> Details come from the community listing.</div>
+      </aside>
+      </div>
+      <VerifiedGateSheet open={gateOpen} onClose={() => setGateOpen(false)} role={role} actionLabel="adding this run to My Runs" pendingLabel="Your profile is still in review." />
     </>
   );
 }

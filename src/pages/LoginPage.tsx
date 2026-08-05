@@ -23,7 +23,7 @@
  * with a confirmation link only. Verification (selfie + manual review) lives
  * on /verify.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Chip, Icon, PillButton } from "../components/ui";
 import { ResendConfirmationBox } from "../components/ResendConfirmationBox";
@@ -35,8 +35,38 @@ import { normalizeErrorMessage } from "../lib/errors";
 import { CITIES } from "../data/cities";
 import { useAccount } from "../state/account";
 
+export const PASSWORD_REQUIREMENTS = [
+  { key: "length", label: "At least 6 characters", test: (value: string) => value.length >= 6 },
+  { key: "lowercase", label: "One lowercase letter", test: (value: string) => /[a-z]/.test(value) },
+  { key: "uppercase", label: "One uppercase letter", test: (value: string) => /[A-Z]/.test(value) },
+  { key: "digit", label: "One digit", test: (value: string) => /\d/.test(value) },
+] as const;
+
+export function passwordRequirements(value: string): boolean[] {
+  return PASSWORD_REQUIREMENTS.map((requirement) => requirement.test(value));
+}
+
+export function usernameFormatValid(value: string): boolean {
+  return normalizeUsername(value) !== null;
+}
+
+/** Pure signup gate used by the form and regression tests. */
+export function signupFieldsValid(password: string, username: string, usernameAvailable: boolean): boolean {
+  return password.length > 0 && passwordRequirements(password).every(Boolean) && usernameFormatValid(username) && usernameAvailable;
+}
+
+export const USERNAME_AVAILABILITY_DEBOUNCE_MS = 400;
+export function isCurrentUsernameRequest(requestId: number, currentRequestId: number): boolean {
+  return requestId === currentRequestId;
+}
+
+/** Provider failures can be arbitrary values; never render an object as "[object Object]" or "{}". */
+export function authErrorText(value: unknown): string {
+  return normalizeErrorMessage(value, "Could not complete signup. Please try again.");
+}
+
 const inputCls =
-  "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+  "h-12 w-full rounded-[10px] border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
 /**
  * Explicit, honest caveat shown whenever we tell a user an email is coming but
@@ -108,6 +138,8 @@ export function LoginPage() {
   // signup-only profile metadata
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
+  const [usernameAvailability, setUsernameAvailability] = useState<"idle" | "loading" | "available" | "taken" | "error">("idle");
+  const usernameRequest = useRef(0);
   const [birthdate, setBirthdate] = useState("");
   const [birthdateError, setBirthdateError] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
@@ -135,6 +167,27 @@ export function LoginPage() {
   const [resending, setResending] = useState(false);
   const [resendError, setResendError] = useState<string | null>(null);
   const [resendNotice, setResendNotice] = useState<string | null>(null);
+
+  const passwordChecks = passwordRequirements(password);
+  const passwordValid = password.length > 0 && passwordChecks.every(Boolean);
+  const usernameTyped = username.length > 0;
+  const usernameValid = usernameFormatValid(username);
+
+  useEffect(() => {
+    const requestId = ++usernameRequest.current;
+    setUsernameAvailability(usernameValid ? "loading" : "idle");
+    if (!usernameValid) return;
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await api.checkUsernameAvailability(username);
+        if (requestId !== usernameRequest.current) return;
+        setUsernameAvailability(result.ok && result.data.available ? "available" : result.ok ? "taken" : "error");
+      } catch {
+        if (requestId === usernameRequest.current) setUsernameAvailability("error");
+      }
+    }, USERNAME_AVAILABILITY_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [username, usernameValid]);
 
   /**
    * Resend the signup confirmation email to the address used at signup. Success
@@ -184,8 +237,8 @@ export function LoginPage() {
       setError("Enter a valid email.");
       return;
     }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (!passwordValid) {
+      setError("Password must be at least 6 characters and include a lowercase letter, uppercase letter, and digit.");
       return;
     }
     if (mode === "signup") {
@@ -193,8 +246,12 @@ export function LoginPage() {
         setError("Enter your name (at least 2 characters).");
         return;
       }
-      if (!normalizeUsername(username)) {
+      if (!usernameValid) {
         setError("Choose a username — 3–24 characters: letters, numbers, _ or -, starting with a letter.");
+        return;
+      }
+      if (usernameAvailability !== "available") {
+        setError(usernameAvailability === "taken" ? "That username is already taken — try another." : "Wait for username availability to finish checking, then try again.");
         return;
       }
       // Exactly one supported city must be chosen before signup proceeds; the
@@ -226,7 +283,7 @@ export function LoginPage() {
     setResendNotice(null);
 
     if (mode === "signup") {
-      const r = await supabase.signUp(e, password);
+      const r = await supabase.signUp(e, password, { data: { username: normalizeUsername(username)!, display_name: name.trim() } });
       if (!r.ok) {
         setBusy(false);
         setError(r.message);
@@ -341,7 +398,7 @@ export function LoginPage() {
     return (
       <div className="mx-auto w-full max-w-md px-4 pb-32 pt-6">
         <div className="rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200/70">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[#c8f169] text-[#0b2b22]">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-[10px] bg-[#FF5741] text-[#14171C]">
             <Icon name="check" className="h-7 w-7" />
           </span>
           <h1 className="mt-3 text-xl font-extrabold">You're signed in</h1>
@@ -385,8 +442,14 @@ export function LoginPage() {
                   placeholder="jordanlee"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className={inputCls}
+                  aria-invalid={usernameTyped && (!usernameValid || usernameAvailability === "taken" || usernameAvailability === "error") ? true : undefined}
+                  className={`${inputCls} ${usernameTyped && !usernameValid ? "border-red-400 focus:border-red-500 focus:ring-red-200" : usernameAvailability === "available" ? "border-emerald-500 focus:border-emerald-600 focus:ring-emerald-200" : usernameAvailability === "taken" || usernameAvailability === "error" ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`}
                 />
+                {usernameTyped && !usernameValid ? <p role="alert" className="mt-1 text-xs font-medium text-red-600"><span aria-hidden="true" className="mr-1">✕</span>Use 3–24 characters, starting with a letter; letters, numbers, _ and - only.</p> : null}
+                {usernameTyped && usernameValid && usernameAvailability === "loading" ? <p className="mt-1 text-xs text-slate-500" role="status"><span aria-hidden="true" className="mr-1 inline-block animate-spin">◌</span>Checking availability…</p> : null}
+                {usernameTyped && usernameValid && usernameAvailability === "available" ? <p className="mt-1 text-xs font-medium text-emerald-600" role="status"><span aria-hidden="true" className="mr-1">✓</span>Username available</p> : null}
+                {usernameTyped && usernameValid && usernameAvailability === "taken" ? <p role="alert" className="mt-1 text-xs font-medium text-red-600"><span aria-hidden="true" className="mr-1">✕</span>Username already taken</p> : null}
+                {usernameTyped && usernameValid && usernameAvailability === "error" ? <p role="alert" className="mt-1 text-xs font-medium text-red-600"><span aria-hidden="true" className="mr-1">✕</span>Couldn’t check availability. Try again.</p> : null}
                 <span className="mt-1 block text-[11px] leading-relaxed text-slate-400">{USERNAME_HINT}</span>
               </label>
               <label className="block">
@@ -475,12 +538,12 @@ export function LoginPage() {
                             setCityError(null);
                           }}
                           className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
-                            active ? "border-[#0b2b22] bg-[#0b2b22] text-white" : "border-slate-200 bg-white text-slate-800"
+                            active ? "border-[#14171C] bg-[#14171C] text-white" : "border-slate-200 bg-white text-slate-800"
                           } ${disabled ? "opacity-60" : "active:bg-slate-50"}`}
                         >
                           <span
                             className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${
-                              active ? "bg-white/15 text-[#c8f169]" : "bg-slate-100 text-slate-500"
+                              active ? "bg-white/15 text-[#FF5741]" : "bg-slate-100 text-slate-500"
                             }`}
                           >
                             <Icon name="pin" className="h-4 w-4" />
@@ -492,7 +555,7 @@ export function LoginPage() {
                             <span className={`block truncate text-[11px] ${active ? "text-white/70" : "text-slate-500"}`}>{c.tagline}</span>
                           </span>
                           {active ? (
-                            <Icon name="check" className="h-4 w-4 shrink-0 text-[#c8f169]" />
+                            <Icon name="check" className="h-4 w-4 shrink-0 text-[#FF5741]" />
                           ) : disabled ? (
                             <Chip tone="amber">Coming soon</Chip>
                           ) : null}
@@ -524,8 +587,10 @@ export function LoginPage() {
               autoComplete={mode === "login" ? "current-password" : "new-password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className={inputCls}
+              aria-invalid={mode === "signup" && password.length > 0 && !passwordValid ? true : undefined}
+              className={`${inputCls} ${mode === "signup" && password.length > 0 ? passwordValid ? "border-emerald-500 focus:border-emerald-600 focus:ring-emerald-200" : "border-slate-400 focus:border-slate-500" : ""}`}
             />
+            {mode === "signup" ? <ul aria-label="Password requirements" className="mt-2 space-y-1 text-xs">{PASSWORD_REQUIREMENTS.map((requirement, index) => { const met = passwordChecks[index]; return <li key={requirement.key} className={password.length > 0 && !met ? "text-red-600" : met ? "text-emerald-600" : "text-slate-500"}><span aria-hidden="true" className="mr-1">{met ? "✓" : "○"}</span>{requirement.label}</li>; })}</ul> : null}
           </label>
           {mode === "signup" && (
             <label className="block">
@@ -533,7 +598,7 @@ export function LoginPage() {
               <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className={inputCls} />
             </label>
           )}
-          {error && <p className="rounded-xl bg-red-50 p-3.5 text-[13px] text-red-800">{normalizeErrorMessage(error)}</p>}
+          {error && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-[13px] text-red-800">{authErrorText(error)}</p>}
           {notice && <p className="rounded-xl bg-emerald-50 p-3.5 text-[13px] text-emerald-900">{notice}</p>}
           {pendingConfirmationEmail && (
             <ResendConfirmationBox
@@ -549,7 +614,7 @@ export function LoginPage() {
             {busy ? (mode === "login" ? "Logging in…" : "Creating account…") : mode === "login" ? "Log in" : "Create account"}
           </PillButton>
           {mode === "login" && (
-            <button type="button" disabled={busy} onClick={() => void reset()} className="block w-full text-center text-sm font-semibold text-[#0b2b22] underline">
+            <button type="button" disabled={busy} onClick={() => void reset()} className="block w-full text-center text-sm font-semibold text-[#14171C] underline">
               Forgot password?
             </button>
           )}
@@ -570,7 +635,7 @@ export function LoginPage() {
                 setResendError(null);
                 setResendNotice(null);
               }}
-              className="font-semibold text-[#0b2b22] underline"
+              className="font-semibold text-[#14171C] underline"
             >
               {mode === "login" ? "Create an account" : "Log in instead"}
             </button>

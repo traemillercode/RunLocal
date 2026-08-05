@@ -155,6 +155,7 @@ export type AdminAction =
   | "admin.audit"
   | "admin.purge"
   | "admin.pending_list"
+  | "admin.overview"
   | "admin.dashboard"
   | "admin.flag_dismiss"
   | "admin.flag_hide"
@@ -177,6 +178,16 @@ export type AdminAction =
   | "admin.appeal_reinstate"
   | "admin.appeal_uphold"
   | "admin.trust_threshold"
+  | "admin.safety_report_list"
+  | "admin.safety_report_resolve"
+  | "admin.event_list"
+  | "admin.event_create"
+  | "admin.event_edit"
+  | "admin.event_approve"
+  | "admin.event_publish"
+  | "admin.event_hide"
+  | "admin.event_unhide"
+  | "admin.event_archive"
   | "cityadmin.dashboard"
   | "cityadmin.submission_list"
   | "cityadmin.submission_approve"
@@ -187,7 +198,12 @@ export type AdminAction =
   | "cityadmin.group_rrca"
   | "cityadmin.content_highlight"
   | "cityadmin.audit"
-  | "account.delete";
+  | "account.delete"
+  | "group.membership_request"
+  | "group.membership_approve"
+  | "group.membership_decline"
+  | "group.membership_leave"
+  | "group.membership_remove";
 
 export interface AuditEntry {
   id: string;
@@ -208,6 +224,13 @@ export interface AuditEntry {
   cityId: string | null;
 }
 
+export interface RunEventRecord {
+  id: string; seedRefId: string | null; cityId: string; groupId: string; title: string;
+  dayOfWeek: number; time: string; location: string; distanceLabel: string; invite: InviteLabel; externalUrl: string | null;
+  provenance: "seed" | "community" | "admin"; status: "draft" | "approved" | "published" | "hidden" | "archived";
+  hidden: boolean; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; archivedAt: string | null;
+}
+
 export interface PersistedDb {
   accounts: AccountRecord[];
   sessions: SessionRecord[];
@@ -220,8 +243,10 @@ export interface PersistedDb {
    * ONLY ids, titles, and moderation flags — no sensitive data.
    */
   content: ContentRecord[];
+  events?: RunEventRecord[];
   /** Owner-dashboard group records: RRCA badge state + internal note. */
   groups: GroupModRecord[];
+  memberships?: GroupMembershipRecord[];
   /** Content flags (reports). Reasons are owner-only, never public. */
   flags: FlagRecord[];
   /**
@@ -247,6 +272,60 @@ export interface PersistedDb {
    * event submission (the submitter is the host of that event).
    */
   attendance?: AttendanceRecord[];
+  personalRuns?: PersonalRunRecord[];
+  matchingPreferences?: MatchingPreferencesRecord[];
+  joinRequests?: JoinRequestRecord[];
+  blocks?: BlockRecord[];
+  /** Per-account JoinRequest timestamps (epoch ms), persisted for restart/shared enforcement. */
+  joinRequestRate?: Record<string, number[]>;
+  safetyReports?: SafetyReportRecord[];
+  safetyReportRate?: Record<string, number[]>;
+  notificationPreferences?: NotificationPreferenceRecord[];
+  notifications?: NotificationRecord[];
+  discussions?: DiscussionRecord[];
+  discussionRate?: Record<string, number[]>;
+}
+
+export interface DiscussionRecord {
+  id: string; kind: "thread" | "comment"; parentId: string | null;
+  occurrenceId: string; eventId: string; cityId: string; authorId: string;
+  title: string | null; body: string; state: "visible" | "hidden" | "deleted";
+  createdAt: string; updatedAt: string;
+}
+
+export const NOTIFICATION_CATEGORIES = ["run_reminders", "community_updates", "account_alerts"] as const;
+export type NotificationCategory = typeof NOTIFICATION_CATEGORIES[number];
+export interface NotificationPreferenceRecord { accountId: string; run_reminders: boolean; community_updates: boolean; account_alerts: boolean; updatedAt: string; }
+export interface NotificationRecord { id: string; accountId: string; category: NotificationCategory; title: string; body: string; createdAt: string; readAt: string | null; }
+export interface MatchingPreferencesRecord {
+  accountId: string;
+  enabled: boolean;
+  consentVersion: string | null;
+  consentedAt: string | null;
+  cityId: string | null;
+  timeWindow: "morning" | "afternoon" | "evening" | "flexible" | null;
+  selfDescribedGender: string | null;
+  genderPreference: string | null;
+  updatedAt: string;
+}
+export type JoinRequestState = "pending" | "accepted" | "declined" | "cancelled" | "expired" | "blocked";
+export interface JoinRequestRecord {
+  id: string; requesterId: string; recipientId: string;
+  contextType: "event" | "personal_run"; contextId: string;
+  /** State is accepted only after BOTH participants explicitly accept. */
+  state: JoinRequestState;
+  requesterAccepted: boolean; recipientAccepted: boolean;
+  createdAt: string; expiresAt: string; updatedAt: string;
+}
+export interface BlockRecord { blockerId: string; blockedId: string; createdAt: string; }
+
+export const MATCHING_CONSENT_VERSION = "2026-08-04.matching.v1";
+export const PERSONAL_RUN_CONSENT_VERSION = "2026-08-04.v1";
+export interface PersonalRunRecord {
+  id: string; accountId: string; cityId: string; title: string; startsAt: string;
+  locationLabel: string | null; distanceLabel: string | null; notes: string | null;
+  visibility: "private"; consentVersion: string; consentedAt: string;
+  createdAt: string; updatedAt: string; deletedAt: string | null;
 }
 
 export type CredentialType = "coach_certification" | "first_aid_cpr";
@@ -262,6 +341,8 @@ export const ALLOWED_TRUST_TAGS = ["reliable", "welcoming", "safety-minded", "kn
 export type TrustTag = typeof ALLOWED_TRUST_TAGS[number];
 export interface RatingRecord { id:string; reviewerId:string; revieweeId:string; eventId:string; positive:boolean; tags:TrustTag[]; createdAt:string; /** Required when positive === false — the reviewer's stated reason (admin-only, never public). */ reason:string|null; }
 export interface ConcernRecord { id:string; reporterId:string; subjectId:string; eventId:string|null; reason:string; status:"open"|"resolved"; createdAt:string; }
+export type SafetyReportStatus = "open" | "under_review" | "resolved" | "dismissed";
+export interface SafetyReportRecord { id:string; reporterId:string; subjectId:string; cityId:string; contextType:"join_request"|"event"|"personal_run"; contextId:string; reason:string; status:SafetyReportStatus; createdAt:string; updatedAt:string; resolvedAt:string|null; }
 export interface AppealRecord { id:string; accountId:string; reason:string; status:"open"|"reinstated"|"upheld"; createdAt:string; decidedAt:string|null; decidedBy:string|null; decisionReason:string|null; }
 export interface RecognitionRecord { accountId:string; cityId:string; role:"coach"|"host"; tier:"recognized"; updatedAt:string; }
 /**
@@ -271,7 +352,7 @@ export interface RecognitionRecord { accountId:string; cityId:string; role:"coac
  * for ratings: a reviewer may rate a reviewee only for an event BOTH of them
  * attended (shared RSVP/host-attendance).
  */
-export interface AttendanceRecord { id:string; accountId:string; eventId:string; role:"rsvp"|"host"; createdAt:string; }
+export interface AttendanceRecord { id:string; accountId:string; eventId:string; role:"rsvp"|"host"; createdAt:string; /** Concrete occurrence; absent on legacy event-level rows. */ occurrenceId?: string; runDate?: string; startsAt?: string; }
 
 export interface SiteSettings { title:string; wordmark:string; tagline:string; primary:string; accent:string; surface:string; strings:Record<string,string>; tags:Record<string,string[]>; providers:Record<string,boolean>; bottomNav:string[]; announcement:{text:string;link?:string}|null; logoRef:string|null; faviconRef:string|null; /**
    * Community-trust policy, configurable by a Global Admin. `underReviewThreshold`
@@ -342,16 +423,20 @@ export interface ContentRecord {
   hiddenAt: string | null;
 }
 
+export type GroupStatus = "pending_approval" | "published" | "suspended";
+export type MembershipMode = "open" | "request";
 export interface GroupModRecord {
-  /** Seed group id (e.g. "ctc"). */
-  id: string;
-  cityId: string;
-  name: string;
-  /** Whether the public "RRCA-Chartered Club" label is warranted (owner-set). */
-  rrcaBadge: boolean;
-  /** Internal (owner-only) note explaining the charter/badge, e.g. "Charter #…". */
-  rrcaNote: string | null;
-  rrcaNoteUpdatedAt: string | null;
+  id: string; cityId: string; name: string; description?: string;
+  groupType?: GroupType; websiteUrl?: string|null; groupmeUrl?: string|null; facebookUrl?: string|null; instagramUrl?: string|null;
+  coverPhotoRef?: string|null; logoPhotoRef?: string|null; ownerId?: string; leaderIds?: string[]; membershipMode?: MembershipMode; status?: GroupStatus;
+  rrcaBadge: boolean; rrcaNote: string | null; rrcaNoteUpdatedAt: string | null;
+  rejectionReason?: string|null;
+}
+
+export type GroupMembershipStatus = "pending" | "active" | "declined" | "revoked" | "left";
+export interface GroupMembershipRecord {
+  id: string; groupId: string; accountId: string; cityId: string; status: GroupMembershipStatus;
+  requestedAt: string; updatedAt: string; decidedAt: string | null; decidedBy: string | null;
 }
 
 export type FlagStatus = "open" | "dismissed" | "hidden";
@@ -411,6 +496,9 @@ export interface GroupSubmissionPayload {
   facebookUrl: string | null;
   instagramUrl: string | null;
   websiteUrl: string | null;
+  coverPhotoRef?: string;
+  logoPhotoRef?: string;
+  membershipMode?: MembershipMode;
 }
 
 /** Independent-event submission payload — a run NOT tied to a group. */

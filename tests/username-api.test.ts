@@ -76,6 +76,22 @@ async function get(db: ReturnType<typeof createMemoryStore>, path: string, cooki
 
 const VALID = { name: "Jordan Lee", username: "jordanlee", email: "runner@example.com", birthdate: "1998-05-05", cityId: "columbia-mo" };
 
+describe("GET /api/username/availability — normalized server response", () => {
+  it("reports an unused valid username as available", async () => {
+    const db = createMemoryStore();
+    const fake = await get(db, "/api/username/availability?username=%20FreshRunner%20");
+    expect(fake.status).toBe(200);
+    expect(JSON.parse(fake.body)).toEqual({ valid: true, available: true });
+  });
+  it("reports a genuinely taken username as unavailable, regardless of casing", async () => {
+    const db = createMemoryStore();
+    await post(db, "/api/accounts", VALID);
+    const fake = await get(db, "/api/username/availability?username=JORDANLEE");
+    expect(fake.status).toBe(200);
+    expect(JSON.parse(fake.body)).toEqual({ valid: true, available: false });
+  });
+});
+
 describe("POST /api/accounts — signup requires and normalizes the username", () => {
   it("rejects a missing username with 400 invalid_username and creates nothing", async () => {
     const db = createMemoryStore();

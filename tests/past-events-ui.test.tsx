@@ -1,0 +1,10 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
+import { describe, expect, it, vi } from "vitest";
+import { PastEventsPage } from "../src/pages/PastEventsPage";
+const { content } = vi.hoisted(() => ({ content: vi.fn() }));
+vi.mock("../src/state/content", () => ({ usePublicContent: content }));
+vi.mock("../src/state/moderated", () => ({ useModerated: () => ({ hidden: new Set(), highlights: new Map(), groupBadges: new Map() }) }));
+vi.mock("../src/components/HomeCityBanner", () => ({ HomeCityBanner: () => null }));
+const city = { id: "c", name: "Columbia", state: "MO", tagline: "", live: true, groups: [], events: [], races: [], forum: [] };
+describe("past events route", () => { it("renders past activity and current link", () => { content.mockReturnValue({ events: [{ id: "e", kind: "event", title: "Finished Run", type: "one_time", date: "2026-08-03", dayOfWeek: null, time: "6 PM", location: "Park", distanceLabel: "5K", invite: "Open to all", externalUrl: null, description: "", host: "" }], races: [], groups: [] }); const html = renderToStaticMarkup(<MemoryRouter><PastEventsPage city={city} /></MemoryRouter>); expect(html).toContain("Past events"); expect(html).toContain("Finished Run"); expect(html).toContain('href="/"'); }); });

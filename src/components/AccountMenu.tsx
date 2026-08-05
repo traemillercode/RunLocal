@@ -65,7 +65,7 @@ export function AccountMenuContent({
           {photo ? (
             <img src={photo} alt="" className="h-11 w-11 rounded-full object-cover" />
           ) : (
-            <span className="grid h-11 w-11 place-items-center rounded-full bg-[#0b2b22] text-sm font-extrabold text-[#c8f169]">
+            <span className="grid h-11 w-11 place-items-center rounded-[10px] bg-[#14171C] text-sm font-extrabold text-[#FF5741]">
               {initials(account.name)}
             </span>
           )}
@@ -148,13 +148,13 @@ export function AccountMenuButton() {
           <span className="relative grid h-10 w-10 place-items-center rounded-full text-[13px] font-extrabold">
             {account ? initials(account.name) : <Icon name="users" className="h-5 w-5" />}
             {account && !verified ? (
-              <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full bg-amber-400 ring-2 ring-[#0b2b22]">
-                <Icon name="clock" className="h-2.5 w-2.5 text-[#0b2b22]" />
+              <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full bg-amber-400 ring-2 ring-[#14171C]">
+                <Icon name="clock" className="h-2.5 w-2.5 text-[#14171C]" />
               </span>
             ) : null}
             {account && verified ? (
-              <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full bg-[#c8f169] ring-2 ring-[#0b2b22]">
-                <Icon name="check" className="h-2.5 w-2.5 text-[#0b2b22]" />
+              <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-[10px] bg-[#FF5741] ring-2 ring-[#14171C]">
+                <Icon name="check" className="h-2.5 w-2.5 text-[#14171C]" />
               </span>
             ) : null}
           </span>

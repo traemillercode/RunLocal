@@ -2,73 +2,84 @@
 
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --color-ink: #0b2b22;
-  --color-volt: #c8f169;
+  --color-ink: #14171C;
+  --color-volt: #FF5741;
 }
 
-html {
-  -webkit-tap-highlight-color: transparent;
-  -webkit-text-size-adjust: 100%;
+:root {
+  --rl-coral: #FF5741;
+  --rl-coral-soft: #fff0ec;
+  --rl-ink: #14171C;
+  --rl-canvas: #f7f7f5;
+  /* Shared interactive-control geometry: moderate, never pill-shaped. */
+  --rl-control-radius: 10px;
 }
 
-body {
-  font-family: var(--font-sans);
-  background-color: #f5f6f2;
-  overscroll-behavior-y: none;
-}
+html { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
+body { font-family: var(--font-sans); background-color: #f7f7f5; overscroll-behavior-y: none; }
+input, textarea, select { font-size: 16px; }
+::selection { background: var(--rl-coral); color: var(--rl-ink); }
+:focus-visible { outline: 3px solid var(--rl-coral); outline-offset: 3px; }
+button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in srgb, var(--rl-coral) 18%, transparent); }
+/* Applied by shared button components and button-like links. Status badges and
+   icon-only controls intentionally keep their own geometry. */
+.rl-control { border-radius: var(--rl-control-radius); min-height: 44px; }
 
-/* Prevent iOS zoom on input focus via 16px base input text (already set per-input). */
-input,
-textarea,
-select {
-  font-size: 16px;
-}
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.animate-sheet-up { animation: sheet-up 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+.animate-fade-in { animation: fade-in 180ms ease-out; }
+.animate-pop-in { animation: pop-in 160ms ease-out; }
+.line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
 
-@keyframes sheet-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
+@media (min-width: 1024px) {
+  .desktop-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 50; display: flex; width: 240px; flex-direction: column; border-right: 1px solid #273039; background: #14171c; padding: 28px 18px 20px; color: white; }
+  .desktop-brand { display: flex; align-items: center; gap: 10px; padding: 0 10px 34px; color: white; font-size: 20px; font-weight: 800; letter-spacing: -0.03em; }
+  .desktop-brand img { height: 36px; width: 36px; border-radius: 10px; }
+  .desktop-brand b { color: #ff5741; }
+  .desktop-city { display: flex; width: fit-content; max-width: 100%; min-height: 44px; align-items: center; gap: 9px; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; background: rgba(255,255,255,.1); padding: 0 12px; text-align: left; font-size: 13px; font-weight: 700; }
+  .desktop-nav { display: grid; gap: 6px; margin-top: 28px; }
+  .desktop-nav a, .desktop-account a { display: flex; width: fit-content; max-width: 100%; min-height: 46px; align-items: center; gap: 12px; border-radius: 10px; padding: 0 12px; color: #cbd5e1; font-size: 14px; font-weight: 700; }
+  .desktop-nav a.active, .desktop-nav a:hover, .desktop-account a:hover { background: rgba(255,255,255,.1); color: white; }
+  .desktop-nav a.active { box-shadow: inset 3px 0 #ff5741; }
+  .desktop-account { margin-top: auto; border-top: 1px solid rgba(255,255,255,.12); padding-top: 16px; }
+  /* Navigation rows fill the sidebar; the city selector remains content-sized. */
+  .desktop-nav a, .desktop-account a { width: 100%; }
+  /* Only controls explicitly opted into compact desktop sizing change width.
+     Full-width actions retain their composition at every viewport. */
+  .desktop-compact-control { width: fit-content; max-width: 100%; }
+  .desktop-main .desktop-compact-control.w-full { width: 100%; }
+  .desktop-main { margin-left: 240px; min-height: 100dvh; min-width: 0; }
+  .desktop-main > .desktop-browse-layout { max-width: 1240px !important; padding-left: clamp(24px, 4vw, 56px); padding-right: clamp(24px, 4vw, 56px); }
+  .desktop-main > .desktop-reading { max-width: 1240px !important; }
+  .app-shell-header, .app-shell-nav { display: none; }
+  .desktop-sheet-panel { max-width: 640px; max-height: 86dvh; border-radius: 10px; animation: fade-in 160ms ease-out; }
+  [role="dialog"] { align-items: center; }
+  .desktop-main .desktop-two-column { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: clamp(24px, 3vw, 40px); }
+  .desktop-home-rail { position: sticky; top: 32px; align-self: start; display: grid; gap: 16px; padding-top: 52px; }
+  .desktop-home-rail section, .desktop-forum-context, .desktop-detail-panel { border-radius: 10px; background: white; padding: 18px; box-shadow: 0 1px 2px rgb(15 23 42 / 0.04); border: 1px solid #e2e8f0; }
+  .desktop-home-rail h2 { margin-top: 4px; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+  .desktop-home-rail section > p:not(.desktop-rail-kicker) { margin-top: 4px; font-size: 13px; line-height: 1.5; color: #64748b; }
+  .desktop-rail-kicker { font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #ff5741; }
+  .desktop-home-rail section > a:last-child { display: inline-flex; margin-top: 14px; color: #14171c; font-size: 12px; font-weight: 800; }
+  .desktop-rail-item { display: grid; gap: 3px; margin-top: 13px; border-top: 1px solid #f1f5f9; padding-top: 12px; }
+  .desktop-rail-item b { font-size: 13px; } .desktop-rail-item span { font-size: 12px; color: #64748b; }
+  .desktop-forum-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 32px; }
+  .desktop-forum-context { align-self: start; position: sticky; top: 32px; }
+  .desktop-detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 32px; align-items: start; }
+  .desktop-detail-panel { position: sticky; top: 32px; }
 }
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) { .desktop-nav a, .desktop-account a, .desktop-city, .desktop-brand { transition: background-color 160ms ease, color 160ms ease, transform 160ms ease; } .desktop-nav a:hover { transform: translateX(2px); } }
+@media (min-width: 1024px) and (max-width: 1100px) { .desktop-sidebar { width: 216px; } .desktop-main { margin-left: 216px; } .desktop-forum-layout, .desktop-detail-layout { grid-template-columns: minmax(0, 1fr) 240px; gap: 20px; } }
 
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+/* Races stays comfortably single-column until there is room for a useful rail. */
+@media (min-width: 1180px) {
+  .desktop-races-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: clamp(24px, 3vw, 40px); align-items: start; }
+  .desktop-races-rail { position: sticky; top: 32px; display: grid; gap: 16px; align-self: start; }
+  .desktop-races-rail section { border: 1px solid #e2e8f0; border-radius: 10px; background: white; padding: 18px; box-shadow: 0 1px 2px rgb(15 23 42 / 0.04); }
+  .desktop-races-rail h2 { margin-top: 4px; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+  .desktop-races-rail section > p:not(.desktop-rail-kicker) { margin-top: 6px; font-size: 13px; line-height: 1.5; color: #64748b; }
 }
-
-@keyframes pop-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.animate-sheet-up {
-  animation: sheet-up 220ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.animate-fade-in {
-  animation: fade-in 180ms ease-out;
-}
-
-.animate-pop-in {
-  animation: pop-in 160ms ease-out;
-}
-
-/* 3-line clamp for post excerpts */
-.line-clamp-3 {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
+@media (max-width: 1179px) { .desktop-races-rail { display: none; } }

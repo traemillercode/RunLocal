@@ -10,6 +10,7 @@ import {
   adminLogin,
   adminSearch,
   adminSetStatus,
+  adminViewSelfie,
   toCsv,
   validReason,
   type AdminCtx,
@@ -129,6 +130,28 @@ describe("admin authorization", () => {
     expect(db.getAccount(rec.id)!.status).toBe("verified");
     expect(db.getAccount(rec.id)!.verifiedAt).toBe(T0.toISOString());
     expect(db.listAudit(10).some((a) => a.action === "admin.approve" && a.targetId === rec.id)).toBe(true);
+  });
+
+  it("serves the submitted selfie only to an authorized admin and reports missing bytes", async () => {
+    const db = createMemoryStore();
+    const rec = db.createAccount({ name: "A", email: "a@x.com" });
+    const login = adminLogin(db, KEY, "198.51.100.7", T0);
+    if (!login.ok) throw new Error("login failed");
+    const denied = await adminViewSelfie(db, { adminSessionId: null, reason: "review selfie", ip: "198.51.100.7" }, rec.id, T0);
+    expect(denied.ok).toBe(false);
+    if (!denied.ok) expect(denied.error).toBe("unauthorized");
+    const missing = await adminViewSelfie(db, ctx(login.data.sessionId, "review selfie"), rec.id, T0);
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.error).toBe("no_selfie");
+    db.updateAccount(rec.id, { selfieRef: `${rec.id}_selfie.jpg` });
+    const absentBytes = await adminViewSelfie(db, ctx(login.data.sessionId, "review selfie"), rec.id, T0);
+    expect(absentBytes.ok).toBe(false);
+    if (!absentBytes.ok) expect(absentBytes.error).toBe("no_selfie");
+    await db.writePrivateUpload(`${rec.id}_selfie.jpg`, Buffer.from("safe-test-image"));
+    const served = await adminViewSelfie(db, ctx(login.data.sessionId, "review selfie"), rec.id, T0);
+    expect(served.ok).toBe(true);
+    if (served.ok) expect(served.data.buffer.toString()).toBe("safe-test-image");
+    expect(db.listAudit(20).some((a) => a.action === "admin.view_selfie" && a.targetId === rec.id)).toBe(true);
   });
 
   it("approve without a reason is rejected", () => {

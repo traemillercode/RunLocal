@@ -33,7 +33,7 @@ export function Sheet({ open, onClose, title, subtitle, children }: SheetProps) 
         onClick={onClose}
         className="absolute inset-0 bg-black/45 backdrop-blur-[2px] animate-fade-in"
       />
-      <div className="relative z-10 w-full max-w-md animate-sheet-up rounded-t-3xl bg-white shadow-2xl max-h-[88dvh] flex flex-col">
+      <div className="relative z-10 w-full max-w-md animate-sheet-up rounded-t-3xl bg-white shadow-2xl max-h-[88dvh] flex flex-col desktop-sheet-panel">
         <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3 border-b border-slate-100 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-slate-900">{title}</h2>
@@ -221,6 +221,9 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9" />
     </>
   ),
+  user: <><circle cx="12" cy="8" r="3.5" /><path d="M5 21c.7-4 3-6 7-6s6.3 2 7 6" /></>,
+  settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.1h-2.6v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H6.4v-2.6h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.1H15v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1v2.6h-.1a1.7 1.7 0 0 0-1.5 1z" /></>,
+
   download: (
     <>
       <path d="M12 4v11M8 11l4 4 4-4" />
@@ -262,8 +265,8 @@ export function Icon({ name, className = "h-5 w-5" }: { name: string; className?
 export function Chip({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "brand" | "volt" | "amber" | "sky" | "emerald" | "outline" }) {
   const tones: Record<string, string> = {
     neutral: "bg-slate-100 text-slate-600",
-    brand: "bg-[#0b2b22] text-[#c8f169]",
-    volt: "bg-[#c8f169] text-[#0b2b22]",
+    brand: "bg-[#14171C] text-[#FF5741]",
+    volt: "bg-[#FF5741] text-[#14171C]",
     amber: "bg-amber-100 text-amber-800",
     sky: "bg-sky-100 text-sky-800",
     emerald: "bg-emerald-100 text-emerald-800",
@@ -276,7 +279,7 @@ export function Chip({ children, tone = "neutral" }: { children: ReactNode; tone
   );
 }
 
-/** Pill button with 44px min touch target. */
+/** Primary/secondary button with a 10px radius and 44px minimum touch target. */
 export function PillButton({
   children,
   onClick,
@@ -293,8 +296,8 @@ export function PillButton({
   ariaLabel?: string;
 }) {
   const variants: Record<string, string> = {
-    primary: "bg-[#0b2b22] text-white active:bg-[#124d3c] disabled:bg-slate-200 disabled:text-slate-400",
-    secondary: "bg-[#c8f169] text-[#0b2b22] active:bg-[#b9e355] disabled:bg-slate-200 disabled:text-slate-400",
+    primary: "bg-[#14171C] text-white active:bg-[#252a31] disabled:bg-slate-200 disabled:text-slate-400",
+    secondary: "bg-[#FF5741] text-[#14171C] active:bg-[#e94735] disabled:bg-slate-200 disabled:text-slate-400",
     ghost: "bg-transparent text-slate-700 ring-1 ring-slate-200 active:bg-slate-100 disabled:text-slate-300",
   };
   return (
@@ -303,7 +306,7 @@ export function PillButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition-colors ${variants[variant]} ${className}`}
+      className={`rl-control inline-flex desktop-compact-control min-h-11 items-center justify-center gap-2 px-5 text-sm font-semibold transition-colors ${variants[variant]} ${className}`}
     >
       {children}
     </button>

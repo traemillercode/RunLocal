@@ -1,7 +1,7 @@
 /** Parse Supabase callbacks before HashRouter consumes the URL. */
 export type AuthCallback =
   | { kind: "recovery"; accessToken: string; refreshToken: string }
-  | { kind: "confirmation" }
+  | { kind: "confirmation"; accessToken?: string; refreshToken?: string; code?: string }
   | { kind: "error"; flow: "recovery" | "confirmation"; error: string };
 export function parseAuthCallback(url: string): AuthCallback | null {
   const parsed = new URL(url, "https://runlocal.invalid");
@@ -15,7 +15,14 @@ export function parseAuthCallback(url: string): AuthCallback | null {
     const accessToken = params.get("access_token"); const refreshToken = params.get("refresh_token");
     return accessToken && refreshToken ? { kind: "recovery", accessToken, refreshToken } : { kind: "error", flow: "recovery", error: "This recovery link is incomplete or expired. Request a new one." };
   }
-  if (type === "signup" || parsed.searchParams.get("code")) return { kind: "confirmation" };
+  if (type === "signup" || parsed.searchParams.get("code")) {
+    return {
+      kind: "confirmation",
+      ...(params.get("access_token") ? { accessToken: params.get("access_token")! } : {}),
+      ...(params.get("refresh_token") ? { refreshToken: params.get("refresh_token")! } : {}),
+      ...(params.get("code") || parsed.searchParams.get("code") ? { code: params.get("code") ?? parsed.searchParams.get("code")! } : {}),
+    };
+  }
   return null;
 }
 export function cleanCallbackUrl(url: string): string {

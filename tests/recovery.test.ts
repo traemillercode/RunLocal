@@ -6,7 +6,25 @@
  * from the hash before the HashRouter claims the route.
  */
 import { describe, expect, it } from "vitest";
-import { parseRecoveryHash } from "../src/lib/recovery";
+import { parseAuthCallback, parseRecoveryHash } from "../src/lib/recovery";
+
+describe("parseAuthCallback", () => {
+  it("routes signup confirmation callbacks without treating them as OTP verification", () => {
+    expect(parseAuthCallback("https://runlocal.ctonew.app/#type=signup&code=confirm-code")).toEqual({ kind: "confirmation", code: "confirm-code" });
+  });
+
+  it("preserves a confirmation callback session for deterministic linking", () => {
+    expect(parseAuthCallback("https://runlocal.ctonew.app/#type=signup&access_token=at&refresh_token=rt")).toEqual({ kind: "confirmation", accessToken: "at", refreshToken: "rt" });
+  });
+
+  it("routes recovery callbacks and keeps tokens at the callback boundary", () => {
+    expect(parseAuthCallback("https://runlocal.ctonew.app/#type=recovery&access_token=at&refresh_token=rt")).toEqual({ kind: "recovery", accessToken: "at", refreshToken: "rt" });
+  });
+
+  it("returns an explicit error route for rejected confirmation links", () => {
+    expect(parseAuthCallback("https://runlocal.ctonew.app/#type=signup&error=access_denied&error_description=expired")).toEqual({ kind: "error", flow: "confirmation", error: "expired" });
+  });
+});
 
 describe("parseRecoveryHash", () => {
   it("parses a valid recovery hash into tokens", () => {

@@ -34,6 +34,7 @@ describe("server supabaseConfig", () => {
     expect(cfg.missing).toEqual([]);
     expect(cfg.url).toBe(ENV.VITE_SUPABASE_URL);
     expect(cfg.anonKey).toBe(ENV.VITE_SUPABASE_ANON_KEY);
+    expect(cfg.redirectConfigured).toBe(false);
   });
 
   it("treats a non-https project URL as unconfigured", () => {
@@ -287,6 +288,19 @@ describe("signUp (browser adapter)", () => {
     const result = await signUp("runner@example.com", "s3cret-pass", { env: CLIENT_ENV, auth });
     expect(result).toEqual({ ok: true, accessToken: "tok-abc", emailConfirmationRequired: false });
     expect(auth.signUp).toHaveBeenCalledWith({ email: "runner@example.com", password: "s3cret-pass", options: { emailRedirectTo: "https://runlocal.ctonew.app" } });
+  });
+
+  it("passes only safe profile metadata through options.data", async () => {
+    const auth = authStub();
+    createClientMock.mockReturnValue({ auth });
+    await signUp("runner@example.com", "s3cret-pass", {
+      env: { ...CLIENT_ENV, VITE_AUTH_REDIRECT_URL: "https://runlocal.ctonew.app" },
+      auth,
+      data: { username: "runner_1", display_name: "Runner One" },
+    });
+    const request = auth.signUp.mock.calls[0]?.[0] as { options?: { data?: Record<string, unknown> } };
+    expect(request.options?.data).toEqual({ username: "runner_1", display_name: "Runner One" });
+    expect(JSON.stringify(request.options?.data)).not.toMatch(/password|phone|birthdate|photo|email/i);
   });
 
   it("reports email-confirmation-required when Supabase returns no session", async () => {
