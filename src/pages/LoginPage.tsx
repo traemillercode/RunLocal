@@ -66,7 +66,7 @@ export function authErrorText(value: unknown): string {
 }
 
 const inputCls =
-  "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
+  "h-12 w-full rounded-[10px] border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
 /**
  * Explicit, honest caveat shown whenever we tell a user an email is coming but
@@ -398,7 +398,7 @@ export function LoginPage() {
     return (
       <div className="mx-auto w-full max-w-md px-4 pb-32 pt-6">
         <div className="rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200/70">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[#FF5741] text-[#14171C]">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-[10px] bg-[#FF5741] text-[#14171C]">
             <Icon name="check" className="h-7 w-7" />
           </span>
           <h1 className="mt-3 text-xl font-extrabold">You're signed in</h1>

@@ -65,7 +65,7 @@ export function AccountMenuContent({
           {photo ? (
             <img src={photo} alt="" className="h-11 w-11 rounded-full object-cover" />
           ) : (
-            <span className="grid h-11 w-11 place-items-center rounded-full bg-[#14171C] text-sm font-extrabold text-[#FF5741]">
+            <span className="grid h-11 w-11 place-items-center rounded-[10px] bg-[#14171C] text-sm font-extrabold text-[#FF5741]">
               {initials(account.name)}
             </span>
           )}
@@ -153,7 +153,7 @@ export function AccountMenuButton() {
               </span>
             ) : null}
             {account && verified ? (
-              <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full bg-[#FF5741] ring-2 ring-[#14171C]">
+              <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-[10px] bg-[#FF5741] ring-2 ring-[#14171C]">
                 <Icon name="check" className="h-2.5 w-2.5 text-[#14171C]" />
               </span>
             ) : null}

@@ -642,7 +642,7 @@ export function AdminPage() {
                 Moderation, RRCA badges, and highlights for one city. Every action is reason-required and audited.
               </p>
             </div>
-            <button type="button" onClick={goLookup} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-[#14171C] px-4 text-xs font-semibold text-white active:bg-[#252a31]">
+            <button type="button" onClick={goLookup} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[10px] bg-[#14171C] px-4 text-xs font-semibold text-white active:bg-[#252a31]">
               <Icon name="search" className="h-4 w-4" /> Verification lookup
             </button>
           </div>

@@ -25,7 +25,7 @@ import { useAccount } from "../state/account";
 function StepBadge({ step, total, label }: { step: number; total: number; label: string }) {
   return (
     <div className="mb-4 flex items-center gap-2">
-      <span className="grid h-7 w-7 place-items-center rounded-full bg-[#14171C] text-[12px] font-bold text-[#FF5741]">{step}</span>
+      <span className="grid h-7 w-7 place-items-center rounded-[10px] bg-[#14171C] text-[12px] font-bold text-[#FF5741]">{step}</span>
       <span className="text-[13px] font-semibold text-slate-700">{label}</span>
       <span className="ml-auto text-[11px] font-medium text-slate-400">
         Step {step} of {total}
@@ -91,7 +91,7 @@ export function VerifyPage() {
     return (
       <div className="mx-auto w-full max-w-md px-4 pb-32 pt-6">
         <div className="rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200/70">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[#FF5741] text-[#14171C]">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-[10px] bg-[#FF5741] text-[#14171C]">
             <Icon name="shield" className="h-7 w-7" />
           </span>
           <h1 className="mt-3 text-xl font-extrabold text-slate-900">You're verified</h1>
@@ -111,7 +111,7 @@ export function VerifyPage() {
     return (
       <div className="mx-auto w-full max-w-md px-4 pb-32 pt-6">
         <section className="rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200/70">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[#14171C] text-[#FF5741]">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-[10px] bg-[#14171C] text-[#FF5741]">
             <Icon name="shield" className="h-7 w-7" />
           </span>
           <h1 className="mt-3 text-xl font-extrabold text-slate-900">Log in to verify</h1>

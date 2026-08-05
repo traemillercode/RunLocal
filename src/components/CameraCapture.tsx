@@ -172,7 +172,7 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
             type="button"
             onClick={capture}
             aria-label="Capture selfie"
-            className="grid h-16 w-16 place-items-center rounded-full bg-[#14171C] ring-4 ring-[#14171C]/20 active:scale-95"
+            className="grid h-16 w-16 place-items-center rounded-[10px] bg-[#14171C] ring-4 ring-[#14171C]/20 active:scale-95"
           >
             <span className="h-11 w-11 rounded-full border-4 border-[#FF5741]" />
           </button>

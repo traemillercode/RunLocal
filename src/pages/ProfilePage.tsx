@@ -109,7 +109,7 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
           {photo ? (
             <img src={photo} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover ring-2 ring-white/20" />
           ) : (
-            <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[#FF5741] text-xl font-extrabold text-[#14171C]">
+            <span className="grid h-16 w-16 shrink-0 place-items-center rounded-[10px] bg-[#FF5741] text-xl font-extrabold text-[#14171C]">
               {initials(name)}
             </span>
           )}

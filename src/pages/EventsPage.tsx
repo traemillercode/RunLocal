@@ -213,7 +213,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
                         </div>
                         {e.externalUrl ? (
                           <div className="border-t border-slate-100 px-4 py-2.5">
-                            <a href={e.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#14171C] text-sm font-semibold text-white">
+                            <a href={e.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[#14171C] text-sm font-semibold text-white">
                               Details <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
                             </a>
                           </div>
@@ -260,7 +260,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
                     <div className="space-y-1.5 px-4 pb-4 text-[13px] text-slate-600">
                       <p className="flex items-center gap-2"><Icon name="mapPin" className="h-4 w-4 text-slate-400" />{e.location}</p>
                       {e.externalUrl ? (
-                        <a href={e.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full bg-[#14171C] text-sm font-semibold text-white">
+                        <a href={e.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[#14171C] text-sm font-semibold text-white">
                           Details <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
                         </a>
                       ) : null}

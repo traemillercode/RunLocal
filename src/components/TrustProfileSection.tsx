@@ -408,7 +408,7 @@ export function TrustProfileSection({ me }: { me: { id: string; name: string; em
                 setFormOpen(true);
                 setError(null);
               }}
-              className="shrink-0 rounded-full bg-[#14171C] px-4 py-2 text-[13px] font-semibold text-white active:bg-[#252a31]"
+              className="shrink-0 rounded-[10px] bg-[#14171C] px-4 py-2 text-[13px] font-semibold text-white active:bg-[#252a31]"
             >
               Add credential
             </button>
