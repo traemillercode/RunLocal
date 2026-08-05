@@ -212,6 +212,16 @@ export function cmsRefUrl(ref: string): string { return `/api/cms/refs/${encodeU
 export function adminCmsRefUrl(ref: string): string { return `/api/admin/cms/refs/${encodeURIComponent(ref)}`; }
 
 // -------------------------------------------------------------------- admin
+export interface AdminOverview {
+  scope: { kind: "global" | "city"; cityId: string | null };
+  generatedAt: string;
+  queues: { pendingVerification: number; pendingSubmissions: number; openSafetyReports: number; contentNeedingReview: number };
+  analytics: { publishedContent: number | null; rsvpTotal: number | null; generatedAt: string; unavailable: boolean };
+}
+export function adminGetOverview(reason: string): Promise<ApiResult<AdminOverview>> {
+  return adminRequest("/api/admin/overview", reason);
+}
+
 export interface AdminSearchRow {
   id: string;
   name: string;

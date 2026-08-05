@@ -13,6 +13,7 @@ import type { AccountRecord } from "./types";
 import { PERSONAL_RUN_CONSENT_VERSION, MATCHING_CONSENT_VERSION } from "./types";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
 import { listSafetyReportsAdmin, decideSafetyReport } from "./safety";
+import { adminOverview } from "./adminOverview";
 import type { SafetyReportStatus } from "./types";
 
 import { supabaseConfig, verifySupabaseToken, applySupabaseIdentity } from "./supabase";
@@ -1369,6 +1370,12 @@ async function handleAdmin(
     return ok(res, { threshold: t, newlyUnderReview }), true;
   }
 
+  if (method === "GET" && url.pathname === "/api/admin/overview") {
+    const result = adminOverview(db, ctx, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, result.data), true;
+  }
   if (method === "GET" && url.pathname === "/api/admin/pending") {
     const result = adminPending(db, ctx);
     if (!result.ok) return sendErr(result), true;
@@ -1419,6 +1426,14 @@ async function handleAdmin(
   // GET /api/admin/dashboard?city= — owner-only moderation dashboard overview
   if (method === "GET" && url.pathname === "/api/admin/dashboard") {
     const result = dashboardOverview(db, ctx, url.searchParams.get("city") ?? "", now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, result.data), true;
+  }
+
+  // GET /api/admin/overview — reason-gated, aggregate-only attention counts
+  if (method === "GET" && url.pathname === "/api/admin/overview") {
+    const result = adminOverview(db, ctx, now);
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, result.data), true;
