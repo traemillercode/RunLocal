@@ -111,10 +111,9 @@ button, a, input, textarea, select {
   .desktop-nav a.active { box-shadow: inset 3px 0 #ff5741; }
   .desktop-account { margin-top: auto; border-top: 1px solid rgba(255,255,255,.12); padding-top: 16px; }
   .desktop-main { margin-left: 240px; min-height: 100dvh; }
-  .desktop-main > * { max-width: 1160px !important; }
-  .desktop-main .max-w-md { max-width: 1160px !important; }
-  .desktop-main .max-w-md { padding-left: 32px; padding-right: 32px; }
-  header, nav.fixed { display: none; }
+  .desktop-main > .desktop-browse-layout { max-width: 1160px !important; padding-left: 32px; padding-right: 32px; }
+  .desktop-main > .desktop-reading { max-width: 820px !important; }
+  .app-shell-header, .app-shell-nav { display: none; }
   .desktop-sheet-panel { max-width: 640px; max-height: 86dvh; border-radius: 24px; animation: fade-in 160ms ease-out; }
   .desktop-sheet-panel + * { border-radius: 24px; }
   [role="dialog"] { align-items: center; }

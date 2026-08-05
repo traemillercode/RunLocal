@@ -130,7 +130,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+    <div className="desktop-browse-layout mx-auto w-full max-w-md px-4 pb-32 pt-4">
       <div className="desktop-two-column"><div>
       <div className="flex items-end justify-between gap-3">
         <div>

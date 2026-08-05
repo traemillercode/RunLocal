@@ -6,7 +6,7 @@ describe("desktop layout stays additive", () => {
     const css = readFileSync("src/styles/app.css", "utf8");
     expect(css).toContain("@media (min-width: 1024px)");
     expect(css).toContain(".desktop-sidebar");
-    expect(css).toContain("header, nav.fixed { display: none; }");
+    expect(css).toContain(".app-shell-header, .app-shell-nav { display: none; }");
     expect(css).toContain("@media (min-width: 1024px) and (hover: hover) and (pointer: fine)");
   });
 
