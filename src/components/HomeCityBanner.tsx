@@ -26,7 +26,11 @@ export function HomeCityBanner() {
       <button
         type="button"
         onClick={() => navigate("/settings")}
+<<<<<<< HEAD
+        className="mt-2.5 inline-flex min-h-11 items-center justify-center rounded-full bg-[#14171C] px-5 text-[13px] font-bold text-white active:bg-[#20262E]"
+=======
         className="mt-2.5 inline-flex min-h-11 items-center justify-center rounded-full bg-[#14171C] px-5 text-[13px] font-bold text-white active:bg-[#252a31]"
+>>>>>>> origin/main
       >
         Choose home city
       </button>

@@ -21,7 +21,7 @@ import type { CmsCity, CmsCityStatus, SiteSettings } from "./types";
 
 export const CITY_STATUSES: CmsCityStatus[] = ["active", "coming_soon", "invite_only", "inactive"];
 
-export const DEFAULT_SETTINGS: SiteSettings = { title:"Run Local", wordmark:"Run Local", tagline:"Find your local run.", primary:"#0b2b22", accent:"#c8f169", surface:"#f7f8f3", strings:{}, tags:{runTypes:["Social run","Track","Trail","Long run"],credentialBodies:["RRCA"],qa:["Training","Shoes","Routes"],ratings:["Easy","Moderate","Hard"]}, providers:{strava:true,garmin:true,coros:true,suunto:true}, bottomNav:["home","races","clubs","forum"], announcement:null, logoRef:null, faviconRef:null, trust:{ underReviewThreshold: 3 } };
+export const DEFAULT_SETTINGS: SiteSettings = { title:"Run Local", wordmark:"Run Local", tagline:"Find your local run.", primary:"#14171C", accent:"#FF5741", surface:"#f7f8f3", strings:{}, tags:{runTypes:["Social run","Track","Trail","Long run"],credentialBodies:["RRCA"],qa:["Training","Shoes","Routes"],ratings:["Easy","Moderate","Hard"]}, providers:{strava:true,garmin:true,coros:true,suunto:true}, bottomNav:["home","races","clubs","forum"], announcement:null, logoRef:null, faviconRef:null, trust:{ underReviewThreshold: 3 } };
 
 export const BOTTOM_NAV_KEYS = ["home", "races", "clubs", "forum"] as const;
 export const PROVIDER_KEYS = ["strava", "garmin", "coros", "suunto"] as const;

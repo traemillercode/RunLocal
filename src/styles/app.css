@@ -13,7 +13,11 @@ html {
 
 body {
   font-family: var(--font-sans);
+<<<<<<< HEAD
+  background-color: #F7F8FA;
+=======
   background-color: #f7f7f5;
+>>>>>>> origin/main
   overscroll-behavior-y: none;
 }
 
@@ -73,6 +77,31 @@ select {
   overflow: hidden;
 }
 
+<<<<<<< HEAD
+/* Run Local visual system: coral activity energy on a charcoal foundation. */
+:root {
+  --rl-coral: #FF5741;
+  --rl-coral-dark: #B82D20;
+  --rl-charcoal: #14171C;
+  --rl-surface: #F7F8FA;
+  --rl-muted: #52606D;
+}
+
+/* Consistent keyboard visibility across every surface. */
+:where(a, button, input, textarea, select):focus-visible {
+  outline: 3px solid var(--rl-coral);
+  outline-offset: 2px;
+}
+
+/* Activity hierarchy helpers used by cards and page headers. */
+.rl-activity-rail { border-left: 4px solid var(--rl-coral); }
+.rl-activity-wash { background: linear-gradient(135deg, #fff 0%, #fff5f2 100%); }
+.rl-coral-action { background: var(--rl-coral); color: var(--rl-charcoal); }
+.rl-coral-action:hover { background: var(--rl-coral-dark); color: #fff; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+=======
 
 /* Run Local visual system: coral energy on an ink foundation. Keep semantic
    status colors below intact; these tokens are for brand and interaction UI. */
@@ -135,3 +164,4 @@ button, a, input, textarea, select {
   .desktop-nav a:hover { transform: translateX(2px); }
 }
 
+>>>>>>> origin/main

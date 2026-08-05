@@ -296,8 +296,13 @@ export function PillButton({
   ariaLabel?: string;
 }) {
   const variants: Record<string, string> = {
+<<<<<<< HEAD
+    primary: "bg-[#14171C] text-white active:bg-[#20262E] disabled:bg-slate-200 disabled:text-slate-400",
+    secondary: "bg-[#FF5741] text-[#14171C] active:bg-[#E44735] disabled:bg-slate-200 disabled:text-slate-400",
+=======
     primary: "bg-[#14171C] text-white active:bg-[#252a31] disabled:bg-slate-200 disabled:text-slate-400",
     secondary: "bg-[#FF5741] text-[#14171C] active:bg-[#e94735] disabled:bg-slate-200 disabled:text-slate-400",
+>>>>>>> origin/main
     ghost: "bg-transparent text-slate-700 ring-1 ring-slate-200 active:bg-slate-100 disabled:text-slate-300",
   };
   return (
