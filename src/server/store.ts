@@ -181,6 +181,8 @@ export class Db {
   private joinRequestRate = new Map<string, number[]>();
   private safetyReports = new Map<string, SafetyReportRecord>();
   private safetyReportRate = new Map<string, number[]>();
+  private notificationPreferences = new Map<string, import("./types").NotificationPreferenceRecord>();
+  private notifications = new Map<string, import("./types").NotificationRecord>();
   /**
    * Private upload bytes (credential proofs) kept in memory so in-memory/test
    * stores can serve them back; file-backed stores mirror the bytes to disk
@@ -259,6 +261,8 @@ export class Db {
       for (const j of parsed.joinRequests ?? []) this.joinRequests.set(j.id, { ...j, requesterAccepted: j.requesterAccepted ?? false, recipientAccepted: j.recipientAccepted ?? false });
       for (const b of parsed.blocks ?? []) this.blocks.set(`${b.blockerId}:${b.blockedId}`, b);
       for (const r of parsed.safetyReports ?? []) this.safetyReports.set(r.id, r);
+      for (const p of parsed.notificationPreferences ?? []) this.notificationPreferences.set(p.accountId, p);
+      for (const n of parsed.notifications ?? []) this.notifications.set(n.id, n);
       for (const [accountId, timestamps] of Object.entries(parsed.safetyReportRate ?? {})) this.safetyReportRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
       for (const [accountId, timestamps] of Object.entries(parsed.joinRequestRate ?? {})) {
         this.joinRequestRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
@@ -299,6 +303,8 @@ export class Db {
       joinRequestRate: Object.fromEntries(this.joinRequestRate.entries()),
       safetyReports: [...this.safetyReports.values()],
       safetyReportRate: Object.fromEntries(this.safetyReportRate.entries()),
+      notificationPreferences: [...this.notificationPreferences.values()],
+      notifications: [...this.notifications.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -306,6 +312,11 @@ export class Db {
     await rename(tmp, file);
   }
 
+  getNotificationPreferences(accountId: string) { return this.notificationPreferences.get(accountId) ?? { accountId, run_reminders:false, community_updates:false, account_alerts:false, updatedAt:this.now().toISOString() }; }
+  setNotificationPreferences(accountId: string, patch: Partial<Pick<import("./types").NotificationPreferenceRecord,"run_reminders"|"community_updates"|"account_alerts">>) { const next={...this.getNotificationPreferences(accountId),...patch,accountId,updatedAt:this.now().toISOString()}; this.notificationPreferences.set(accountId,next); return next; }
+  listNotifications(accountId: string) { return [...this.notifications.values()].filter(n=>n.accountId===accountId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
+  updateNotification(id: string, accountId: string, patch: {readAt:string|null}) { const n=this.notifications.get(id); if(!n||n.accountId!==accountId)return undefined; n.readAt=patch.readAt; return n; }
+  markAllNotificationsRead(accountId:string) { const at=this.now().toISOString(); for(const n of this.notifications.values()) if(n.accountId===accountId)n.readAt=at; }
   // ---------------------------------------------------------------- accounts
   listAccounts(): AccountRecord[] {
     return [...this.accounts.values()];

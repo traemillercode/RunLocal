@@ -73,6 +73,14 @@ export async function checkUsernameAvailability(username: string): Promise<ApiRe
   return result.ok ? normalizeUsernameAvailabilityResponse(result.data) : result;
 }
 
+export type NotificationPreferences = { run_reminders:boolean; community_updates:boolean; account_alerts:boolean; };
+export type InAppNotification = { id:string; category:keyof NotificationPreferences; title:string; body:string; createdAt:string; readAt:string|null };
+export const getNotificationPreferences = () => request<{preferences: NotificationPreferences}>("/api/notifications/preferences");
+export const updateNotificationPreferences = (patch: Partial<NotificationPreferences>) => request<{preferences: NotificationPreferences}>("/api/notifications/preferences", {method:"PATCH", body:JSON.stringify(patch)});
+export const getNotifications = () => request<{notifications:InAppNotification[]; unreadCount:number}>("/api/notifications");
+export const markNotificationRead = (id:string) => request<{status:string}>(`/api/notifications/${encodeURIComponent(id)}/read`, {method:"POST"});
+export const markAllNotificationsRead = () => request<{status:string}>("/api/notifications/read-all", {method:"POST"});
+
 // ------------------------------------------------------------------ health
 export interface HealthInfo {
   ok: true;
