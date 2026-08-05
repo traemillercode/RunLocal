@@ -18,6 +18,7 @@ import { ResendConfirmationBox } from "../components/ResendConfirmationBox";
 import * as supabase from "../lib/supabase";
 import { normalizeErrorMessage } from "../lib/errors";
 import { useAccount } from "../state/account";
+import { cancelCallback } from "../lib/callbackNavigation";
 
 const inputCls =
   "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
@@ -94,6 +95,9 @@ export function ConfirmationPage() {
         </div>
         <button type="button" onClick={() => navigate("/login")} className="mt-4 block w-full text-center text-sm font-semibold text-[#14171C] underline">
           Go to log in
+        </button>
+        <button type="button" onClick={() => cancelCallback(navigate, "/")} className="mt-3 block w-full text-center text-sm font-semibold text-slate-600 underline">
+          Cancel
         </button>
       </section>
     </div>

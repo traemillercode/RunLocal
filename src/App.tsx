@@ -30,7 +30,7 @@ import { GroupsPage } from "./pages/GroupsPage";
 import { MarketingPage } from "./pages/MarketingPage";
 import { GroupDetailPage } from "./pages/GroupDetailPage";
 import { MyGroupsPage } from "./pages/MyGroupsPage";
-import { cleanCallbackUrl, parseAuthCallback } from "./lib/recovery";
+import { parseAuthCallback } from "./lib/recovery";
 import * as supabase from "./lib/supabase";
 
 /** Routes that get a chrome-free wizard layout (no bottom nav). */
@@ -47,7 +47,9 @@ function Shell() {
   useEffect(() => {
     const parsed = parseAuthCallback(window.location.href);
     if (!parsed) return;
-    window.history.replaceState(null, "", cleanCallbackUrl(window.location.href));
+    // Let the router replace the callback entry when it selects the destination.
+    // Do not mutate the global history entry here: callback cancellation/back
+    // must still be able to return to the meaningful app page that initiated it.
     if (parsed.kind === "confirmation") {
       navigate("/confirmation", { replace: true });
       void supabase.getConfirmationSession(parsed).then(async (session) => {
