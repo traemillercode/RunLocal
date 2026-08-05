@@ -40,6 +40,7 @@ import {
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
 import { publicGroups, publicGroup } from "./groups";
+import { membershipDto, myMemberships, createMembership } from "./memberships";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import {
@@ -322,6 +323,39 @@ async function handleApi(
   }
   const groupDetail = /^\/api\/groups\/([a-f0-9-]+)$/.exec(url.pathname);
   if (method === "GET" && groupDetail) { const group = publicGroup(db, groupDetail[1]); if (!group) return err(res,{status:404,error:"not_found"}),true; return ok(res,{group}),true; }
+
+  if (method === "GET" && url.pathname === "/api/me/groups") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    return ok(res, { memberships: myMemberships(db, sess.accountId) }), true;
+  }
+  const membershipPath = /^\/api\/groups\/([^/]+)\/membership$/.exec(url.pathname);
+  if (membershipPath && method === "POST") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const group = db.getGroup(membershipPath[1]); if (!group) return err(res,{status:404,error:"not_found"}),true;
+    const account = db.getAccount(sess.accountId); if (!account || account.status !== "verified") return err(res,{status:403,error:"verified_runner_required"}),true;
+    if (account.cityId !== group.cityId) return err(res,{status:403,error:"cross_city_forbidden"}),true;
+    const current = db.getMembership(group.id, account.id);
+    if (current && (current.status === "pending" || current.status === "active")) return ok(res,{membership:membershipDto(db,current)}),true;
+    const status = group.membershipMode === "open" ? "active" : "pending";
+    const membership = createMembership(db, group.id, account.id, status, now)!;
+    db.appendAudit({admin:account.email, action:"group.membership_request", reason:"Member membership request", targetId:group.id, ip, cityId:group.cityId}); await db.persist();
+    return ok(res,{membership:membershipDto(db,membership)}),true;
+  }
+  const membershipAction = /^\/api\/groups\/([^/]+)\/membership\/(leave|approve|decline|remove)$/.exec(url.pathname);
+  if (membershipAction && method === "POST") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const group = db.getGroup(membershipAction[1]); if (!group) return err(res,{status:404,error:"not_found"}),true;
+    const body = await readJson(req) as Record<string,unknown>; const account = db.getAccount(sess.accountId);
+    const targetId = typeof body.accountId === "string" ? body.accountId : sess.accountId;
+    const membership = db.getMembership(group.id,targetId); if (!membership) return err(res,{status:404,error:"membership_not_found"}),true;
+    const leader = (group.leaderIds ?? []).includes(sess.accountId) || (group.ownerId === sess.accountId);
+    if (membershipAction[2] === "leave" && targetId === sess.accountId) { membership.status="left"; }
+    else if (!leader && !isOwnerEmail(account?.email ?? "")) return err(res,{status:403,error:"forbidden"}),true;
+    else membership.status = membershipAction[2] === "approve" ? "active" : membershipAction[2] === "decline" ? "declined" : "revoked";
+    membership.updatedAt=now.toISOString(); membership.decidedAt=now.toISOString(); membership.decidedBy=sess.accountId;
+    db.updateMembership(membership.id,membership); db.appendAudit({admin:account?.email ?? "unknown",action:(membershipAction[2] === "leave" ? "group.membership_leave" : membershipAction[2] === "approve" ? "group.membership_approve" : membershipAction[2] === "decline" ? "group.membership_decline" : "group.membership_remove") as import("./types").AdminAction,reason:"Membership lifecycle action",targetId:group.id,ip,cityId:group.cityId}); await db.persist();
+    return ok(res,{membership:membershipDto(db,membership)}),true;
+  }
 
   if (method === "GET" && url.pathname === "/api/content") {
     const cityId = url.searchParams.get("city") ?? "";

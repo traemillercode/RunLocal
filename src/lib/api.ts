@@ -688,3 +688,8 @@ export function adminGetTrust(reason: string): Promise<ApiResult<AdminTrustView>
 export function adminSetTrustThreshold(threshold: number, reason: string): Promise<ApiResult<{ threshold: number; newlyUnderReview: number }>> {
   return adminRequest("/api/admin/trust/threshold", reason, { method: "POST", body: JSON.stringify({ threshold }) });
 }
+
+export interface MyGroupMembership { id:string; groupId:string; cityId:string; groupName:string; status:"pending"|"active"|"declined"|"revoked"|"left"; requestedAt:string; updatedAt:string }
+export function getMyGroups(): Promise<ApiResult<{memberships:MyGroupMembership[]}>> { return request("/api/me/groups"); }
+export function requestGroupMembership(groupId:string): Promise<ApiResult<{membership:MyGroupMembership}>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership`, {method:"POST",body:"{}"}); }
+export function updateGroupMembership(groupId:string, action:"leave"|"approve"|"decline"|"remove", accountId?:string): Promise<ApiResult<{membership:MyGroupMembership}>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership/${action}`, {method:"POST",body:JSON.stringify(accountId?{accountId}:{})}); }

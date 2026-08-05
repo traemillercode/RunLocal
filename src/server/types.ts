@@ -197,7 +197,12 @@ export type AdminAction =
   | "cityadmin.group_rrca"
   | "cityadmin.content_highlight"
   | "cityadmin.audit"
-  | "account.delete";
+  | "account.delete"
+  | "group.membership_request"
+  | "group.membership_approve"
+  | "group.membership_decline"
+  | "group.membership_leave"
+  | "group.membership_remove";
 
 export interface AuditEntry {
   id: string;
@@ -240,6 +245,7 @@ export interface PersistedDb {
   events?: RunEventRecord[];
   /** Owner-dashboard group records: RRCA badge state + internal note. */
   groups: GroupModRecord[];
+  memberships?: GroupMembershipRecord[];
   /** Content flags (reports). Reasons are owner-only, never public. */
   flags: FlagRecord[];
   /**
@@ -409,6 +415,12 @@ export interface GroupModRecord {
   coverPhotoRef?: string|null; logoPhotoRef?: string|null; ownerId?: string; leaderIds?: string[]; membershipMode?: MembershipMode; status?: GroupStatus;
   rrcaBadge: boolean; rrcaNote: string | null; rrcaNoteUpdatedAt: string | null;
   rejectionReason?: string|null;
+}
+
+export type GroupMembershipStatus = "pending" | "active" | "declined" | "revoked" | "left";
+export interface GroupMembershipRecord {
+  id: string; groupId: string; accountId: string; cityId: string; status: GroupMembershipStatus;
+  requestedAt: string; updatedAt: string; decidedAt: string | null; decidedBy: string | null;
 }
 
 export type FlagStatus = "open" | "dismissed" | "hidden";

@@ -20,6 +20,7 @@ import type {
   ContentRecord,
   FlagRecord,
   GroupModRecord,
+  GroupMembershipRecord,
   PersistedDb,
   SessionRecord,
   SubmissionRecord,
@@ -160,6 +161,7 @@ export class Db {
   private content = new Map<string, ContentRecord>();
   private events = new Map<string, RunEventRecord>();
   private groups = new Map<string, GroupModRecord>();
+  private memberships = new Map<string, GroupMembershipRecord>();
   private flags: FlagRecord[] = [];
   private submissions = new Map<string, SubmissionRecord>();
   private activities = new Map<string, import("./activity").Activity>();
@@ -241,6 +243,7 @@ export class Db {
       for (const r of parsed.content ?? []) this.content.set(r.id, r);
       for (const e of parsed.events ?? []) this.events.set(e.id, e);
       for (const g of parsed.groups ?? []) this.groups.set(g.id, g);
+      for (const m of parsed.memberships ?? []) this.memberships.set(m.id, m);
       this.flags = parsed.flags ?? [];
       for (const s of parsed.submissions ?? []) this.submissions.set(s.id, s);
       for (const a of parsed.activities ?? []) this.activities.set(a.id, a);
@@ -279,6 +282,7 @@ export class Db {
       content: [...this.content.values()],
       events: [...this.events.values()],
       groups: [...this.groups.values()],
+      memberships: [...this.memberships.values()],
       flags: this.flags,
       submissions: [...this.submissions.values()],
       activities: [...this.activities.values()],
@@ -543,6 +547,20 @@ export class Db {
   }
   deleteCode(accountId: string): void {
     this.codes.delete(accountId);
+  }
+
+  // --------------------------------------------------------- memberships
+  listMemberships(accountId?: string): GroupMembershipRecord[] {
+    return [...this.memberships.values()].filter((m) => !accountId || m.accountId === accountId);
+  }
+  getMembership(groupId: string, accountId: string): GroupMembershipRecord | undefined {
+    return [...this.memberships.values()].find((m) => m.groupId === groupId && m.accountId === accountId);
+  }
+  getMembershipById(id: string): GroupMembershipRecord | undefined { return this.memberships.get(id); }
+  addMembership(m: GroupMembershipRecord): void { this.memberships.set(m.id, m); }
+  updateMembership(id: string, patch: Partial<GroupMembershipRecord>): GroupMembershipRecord | undefined {
+    const current = this.memberships.get(id); if (!current) return undefined;
+    const next = { ...current, ...patch }; this.memberships.set(id, next); return next;
   }
 
   // ------------------------------------------------------------------- audit
