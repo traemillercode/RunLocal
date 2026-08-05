@@ -66,6 +66,7 @@ export function AdminPage() {
   // search
   const [query, setQuery] = useState("");
   const [reason, setReason] = useState("");
+  const [overviewReason, setOverviewReason] = useState("");
   const [results, setResults] = useState<AdminSearchRow[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -205,12 +206,12 @@ export function AdminPage() {
 
   const loadOverview = async () => {
     setOverviewError(null);
-    if (!reason.trim() || reason.trim().length < 5) {
+    if (!overviewReason.trim() || overviewReason.trim().length < 5) {
       setOverviewError("Enter a reason (min 5 characters) to load the overview.");
       return;
     }
     setOverviewBusy(true);
-    const r = await api.adminGetOverview(reason.trim());
+    const r = await api.adminGetOverview(overviewReason.trim());
     setOverviewBusy(false);
     if (r.ok) setOverview(r.data);
     else setOverviewError(r.error.status === 401 ? "Your admin session expired — sign in again." : r.error.message ?? "Could not load the overview.");
@@ -521,7 +522,11 @@ export function AdminPage() {
         <div className="flex items-start justify-between gap-3">
           <div><h2 id="admin-overview-heading" className="text-[15px] font-bold text-slate-900">Attention overview</h2>
           <p className="mt-0.5 text-xs text-slate-500">Server-derived queue counts for your permitted scope. No private run or identity details.</p></div>
-          <PillButton variant="secondary" className="min-h-9 shrink-0 px-3 text-xs" disabled={overviewBusy} onClick={() => void loadOverview()}>{overviewBusy ? "Refreshing…" : "Refresh"}</PillButton>
+          <div className="flex shrink-0 items-start gap-2">
+            <label className="sr-only" htmlFor="overview-reason">Reason for refreshing overview</label>
+            <input id="overview-reason" value={overviewReason} onChange={(e) => setOverviewReason(e.target.value)} placeholder="Reason (required)" className={`${inputCls} h-9 w-40 px-2 text-xs`} />
+            <PillButton variant="secondary" className="min-h-9 px-3 text-xs" disabled={overviewBusy} onClick={() => void loadOverview()}>{overviewBusy ? "Refreshing…" : "Refresh"}</PillButton>
+          </div>
         </div>
         {overview ? <><p className="mt-3 text-[11px] text-slate-500">Updated {fmt(overview.generatedAt)} · {overview.scope.kind === "global" ? "All cities" : "Assigned city"}</p>
           <div className="mt-3 grid grid-cols-2 gap-2">{([["Pending verification", overview.queues.pendingVerification, "pending-users"],["Pending submissions", overview.queues.pendingSubmissions, "submissions"],["Open safety reports", overview.queues.openSafetyReports, "dashboard"],["Content to review", overview.queues.contentNeedingReview, "dashboard"]] as const).map(([label,count,target]) => <button type="button" key={label} onClick={() => document.getElementById(target)?.scrollIntoView({behavior:"smooth"})} className="rounded-xl border border-slate-200 p-3 text-left hover:border-slate-400"><span className="block text-2xl font-bold text-slate-900">{count}</span><span className="text-xs font-semibold text-slate-600">{label}</span></button>)}</div>
