@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { BottomNav } from "./components/BottomNav";
 import { CitySheet, Header } from "./components/Header";
+import { DesktopSidebar } from "./components/DesktopSidebar";
 import { CITIES } from "./data/cities";
 import { ToastProvider } from "./lib/toast";
 import { useAppState } from "./lib/store";
@@ -68,7 +69,8 @@ function Shell() {
   return (
     <div className="min-h-dvh bg-[#f7f7f5] text-slate-900">
       <Header city={city} onOpenCitySheet={() => setCityOpen(true)} />
-      <main key={location.pathname}>
+      <DesktopSidebar city={city} onOpenCitySheet={() => setCityOpen(true)} />
+      <main key={location.pathname} className="desktop-main">
         <ModeratedProvider cityId={city.id}>
           <PublicContentProvider cityId={city.id}>
             <Routes>

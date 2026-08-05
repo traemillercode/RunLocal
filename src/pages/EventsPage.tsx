@@ -15,6 +15,7 @@ import { useAccount } from "../state/account";
 import { useModerated } from "../state/moderated";
 import { usePublicContent } from "../state/content";
 import { GROUP_TYPE_LABELS, type City } from "../types";
+import { HomeRightRail } from "../components/HomeRightRail";
 
 export function EventsPage({ city }: { city: City; store: AppStore }) {
   const toast = useToast();
@@ -121,6 +122,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+      <div className="desktop-two-column"><div>
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">This week</h1>
@@ -305,6 +307,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
         </p>
       ) : null}
 
+      </div><HomeRightRail city={city} /></div>
       <IndependentEventSheet open={eventSheetOpen} onClose={() => setEventSheetOpen(false)} cityId={city.id} />
       <GroupSubmissionSheet open={groupSheetOpen} onClose={() => setGroupSheetOpen(false)} cityId={city.id} />
 

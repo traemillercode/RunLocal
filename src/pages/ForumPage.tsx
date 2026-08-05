@@ -139,7 +139,7 @@ export function ForumPage({ city }: { city: City }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Forum</h1>

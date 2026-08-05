@@ -59,7 +59,7 @@ export function EventDetailView({
   const rrca = groupBadge ?? group?.groupType === "rrca-chartered";
   const label = group ? (rrca ? GROUP_TYPE_LABELS["rrca-chartered"] : GROUP_TYPE_LABELS.community) : null;
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
       <button type="button" onClick={onBack} className="mb-3 flex items-center gap-1 text-[13px] font-semibold text-slate-500">
         <Icon name="chevronRight" className="h-4 w-4 rotate-180" /> Back to this week
       </button>

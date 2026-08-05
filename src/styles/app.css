@@ -97,3 +97,42 @@ button, a, input, textarea, select {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Desktop shell is additive: mobile keeps its original header/nav and wrappers. */
+@media (min-width: 1024px) {
+  .desktop-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 50; display: flex; width: 240px; flex-direction: column; border-right: 1px solid #e2e8f0; background: #14171c; padding: 28px 18px 20px; color: white; }
+  .desktop-brand { display: flex; align-items: center; gap: 10px; padding: 0 10px 34px; color: white; font-size: 20px; font-weight: 800; letter-spacing: -0.03em; }
+  .desktop-brand img { height: 36px; width: 36px; border-radius: 10px; }
+  .desktop-brand b { color: #ff5741; }
+  .desktop-city { display: flex; min-height: 44px; align-items: center; gap: 9px; border-radius: 12px; background: rgba(255,255,255,.1); padding: 0 12px; text-align: left; font-size: 13px; font-weight: 700; }
+  .desktop-nav { display: grid; gap: 6px; margin-top: 28px; }
+  .desktop-nav a, .desktop-account a { display: flex; min-height: 46px; align-items: center; gap: 12px; border-radius: 12px; padding: 0 12px; color: #cbd5e1; font-size: 14px; font-weight: 700; }
+  .desktop-nav a.active, .desktop-nav a:hover, .desktop-account a:hover { background: rgba(255,255,255,.1); color: white; }
+  .desktop-nav a.active { box-shadow: inset 3px 0 #ff5741; }
+  .desktop-account { margin-top: auto; border-top: 1px solid rgba(255,255,255,.12); padding-top: 16px; }
+  .desktop-main { margin-left: 240px; min-height: 100dvh; }
+  .desktop-main > * { max-width: 1160px !important; }
+  .desktop-main .max-w-md { max-width: 1160px !important; }
+  .desktop-main .max-w-md { padding-left: 32px; padding-right: 32px; }
+  header, nav.fixed { display: none; }
+  .desktop-sheet-panel { max-width: 640px; max-height: 86dvh; border-radius: 24px; animation: fade-in 160ms ease-out; }
+  .desktop-sheet-panel + * { border-radius: 24px; }
+  [role="dialog"] { align-items: center; }
+  .desktop-main .desktop-two-column { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28px; }
+  .desktop-home-rail { position: sticky; top: 32px; align-self: start; display: grid; gap: 16px; padding-top: 52px; }
+  .desktop-home-rail section { border-radius: 18px; background: white; padding: 18px; box-shadow: 0 1px 2px rgb(15 23 42 / 0.04); border: 1px solid #e2e8f0; }
+  .desktop-home-rail h2 { margin-top: 4px; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+  .desktop-home-rail section > p:not(.desktop-rail-kicker) { margin-top: 4px; font-size: 13px; line-height: 1.5; color: #64748b; }
+  .desktop-rail-kicker { font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #ff5741; }
+  .desktop-home-rail section > a:last-child { display: inline-flex; margin-top: 14px; color: #14171c; font-size: 12px; font-weight: 800; }
+  .desktop-rail-item { display: grid; gap: 3px; margin-top: 13px; border-top: 1px solid #f1f5f9; padding-top: 12px; }
+  .desktop-rail-item b { font-size: 13px; }
+  .desktop-rail-item span { font-size: 12px; color: #64748b; }
+  .desktop-reading { max-width: 820px !important; }
+}
+
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .desktop-nav a, .desktop-account a, .desktop-city, .desktop-brand { transition: background-color 160ms ease, color 160ms ease, transform 160ms ease; }
+  .desktop-nav a:hover { transform: translateX(2px); }
+}
+
