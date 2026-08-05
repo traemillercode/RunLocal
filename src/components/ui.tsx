@@ -279,7 +279,7 @@ export function Chip({ children, tone = "neutral" }: { children: ReactNode; tone
   );
 }
 
-/** Pill button with 44px min touch target. */
+/** Primary/secondary button with a 10px radius and 44px minimum touch target. */
 export function PillButton({
   children,
   onClick,
@@ -306,7 +306,7 @@ export function PillButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition-colors ${variants[variant]} ${className}`}
+      className={`rl-control inline-flex min-h-11 items-center justify-center gap-2 px-5 text-sm font-semibold transition-colors ${variants[variant]} ${className}`}
     >
       {children}
     </button>
