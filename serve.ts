@@ -126,12 +126,15 @@ const server = createServer(async (req, res) => {
       return;
     }
     let data: Buffer;
+    let servedPath = filePath;
     try {
       data = await readFile(filePath);
     } catch {
-      data = await readFile(join(root, "index.html"));
+      // Extensionless OAuth callback is an SPA document, never a binary download.
+      servedPath = join(root, "index.html");
+      data = await readFile(servedPath);
     }
-    const ext = extname(filePath);
+    const ext = extname(servedPath);
     res.writeHead(200, {
       "content-type": TYPES[ext] ?? "application/octet-stream",
       "cache-control": ext === ".html" ? "no-cache" : "public, max-age=3600",
