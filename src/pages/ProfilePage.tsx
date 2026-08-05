@@ -7,7 +7,6 @@ import { resolveWeekEvents } from "../lib/dates";
 import { phaseLabel, roleLabel } from "../lib/accounts";
 import * as api from "../lib/api";
 import type { AppStore } from "../lib/store";
-import { normalizeUsername, USERNAME_HINT, USERNAME_PROMPT } from "../lib/username";
 import { useAccount } from "../state/account";
 import { useSelectedCity } from "../state/city";
 import { TrustProfileSection } from "../components/TrustProfileSection";

@@ -125,16 +125,6 @@ export function setHomeCity(cityId: string): Promise<ApiResult<{ account: import
   return request("/api/profile/city", { method: "POST", body: JSON.stringify({ cityId }) });
 }
 
-/** Set or change the signed-in user's unique public handle (server-normalized). */
-export function setUsername(username: string): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
-  return request("/api/profile/username", { method: "POST", body: JSON.stringify({ username }) });
-}
-
-/** Set or change the signed-in user's home city (server-validated against known city entities). */
-export function setHomeCity(cityId: string): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
-  return request("/api/profile/city", { method: "POST", body: JSON.stringify({ cityId }) });
-}
-
 export function uploadProfilePhoto(photoDataUrl: string): Promise<ApiResult<{ photoUrl: string }>> {
   return request("/api/profile/photo", { method: "POST", body: JSON.stringify({ photo: photoDataUrl }) });
 }
