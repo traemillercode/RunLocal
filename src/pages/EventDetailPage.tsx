@@ -234,6 +234,8 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
 
   return (
     <>
+      <div className="desktop-detail-layout">
+      <div>
       <EventDetailView
         event={event}
         city={city}
@@ -246,6 +248,14 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
         groupBadge={groupBadges.get(event.groupId)}
       />
       <DiscussionPanel eventId={event.id} occurrenceId={`event:${event.id}:${event.date}`} eligible={canRsvp && myRunIds.has(event.id)} />
+      </div>
+      <aside className="desktop-detail-panel" aria-label="Run details summary">
+        <p className="text-[11px] font-extrabold uppercase tracking-[.12em] text-[#FF5741]">Run details</p>
+        <h2 className="mt-2 text-lg font-extrabold tracking-tight text-slate-900">Plan your arrival</h2>
+        <p className="mt-2 text-[13px] leading-relaxed text-slate-600">Review the start time, location, and distance before adding this run to My Runs.</p>
+        <div className="mt-4 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-500"><strong className="text-slate-700">Local note:</strong> Details come from the community listing.</div>
+      </aside>
+      </div>
       <VerifiedGateSheet open={gateOpen} onClose={() => setGateOpen(false)} role={role} actionLabel="adding this run to My Runs" pendingLabel="Your profile is still in review." />
     </>
   );
