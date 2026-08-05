@@ -1431,6 +1431,14 @@ async function handleAdmin(
     return ok(res, result.data), true;
   }
 
+  // GET /api/admin/overview — reason-gated, aggregate-only attention counts
+  if (method === "GET" && url.pathname === "/api/admin/overview") {
+    const result = adminOverview(db, ctx, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, result.data), true;
+  }
+
   // POST /api/admin/moderate/flag/:flagId — dismiss | hide an open flag
   const flagMatch = /^\/api\/admin\/moderate\/flag\/([a-f0-9]{32})\/?$/.exec(url.pathname);
   if (flagMatch && method === "POST") {
