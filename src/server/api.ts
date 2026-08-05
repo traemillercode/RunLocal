@@ -880,8 +880,9 @@ async function handleApi(
         if (!dated) return [];
         return [{ id: a.id, eventId, cityId: city.id, title: dated.title, date: dated.date.toISOString().slice(0, 10), time: dated.time, location: dated.location, groupId: dated.groupId, rsvpedAt: a.createdAt }];
       }
-      return [];
-    }).sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`) || a.eventId.localeCompare(b.eventId));
+      // Preserve private history if public details disappear; never invent details.
+      return [{ id: a.id, eventId, cityId: rec.cityId, title: "Past run RSVP", date: a.createdAt.slice(0, 10), time: "Time unavailable", location: "Location unavailable", groupId: "", rsvpedAt: a.createdAt }];
+    }).sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`) || a.eventId.localeCompare(b.eventId) || a.id.localeCompare(b.id));
     return ok(res, { runs }), true;
   }
   // ---- submit a race ------------------------------------------------------
