@@ -325,7 +325,8 @@ async function handleApi(
     if (!cityId || !cityExists(db, cityId)) return err(res, { status: 400, error: "invalid_city" }), true;
     return ok(res, { cityId, groups: publicGroups(db, cityId) }), true;
   }
-  const groupDetail = /^\/api\/groups\/([a-f0-9-]+)$/.exec(url.pathname);
+  // Approved submission groups use stable user-<submissionId> ids.
+  const groupDetail = /^\/api\/groups\/([^/]+)$/.exec(url.pathname);
   if (method === "GET" && groupDetail) { const group = publicGroup(db, groupDetail[1]); if (!group) return err(res,{status:404,error:"not_found"}),true; return ok(res,{group}),true; }
 
   if (method === "GET" && url.pathname === "/api/me/groups") {

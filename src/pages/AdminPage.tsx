@@ -579,7 +579,7 @@ export function AdminPage() {
       ) : null}
 
       {/* Admin submission queue — owner OR key admin; audited with a reason */}
-      <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+      <section id="submissions" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
         <h2 className="text-[15px] font-bold text-slate-900">Submission queue</h2>
         <p className="mt-0.5 text-xs text-slate-500">
           Community-submitted races, groups, and independent events awaiting review. Pending items are not public; approve publishes them (groups grant the submitter the Group
@@ -622,7 +622,7 @@ export function AdminPage() {
 
       {/* Owner-only dashboard: moderation, RRCA, featured/pinned */}
       {isOwner ? (
-        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+        <section id="dashboard" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <div className="flex items-start justify-between gap-2">
             <div>
               <h2 className="text-[15px] font-bold text-slate-900">City dashboard</h2>

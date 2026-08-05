@@ -226,7 +226,7 @@ export interface AuditEntry {
 
 export interface RunEventRecord {
   id: string; seedRefId: string | null; cityId: string; groupId: string; title: string;
-  dayOfWeek: number; time: string; location: string; distanceLabel: string; invite: InviteLabel; externalUrl: string | null;
+  dayOfWeek: number; /** One-time submissions carry an exact date; recurring records leave this null. */ scheduleDate?: string | null; recurrenceType?: "one_time" | "recurring"; time: string; location: string; distanceLabel: string; invite: InviteLabel; externalUrl: string | null;
   provenance: "seed" | "community" | "admin"; status: "draft" | "approved" | "published" | "hidden" | "archived";
   hidden: boolean; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; archivedAt: string | null;
 }

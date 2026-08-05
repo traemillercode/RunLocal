@@ -18,7 +18,9 @@ export function resolveOccurrence(db: Db, requestedEventId: string, runDate: str
   const event = dbEvent ?? (seed ? ({ id:`event:${seed.e.id}`, seedRefId:seed.e.id, cityId:seed.cityId, groupId:seed.e.groupId, title:seed.e.title, dayOfWeek:seed.e.dayOfWeek, time:seed.e.time, location:seed.e.location, distanceLabel:seed.e.distanceLabel, invite:seed.e.invite, externalUrl:seed.e.externalUrl ?? null, provenance:"seed", status:"published", hidden:false, createdAt:"", updatedAt:"", createdBy:"seed", updatedBy:"seed", archivedAt:null } as RunEventRecord) : null);
   if (!event || event.hidden || event.archivedAt || event.status !== "published" || !validDate(runDate)) return null;
   const d = new Date(`${runDate}T00:00:00.000Z`);
-  if (event.dayOfWeek !== d.getUTCDay() - 1 && !(event.dayOfWeek === 6 && d.getUTCDay() === 0)) return null;
+  if (event.recurrenceType === "one_time" || event.scheduleDate) {
+    if (event.scheduleDate !== runDate) return null;
+  } else if (event.dayOfWeek !== d.getUTCDay() - 1 && !(event.dayOfWeek === 6 && d.getUTCDay() === 0)) return null;
   const eventId = event.id.startsWith("event:") ? event.id : `event:${event.id}`;
   return { eventId, runDate, occurrenceId:`${eventId}:${runDate}`, startsAt:startsAt(runDate,event.time), event };
 }
