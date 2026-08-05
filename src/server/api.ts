@@ -1096,15 +1096,21 @@ async function handleApi(
     const eventParam = decodeURIComponent(discussionPath[1]);
     const occurrenceId = decodeURIComponent(discussionPath[2]);
     const event = db.listEvents().find(e => e.id === eventParam || e.seedRefId === eventParam || e.id === `event:${eventParam}`);
-    const [eventId, runDate] = occurrenceId.split(":");
-    const occ = event && eventId === event.id ? resolveOccurrence(db, event.id, runDate) : null;
+    // Occurrence IDs are `event:<event-id>:<YYYY-MM-DD>`; split only at the
+    // final colon because event IDs themselves may contain colons.
+    const separator = occurrenceId.lastIndexOf(":");
+    const occurrenceEventId = separator > 0 ? occurrenceId.slice(0, separator) : "";
+    const runDate = separator > 0 ? occurrenceId.slice(separator + 1) : "";
+    const occ = event && (event.id === occurrenceEventId || event.id === occurrenceEventId.replace(/^event:/, "") || event.seedRefId === occurrenceEventId.replace(/^event:/, ""))
+      ? resolveOccurrence(db, event.id, runDate) : null;
     if (!event || !occ || occ.occurrenceId !== occurrenceId || event.status !== "published" || event.hidden || event.archivedAt) return err(res, { status: 404, error: "discussion_unavailable" }), true;
     const publicDto = (d: import("./types").DiscussionRecord) => ({ id:d.id, kind:d.kind, parentId:d.parentId, occurrenceId:d.occurrenceId, eventId:d.eventId, cityId:d.cityId, title:d.title, body:d.body, authorId:d.authorId, createdAt:d.createdAt, updatedAt:d.updatedAt });
-    if (method === "GET") return ok(res, { discussion: db.listDiscussions(occurrenceId).map(publicDto) }), true;
+    // Discussion reads are private to verified participants; this is not a public forum.
     const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const account = db.getAccount(sess.accountId);
     const attendance = account && db.listAttendance(account.id).some(a => (a.role === "rsvp" || a.role === "host") && a.eventId === event.id && a.occurrenceId === occurrenceId);
     if (!account || account.deletedAt || account.status !== "verified" || !attendance || account.cityId !== event.cityId) return err(res, { status: 403, error: "participant_required" }), true;
+    if (method === "GET") return ok(res, { discussion: db.listDiscussions(occurrenceId).map(publicDto) }), true;
     if (account.suspended && (!account.suspendedUntil || new Date(account.suspendedUntil) > now)) return err(res, { status: 403, error: "suspended" }), true;
     if (!db.consumeDiscussionRate(account.id, now.getTime())) return err(res, { status: 429, error: "rate_limited" }), true;
     if (method === "DELETE") {
