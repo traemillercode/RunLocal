@@ -282,6 +282,15 @@ export interface PersistedDb {
   safetyReportRate?: Record<string, number[]>;
   notificationPreferences?: NotificationPreferenceRecord[];
   notifications?: NotificationRecord[];
+  discussions?: DiscussionRecord[];
+  discussionRate?: Record<string, number[]>;
+}
+
+export interface DiscussionRecord {
+  id: string; kind: "thread" | "comment"; parentId: string | null;
+  occurrenceId: string; eventId: string; cityId: string; authorId: string;
+  title: string | null; body: string; state: "visible" | "hidden" | "deleted";
+  createdAt: string; updatedAt: string;
 }
 
 export const NOTIFICATION_CATEGORIES = ["run_reminders", "community_updates", "account_alerts"] as const;

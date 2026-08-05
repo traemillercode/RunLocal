@@ -613,7 +613,7 @@ export function getRecognitions(cityId: string): Promise<ApiResult<{ recognition
   return request(`/api/recognitions?city=${encodeURIComponent(cityId)}`);
 }
 
-export interface MyRunView { id: string; eventId: string; cityId: string; title: string; date: string; time: string; location: string; groupId: string; rsvpedAt: string; }
+export interface MyRunView { id: string; eventId: string; occurrenceId?: string | null; cityId: string; title: string; date: string; time: string; location: string; groupId: string; rsvpedAt: string; }
 export const PERSONAL_RUN_CONSENT_VERSION = "2026-08-04.v1";
 export interface PersonalRun { id:string; accountId:string; cityId:string; title:string; startsAt:string; locationLabel:string|null; distanceLabel:string|null; notes:string|null; visibility:"private"; consentVersion:string; consentedAt:string; createdAt:string; updatedAt:string; deletedAt:string|null; }
 export function getPersonalRuns(): Promise<ApiResult<{runs: PersonalRun[]}>> { return request("/api/personal-runs"); }
@@ -626,6 +626,10 @@ export function getMyRuns(): Promise<ApiResult<{ runs: MyRunView[] }>> { return 
 export function rsvpEvent(eventId: string, rsvp: boolean = true): Promise<ApiResult<{ rsvped: boolean }>> {
   return request("/api/events/rsvp", { method: "POST", body: JSON.stringify({ eventId, rsvp }) });
 }
+export interface DiscussionView { id:string; kind:"thread"|"comment"; parentId:string|null; occurrenceId:string; eventId:string; cityId:string; title:string|null; body:string; authorId:string; createdAt:string; updatedAt:string; }
+export function getOccurrenceDiscussion(eventId:string, occurrenceId:string): Promise<ApiResult<{discussion:DiscussionView[]}>> { return request(`/api/events/${encodeURIComponent(eventId)}/occurrences/${encodeURIComponent(occurrenceId)}/discussion`); }
+export function createDiscussion(eventId:string, occurrenceId:string, input:{title?:string;body:string;parentId?:string}): Promise<ApiResult<{discussion:DiscussionView}>> { return request(`/api/events/${encodeURIComponent(eventId)}/occurrences/${encodeURIComponent(occurrenceId)}/discussion`, {method:"POST",body:JSON.stringify(input)}); }
+export function deleteDiscussion(eventId:string, occurrenceId:string, id:string): Promise<ApiResult<{deleted:boolean}>> { return request(`/api/events/${encodeURIComponent(eventId)}/occurrences/${encodeURIComponent(occurrenceId)}/discussion/${encodeURIComponent(id)}`, {method:"DELETE"}); }
 
 export function submitRating(input: {
   revieweeId: string;

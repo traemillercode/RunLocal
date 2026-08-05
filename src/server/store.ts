@@ -185,6 +185,8 @@ export class Db {
   private safetyReportRate = new Map<string, number[]>();
   private notificationPreferences = new Map<string, import("./types").NotificationPreferenceRecord>();
   private notifications = new Map<string, import("./types").NotificationRecord>();
+  private discussions = new Map<string, import("./types").DiscussionRecord>();
+  private discussionRate = new Map<string, number[]>();
   /**
    * Private upload bytes (credential proofs) kept in memory so in-memory/test
    * stores can serve them back; file-backed stores mirror the bytes to disk
@@ -266,6 +268,8 @@ export class Db {
       for (const r of parsed.safetyReports ?? []) this.safetyReports.set(r.id, r);
       for (const p of parsed.notificationPreferences ?? []) this.notificationPreferences.set(p.accountId, p);
       for (const n of parsed.notifications ?? []) this.notifications.set(n.id, n);
+      for (const d of parsed.discussions ?? []) this.discussions.set(d.id, d);
+      for (const [accountId, timestamps] of Object.entries(parsed.discussionRate ?? {})) this.discussionRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
       for (const [accountId, timestamps] of Object.entries(parsed.safetyReportRate ?? {})) this.safetyReportRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
       for (const [accountId, timestamps] of Object.entries(parsed.joinRequestRate ?? {})) {
         this.joinRequestRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
@@ -309,6 +313,8 @@ export class Db {
       safetyReportRate: Object.fromEntries(this.safetyReportRate.entries()),
       notificationPreferences: [...this.notificationPreferences.values()],
       notifications: [...this.notifications.values()],
+      discussions: [...this.discussions.values()],
+      discussionRate: Object.fromEntries(this.discussionRate.entries()),
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -322,6 +328,11 @@ export class Db {
   listNotifications(accountId: string) { return [...this.notifications.values()].filter(n=>n.accountId===accountId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
   updateNotification(id: string, accountId: string, patch: {readAt:string|null}) { const n=this.notifications.get(id); if(!n||n.accountId!==accountId)return undefined; n.readAt=patch.readAt; return n; }
   markAllNotificationsRead(accountId:string) { const at=this.now().toISOString(); for(const n of this.notifications.values()) if(n.accountId===accountId)n.readAt=at; }
+  listDiscussions(occurrenceId: string) { return [...this.discussions.values()].filter(d => d.occurrenceId === occurrenceId && d.state === "visible").sort((a,b) => a.createdAt.localeCompare(b.createdAt)); }
+  getDiscussion(id: string) { return this.discussions.get(id); }
+  addDiscussion(d: import("./types").DiscussionRecord) { this.discussions.set(d.id, d); return d; }
+  updateDiscussion(id: string, patch: Partial<import("./types").DiscussionRecord>) { const d=this.discussions.get(id); if (!d) return undefined; const n={...d,...patch,updatedAt:this.now().toISOString()}; this.discussions.set(id,n); return n; }
+  consumeDiscussionRate(accountId:string, nowMs:number, limit=10, windowMs=60*60*1000) { const current=(this.discussionRate.get(accountId)??[]).filter(t=>nowMs-t<windowMs); if(current.length>=limit){this.discussionRate.set(accountId,current);return false;} current.push(nowMs);this.discussionRate.set(accountId,current);return true; }
   // ---------------------------------------------------------------- accounts
   listAccounts(): AccountRecord[] {
     return [...this.accounts.values()];
