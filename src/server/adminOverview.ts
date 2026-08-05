@@ -1,5 +1,5 @@
 import type { AdminCtx, AdminResult } from "./admin";
-import { authorizeScoped } from "./admin";
+import { authorizeScoped, routineAdminCtx } from "./admin";
 import type { Db } from "./store";
 
 export interface AdminOverview {
@@ -21,7 +21,7 @@ export interface AdminOverview {
 
 /** Reason-gated, aggregate-only admin overview. No account or report fields leave this function. */
 export function adminOverview(db: Db, ctx: AdminCtx, now = new Date()): AdminResult<AdminOverview> {
-  const auth = authorizeScoped(db, ctx, "admin.overview", null, now);
+  const auth = authorizeScoped(db, routineAdminCtx(ctx), "admin.overview", null, now);
   if (!auth.ok) return auth;
   const cityId = auth.data.scope.cityId;
   const inScope = (value: string | null) => cityId === null || value === cityId;

@@ -218,14 +218,15 @@ export interface AdminOverview {
   queues: { pendingVerification: number; pendingSubmissions: number; openSafetyReports: number; contentNeedingReview: number };
   analytics: { publishedContent: number | null; rsvpTotal: number | null; generatedAt: string; unavailable: boolean };
 }
-export function adminGetOverview(reason: string): Promise<ApiResult<AdminOverview>> {
-  return adminRequest("/api/admin/overview", reason);
+export function adminGetOverview(): Promise<ApiResult<AdminOverview>> {
+  return request("/api/admin/overview");
 }
 
 export interface AdminSearchRow {
   id: string;
   name: string;
   email: string;
+  username: string | null;
   status: string;
   phase: string | null;
   phoneLast4: string | null;
@@ -269,7 +270,7 @@ export interface AuditEntryView {
   ip: string;
 }
 
-/** Admin calls attach the mandatory reason header; the server audits it. */
+/** Consequential admin calls attach an operator reason; routine reads use server-generated audit context. */
 function adminRequest<T>(path: string, reason: string, init?: RequestInit): Promise<ApiResult<T>> {
   return request<T>(path, {
     ...init,
@@ -285,8 +286,8 @@ export function adminLogout(): Promise<ApiResult<{ ok: true }>> {
   return request("/api/admin/logout", { method: "POST" });
 }
 
-export function adminSearch(query: string, reason: string): Promise<ApiResult<{ results: AdminSearchRow[] }>> {
-  return adminRequest(`/api/admin/search?q=${encodeURIComponent(query)}`, reason);
+export function adminSearch(query: string): Promise<ApiResult<{ results: AdminSearchRow[] }>> {
+  return request(`/api/admin/search?q=${encodeURIComponent(query)}`);
 }
 
 export function adminGetRecord(id: string, reason: string): Promise<ApiResult<{ record: AdminRecordView }>> {
