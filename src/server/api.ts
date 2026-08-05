@@ -869,7 +869,7 @@ async function handleApi(
     if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
     const runs = (db.listAttendance(sess.accountId).filter(a => a.role === "rsvp").flatMap((a): any => {
       if (!a.occurrenceId || !a.runDate) return [{ id:a.id, eventId:a.eventId.replace(/^event:/,""), occurrenceId:null, runDate:a.createdAt.slice(0,10), startsAt:null, cityId:rec.cityId, title:"Past run RSVP", date:a.createdAt.slice(0,10), time:"Time unavailable", location:"Location unavailable", groupId:"", rsvpedAt:a.createdAt, upcoming:false, past:true }];
-      const occ = resolveOccurrence(db, a.eventId, a.runDate, now); if (!occ || !occ.event) return [];
+      const occ = resolveOccurrence(db, a.eventId, a.runDate); if (!occ || !occ.event) return [];
       const ev=occ.event; const upcoming = new Date(occ.startsAt).getTime() >= now.getTime();
       return [{ id:a.id, eventId:occ.eventId.replace(/^event:/,""), occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt, cityId:ev.cityId, title:ev.title, date:occ.runDate, time:ev.time, location:ev.location, groupId:ev.groupId, rsvpedAt:a.createdAt, upcoming, past:!upcoming }];
     }) as Array<{ id:string; eventId:string; occurrenceId:string|null; runDate:string; startsAt:string|null; cityId:string|null; title:string; date:string; time:string; location:string; groupId:string; rsvpedAt:string; upcoming:boolean; past:boolean }>).sort((a,b) => (a.startsAt ?? `${a.runDate}T00:00:00Z`).localeCompare(b.startsAt ?? `${b.runDate}T00:00:00Z`) || a.eventId.localeCompare(b.eventId) || a.id.localeCompare(b.id));
@@ -1097,7 +1097,7 @@ async function handleApi(
     const rawId = requestedId.replace(/^event:/, "");
     const known = db.listEvents().find(e => e.id === requestedId || e.id === rawId || e.seedRefId === rawId);
     const date = typeof b.runDate === "string" ? b.runDate : (known ? defaultOccurrenceDate(known, now) : "");
-    const occ = resolveOccurrence(db, requestedId, date, now);
+    const occ = resolveOccurrence(db, requestedId, date);
     if (!occ) return err(res, { status: 400, error: "invalid_occurrence", message: "That date is not a scheduled occurrence of this event." }), true;
     const want = b.rsvp !== false; const mine = db.listAttendance(s.accountId).filter(a => a.role === "rsvp" && a.eventId === occ.eventId && a.occurrenceId === occ.occurrenceId);
     if (want) { if (!mine.length) { db.addAttendance({ id: crypto.randomUUID().replace(/-/g,""), accountId:s.accountId, eventId:occ.eventId, role:"rsvp", createdAt:now.toISOString(), occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt }); await db.persist(); } }

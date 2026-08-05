@@ -11,7 +11,7 @@ function startsAt(date: string, time: string): string {
   let h = Number(m[1]) % 12; if (m[3].toUpperCase() === "PM") h += 12;
   return `${date}T${String(h).padStart(2,"0")}:${m[2]}:00.000Z`;
 }
-export function resolveOccurrence(db: Db, requestedEventId: string, runDate: string, _now: Date): EventOccurrence | null {
+export function resolveOccurrence(db: Db, requestedEventId: string, runDate: string): EventOccurrence | null {
   const raw = requestedEventId.replace(/^event:/, "");
   const dbEvent = db.listEvents().find(e => e.id === requestedEventId || e.id === raw || e.seedRefId === raw);
   const seed = CITIES.flatMap(c => c.events.map(e => ({ e, cityId:c.id }))).find(x => x.e.id === raw);
