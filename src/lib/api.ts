@@ -550,7 +550,8 @@ export type ActivityProvider = "strava" | "garmin" | "coros" | "suunto";
 export type ShareMode = "auto" | "manual" | "private";
 export interface PublicActivityCard { id: string; type: string; distanceMeters: number; durationSeconds: number; provider: ActivityProvider; attribution: string; sharedAt: string; }
 export function getActivityFeed(city: string): Promise<ApiResult<{ cards: PublicActivityCard[] }>> { return request(`/api/activity/feed?city=${encodeURIComponent(city)}`); }
-export function getConnection(provider: ActivityProvider): Promise<ApiResult<{ authorizeUrl?: string; connected?: boolean; shareMode?: ShareMode }>> { return request(`/api/connections/${provider}`); }
+export type ProviderStatus = { provider: ActivityProvider; offered: boolean; configured: boolean; connected: boolean; state: "unavailable" | "coming_soon" | "not_configured" | "available" | "connected"; authorizeUrl?: string; missing?: string[] };
+export function getProviderStatus(provider: ActivityProvider): Promise<ApiResult<ProviderStatus>> { return request(`/api/connections/${provider}`); }
 export function disconnectConnection(provider: ActivityProvider, deleteActivities: boolean): Promise<ApiResult<{ disconnected: boolean; deletedActivities: boolean }>> { return request(`/api/connections/${provider}/disconnect`, { method: "POST", body: JSON.stringify({ deleteActivities }) }); }
 
 // ------------------------------------------------------- credentials & trust
