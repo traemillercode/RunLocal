@@ -391,8 +391,8 @@ async function handleApi(
       if (!adapters.strava.configured()) return ok(res, { provider, offered: true, configured: false, connected, state: "not_configured", missing: configError("strava").missing }), true;
       return ok(res, { provider, offered: true, configured: true, connected, state: connected ? "connected" : "available", authorizeUrl: connected ? undefined : adapters.strava.authorizeUrl(oauthState(sess.accountId, "strava")) }), true;
     }
-    if (provider !== "strava") return err(res, { status: 409, error: "provider_coming_soon", provider }), true;
-    if (!offered || !adapters.strava.configured()) return err(res, { status: 503, error: "provider_not_configured", provider }), true;
+    if (provider !== "strava") return err(res, { status: 409, error: "provider_coming_soon" }), true;
+    if (!offered || !adapters.strava.configured()) return err(res, { status: 503, error: "provider_not_configured" }), true;
     const body=await readJson(req) as Record<string,unknown>; const mode=body.shareMode;
     if (mode!==undefined && mode!=="auto" && mode!=="manual" && mode!=="private") return err(res,{status:400,error:"invalid_share_mode"}),true;
     if (!adapters[provider].configured()) return err(res,{status:503,...configError(provider)}),true;
