@@ -98,8 +98,8 @@ export function RacesPage({ city }: { city: City }) {
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
-      <div className="flex items-end justify-between gap-3">
-        <div>
+      <div className="flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-end min-[420px]:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Races</h1>
           <p className="mt-0.5 text-sm font-medium text-slate-500">
             Upcoming races in {city.name}, {city.state} — registration on the organizer's site.
@@ -107,7 +107,7 @@ export function RacesPage({ city }: { city: City }) {
         </div>
         <PillButton
           variant="secondary"
-          className="min-h-11 px-4"
+          className="min-h-11 w-full justify-center px-4 min-[420px]:w-auto"
           onClick={() => {
             if (role === "verified") setSheetOpen(true);
             else setGateOpen(true);
