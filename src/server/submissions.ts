@@ -554,10 +554,27 @@ function decideSubmissionCore(
       hidden: false,
       hiddenAt: null,
     });
-    // The approved event's submitter HOSTS it — record host-attendance so
-    // they can rate runners who RSVP'd to their event (and vice versa). This
-    // is server-authoritative: only an admin approval creates host records.
     if (rec.kind === "event") {
+      const eventPayload = payload as EventSubmissionPayload;
+      // Materialize the same stable public id consumed by /api/events,
+      // occurrence resolution, RSVP, and private occurrence discussions.
+      db.setEvent({
+        id: `event:${refId}`, seedRefId: null, cityId: rec.cityId,
+        groupId: refId, title: eventPayload.title,
+        dayOfWeek: eventPayload.dayOfWeek ?? -1,
+        scheduleDate: eventPayload.date,
+        recurrenceType: eventPayload.type,
+        time: eventPayload.time, location: eventPayload.location,
+        distanceLabel: eventPayload.distanceLabel, invite: eventPayload.invite,
+        externalUrl: eventPayload.externalUrl, provenance: "community",
+        status: "published", hidden: false, createdAt: now.toISOString(),
+        updatedAt: now.toISOString(), createdBy: rec.submitterAccountId,
+        updatedBy: admin, archivedAt: null,
+      });
+      // The approved event's submitter HOSTS it — record host-attendance so
+      // they can rate runners who RSVP'd to their event (and vice versa). This
+      // is server-authoritative: only an admin approval creates host records.
+
       db.addAttendance({
         id: newId(),
         accountId: rec.submitterAccountId,
