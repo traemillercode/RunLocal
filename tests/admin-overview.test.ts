@@ -9,3 +9,5 @@ describe("admin overview",()=>{ beforeEach(()=>{process.env[ADMIN_KEY_VAR]=KEY;p
  it("requires a reason and authorization",()=>{const db=createMemoryStore(); expect(adminOverview(db,ctx(null,null,""),T0).ok).toBe(false); expect(adminOverview(db,ctx(null),T0).ok).toBe(false)});
  it("returns aggregate global counts without sensitive fields",()=>{const db=createMemoryStore(); const login=adminLogin(db,KEY,"198.51.100.7",T0); if(!login.ok)throw Error("login"); db.createAccount({name:"Pending",email:"p@test",cityId:"columbia-mo"}); const r=adminOverview(db,ctx(login.data.sessionId),T0); expect(r.ok).toBe(true); if(r.ok){expect(r.data.scope.kind).toBe("global"); expect(r.data.queues.pendingVerification).toBe(1); expect(JSON.stringify(r.data)).not.toMatch(/email|phone|selfie|ip|reason/i)}});
 });
+
+  // UI placement contract is covered by the page source: overview refresh owns its distinct reason field.
