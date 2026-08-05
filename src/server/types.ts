@@ -155,6 +155,7 @@ export type AdminAction =
   | "admin.audit"
   | "admin.purge"
   | "admin.pending_list"
+  | "admin.overview"
   | "admin.dashboard"
   | "admin.flag_dismiss"
   | "admin.flag_hide"

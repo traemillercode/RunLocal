@@ -72,6 +72,9 @@ export function AdminPage() {
   // pending queue (owner-only)
   const [pending, setPending] = useState<PendingQueueRow[] | null>(null);
   const [queueError, setQueueError] = useState<string | null>(null);
+  const [overview, setOverview] = useState<api.AdminOverview | null>(null);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
+  const [overviewBusy, setOverviewBusy] = useState(false);
   const [roleSel, setRoleSel] = useState<Record<string, "runner" | "group_leader">>({});
 
   // detail
@@ -198,6 +201,19 @@ export function AdminPage() {
     setDash(null);
     setDashError(null);
     setDashReason("");
+  };
+
+  const loadOverview = async () => {
+    setOverviewError(null);
+    if (!reason.trim() || reason.trim().length < 5) {
+      setOverviewError("Enter a reason (min 5 characters) to load the overview.");
+      return;
+    }
+    setOverviewBusy(true);
+    const r = await api.adminGetOverview(reason.trim());
+    setOverviewBusy(false);
+    if (r.ok) setOverview(r.data);
+    else setOverviewError(r.error.status === 401 ? "Your admin session expired — sign in again." : r.error.message ?? "Could not load the overview.");
   };
 
   // ---- owner-only pending queue -----------------------------------------
@@ -501,9 +517,21 @@ export function AdminPage() {
         </button>
       </div>
 
+      <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70" aria-labelledby="admin-overview-heading">
+        <div className="flex items-start justify-between gap-3">
+          <div><h2 id="admin-overview-heading" className="text-[15px] font-bold text-slate-900">Attention overview</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Server-derived queue counts for your permitted scope. No private run or identity details.</p></div>
+          <PillButton variant="secondary" className="min-h-9 shrink-0 px-3 text-xs" disabled={overviewBusy} onClick={() => void loadOverview()}>{overviewBusy ? "Refreshing…" : "Refresh"}</PillButton>
+        </div>
+        {overview ? <><p className="mt-3 text-[11px] text-slate-500">Updated {fmt(overview.generatedAt)} · {overview.scope.kind === "global" ? "All cities" : "Assigned city"}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">{([["Pending verification", overview.queues.pendingVerification, "pending-users"],["Pending submissions", overview.queues.pendingSubmissions, "submissions"],["Open safety reports", overview.queues.openSafetyReports, "dashboard"],["Content to review", overview.queues.contentNeedingReview, "dashboard"]] as const).map(([label,count,target]) => <button type="button" key={label} onClick={() => document.getElementById(target)?.scrollIntoView({behavior:"smooth"})} className="rounded-xl border border-slate-200 p-3 text-left hover:border-slate-400"><span className="block text-2xl font-bold text-slate-900">{count}</span><span className="text-xs font-semibold text-slate-600">{label}</span></button>)}</div>
+          <p className="mt-3 text-xs text-slate-500">Published content: {overview.analytics.unavailable ? "Unavailable" : overview.analytics.publishedContent ?? "—"} · RSVP total: {overview.analytics.unavailable ? "Unavailable" : overview.analytics.rsvpTotal ?? "—"}</p>
+        </> : <p className="mt-3 text-sm text-slate-500">Load the overview to see current counts.</p>}
+        {overviewError ? <Err msg={overviewError} /> : null}
+      </section>
       {/* Owner-only pending queue */}
       {isOwner ? (
-        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+        <section id="pending-users" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <h2 className="text-[15px] font-bold text-slate-900">Pending users</h2>
           <p className="mt-0.5 text-xs text-slate-500">
             Read-only queue access for Super Admin. Approve and reject actions require an audited reason below. Accounts awaiting verification, newest first. Rows are redacted — no phone, selfie, or IP data here.
