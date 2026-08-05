@@ -179,6 +179,14 @@ export type AdminAction =
   | "admin.trust_threshold"
   | "admin.safety_report_list"
   | "admin.safety_report_resolve"
+  | "admin.event_list"
+  | "admin.event_create"
+  | "admin.event_edit"
+  | "admin.event_approve"
+  | "admin.event_publish"
+  | "admin.event_hide"
+  | "admin.event_unhide"
+  | "admin.event_archive"
   | "cityadmin.dashboard"
   | "cityadmin.submission_list"
   | "cityadmin.submission_approve"
@@ -210,6 +218,13 @@ export interface AuditEntry {
   cityId: string | null;
 }
 
+export interface RunEventRecord {
+  id: string; seedRefId: string | null; cityId: string; groupId: string; title: string;
+  dayOfWeek: number; time: string; location: string; distanceLabel: string; invite: InviteLabel; externalUrl: string | null;
+  provenance: "seed" | "community" | "admin"; status: "draft" | "approved" | "published" | "hidden" | "archived";
+  hidden: boolean; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; archivedAt: string | null;
+}
+
 export interface PersistedDb {
   accounts: AccountRecord[];
   sessions: SessionRecord[];
@@ -222,6 +237,7 @@ export interface PersistedDb {
    * ONLY ids, titles, and moderation flags — no sensitive data.
    */
   content: ContentRecord[];
+  events?: RunEventRecord[];
   /** Owner-dashboard group records: RRCA badge state + internal note. */
   groups: GroupModRecord[];
   /** Content flags (reports). Reasons are owner-only, never public. */

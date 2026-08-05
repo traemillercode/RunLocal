@@ -25,6 +25,7 @@ import type {
   SubmissionRecord,
   VerifyPhase,
   SafetyReportRecord,
+  RunEventRecord,
 } from "./types";
 
 export const DEFAULT_RETENTION_YEARS = 3;
@@ -157,6 +158,7 @@ export class Db {
   private codes = new Map<string, CodeRecord>();
   private audits: AuditEntry[] = [];
   private content = new Map<string, ContentRecord>();
+  private events = new Map<string, RunEventRecord>();
   private groups = new Map<string, GroupModRecord>();
   private flags: FlagRecord[] = [];
   private submissions = new Map<string, SubmissionRecord>();
@@ -237,6 +239,7 @@ export class Db {
       // Pre-multi-city audit entries have no cityId — normalize to null.
       this.audits = (parsed.audits ?? []).map((a) => ({ ...a, cityId: a.cityId ?? null }));
       for (const r of parsed.content ?? []) this.content.set(r.id, r);
+      for (const e of parsed.events ?? []) this.events.set(e.id, e);
       for (const g of parsed.groups ?? []) this.groups.set(g.id, g);
       this.flags = parsed.flags ?? [];
       for (const s of parsed.submissions ?? []) this.submissions.set(s.id, s);
@@ -274,6 +277,7 @@ export class Db {
       codes: [...this.codes.values()],
       audits: this.audits,
       content: [...this.content.values()],
+      events: [...this.events.values()],
       groups: [...this.groups.values()],
       flags: this.flags,
       submissions: [...this.submissions.values()],
@@ -559,6 +563,11 @@ export class Db {
     this.audits = this.audits.filter((a) => new Date(a.at).getTime() >= cutoff);
     return before - this.audits.length;
   }
+
+  // ------------------------------------------- canonical event registry
+  listEvents(): RunEventRecord[] { return [...this.events.values()]; }
+  getEvent(id: string): RunEventRecord | undefined { return this.events.get(id); }
+  setEvent(rec: RunEventRecord): RunEventRecord { this.events.set(rec.id, rec); return rec; }
 
   // ------------------------------------------- owner-dashboard registry
   listContent(): ContentRecord[] {

@@ -93,6 +93,10 @@ export function trustRestrictions(rec: AccountRecord | null | undefined): { host
 export function resolveEventId(db: Db, eventId: string): string | null {
   const id = eventId.trim();
   if (!id) return null;
+  // Canonical CMS events are authoritative; retain compatibility with the
+  // legacy moderation registry used by attendance/rating records.
+  const canonical = db.getEvent(id) ?? db.listEvents().find((event) => event.seedRefId === id);
+  if (canonical && canonical.status !== "archived") return canonical.id;
   const candidate = id.startsWith("event:") ? id : `event:${id}`;
   const content = db.getContent(candidate);
   return content && content.kind === "event" ? candidate : null;

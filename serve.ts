@@ -29,6 +29,7 @@ import { Db } from "./src/server/store";
 import { apiHandler, pruneSessionsWith } from "./src/server/api";
 import { purgeEligible } from "./src/server/retention";
 import { seedContentRegistry, seedSampleFlags } from "./src/server/contentSeed";
+import { materializeSeedEvents } from "./src/server/events";
 import { seedCmsCities } from "./src/server/cms";
 import { expireCredentials } from "./src/server/trust";
 
@@ -43,6 +44,7 @@ await db.load();
 // Mirror the seeded city content into the moderation registry (idempotent,
 // preserves owner decisions) and seed the labeled sample flags once.
 seedContentRegistry(db);
+materializeSeedEvents(db);
 seedSampleFlags(db);
 // Mirror known city entities into the CMS store (idempotent, preserves admin
 // edits; non-launched cities start inactive so only live cities are public).

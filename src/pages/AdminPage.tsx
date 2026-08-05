@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GlobalAdminSection } from "../components/GlobalAdminSection";
 import { AdminTrustSection } from "../components/AdminTrustSection";
+import { EventCmsSection } from "../components/EventCmsSection";
 import { Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
 import type { AdminRecordView, AdminSearchRow, AuditEntryView, DashboardView, PendingQueueRow } from "../lib/api";
@@ -867,6 +868,7 @@ export function AdminPage() {
       ) : null}
 
       {/* Global Admin — site settings & CMS (key admin or owner; audited) */}
+      <EventCmsSection />
       <GlobalAdminSection />
       {/* Global Admin — community trust & credentials (audited) */}
       <AdminTrustSection />

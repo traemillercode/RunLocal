@@ -27,6 +27,14 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
   const [groupSheetOpen, setGroupSheetOpen] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
   const [myRunIds, setMyRunIds] = useState<Set<string>>(new Set());
+  const [canonicalEvents, setCanonicalEvents] = useState<api.CanonicalEvent[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void api.getCanonicalEvents(city.id).then((r) => {
+      if (alive && r.ok) setCanonicalEvents(r.data.events);
+    });
+    return () => { alive = false; };
+  }, [city.id]);
   const weekStart = startOfWeek(new Date());
   const canRsvp = canDo(role, "rsvp");
   useEffect(() => {
@@ -55,7 +63,8 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
     // Recurring seed slots describe the full weekly schedule, including a
     // Monday slot after Monday has passed; one-time community activity is
     // filtered separately below by its calendar date.
-    const resolved = resolveWeekEvents([...city.events, ...recurring], today)
+    const canonical = (canonicalEvents ?? []).filter((e) => e.status === "published" && !e.hidden && !e.archivedAt).map((e) => ({ id: e.id, groupId: e.groupId, title: e.title, dayOfWeek: e.dayOfWeek, time: e.time, location: e.location, distanceLabel: e.distanceLabel, invite: e.invite, externalUrl: e.externalUrl ?? undefined }));
+    const resolved = resolveWeekEvents([...city.events, ...canonical, ...recurring], today)
       .filter((e) => !hidden.has(`event:${e.id}`))
       .sort((a, b) => {
         const ha = highlights.get(`event:${a.id}`);
