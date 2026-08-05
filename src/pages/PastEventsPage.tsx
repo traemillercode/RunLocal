@@ -13,7 +13,7 @@ export function PastEventsPage({ city }: { city: City }) {
   const events = filterOneTimeEvents(submittedEvents, "past").filter((event) => !hidden.has(`event:${event.id}`));
   const races = [...city.races, ...submittedRaces].filter((race) => isPastCalendarDate(race.date) && !hidden.has(`race:${race.id}`));
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+    <div className="desktop-browse-layout mx-auto w-full max-w-md px-4 pb-32 pt-4">
       <div className="flex items-start justify-between gap-3">
         <div><h1 className="text-2xl font-extrabold tracking-tight">Past events</h1><p className="mt-0.5 text-sm font-medium text-slate-500">A record of finished local runs and races.</p></div>
         <Link to="/" className="inline-flex min-h-10 items-center gap-1 rounded-full bg-slate-100 px-3 text-xs font-bold text-slate-700"><Icon name="chevronRight" className="h-4 w-4" /> Current</Link>

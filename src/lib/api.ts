@@ -448,6 +448,7 @@ export function adminEditEvent(id: string, input: Partial<CanonicalEvent>, reaso
 export function adminTransitionEvent(id: string, action: "approve" | "publish" | "hide" | "unhide" | "archive", reason: string): Promise<ApiResult<{ event: CanonicalEvent }>> { return adminRequest(`/api/admin/events/${encodeURIComponent(id)}/${action}`, reason, { method: "POST" }); }
 export function getPublicGroups(cityId: string): Promise<ApiResult<{cityId:string;groups:PublicUserGroup[]}>> { return request(`/api/groups?city=${encodeURIComponent(cityId)}`); }
 export function getPublicGroup(id: string): Promise<ApiResult<{group:PublicUserGroup}>> { return request(`/api/groups/${encodeURIComponent(id)}`); }
+export function requestGroupMembership(groupId: string): Promise<ApiResult<unknown>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership`, { method: "POST", body: "{}" }); }
 
 // ------------------------------------------------- owner dashboard (admin)
 export interface DashboardFlagView {

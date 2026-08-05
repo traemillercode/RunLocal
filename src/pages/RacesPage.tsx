@@ -97,7 +97,7 @@ export function RacesPage({ city }: { city: City }) {
   }, [city.races, userRaces, hidden, highlights]);
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+    <div className="desktop-browse-layout mx-auto w-full max-w-md px-4 pb-32 pt-4">
       <div className="flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-end min-[420px]:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Races</h1>
