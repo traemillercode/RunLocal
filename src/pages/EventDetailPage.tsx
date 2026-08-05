@@ -171,13 +171,12 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
   const discussionOccurrenceId = new URLSearchParams(location.search).get("discussion");
   const navigate = useNavigate();
   const [gateOpen, setGateOpen] = useState(false);
-  const [myRunIds, setMyRunIds] = useState<Set<string>>(new Set());
   const [myRuns, setMyRuns] = useState<api.MyRunView[]>([]);
   const [canonicalEvents, setCanonicalEvents] = useState<api.CanonicalEvent[]>([]);
   const canRsvp = canDo(role, "rsvp");
   useEffect(() => {
-    if (!canRsvp) { setMyRunIds(new Set()); return; }
-    void api.getMyRuns().then((r) => { if (r.ok) { setMyRuns(r.data.runs); setMyRunIds(new Set(r.data.runs.map((run) => run.eventId))); } });
+    if (!canRsvp) { setMyRuns([]); return; }
+    void api.getMyRuns().then((r) => { if (r.ok) setMyRuns(r.data.runs); });
   }, [canRsvp]);
   useEffect(() => { void api.getCanonicalEvents(city.id).then((r) => { if (r.ok) setCanonicalEvents(r.data.events); }); }, [city.id]);
 
@@ -235,7 +234,9 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
         toast(r.error.message ?? "Couldn't save your RSVP. Try again.", "info");
         return;
       }
-      setMyRunIds((ids) => { const next = new Set(ids); if (nowRsvped) next.add(event.id); else next.delete(event.id); return next; });
+      setMyRuns((runs) => nowRsvped
+        ? [...runs, { eventId: event.id, occurrenceId, date: runDate } as api.MyRunView]
+        : runs.filter((run) => !(run.eventId === event.id && run.occurrenceId === occurrenceId)));
       toast(nowRsvped ? `You're in for "${event.title}"!` : `RSVP removed for "${event.title}".`, nowRsvped ? "success" : "neutral");
     });
   };
