@@ -191,10 +191,11 @@ export function SettingsPage() {
   const { city, cityId, signedIn, hasHomeCity, selectCity } = useSelectedCity();
   const [notificationPrefs, setNotificationPrefs] = useState<api.NotificationPreferences>({run_reminders:false,community_updates:false,account_alerts:false});
   const [notificationCount, setNotificationCount] = useState(0);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<api.InAppNotification[]>([]);
   const [browserPermission, setBrowserPermission] = useState<NotificationPermission | "unsupported">(typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported");
-  useEffect(() => { if (!signedIn) return; void api.getNotificationPreferences().then(r => { if (r.ok) setNotificationPrefs(r.data.preferences); }); void api.getNotifications().then(r => { if (r.ok) { setNotificationCount(r.data.unreadCount); setNotifications(r.data.notifications); } }); }, [signedIn]);
-  const toggleNotification = async (key: keyof api.NotificationPreferences) => { const next = {...notificationPrefs, [key]: !notificationPrefs[key]}; setNotificationPrefs(next); const r = await api.updateNotificationPreferences({[key]: next[key]}); if (!r.ok) setNotificationPrefs(notificationPrefs); };
+  useEffect(() => { if (!signedIn) return; void api.getNotificationPreferences().then(r => { if (r.ok) setNotificationPrefs(r.data.preferences); else setNotificationError(r.error.message); }).catch(() => setNotificationError("Couldn’t load notification preferences. Try again.")); void api.getNotifications().then(r => { if (r.ok) { setNotificationCount(r.data.unreadCount); setNotifications(r.data.notifications); } }); }, [signedIn]);
+  const toggleNotification = async (key: keyof api.NotificationPreferences) => { const next = {...notificationPrefs, [key]: !notificationPrefs[key]}; setNotificationError(null); setNotificationPrefs(next); const r = await api.updateNotificationPreferences({[key]: next[key]}); if (!r.ok) { setNotificationPrefs(notificationPrefs); setNotificationError(r.error.message ?? "Couldn’t save notification preference. Try again."); } };
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [health, setHealth] = useState<api.HealthInfo | null>(null);
   // In-progress home-city selection (null = not editing / unchanged).
@@ -341,6 +342,7 @@ export function SettingsPage() {
       <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
         <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Preferences</h2>
         <ul className="divide-y divide-slate-100">
+          {notificationError ? <li role="alert" className="bg-red-50 px-5 py-3 text-xs font-medium text-red-800">{notificationError}</li> : null}
           <li className="flex items-center justify-between gap-3 px-5 py-3.5">
             <span className="text-[14px] font-medium text-slate-700">City</span>
             <span className="text-[14px] text-slate-500">

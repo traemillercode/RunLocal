@@ -77,7 +77,7 @@ export function ConfirmationPage() {
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-8">
       <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
         <h1 className="text-xl font-extrabold">Confirmation link unavailable</h1>
-        <p className="mt-2 text-sm text-slate-600">{error}</p>
+        <p role="alert" className="mt-2 text-sm text-slate-600">{error}</p>
         <p className="mt-3 text-sm text-slate-600">Enter the email you signed up with and we'll send a fresh confirmation link.</p>
         <label className="mt-4 block">
           <span className="mb-1.5 block text-sm font-semibold">Email</span>
