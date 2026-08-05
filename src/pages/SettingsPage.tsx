@@ -17,7 +17,78 @@ import * as api from "../lib/api";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
 import { useSelectedCity } from "../state/city";
+import * as supabase from "../lib/supabase";
+import { PASSWORD_REQUIREMENTS, passwordRequirements } from "./LoginPage";
 
+const inputCls =
+  "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
+
+/** Shared signup policy: password changes must satisfy the same checks. */
+export function changePasswordValidation(password: string, confirmation: string): string | null {
+  if (!passwordRequirements(password).every(Boolean)) {
+    return "Password must be at least 6 characters and include a lowercase letter, uppercase letter, and digit.";
+  }
+  if (password !== confirmation) return "Passwords do not match.";
+  return null;
+}
+
+function ChangePasswordSettings() {
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const checks = passwordRequirements(password);
+
+  const submit = async () => {
+    setError(null);
+    setSaved(false);
+    const validationError = changePasswordValidation(password, confirmation);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setBusy(true);
+    // Passwords go directly to Supabase Auth. They are never sent to the
+    // Run Local API or retained in local state after a successful update.
+    const result = await supabase.updatePassword(password);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    setPassword("");
+    setConfirmation("");
+    setSaved(true);
+  };
+
+  return (
+    <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+      <div className="border-b border-slate-100 px-5 py-3.5">
+        <h2 className="text-[15px] font-bold text-slate-900">Change password</h2>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">Your active secure session verifies your account. Your password is handled only by Supabase Auth.</p>
+      </div>
+      <div className="space-y-4 px-5 py-4">
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-700">New password</span>
+          <input aria-label="New password" type="password" autoComplete="new-password" value={password} onChange={(e) => { setPassword(e.target.value); setSaved(false); }} className={inputCls} />
+        </label>
+        {password.length > 0 ? (
+          <ul aria-label="Password requirements" className="grid grid-cols-1 gap-1 text-xs text-slate-500">
+            {PASSWORD_REQUIREMENTS.map((requirement, i) => <li key={requirement.key} className={checks[i] ? "text-emerald-700" : "text-slate-500"}>{checks[i] ? "✓" : "○"} {requirement.label}</li>)}
+          </ul>
+        ) : null}
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-700">Confirm new password</span>
+          <input aria-label="Confirm new password" type="password" autoComplete="new-password" value={confirmation} onChange={(e) => { setConfirmation(e.target.value); setSaved(false); }} className={inputCls} />
+        </label>
+        {error ? <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-[13px] text-red-800">{error}</p> : null}
+        {saved ? <p role="status" className="rounded-xl bg-emerald-50 p-3.5 text-[13px] text-emerald-800">Password updated successfully.</p> : null}
+        <PillButton variant="primary" className="w-full" disabled={busy} onClick={() => void submit()}>{busy ? "Updating…" : "Update password"}</PillButton>
+      </div>
+    </section>
+  );
+}
 
 const PHOTO_MAX_BYTES = 4 * 1024 * 1024;
 const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -180,6 +251,7 @@ export function SettingsPage() {
       ) : null}
 
       {signedIn && account ? <ProfilePhotoSettings account={account} refresh={refresh} /> : null}
+      {signedIn && account ? <ChangePasswordSettings /> : null}
       {signedIn && account ? <ActivityConnections /> : null}
       {/* Account */}
       <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
