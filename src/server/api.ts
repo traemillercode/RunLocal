@@ -109,6 +109,7 @@ export interface ApiError {
   status: number;
   error: string;
   message?: string;
+  provider?: string;
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -383,8 +384,16 @@ async function handleApi(
     const account=db.getAccount(sess.accountId); if (!account || account.status!=="verified") return err(res,{status:403,error:"verified_runner_required"}),true;
     // CMS provider toggle: a disabled provider is not offered on this site,
     // regardless of whether deployment credentials exist.
-    if (!providerEnabled(db, provider)) return err(res,{status:403,error:"provider_disabled"}),true;
-    if (method === "GET") { if (!adapters[provider].configured()) return err(res,{status:503,...configError(provider)}),true; const state=oauthState(sess.accountId,provider); return ok(res,{authorizeUrl:adapters[provider].authorizeUrl(state)}), true; }
+    const offered = providerEnabled(db, provider);
+    const connected = Boolean(db.getToken(sess.accountId, provider));
+    if (method === "GET") {
+      if (!offered) return ok(res, { provider, offered: false, configured: adapters[provider].configured(), connected, state: "unavailable" }), true;
+      if (provider !== "strava") return ok(res, { provider, offered: true, configured: false, connected, state: "coming_soon", error: "provider_coming_soon" }), true;
+      if (!adapters.strava.configured()) return ok(res, { provider, offered: true, configured: false, connected, state: "not_configured", missing: configError("strava").missing }), true;
+      return ok(res, { provider, offered: true, configured: true, connected, state: connected ? "connected" : "available", authorizeUrl: connected ? undefined : adapters.strava.authorizeUrl(oauthState(sess.accountId, "strava")) }), true;
+    }
+    if (provider !== "strava") return err(res, { status: 409, error: "provider_coming_soon" }), true;
+    if (!offered || !adapters.strava.configured()) return err(res, { status: 503, error: "provider_not_configured" }), true;
     const body=await readJson(req) as Record<string,unknown>; const mode=body.shareMode;
     if (mode!==undefined && mode!=="auto" && mode!=="manual" && mode!=="private") return err(res,{status:400,error:"invalid_share_mode"}),true;
     if (!adapters[provider].configured()) return err(res,{status:503,...configError(provider)}),true;
