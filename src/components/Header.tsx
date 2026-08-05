@@ -21,11 +21,7 @@ function GuestLoginCta() {
       type="button"
       onClick={() => navigate("/login")}
       aria-label="Log in"
-<<<<<<< HEAD
-      className="flex h-9 shrink-0 items-center rounded-full bg-[#FF5741] px-2 text-[12px] font-extrabold text-[#14171C] active:bg-[#E44735] min-[400px]:px-3 min-[400px]:text-[13px]"
-=======
       className="flex h-9 shrink-0 items-center rounded-full bg-[#FF5741] px-2 text-[12px] font-extrabold text-[#14171C] shadow-sm active:bg-[#e94735] min-[400px]:px-3 min-[400px]:text-[13px]"
->>>>>>> origin/main
     >
       Log in
     </button>
@@ -34,11 +30,7 @@ function GuestLoginCta() {
 
 export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet: () => void }) {
   return (
-<<<<<<< HEAD
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#14171C] text-white shadow-sm">
-=======
     <header className="app-shell-header sticky top-0 z-40 border-b border-white/10 bg-[#14171C] text-white shadow-sm">
->>>>>>> origin/main
       <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between gap-2 px-3">
         {/* Clickable logo / title — always returns to the city home feed. The
             wordmark is sized down on narrow screens (and hidden entirely only
@@ -49,13 +41,7 @@ export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet:
           aria-label="Run Local — home"
           className="flex min-w-0 items-center gap-2 rounded-lg active:opacity-80 min-[420px]:gap-2.5"
         >
-<<<<<<< HEAD
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#FF5741] text-[#14171C] min-[420px]:h-8 min-[420px]:w-8">
-            <Icon name="pin" className="h-5 w-5" />
-          </span>
-=======
           <img src="/icons/icon-192.png" alt="" className="h-8 w-8 shrink-0 rounded-lg shadow-sm min-[420px]:h-9 min-[420px]:w-9" />
->>>>>>> origin/main
           <span className="hidden whitespace-nowrap text-[15px] font-extrabold tracking-tight min-[360px]:inline min-[420px]:text-[16px] sm:text-[17px]">
             Run <span className="text-[#FF5741]">Local</span>
           </span>

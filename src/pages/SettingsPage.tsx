@@ -333,26 +333,11 @@ export function SettingsPage() {
               {signedIn && hasHomeCity ? " (home)" : ""}
             </span>
           </li>
-<<<<<<< HEAD
-          <li>
-            <button
-              type="button"
-              onClick={() => setNotificationsOn((v) => !v)}
-              className="flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3.5 text-left active:bg-slate-50"
-            >
-              <span className="text-[14px] font-medium text-slate-700">Reminders & notifications</span>
-              <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${notificationsOn ? "bg-[#14171C]" : "bg-slate-300"}`}>
-                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${notificationsOn ? "left-6" : "left-1"}`} />
-              </span>
-            </button>
-          </li>
-=======
           {signedIn ? (Object.entries(notificationPrefs) as Array<[keyof api.NotificationPreferences, boolean]>).map(([key, value]) => (
             <li key={key}><button type="button" onClick={() => void toggleNotification(key)} className="flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3.5 text-left active:bg-slate-50"><span className="text-[14px] font-medium text-slate-700">{key === "run_reminders" ? "Run reminders" : key === "community_updates" ? "Community updates" : "Account alerts"}</span><span aria-label={value ? "On" : "Off"} className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${value ? "bg-[#14171C]" : "bg-slate-300"}`}><span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${value ? "left-6" : "left-1"}`} /></span></button></li>
           )) : null}
           {signedIn ? <li className="flex items-center justify-between px-5 py-3 text-xs text-slate-500"><span>In-app notifications</span><span>{notificationCount} unread</span></li> : null}
           {signedIn ? <li className="px-5 py-3"><p className="text-sm font-semibold">Browser notifications</p><p className="mt-1 text-xs text-slate-500">{browserPermission === "unsupported" ? "This browser does not support notifications." : browserPermission === "denied" ? "Notifications are blocked in your browser settings." : browserPermission === "granted" ? "Allowed for foreground notices only." : "Not enabled."}</p>{browserPermission === "default" ? <button type="button" className="mt-2 rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white" onClick={() => void Notification.requestPermission().then(setBrowserPermission)}>Allow browser notifications</button> : null}</li> : null}
->>>>>>> origin/main
         </ul>
         <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
           Notification categories are saved to your account and default to off. In-app notifications are private to your account. Browser permission is foreground-only; Run Local does not claim background push.

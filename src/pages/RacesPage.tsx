@@ -50,11 +50,7 @@ function RaceCard({ race, featured = false, pinned = false }: { race: Race; feat
           href={race.registrationUrl}
           target="_blank"
           rel="noopener noreferrer"
-<<<<<<< HEAD
-          className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#14171C] text-sm font-semibold text-white active:bg-[#20262E]"
-=======
           className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#14171C] text-sm font-semibold text-white active:bg-[#252a31]"
->>>>>>> origin/main
         >
           {race.registrationOpen ? "Register" : "View details"}
           <Icon name="external" className="h-4 w-4 text-[#FF5741]" />

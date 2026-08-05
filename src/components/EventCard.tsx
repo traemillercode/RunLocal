@@ -24,13 +24,8 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
   const label = group ? (rrca ? GROUP_TYPE_LABELS["rrca-chartered"] : GROUP_TYPE_LABELS.community) : null;
   return (
     <article
-<<<<<<< HEAD
-      className={`relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 transition-shadow ${
-        event.isToday ? "ring-2 ring-[#FF5741]" : "ring-slate-200/70"
-=======
       className={`relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 transition-shadow before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-[#FF5741] before:to-[#ff9a7f] ${
         event.isToday ? "ring-2 ring-[#FF5741] shadow-md" : "ring-slate-200/70"
->>>>>>> origin/main
       }`}
     >
       {/* The whole card body is the primary tappable action — it navigates to the
@@ -111,11 +106,7 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
             rsvped
               ? "bg-emerald-100 text-emerald-800"
               : canRsvp
-<<<<<<< HEAD
-                ? "bg-[#FF5741] text-[#14171C] active:bg-[#E44735]"
-=======
                 ? "bg-[#FF5741] text-[#14171C] active:bg-[#e94735]"
->>>>>>> origin/main
                 : "bg-slate-100 text-slate-500 active:bg-slate-200"
           }`}
         >

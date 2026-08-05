@@ -33,11 +33,7 @@ export function BottomNav() {
             {({ isActive }) => (
               <>
                 <span
-<<<<<<< HEAD
-                  className={`grid h-7 w-12 place-items-center rounded-full ${isActive ? "bg-[#FF5741]" : ""}`}
-=======
                   className={`grid h-7 w-12 place-items-center rounded-full ${isActive ? "bg-[#FF5741] shadow-sm" : ""}`}
->>>>>>> origin/main
                 >
                   <Icon name={t.icon} className="h-5 w-5" />
                 </span>

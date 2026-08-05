@@ -68,11 +68,7 @@ function Shell() {
   const location = useLocation();
   const noNav = NO_NAV_PATHS.has(location.pathname);
   return (
-<<<<<<< HEAD
-    <div className="min-h-dvh bg-[#F7F8FA] text-slate-900">
-=======
     <div className="min-h-dvh bg-[#f7f7f5] text-slate-900">
->>>>>>> origin/main
       <Header city={city} onOpenCitySheet={() => setCityOpen(true)} />
       <DesktopSidebar city={city} onOpenCitySheet={() => setCityOpen(true)} />
       <main key={location.pathname} className="desktop-main">
