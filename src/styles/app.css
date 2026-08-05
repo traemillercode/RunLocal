@@ -39,12 +39,19 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
   .desktop-brand { display: flex; align-items: center; gap: 10px; padding: 0 10px 34px; color: white; font-size: 20px; font-weight: 800; letter-spacing: -0.03em; }
   .desktop-brand img { height: 36px; width: 36px; border-radius: 10px; }
   .desktop-brand b { color: #ff5741; }
-  .desktop-city { display: flex; min-height: 44px; align-items: center; gap: 9px; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; background: rgba(255,255,255,.1); padding: 0 12px; text-align: left; font-size: 13px; font-weight: 700; }
+  .desktop-city { display: flex; width: fit-content; max-width: 100%; min-height: 44px; align-items: center; gap: 9px; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; background: rgba(255,255,255,.1); padding: 0 12px; text-align: left; font-size: 13px; font-weight: 700; }
   .desktop-nav { display: grid; gap: 6px; margin-top: 28px; }
-  .desktop-nav a, .desktop-account a { display: flex; min-height: 46px; align-items: center; gap: 12px; border-radius: 10px; padding: 0 12px; color: #cbd5e1; font-size: 14px; font-weight: 700; }
+  .desktop-nav a, .desktop-account a { display: flex; width: fit-content; max-width: 100%; min-height: 46px; align-items: center; gap: 12px; border-radius: 10px; padding: 0 12px; color: #cbd5e1; font-size: 14px; font-weight: 700; }
   .desktop-nav a.active, .desktop-nav a:hover, .desktop-account a:hover { background: rgba(255,255,255,.1); color: white; }
   .desktop-nav a.active { box-shadow: inset 3px 0 #ff5741; }
   .desktop-account { margin-top: auto; border-top: 1px solid rgba(255,255,255,.12); padding-top: 16px; }
+  /* Form actions stay full-width on mobile; on desktop they size to their label
+     unless a layout explicitly opts into a wider action row. */
+  .desktop-compact-control { width: fit-content; max-width: 100%; }
+  .desktop-compact-control.flex-1 { flex: 0 0 auto; }
+  /* Raw admin/settings action buttons use the existing utility classes. Keep
+     inputs and content surfaces untouched while compacting only controls. */
+  .desktop-main button.w-full, .desktop-main a.w-full { width: fit-content; max-width: 100%; }
   .desktop-main { margin-left: 240px; min-height: 100dvh; min-width: 0; }
   .desktop-main > .desktop-browse-layout { max-width: 1240px !important; padding-left: clamp(24px, 4vw, 56px); padding-right: clamp(24px, 4vw, 56px); }
   .desktop-main > .desktop-reading { max-width: 1240px !important; }
