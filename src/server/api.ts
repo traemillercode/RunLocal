@@ -263,6 +263,7 @@ async function handleApi(
   const ip = getIp(req);
   const secure = isSecure(req);
   const now = new Date();
+  if (["POST", "PATCH", "DELETE"].includes(method) && !originAllowed(req)) return err(res, { status: 403, error: "origin_not_allowed" }), true;
 
   // ---- health (non-sensitive config booleans for the UI) -----------------
   if (method === "GET" && url.pathname === "/api/health") {
@@ -1087,6 +1088,49 @@ async function handleApi(
     const parsed = new Date(startsAt); const nowMs = now.getTime();
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:?\d{2})$/.test(startsAt) || Number.isNaN(parsed.getTime()) || parsed.getTime() < nowMs - 24 * 60 * 60 * 1000 || parsed.getTime() > nowMs + 2 * 365 * 24 * 60 * 60 * 1000) return err(res, { status: 400, error: "invalid_starts_at" }), true;
     const next = db.updatePersonalRun(run.id, { cityId, title, startsAt: parsed.toISOString(), locationLabel: typeof b.locationLabel === "string" ? b.locationLabel.trim() || null : run.locationLabel, distanceLabel: typeof b.distanceLabel === "string" ? b.distanceLabel.trim() || null : run.distanceLabel, notes: typeof b.notes === "string" ? b.notes.trim() || null : run.notes, consentVersion: PERSONAL_RUN_CONSENT_VERSION, consentedAt: now.toISOString(), updatedAt: now.toISOString() }); await db.persist(); return ok(res, { run: next }), true;
+  }
+
+  // ---- occurrence-scoped run-day discussion -------------------------------
+  const discussionPath = /^\/api\/events\/([^/]+)\/occurrences\/([^/]+)\/discussion(?:\/([^/]+))?$/i.exec(url.pathname);
+  if (discussionPath && (method === "GET" || method === "POST" || method === "DELETE")) {
+    const eventParam = decodeURIComponent(discussionPath[1]);
+    const occurrenceId = decodeURIComponent(discussionPath[2]);
+    const event = db.listEvents().find(e => e.id === eventParam || e.seedRefId === eventParam || e.id === `event:${eventParam}`);
+    // Occurrence IDs are `event:<event-id>:<YYYY-MM-DD>`; split only at the
+    // final colon because event IDs themselves may contain colons.
+    const separator = occurrenceId.lastIndexOf(":");
+    const occurrenceEventId = separator > 0 ? occurrenceId.slice(0, separator) : "";
+    const runDate = separator > 0 ? occurrenceId.slice(separator + 1) : "";
+    const occ = event && (event.id === occurrenceEventId || event.id === occurrenceEventId.replace(/^event:/, "") || event.seedRefId === occurrenceEventId.replace(/^event:/, ""))
+      ? resolveOccurrence(db, event.id, runDate) : null;
+    if (!event || !occ || occ.occurrenceId !== occurrenceId || event.status !== "published" || event.hidden || event.archivedAt) return err(res, { status: 404, error: "discussion_unavailable" }), true;
+    const publicDto = (d: import("./types").DiscussionRecord) => ({ id:d.id, kind:d.kind, parentId:d.parentId, occurrenceId:d.occurrenceId, eventId:d.eventId, cityId:d.cityId, title:d.title, body:d.body, authorId:d.authorId, createdAt:d.createdAt, updatedAt:d.updatedAt });
+    // Discussion reads are private to verified participants; this is not a public forum.
+    const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const account = db.getAccount(sess.accountId);
+    const attendance = account && db.listAttendance(account.id).some(a => (a.role === "rsvp" || a.role === "host") && a.eventId === event.id && a.occurrenceId === occurrenceId);
+    if (!account || account.deletedAt || account.status !== "verified" || !attendance || account.cityId !== event.cityId) return err(res, { status: 403, error: "participant_required" }), true;
+    if (method === "GET") return ok(res, { discussion: db.listDiscussions(occurrenceId).map(publicDto) }), true;
+    if (account.suspended && (!account.suspendedUntil || new Date(account.suspendedUntil) > now)) return err(res, { status: 403, error: "suspended" }), true;
+    if (!db.consumeDiscussionRate(account.id, now.getTime())) return err(res, { status: 429, error: "rate_limited" }), true;
+    if (method === "DELETE") {
+      const target = db.getDiscussion(decodeURIComponent(discussionPath[3] ?? ""));
+      if (!target || target.authorId !== account.id || target.occurrenceId !== occurrenceId || target.state === "deleted") return err(res, { status: 404, error: "not_found" }), true;
+      db.updateDiscussion(target.id, { state: "deleted", body: "", title: null }); await db.persist(); return ok(res, { deleted: true }), true;
+    }
+    const b = await readJson(req) as Record<string, unknown>;
+    const body = typeof b.body === "string" ? b.body.trim() : "";
+    const title = typeof b.title === "string" ? b.title.trim() : null;
+    const parentId = typeof b.parentId === "string" ? b.parentId : null;
+    if (!body || body.length > 1000 || (title !== null && (!title || title.length > 120)) || (parentId && (!db.getDiscussion(parentId) || db.getDiscussion(parentId)?.occurrenceId !== occurrenceId))) return err(res, { status: 400, error: "invalid_discussion" }), true;
+    const kind = parentId ? "comment" : "thread";
+    if (kind === "thread" && title === null) return err(res, { status: 400, error: "title_required" }), true;
+    const record: import("./types").DiscussionRecord = { id:newId(), kind, parentId, occurrenceId, eventId:event.id, cityId:event.cityId, authorId:account.id, title:title ? title.slice(0,120) : null, body:body.slice(0,1000), state:"visible", createdAt:now.toISOString(), updatedAt:now.toISOString() };
+    db.addDiscussion(record);
+    const recipients = new Set(db.listDiscussions(occurrenceId).filter(d => d.authorId !== account.id && !db.isBlocked(account.id,d.authorId)).map(d => d.authorId));
+    if (parentId) { const parent=db.getDiscussion(parentId); if(parent && parent.authorId !== account.id && !db.isBlocked(account.id,parent.authorId)) recipients.add(parent.authorId); }
+    for (const recipient of recipients) if (db.getNotificationPreferences(recipient).community_updates) db.addNotification({id:newId(),accountId:recipient,category:"community_updates",title:"New run-day discussion activity",body:"Someone added to a run you joined.",createdAt:now.toISOString(),readAt:null});
+    await db.persist(); return ok(res, { discussion: publicDto(record) }), true;
   }
 
   // ---- RSVP to an event occurrence (server-validated schedule) ------------
