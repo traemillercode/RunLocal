@@ -32,5 +32,16 @@ describe("My Runs SSR UI", () => {
     expect(html).not.toContain('href="/events/event-past"');
     expect(html).toContain("This RSVP is preserved in your history");
   });
+
+  it("renders event details and run-day discussion as separate links", async () => {
+    const { Agenda } = await import("../src/pages/MyRunsPage");
+    const run = { cityId: "columbia-mo", time: "8:00 AM", location: "Downtown", groupId: "g1", rsvpedAt: "2026-01-01T00:00:00Z", id: "up", eventId: "event-up", title: "Upcoming run", date: "2099-01-01", occurrenceId: "occ-1" };
+    const html = renderToStaticMarkup(<MemoryRouter><Agenda upcoming={[run]} past={[]} onRemove={() => {}} /></MemoryRouter>);
+    expect(html).toMatch(/<a[^>]*href="\/events\/event-up"/);
+    expect(html).toMatch(/<a[^>]*href="\/events\/event-up\?discussion=occ-1"/);
+    expect(html).toMatch(/<\/a><a[^>]*href="\/events\/event-up\?discussion=occ-1"/);
+    const detailAnchor = html.match(/<a[^>]*href="\/events\/event-up"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? "";
+    expect(detailAnchor.slice(detailAnchor.indexOf(">") + 1)).not.toContain("<a");
+  });
 });
 
