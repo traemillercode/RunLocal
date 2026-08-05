@@ -40,6 +40,7 @@ import {
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
+import { resolveOccurrence, defaultOccurrenceDate } from "./occurrences";
 import { publicGroups, publicGroup } from "./groups";
 import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
@@ -861,29 +862,17 @@ async function handleApi(
     return ok(res, { submissions: mySubmissions(db, sess.accountId) }), true;
   }
 
-  // ---- private My Runs (RSVP attendance only; never host records) ---------
+  // ---- private My Runs (occurrence-aware RSVP attendance) -----------------
   if (method === "GET" && url.pathname === "/api/my/runs") {
-    const sess = requireSession(db, cookies);
-    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
-    const rec = db.getAccount(sess.accountId);
-    if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(sess.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
     if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
-    const mine = db.listAttendance(sess.accountId).filter((a) => a.role === "rsvp");
-    const { CITIES } = await import("../data/cities");
-    const { resolveWeekEvents } = await import("../lib/dates");
-    const nowDate = now;
-    const runs = mine.flatMap((a) => {
-      const eventId = a.eventId.replace(/^event:/, "");
-      for (const city of CITIES) {
-        const event = city.events.find((e) => e.id === eventId);
-        if (!event) continue;
-        const dated = resolveWeekEvents([event], nowDate)[0];
-        if (!dated) return [];
-        return [{ id: a.id, eventId, cityId: city.id, title: dated.title, date: dated.date.toISOString().slice(0, 10), time: dated.time, location: dated.location, groupId: dated.groupId, rsvpedAt: a.createdAt }];
-      }
-      // Preserve private history if public details disappear; never invent details.
-      return [{ id: a.id, eventId, cityId: rec.cityId, title: "Past run RSVP", date: a.createdAt.slice(0, 10), time: "Time unavailable", location: "Location unavailable", groupId: "", rsvpedAt: a.createdAt }];
-    }).sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`) || a.eventId.localeCompare(b.eventId) || a.id.localeCompare(b.id));
+    const runs = (db.listAttendance(sess.accountId).filter(a => a.role === "rsvp").flatMap((a): any => {
+      if (!a.occurrenceId || !a.runDate) return [{ id:a.id, eventId:a.eventId.replace(/^event:/,""), occurrenceId:null, runDate:a.createdAt.slice(0,10), startsAt:null, cityId:rec.cityId, title:"Past run RSVP", date:a.createdAt.slice(0,10), time:"Time unavailable", location:"Location unavailable", groupId:"", rsvpedAt:a.createdAt, upcoming:false, past:true }];
+      const occ = resolveOccurrence(db, a.eventId, a.runDate); if (!occ || !occ.event) return [];
+      const ev=occ.event; const upcoming = new Date(occ.startsAt).getTime() >= now.getTime();
+      return [{ id:a.id, eventId:occ.eventId.replace(/^event:/,""), occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt, cityId:ev.cityId, title:ev.title, date:occ.runDate, time:ev.time, location:ev.location, groupId:ev.groupId, rsvpedAt:a.createdAt, upcoming, past:!upcoming }];
+    }) as Array<{ id:string; eventId:string; occurrenceId:string|null; runDate:string; startsAt:string|null; cityId:string|null; title:string; date:string; time:string; location:string; groupId:string; rsvpedAt:string; upcoming:boolean; past:boolean }>).sort((a,b) => (a.startsAt ?? `${a.runDate}T00:00:00Z`).localeCompare(b.startsAt ?? `${b.runDate}T00:00:00Z`) || a.eventId.localeCompare(b.eventId) || a.id.localeCompare(b.id));
     return ok(res, { runs }), true;
   }
   // ---- submit a race ------------------------------------------------------
@@ -1100,34 +1089,21 @@ async function handleApi(
     const next = db.updatePersonalRun(run.id, { cityId, title, startsAt: parsed.toISOString(), locationLabel: typeof b.locationLabel === "string" ? b.locationLabel.trim() || null : run.locationLabel, distanceLabel: typeof b.distanceLabel === "string" ? b.distanceLabel.trim() || null : run.distanceLabel, notes: typeof b.notes === "string" ? b.notes.trim() || null : run.notes, consentVersion: PERSONAL_RUN_CONSENT_VERSION, consentedAt: now.toISOString(), updatedAt: now.toISOString() }); await db.persist(); return ok(res, { run: next }), true;
   }
 
-  // ---- RSVP to an event (server-side shared attendance) -------------------
-  // Verified runners may RSVP — INCLUDING under-review accounts (RSVP is
-  // preserved while under review). The record feeds rating eligibility and is
-  // idempotent.
+  // ---- RSVP to an event occurrence (server-validated schedule) ------------
   if (url.pathname === "/api/events/rsvp" && method === "POST") {
     const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
     const rec = db.getAccount(s.accountId); if (!rec || rec.deletedAt || rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
-    const b = await readJson(req) as Record<string, unknown>;
-    const registryId = resolveEventId(db, typeof b.eventId === "string" ? b.eventId : "");
-    if (!registryId) return err(res, { status: 400, error: "invalid_event", message: "That event isn't in the current listings." }), true;
-    const want = b.rsvp !== false;
-    if (want) {
-      if (!db.hasAttendance(s.accountId, registryId)) {
-        db.addAttendance({ id: crypto.randomUUID().replace(/-/g, ""), accountId: s.accountId, eventId: registryId, role: "rsvp", createdAt: now.toISOString() });
-        await db.persist();
-      }
-    } else {
-      // Un-RSVP removes ONLY the runner's own rsvp record; host records
-      // (created by admin approval) are never removed this way.
-      const mine = db.listAttendance(s.accountId).find((a) => a.eventId === registryId && a.role === "rsvp");
-      if (mine) {
-        db.removeAttendance(mine.id);
-        await db.persist();
-      }
-    }
-    return ok(res, { rsvped: want }), true;
+    const b = await readJson(req) as Record<string, unknown>; const requestedId = typeof b.eventId === "string" ? b.eventId : "";
+    const rawId = requestedId.replace(/^event:/, "");
+    const known = db.listEvents().find(e => e.id === requestedId || e.id === rawId || e.seedRefId === rawId);
+    const date = typeof b.runDate === "string" ? b.runDate : (known ? defaultOccurrenceDate(known, now) : "");
+    const occ = resolveOccurrence(db, requestedId, date);
+    if (!occ) return err(res, { status: 400, error: "invalid_occurrence", message: "That date is not a scheduled occurrence of this event." }), true;
+    const want = b.rsvp !== false; const mine = db.listAttendance(s.accountId).filter(a => a.role === "rsvp" && a.eventId === occ.eventId && a.occurrenceId === occ.occurrenceId);
+    if (want) { if (!mine.length) { db.addAttendance({ id: crypto.randomUUID().replace(/-/g,""), accountId:s.accountId, eventId:occ.eventId, role:"rsvp", createdAt:now.toISOString(), occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt }); await db.persist(); } }
+    else { for (const a of mine) db.removeAttendance(a.id); if (mine.length) await db.persist(); }
+    return ok(res, { rsvped: want, occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt }), true;
   }
-
   // ---- ratings (server-eligible: shared RSVP/host attendance only) --------
   if (url.pathname === "/api/ratings" && method === "POST") {
     const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;

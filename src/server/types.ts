@@ -343,7 +343,7 @@ export interface RecognitionRecord { accountId:string; cityId:string; role:"coac
  * for ratings: a reviewer may rate a reviewee only for an event BOTH of them
  * attended (shared RSVP/host-attendance).
  */
-export interface AttendanceRecord { id:string; accountId:string; eventId:string; role:"rsvp"|"host"; createdAt:string; }
+export interface AttendanceRecord { id:string; accountId:string; eventId:string; role:"rsvp"|"host"; createdAt:string; /** Concrete occurrence; absent on legacy event-level rows. */ occurrenceId?: string; runDate?: string; startsAt?: string; }
 
 export interface SiteSettings { title:string; wordmark:string; tagline:string; primary:string; accent:string; surface:string; strings:Record<string,string>; tags:Record<string,string[]>; providers:Record<string,boolean>; bottomNav:string[]; announcement:{text:string;link?:string}|null; logoRef:string|null; faviconRef:string|null; /**
    * Community-trust policy, configurable by a Global Admin. `underReviewThreshold`
