@@ -23,6 +23,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { RecoveryPage } from "./pages/RecoveryPage";
 import { ConfirmationPage } from "./pages/ConfirmationPage";
+import { ProviderCallbackPage } from "./pages/ProviderCallbackPage";
 import { MyRunsPage } from "./pages/MyRunsPage";
 import { PersonalRunsPage } from "./pages/PersonalRunsPage";
 import { PastEventsPage } from "./pages/PastEventsPage";
@@ -34,7 +35,7 @@ import { parseAuthCallback } from "./lib/recovery";
 import * as supabase from "./lib/supabase";
 
 /** Routes that get a chrome-free wizard layout (no bottom nav). */
-const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login", "/recovery", "/confirmation"]);
+const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login", "/recovery", "/confirmation", "/callback"]);
 
 function GroupRoute() { const location = useLocation(); const id = location.pathname.split("/").pop() ?? ""; return <GroupDetailPage id={id} />; }
 
@@ -94,6 +95,7 @@ function Shell() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/recovery" element={<RecoveryPage sessionError={recoveryError} />} />
             <Route path="/confirmation" element={<ConfirmationPage />} />
+            <Route path="/callback" element={<ProviderCallbackPage />} />
             <Route path="/verify" element={<VerifyPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
