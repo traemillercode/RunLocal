@@ -306,7 +306,7 @@ export function PillButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className={`rl-control inline-flex min-h-11 items-center justify-center gap-2 px-5 text-sm font-semibold transition-colors ${variants[variant]} ${className}`}
+      className={`rl-control desktop-compact-control inline-flex min-h-11 items-center justify-center gap-2 px-5 text-sm font-semibold transition-colors ${variants[variant]} ${className}`}
     >
       {children}
     </button>

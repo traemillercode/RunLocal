@@ -140,6 +140,8 @@ export function ForumPage({ city }: { city: City }) {
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
+      <div className="desktop-forum-layout">
+      <div>
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Forum</h1>
@@ -274,6 +276,14 @@ export function ForumPage({ city }: { city: City }) {
         </div>
       </Sheet>
 
+      </div>
+      <aside className="desktop-forum-context" aria-label="Forum guidance">
+        <p className="text-[11px] font-extrabold uppercase tracking-[.12em] text-[#FF5741]">Community guidelines</p>
+        <h2 className="mt-2 text-lg font-extrabold tracking-tight text-slate-900">A useful local forum</h2>
+        <p className="mt-2 text-[13px] leading-relaxed text-slate-600">Browse announcements, community notes, and runner questions. Posting and replying require a verified profile.</p>
+        <div className="mt-4 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-500"><strong className="text-slate-700">Keep it local.</strong> Share route details and event context that help fellow runners.</div>
+      </aside>
+      </div>
       <VerifiedGateSheet
         open={gateOpen}
         onClose={() => setGateOpen(false)}
