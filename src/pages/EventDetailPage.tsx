@@ -9,7 +9,7 @@
  * resolves the event from the weekly model and wires up navigation + RSVP.
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Chip, Icon } from "../components/ui";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import * as api from "../lib/api";
@@ -167,14 +167,19 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
   const { hidden, highlights, groupBadges } = useModerated();
   const { events: userEvents } = usePublicContent();
   const { eventId } = useParams();
+  const location = useLocation();
+  const discussionOccurrenceId = new URLSearchParams(location.search).get("discussion");
   const navigate = useNavigate();
   const [gateOpen, setGateOpen] = useState(false);
   const [myRunIds, setMyRunIds] = useState<Set<string>>(new Set());
+  const [myRuns, setMyRuns] = useState<api.MyRunView[]>([]);
+  const [canonicalEvents, setCanonicalEvents] = useState<api.CanonicalEvent[]>([]);
   const canRsvp = canDo(role, "rsvp");
   useEffect(() => {
     if (!canRsvp) { setMyRunIds(new Set()); return; }
-    void api.getMyRuns().then((r) => { if (r.ok) setMyRunIds(new Set(r.data.runs.map((run) => run.eventId))); });
+    void api.getMyRuns().then((r) => { if (r.ok) { setMyRuns(r.data.runs); setMyRunIds(new Set(r.data.runs.map((run) => run.eventId))); } });
   }, [canRsvp]);
+  useEffect(() => { void api.getCanonicalEvents(city.id).then((r) => { if (r.ok) setCanonicalEvents(r.data.events); }); }, [city.id]);
 
   // Same weekly resolution as the home/Events feed so an EventCard link always
   // resolves here. Only recurring events render as EventCards; independent
@@ -193,8 +198,9 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
         invite: e.invite,
         externalUrl: e.externalUrl ?? undefined,
       }));
-    return resolveWeekEvents([...city.events, ...recurring], new Date()).filter((e) => !hidden.has(`event:${e.id}`));
-  }, [city, hidden, userEvents]);
+    const canonical = canonicalEvents.filter((e) => e.status === "published" && !e.hidden && !e.archivedAt).map((e) => ({ id:e.id, groupId:e.groupId, title:e.title, dayOfWeek:e.dayOfWeek, time:e.time, location:e.location, distanceLabel:e.distanceLabel, invite:e.invite, externalUrl:e.externalUrl ?? undefined }));
+    return resolveWeekEvents([...city.events, ...canonical, ...recurring], new Date()).filter((e) => !hidden.has(`event:${e.id}`));
+  }, [city, hidden, userEvents, canonicalEvents]);
 
   const event = events.find((e) => e.id === eventId) ?? null;
 
@@ -219,10 +225,12 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
       setGateOpen(true);
       return;
     }
-    const nowRsvped = !myRunIds.has(event.id);
+    const occurrenceId = discussionOccurrenceId ?? `event:${event.id}:${event.date.toISOString().slice(0,10)}`;
+    const runDate = occurrenceId.slice(occurrenceId.lastIndexOf(":") + 1);
+    const nowRsvped = !myRuns.some((run) => run.eventId === event.id && run.occurrenceId === occurrenceId);
     // Server-side RSVP: records shared attendance (rating eligibility basis).
     // Under-review accounts may still RSVP — the server permits it.
-    void api.rsvpEvent(event.id, nowRsvped).then((r) => {
+    void api.rsvpEvent(event.id, nowRsvped, runDate).then((r) => {
       if (!r.ok) {
         toast(r.error.message ?? "Couldn't save your RSVP. Try again.", "info");
         return;
@@ -239,7 +247,7 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
       <EventDetailView
         event={event}
         city={city}
-        rsvped={myRunIds.has(event.id)}
+        rsvped={myRuns.some((run) => run.eventId === event.id && run.occurrenceId === (discussionOccurrenceId ?? `event:${event.id}:${event.date.toISOString().slice(0,10)}`))}
         canRsvp={canRsvp}
         onRsvp={onRsvp}
         onBack={() => navigate(-1)}
@@ -247,7 +255,7 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
         pinned={hl?.pinned}
         groupBadge={groupBadges.get(event.groupId)}
       />
-      <DiscussionPanel eventId={event.id} occurrenceId={`event:${event.id}:${event.date}`} eligible={canRsvp && myRunIds.has(event.id)} />
+      <DiscussionPanel eventId={event.id} occurrenceId={discussionOccurrenceId ?? `event:${event.id}:${event.date.toISOString().slice(0,10)}`} eligible={canRsvp && !!discussionOccurrenceId && myRuns.some((run) => run.eventId === event.id && run.occurrenceId === discussionOccurrenceId)} unavailable={!!discussionOccurrenceId && !myRuns.some((run) => run.eventId === event.id && run.occurrenceId === discussionOccurrenceId)} />
       </div>
       <aside className="desktop-detail-panel" aria-label="Run details summary">
         <p className="text-[11px] font-extrabold uppercase tracking-[.12em] text-[#FF5741]">Run details</p>

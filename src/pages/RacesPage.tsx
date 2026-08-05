@@ -4,6 +4,7 @@ import { HomeCityBanner } from "../components/HomeCityBanner";
 import { RaceSubmissionSheet } from "../components/SubmissionSheets";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { formatRaceDate } from "../lib/dates";
+import { isPastCalendarDate } from "../lib/activityDates";
 import { useModerated } from "../state/moderated";
 import { usePublicContent } from "../state/content";
 import { useAccount } from "../state/account";
@@ -85,7 +86,7 @@ export function RacesPage({ city }: { city: City }) {
     }));
     return [...city.races, ...userAsRaces]
       // Owner-hidden races are excluded from public rendering.
-      .filter((r) => !hidden.has(`race:${r.id}`))
+      .filter((r) => !hidden.has(`race:${r.id}`) && !isPastCalendarDate(r.date))
       // Featured first, then pinned — server-driven ordering facts.
       .sort((a, b) => {
         const ha = highlights.get(`race:${a.id}`);

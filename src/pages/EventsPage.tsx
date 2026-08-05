@@ -5,7 +5,7 @@ import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { GroupSubmissionSheet, IndependentEventSheet } from "../components/SubmissionSheets";
 import { Chip, Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
-import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS } from "../lib/dates";
+import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS, occurrenceHasStarted } from "../lib/dates";
 import { filterOneTimeEvents } from "../lib/activityDates";
 import { Link } from "react-router-dom";
 import { canDo, roleLabel } from "../lib/accounts";
@@ -65,7 +65,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
     // filtered separately below by its calendar date.
     const canonical = (canonicalEvents ?? []).filter((e) => e.status === "published" && !e.hidden && !e.archivedAt).map((e) => ({ id: e.id, groupId: e.groupId, title: e.title, dayOfWeek: e.dayOfWeek, time: e.time, location: e.location, distanceLabel: e.distanceLabel, invite: e.invite, externalUrl: e.externalUrl ?? undefined }));
     const resolved = resolveWeekEvents([...city.events, ...canonical, ...recurring], today)
-      .filter((e) => !hidden.has(`event:${e.id}`))
+      .filter((e) => !hidden.has(`event:${e.id}`) && !occurrenceHasStarted(e, today))
       .sort((a, b) => {
         const ha = highlights.get(`event:${a.id}`);
         const hb = highlights.get(`event:${b.id}`);
@@ -81,7 +81,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
         e.location.toLowerCase().includes(q) ||
         (city.groups.find((g) => g.id === e.groupId)?.name.toLowerCase() ?? "").includes(q),
     );
-  }, [city, query, hidden, highlights, userEvents]);
+  }, [city, query, hidden, highlights, userEvents, canonicalEvents]);
 
   const groups = useMemo(() => {
     const map = new Map<string, typeof events>();
