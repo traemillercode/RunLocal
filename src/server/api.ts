@@ -13,6 +13,7 @@ import type { AccountRecord } from "./types";
 import { PERSONAL_RUN_CONSENT_VERSION, MATCHING_CONSENT_VERSION } from "./types";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
 import { listSafetyReportsAdmin, decideSafetyReport } from "./safety";
+import { adminOverview } from "./adminOverview";
 import type { SafetyReportStatus } from "./types";
 
 import { supabaseConfig, verifySupabaseToken, applySupabaseIdentity } from "./supabase";
@@ -40,6 +41,8 @@ import {
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
 import { publicGroups, publicGroup } from "./groups";
+import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
+import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import {
   dashboardOverview,
@@ -306,6 +309,10 @@ async function handleApi(
     return ok(res, publicModerated(db, cityId)), true;
   }
 
+  if (method === "GET" && url.pathname === "/api/events") {
+    const cityId = url.searchParams.get("city") ?? undefined;
+    return ok(res, { cityId: cityId ?? null, events: publicEvents(db, cityId) }), true;
+  }
   // ---- public approved community content (no auth) -------------------------
   // Only APPROVED submissions ever appear here (pending/rejected never leave
   // the server), and owner-hidden content is excluded. No emails, phones, IPs,
@@ -317,6 +324,39 @@ async function handleApi(
   }
   const groupDetail = /^\/api\/groups\/([a-f0-9-]+)$/.exec(url.pathname);
   if (method === "GET" && groupDetail) { const group = publicGroup(db, groupDetail[1]); if (!group) return err(res,{status:404,error:"not_found"}),true; return ok(res,{group}),true; }
+
+  if (method === "GET" && url.pathname === "/api/me/groups") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    return ok(res, { memberships: myMemberships(db, sess.accountId) }), true;
+  }
+  const membershipPath = /^\/api\/groups\/([^/]+)\/membership$/.exec(url.pathname);
+  if (membershipPath && method === "POST") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const group = db.getGroup(membershipPath[1]); if (!group) return err(res,{status:404,error:"not_found"}),true;
+    const account = db.getAccount(sess.accountId); if (!account || account.status !== "verified") return err(res,{status:403,error:"verified_runner_required"}),true;
+    if (account.cityId !== group.cityId) return err(res,{status:403,error:"cross_city_forbidden"}),true;
+    const current = db.getMembership(group.id, account.id);
+    if (current && (current.status === "pending" || current.status === "active")) return ok(res,{membership:membershipDto(db,current)}),true;
+    const status = group.membershipMode === "open" ? "active" : "pending";
+    const membership = createMembership(db, group.id, account.id, status, now)!;
+    db.appendAudit({admin:account.email, action:"group.membership_request", reason:"Member membership request", targetId:group.id, ip, cityId:group.cityId}); await db.persist();
+    return ok(res,{membership:membershipDto(db,membership)}),true;
+  }
+  const membershipAction = /^\/api\/groups\/([^/]+)\/membership\/(leave|approve|decline|remove)$/.exec(url.pathname);
+  if (membershipAction && method === "POST") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const group = db.getGroup(membershipAction[1]); if (!group) return err(res,{status:404,error:"not_found"}),true;
+    const body = await readJson(req) as Record<string,unknown>; const account = db.getAccount(sess.accountId);
+    const targetId = typeof body.accountId === "string" ? body.accountId : sess.accountId;
+    const membership = db.getMembership(group.id,targetId); if (!membership) return err(res,{status:404,error:"membership_not_found"}),true;
+    const leader = canAdministerMembership(group, account ?? undefined, db.getAccount(targetId), membership);
+    if (membershipAction[2] === "leave" && targetId === sess.accountId) { membership.status="left"; }
+    else if (!leader && !isOwnerEmail(account?.email ?? "")) return err(res,{status:403,error:"forbidden"}),true;
+    else membership.status = membershipAction[2] === "approve" ? "active" : membershipAction[2] === "decline" ? "declined" : "revoked";
+    membership.updatedAt=now.toISOString(); membership.decidedAt=now.toISOString(); membership.decidedBy=sess.accountId;
+    db.updateMembership(membership.id,membership); db.appendAudit({admin:account?.email ?? "unknown",action:(membershipAction[2] === "leave" ? "group.membership_leave" : membershipAction[2] === "approve" ? "group.membership_approve" : membershipAction[2] === "decline" ? "group.membership_decline" : "group.membership_remove") as import("./types").AdminAction,reason:"Membership lifecycle action",targetId:group.id,ip,cityId:group.cityId}); await db.persist();
+    return ok(res,{membership:membershipDto(db,membership)}),true;
+  }
 
   if (method === "GET" && url.pathname === "/api/content") {
     const cityId = url.searchParams.get("city") ?? "";
@@ -385,6 +425,15 @@ async function handleApi(
     db.addActivity(a); await db.persist(); ok(res, { card: publicActivityCard(a) }); return true;
   }
 
+  // ---- account-owned notification preferences and inbox -------------------
+  if (url.pathname.startsWith("/api/notifications")) {
+    const sess=requireSession(db,cookies); if(!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    if (method === "GET" && url.pathname === "/api/notifications/preferences") return ok(res,{preferences:db.getNotificationPreferences(sess.accountId)}),true;
+    if (method === "PATCH" && url.pathname === "/api/notifications/preferences") { const b=await readJson(req) as Record<string,unknown>; const allowed=["run_reminders","community_updates","account_alerts"] as const; const patch: Record<string,boolean>={}; for(const k of allowed) if(b[k]!==undefined){if(typeof b[k]!=="boolean") return err(res,{status:400,error:"invalid_preferences"}),true; patch[k]=b[k] as boolean;} const preferences=db.setNotificationPreferences(sess.accountId,patch); await db.persist(); return ok(res,{preferences}),true; }
+    if (method === "GET" && url.pathname === "/api/notifications") { const items=db.listNotifications(sess.accountId); return ok(res,{notifications:items,unreadCount:items.filter(n=>!n.readAt).length}),true; }
+    if (method === "POST" && url.pathname === "/api/notifications/read-all") { db.markAllNotificationsRead(sess.accountId); await db.persist(); return ok(res,{status:"ok"}),true; }
+    const m=/^\/api\/notifications\/([^/]+)\/read$/.exec(url.pathname); if(method==="POST"&&m){ if(!db.updateNotification(m[1],sess.accountId,{readAt:new Date().toISOString()})) return err(res,{status:404,error:"not_found"}),true; await db.persist(); return ok(res,{status:"ok"}),true; }
+  }
   // ---- public username availability (format + uniqueness only) -----------
   // This endpoint is intentionally narrow: usernames are public profile identity,
   // and the response contains no account metadata or sensitive information.
@@ -832,8 +881,9 @@ async function handleApi(
         if (!dated) return [];
         return [{ id: a.id, eventId, cityId: city.id, title: dated.title, date: dated.date.toISOString().slice(0, 10), time: dated.time, location: dated.location, groupId: dated.groupId, rsvpedAt: a.createdAt }];
       }
-      return [];
-    }).sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`) || a.eventId.localeCompare(b.eventId));
+      // Preserve private history if public details disappear; never invent details.
+      return [{ id: a.id, eventId, cityId: rec.cityId, title: "Past run RSVP", date: a.createdAt.slice(0, 10), time: "Time unavailable", location: "Location unavailable", groupId: "", rsvpedAt: a.createdAt }];
+    }).sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`) || a.eventId.localeCompare(b.eventId) || a.id.localeCompare(b.id));
     return ok(res, { runs }), true;
   }
   // ---- submit a race ------------------------------------------------------
@@ -1320,6 +1370,12 @@ async function handleAdmin(
     return ok(res, { threshold: t, newlyUnderReview }), true;
   }
 
+  if (method === "GET" && url.pathname === "/api/admin/overview") {
+    const result = adminOverview(db, ctx, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, result.data), true;
+  }
   if (method === "GET" && url.pathname === "/api/admin/pending") {
     const result = adminPending(db, ctx);
     if (!result.ok) return sendErr(result), true;
@@ -1349,9 +1405,35 @@ async function handleAdmin(
     return ok(res, { ok: true, submission: { id: result.data.id, status: result.data.status } }), true;
   }
 
+  if (url.pathname === "/api/admin/events" && method === "GET") {
+    const result = listAdminEvents(db, ctx, url.searchParams.get("city") ?? undefined, now);
+    if (!result.ok) return sendErr(result), true; await db.persist(); return ok(res, { events: result.data }), true;
+  }
+  if (url.pathname === "/api/admin/events" && method === "POST") {
+    const result = createEvent(db, ctx, (await readJson(req)) as Record<string, unknown>, now);
+    if (!result.ok) return sendErr(result), true; await db.persist(); return ok(res, { event: result.data }), true;
+  }
+  const eventEdit = /^\/api\/admin\/events\/([^/]+)$/.exec(url.pathname);
+  if (eventEdit && method === "PATCH") {
+    const result = editEvent(db, ctx, eventEdit[1], (await readJson(req)) as Record<string, unknown>, now);
+    if (!result.ok) return sendErr(result), true; await db.persist(); return ok(res, { event: result.data }), true;
+  }
+  const eventTransition = /^\/api\/admin\/events\/([^/]+)\/(approve|publish|hide|unhide|archive)$/.exec(url.pathname);
+  if (eventTransition && method === "POST") {
+    const result = transitionEvent(db, ctx, eventTransition[1], eventTransition[2] as "approve"|"publish"|"hide"|"unhide"|"archive", now);
+    if (!result.ok) return sendErr(result), true; await db.persist(); return ok(res, { event: result.data }), true;
+  }
   // GET /api/admin/dashboard?city= — owner-only moderation dashboard overview
   if (method === "GET" && url.pathname === "/api/admin/dashboard") {
     const result = dashboardOverview(db, ctx, url.searchParams.get("city") ?? "", now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, result.data), true;
+  }
+
+  // GET /api/admin/overview — reason-gated, aggregate-only attention counts
+  if (method === "GET" && url.pathname === "/api/admin/overview") {
+    const result = adminOverview(db, ctx, now);
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, result.data), true;

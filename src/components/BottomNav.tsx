@@ -13,7 +13,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
+      className="app-shell-nav fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
     >
       <div
         className="mx-auto grid w-full max-w-md grid-cols-5 px-1"
@@ -33,7 +33,11 @@ export function BottomNav() {
             {({ isActive }) => (
               <>
                 <span
+<<<<<<< HEAD
                   className={`grid h-7 w-12 place-items-center rounded-full ${isActive ? "bg-[#FF5741]" : ""}`}
+=======
+                  className={`grid h-7 w-12 place-items-center rounded-full ${isActive ? "bg-[#FF5741] shadow-sm" : ""}`}
+>>>>>>> origin/main
                 >
                   <Icon name={t.icon} className="h-5 w-5" />
                 </span>

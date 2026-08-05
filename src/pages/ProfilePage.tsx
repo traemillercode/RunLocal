@@ -5,10 +5,8 @@ import { Chip, Icon, PillButton } from "../components/ui";
 import type { City } from "../types";
 import { resolveWeekEvents } from "../lib/dates";
 import { phaseLabel, roleLabel } from "../lib/accounts";
-import type { PublicAccount } from "../lib/accounts";
 import * as api from "../lib/api";
 import type { AppStore } from "../lib/store";
-import { normalizeUsername, USERNAME_HINT, USERNAME_PROMPT } from "../lib/username";
 import { useAccount } from "../state/account";
 import { useSelectedCity } from "../state/city";
 import { TrustProfileSection } from "../components/TrustProfileSection";
@@ -22,6 +20,7 @@ function initials(name: string): string {
     .join("") || "R";
 }
 
+<<<<<<< HEAD
 const editorInputCls =
   "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
@@ -138,6 +137,8 @@ function UsernameEditor({ account, refresh }: { account: PublicAccount; refresh:
   );
 }
 
+=======
+>>>>>>> origin/main
 const KIND_LABELS: Record<string, string> = { race: "Race", group: "Group", event: "Independent run" };
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   pending: { label: "Pending approval", cls: "bg-amber-100 text-amber-800" },
@@ -196,7 +197,7 @@ export function MySubmissions({ signedIn }: { signedIn: boolean }) {
 
 export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
   const navigate = useNavigate();
-  const { me, backendAvailable, refresh } = useAccount();
+  const { me, backendAvailable } = useAccount();
   const { hasHomeCity } = useSelectedCity();
 
   const rsvps = useMemo(() => {
@@ -288,7 +289,7 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
           </PillButton>
         </section>
       ) : (
-        <UsernameEditor account={signedIn} refresh={refresh} />
+        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70"><h2 className="text-[15px] font-bold text-slate-900">Profile settings</h2><p className="mt-1 text-[13px] text-slate-600">Manage your username and notification preferences in Settings.</p><PillButton variant="secondary" onClick={() => navigate("/settings")} className="mt-3 w-full">Open Settings</PillButton></section>
       )}
 
       {/* My submissions — this account's own submissions only */}

@@ -17,7 +17,85 @@ import * as api from "../lib/api";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
 import { useSelectedCity } from "../state/city";
+import * as supabase from "../lib/supabase";
+import { PASSWORD_REQUIREMENTS, passwordRequirements } from "./LoginPage";
+import { normalizeUsername, USERNAME_HINT, USERNAME_PROMPT } from "../lib/username";
 
+const inputCls =
+  "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
+
+/** Shared signup policy: password changes must satisfy the same checks. */
+export function changePasswordValidation(password: string, confirmation: string): string | null {
+  if (!passwordRequirements(password).every(Boolean)) {
+    return "Password must be at least 6 characters and include a lowercase letter, uppercase letter, and digit.";
+  }
+  if (password !== confirmation) return "Passwords do not match.";
+  return null;
+}
+
+function UsernameEditor({ account, refresh }: { account: PublicAccount; refresh: () => Promise<void> }) {
+  const [open, setOpen] = useState(account.username == null); const [value, setValue] = useState(account.username ?? ""); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); const [saved, setSaved] = useState(false);
+  const save = async () => { setError(null); setSaved(false); const normalized = normalizeUsername(value); if (!normalized) { setError("Use 3–24 characters: letters, numbers, _ or -, starting with a letter."); return; } setBusy(true); const r = await api.setUsername(normalized); setBusy(false); if (r.ok) { setValue(r.data.account.username ?? normalized); setSaved(true); setOpen(false); await refresh(); } else setError(r.error.code === "username_taken" ? "That username is already taken — try another." : r.error.message ?? "Couldn't save your username. Try again."); };
+  if (!open) return <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70"><div className="flex items-center justify-between"><div><h2 className="text-[15px] font-bold text-slate-900">Username</h2><p className="font-semibold">@{account.username ?? "not set"}</p></div><button type="button" onClick={() => setOpen(true)} className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold">{account.username ? "Change" : "Set"}</button></div><p className="mt-1 text-[11px] text-slate-400">{USERNAME_HINT}</p></section>;
+  return <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70"><h2 className="text-[15px] font-bold">{account.username ? "Change username" : "Choose your username"}</h2><p className="mt-1 text-sm text-slate-600">{USERNAME_PROMPT}</p><input value={value} onChange={e => {setValue(e.target.value);setError(null)}} placeholder="jordanlee" className={inputCls+" mt-3"} autoComplete="username" />{error ? <p role="alert" className="mt-1 text-xs text-red-600">{error}</p> : null}{saved ? <p role="status" className="mt-1 text-xs text-emerald-700">Username saved.</p> : null}<div className="mt-3 flex gap-2"><PillButton variant="primary" className="flex-1" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save username"}</PillButton><PillButton variant="ghost" onClick={() => setOpen(false)}>Cancel</PillButton></div></section>;
+}
+function ChangePasswordSettings() {
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const checks = passwordRequirements(password);
+
+  const submit = async () => {
+    setError(null);
+    setSaved(false);
+    const validationError = changePasswordValidation(password, confirmation);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setBusy(true);
+    // Passwords go directly to Supabase Auth. They are never sent to the
+    // Run Local API or retained in local state after a successful update.
+    const result = await supabase.updatePassword(password);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    setPassword("");
+    setConfirmation("");
+    setSaved(true);
+  };
+
+  return (
+    <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+      <div className="border-b border-slate-100 px-5 py-3.5">
+        <h2 className="text-[15px] font-bold text-slate-900">Change password</h2>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">Your active secure session verifies your account. Your password is handled only by Supabase Auth.</p>
+      </div>
+      <div className="space-y-4 px-5 py-4">
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-700">New password</span>
+          <input aria-label="New password" type="password" autoComplete="new-password" value={password} onChange={(e) => { setPassword(e.target.value); setSaved(false); }} className={inputCls} />
+        </label>
+        {password.length > 0 ? (
+          <ul aria-label="Password requirements" className="grid grid-cols-1 gap-1 text-xs text-slate-500">
+            {PASSWORD_REQUIREMENTS.map((requirement, i) => <li key={requirement.key} className={checks[i] ? "text-emerald-700" : "text-slate-500"}>{checks[i] ? "✓" : "○"} {requirement.label}</li>)}
+          </ul>
+        ) : null}
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-700">Confirm new password</span>
+          <input aria-label="Confirm new password" type="password" autoComplete="new-password" value={confirmation} onChange={(e) => { setConfirmation(e.target.value); setSaved(false); }} className={inputCls} />
+        </label>
+        {error ? <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-[13px] text-red-800">{error}</p> : null}
+        {saved ? <p role="status" className="rounded-xl bg-emerald-50 p-3.5 text-[13px] text-emerald-800">Password updated successfully.</p> : null}
+        <PillButton variant="primary" className="w-full" disabled={busy} onClick={() => void submit()}>{busy ? "Updating…" : "Update password"}</PillButton>
+      </div>
+    </section>
+  );
+}
 
 const PHOTO_MAX_BYTES = 4 * 1024 * 1024;
 const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -96,7 +174,12 @@ export function SettingsPage() {
   const toast = useToast();
   const { me, backendAvailable, signOut, deleteMyAccount, refresh } = useAccount();
   const { city, cityId, signedIn, hasHomeCity, selectCity } = useSelectedCity();
-  const [notificationsOn, setNotificationsOn] = useState(false);
+  const [notificationPrefs, setNotificationPrefs] = useState<api.NotificationPreferences>({run_reminders:false,community_updates:false,account_alerts:false});
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [notifications, setNotifications] = useState<api.InAppNotification[]>([]);
+  const [browserPermission, setBrowserPermission] = useState<NotificationPermission | "unsupported">(typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported");
+  useEffect(() => { if (!signedIn) return; void api.getNotificationPreferences().then(r => { if (r.ok) setNotificationPrefs(r.data.preferences); }); void api.getNotifications().then(r => { if (r.ok) { setNotificationCount(r.data.unreadCount); setNotifications(r.data.notifications); } }); }, [signedIn]);
+  const toggleNotification = async (key: keyof api.NotificationPreferences) => { const next = {...notificationPrefs, [key]: !notificationPrefs[key]}; setNotificationPrefs(next); const r = await api.updateNotificationPreferences({[key]: next[key]}); if (!r.ok) setNotificationPrefs(notificationPrefs); };
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [health, setHealth] = useState<api.HealthInfo | null>(null);
   // In-progress home-city selection (null = not editing / unchanged).
@@ -179,7 +262,9 @@ export function SettingsPage() {
         </section>
       ) : null}
 
+      {signedIn && account ? <UsernameEditor account={account} refresh={refresh} /> : null}
       {signedIn && account ? <ProfilePhotoSettings account={account} refresh={refresh} /> : null}
+      {signedIn && account ? <ChangePasswordSettings /> : null}
       {signedIn && account ? <ActivityConnections /> : null}
       {/* Account */}
       <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
@@ -248,6 +333,7 @@ export function SettingsPage() {
               {signedIn && hasHomeCity ? " (home)" : ""}
             </span>
           </li>
+<<<<<<< HEAD
           <li>
             <button
               type="button"
@@ -260,13 +346,20 @@ export function SettingsPage() {
               </span>
             </button>
           </li>
+=======
+          {signedIn ? (Object.entries(notificationPrefs) as Array<[keyof api.NotificationPreferences, boolean]>).map(([key, value]) => (
+            <li key={key}><button type="button" onClick={() => void toggleNotification(key)} className="flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3.5 text-left active:bg-slate-50"><span className="text-[14px] font-medium text-slate-700">{key === "run_reminders" ? "Run reminders" : key === "community_updates" ? "Community updates" : "Account alerts"}</span><span aria-label={value ? "On" : "Off"} className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${value ? "bg-[#14171C]" : "bg-slate-300"}`}><span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${value ? "left-6" : "left-1"}`} /></span></button></li>
+          )) : null}
+          {signedIn ? <li className="flex items-center justify-between px-5 py-3 text-xs text-slate-500"><span>In-app notifications</span><span>{notificationCount} unread</span></li> : null}
+          {signedIn ? <li className="px-5 py-3"><p className="text-sm font-semibold">Browser notifications</p><p className="mt-1 text-xs text-slate-500">{browserPermission === "unsupported" ? "This browser does not support notifications." : browserPermission === "denied" ? "Notifications are blocked in your browser settings." : browserPermission === "granted" ? "Allowed for foreground notices only." : "Not enabled."}</p>{browserPermission === "default" ? <button type="button" className="mt-2 rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white" onClick={() => void Notification.requestPermission().then(setBrowserPermission)}>Allow browser notifications</button> : null}</li> : null}
+>>>>>>> origin/main
         </ul>
         <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
-          Guest city choice and notification preferences are saved on this device only. Your home city is saved to your
-          account. Verification records are never stored on your device.
+          Notification categories are saved to your account and default to off. In-app notifications are private to your account. Browser permission is foreground-only; Run Local does not claim background push.
         </p>
       </section>
 
+      {signedIn ? <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5"><h2 className="text-[15px] font-bold">Notifications</h2><button type="button" className="text-xs font-semibold" disabled={!notificationCount} onClick={() => void api.markAllNotificationsRead().then(() => { setNotifications(v => v.map(n => ({...n, readAt: new Date().toISOString()}))); setNotificationCount(0); })}>Mark all read</button></div>{notifications.length ? <ul className="divide-y divide-slate-100">{notifications.map(n => <li key={n.id} className={`px-5 py-3 ${n.readAt ? "" : "bg-orange-50"}`}><button type="button" className="w-full text-left" onClick={() => !n.readAt && void api.markNotificationRead(n.id).then(() => { setNotifications(v => v.map(x => x.id === n.id ? {...x, readAt: new Date().toISOString()} : x)); setNotificationCount(v => Math.max(0,v-1)); })}><p className="text-sm font-semibold">{n.title}</p><p className="mt-1 text-xs text-slate-600">{n.body}</p><p className="mt-1 text-[11px] text-slate-400">{new Date(n.createdAt).toLocaleString()}</p></button></li>)}</ul> : <p className="px-5 py-4 text-sm text-slate-500">No notifications yet.</p>}</section> : null}
       {/* Home city — account-owned, server-validated */}
       {signedIn ? (
         <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">

@@ -59,7 +59,7 @@ export function EventDetailView({
   const rrca = groupBadge ?? group?.groupType === "rrca-chartered";
   const label = group ? (rrca ? GROUP_TYPE_LABELS["rrca-chartered"] : GROUP_TYPE_LABELS.community) : null;
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
       <button type="button" onClick={onBack} className="mb-3 flex items-center gap-1 text-[13px] font-semibold text-slate-500">
         <Icon name="chevronRight" className="h-4 w-4 rotate-180" /> Back to this week
       </button>
@@ -111,7 +111,11 @@ export function EventDetailView({
               href={event.externalUrl}
               target="_blank"
               rel="noopener noreferrer"
+<<<<<<< HEAD
               className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#14171C] text-sm font-semibold text-white active:bg-[#20262E]"
+=======
+              className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#14171C] text-sm font-semibold text-white active:bg-[#252a31]"
+>>>>>>> origin/main
             >
               External details <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
             </a>
@@ -126,7 +130,11 @@ export function EventDetailView({
               rsvped
                 ? "bg-emerald-100 text-emerald-800"
                 : canRsvp
+<<<<<<< HEAD
                   ? "bg-[#FF5741] text-[#14171C] active:bg-[#E44735]"
+=======
+                  ? "bg-[#FF5741] text-[#14171C] active:bg-[#e94735]"
+>>>>>>> origin/main
                   : "bg-slate-100 text-slate-500 active:bg-slate-200"
             }`}
           >

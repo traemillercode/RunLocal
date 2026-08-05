@@ -16,6 +16,21 @@ const render = () => renderToStaticMarkup(<MemoryRouter><MyRunsPage /></MemoryRo
 describe("My Runs SSR UI", () => {
   it("prompts guests to sign in and links to login", () => { auth({ status: "guest" }); const html = render(); expect(html).toContain("Sign in to see your private RSVP list."); expect(html).toContain('href="/login"'); });
   it("renders the signed-in loading state without exposing public-sharing language", () => { auth({ status: "signed_in", account }); getMyRunsMock.mockReturnValue(new Promise(() => {})); const html = render(); expect(html).toContain("Loading your RSVPs"); expect(html).toContain("My Runs"); expect(html).toContain("Private"); expect(html).not.toContain("Share"); });
-  it("keeps empty, error, upcoming ordering, and remove-RSVP copy in the SSR page contract", async () => { const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/pages/MyRunsPage.tsx", import.meta.url), "utf8")); expect(source).toContain("No RSVPs yet"); expect(source).toContain("We couldn't load your runs."); expect(source).toContain("Upcoming runs"); expect(source).toContain("Remove RSVP for"); expect(source).toContain("Only you can see it."); expect(source).toContain("runs.map"); });
+  it("keeps empty, error, upcoming ordering, and remove-RSVP copy in the SSR page contract", async () => { const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/pages/MyRunsPage.tsx", import.meta.url), "utf8")); expect(source).toContain("No RSVPs yet"); expect(source).toContain("We couldn't load your runs."); expect(source).toContain("Upcoming"); expect(source).toContain("Remove RSVP for"); expect(source).toContain("Only you can see it."); expect(source).toContain("runs.map"); });
   it("shows My Runs in primary navigation with the dedicated route", () => { const html = renderToStaticMarkup(<MemoryRouter><BottomNav /></MemoryRouter>); expect(html).toContain('href="/my-runs"'); expect(html).toContain("My Runs"); });
+  it("renders only one desktop My Runs navigation entry", async () => {
+    const { DesktopSidebar } = await import("../src/components/DesktopSidebar");
+    const html = renderToStaticMarkup(<MemoryRouter><DesktopSidebar city={{ id: "columbia-mo", name: "Columbia", state: "MO", live: true, tagline: "", groups: [], events: [], races: [], forum: [] }} onOpenCitySheet={() => {}} /></MemoryRouter>);
+    expect((html.match(/>My Runs</g) ?? []).length).toBe(1);
+  });
+
+  it("keeps upcoming agenda cards linked while past cards remain historical", async () => {
+    const { Agenda } = await import("../src/pages/MyRunsPage");
+    const base = { cityId: "columbia-mo", time: "8:00 AM", location: "Downtown", groupId: "g1", rsvpedAt: "2026-01-01T00:00:00Z" };
+    const html = renderToStaticMarkup(<MemoryRouter><Agenda upcoming={[{ ...base, id: "up", eventId: "event-up", title: "Upcoming run", date: "2099-01-01" }]} past={[{ ...base, id: "past", eventId: "event-past", title: "Past run", date: "2020-01-01" }]} onRemove={() => {}} /></MemoryRouter>);
+    expect(html).toContain('href="/events/event-up"');
+    expect(html).not.toContain('href="/events/event-past"');
+    expect(html).toContain("This RSVP is preserved in your history");
+  });
 });
+

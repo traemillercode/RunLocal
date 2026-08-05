@@ -20,11 +20,13 @@ import type {
   ContentRecord,
   FlagRecord,
   GroupModRecord,
+  GroupMembershipRecord,
   PersistedDb,
   SessionRecord,
   SubmissionRecord,
   VerifyPhase,
   SafetyReportRecord,
+  RunEventRecord,
 } from "./types";
 
 export const DEFAULT_RETENTION_YEARS = 3;
@@ -157,7 +159,9 @@ export class Db {
   private codes = new Map<string, CodeRecord>();
   private audits: AuditEntry[] = [];
   private content = new Map<string, ContentRecord>();
+  private events = new Map<string, RunEventRecord>();
   private groups = new Map<string, GroupModRecord>();
+  private memberships = new Map<string, GroupMembershipRecord>();
   private flags: FlagRecord[] = [];
   private submissions = new Map<string, SubmissionRecord>();
   private activities = new Map<string, import("./activity").Activity>();
@@ -179,6 +183,8 @@ export class Db {
   private joinRequestRate = new Map<string, number[]>();
   private safetyReports = new Map<string, SafetyReportRecord>();
   private safetyReportRate = new Map<string, number[]>();
+  private notificationPreferences = new Map<string, import("./types").NotificationPreferenceRecord>();
+  private notifications = new Map<string, import("./types").NotificationRecord>();
   /**
    * Private upload bytes (credential proofs) kept in memory so in-memory/test
    * stores can serve them back; file-backed stores mirror the bytes to disk
@@ -237,7 +243,9 @@ export class Db {
       // Pre-multi-city audit entries have no cityId — normalize to null.
       this.audits = (parsed.audits ?? []).map((a) => ({ ...a, cityId: a.cityId ?? null }));
       for (const r of parsed.content ?? []) this.content.set(r.id, r);
+      for (const e of parsed.events ?? []) this.events.set(e.id, e);
       for (const g of parsed.groups ?? []) this.groups.set(g.id, g);
+      for (const m of parsed.memberships ?? []) this.memberships.set(m.id, m);
       this.flags = parsed.flags ?? [];
       for (const s of parsed.submissions ?? []) this.submissions.set(s.id, s);
       for (const a of parsed.activities ?? []) this.activities.set(a.id, a);
@@ -256,6 +264,8 @@ export class Db {
       for (const j of parsed.joinRequests ?? []) this.joinRequests.set(j.id, { ...j, requesterAccepted: j.requesterAccepted ?? false, recipientAccepted: j.recipientAccepted ?? false });
       for (const b of parsed.blocks ?? []) this.blocks.set(`${b.blockerId}:${b.blockedId}`, b);
       for (const r of parsed.safetyReports ?? []) this.safetyReports.set(r.id, r);
+      for (const p of parsed.notificationPreferences ?? []) this.notificationPreferences.set(p.accountId, p);
+      for (const n of parsed.notifications ?? []) this.notifications.set(n.id, n);
       for (const [accountId, timestamps] of Object.entries(parsed.safetyReportRate ?? {})) this.safetyReportRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
       for (const [accountId, timestamps] of Object.entries(parsed.joinRequestRate ?? {})) {
         this.joinRequestRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
@@ -274,7 +284,9 @@ export class Db {
       codes: [...this.codes.values()],
       audits: this.audits,
       content: [...this.content.values()],
+      events: [...this.events.values()],
       groups: [...this.groups.values()],
+      memberships: [...this.memberships.values()],
       flags: this.flags,
       submissions: [...this.submissions.values()],
       activities: [...this.activities.values()],
@@ -295,6 +307,8 @@ export class Db {
       joinRequestRate: Object.fromEntries(this.joinRequestRate.entries()),
       safetyReports: [...this.safetyReports.values()],
       safetyReportRate: Object.fromEntries(this.safetyReportRate.entries()),
+      notificationPreferences: [...this.notificationPreferences.values()],
+      notifications: [...this.notifications.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -302,6 +316,12 @@ export class Db {
     await rename(tmp, file);
   }
 
+  getNotificationPreferences(accountId: string) { return this.notificationPreferences.get(accountId) ?? { accountId, run_reminders:false, community_updates:false, account_alerts:false, updatedAt:this.now().toISOString() }; }
+  setNotificationPreferences(accountId: string, patch: Partial<Pick<import("./types").NotificationPreferenceRecord,"run_reminders"|"community_updates"|"account_alerts">>) { const next={...this.getNotificationPreferences(accountId),...patch,accountId,updatedAt:this.now().toISOString()}; this.notificationPreferences.set(accountId,next); return next; }
+  addNotification(notification: import("./types").NotificationRecord) { this.notifications.set(notification.id, notification); return notification; }
+  listNotifications(accountId: string) { return [...this.notifications.values()].filter(n=>n.accountId===accountId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
+  updateNotification(id: string, accountId: string, patch: {readAt:string|null}) { const n=this.notifications.get(id); if(!n||n.accountId!==accountId)return undefined; n.readAt=patch.readAt; return n; }
+  markAllNotificationsRead(accountId:string) { const at=this.now().toISOString(); for(const n of this.notifications.values()) if(n.accountId===accountId)n.readAt=at; }
   // ---------------------------------------------------------------- accounts
   listAccounts(): AccountRecord[] {
     return [...this.accounts.values()];
@@ -541,6 +561,20 @@ export class Db {
     this.codes.delete(accountId);
   }
 
+  // --------------------------------------------------------- memberships
+  listMemberships(accountId?: string): GroupMembershipRecord[] {
+    return [...this.memberships.values()].filter((m) => !accountId || m.accountId === accountId);
+  }
+  getMembership(groupId: string, accountId: string): GroupMembershipRecord | undefined {
+    return [...this.memberships.values()].find((m) => m.groupId === groupId && m.accountId === accountId);
+  }
+  getMembershipById(id: string): GroupMembershipRecord | undefined { return this.memberships.get(id); }
+  addMembership(m: GroupMembershipRecord): void { this.memberships.set(m.id, m); }
+  updateMembership(id: string, patch: Partial<GroupMembershipRecord>): GroupMembershipRecord | undefined {
+    const current = this.memberships.get(id); if (!current) return undefined;
+    const next = { ...current, ...patch }; this.memberships.set(id, next); return next;
+  }
+
   // ------------------------------------------------------------------- audit
   appendAudit(
     entry: Omit<AuditEntry, "id" | "at" | "cityId"> & { cityId?: string | null },
@@ -559,6 +593,11 @@ export class Db {
     this.audits = this.audits.filter((a) => new Date(a.at).getTime() >= cutoff);
     return before - this.audits.length;
   }
+
+  // ------------------------------------------- canonical event registry
+  listEvents(): RunEventRecord[] { return [...this.events.values()]; }
+  getEvent(id: string): RunEventRecord | undefined { return this.events.get(id); }
+  setEvent(rec: RunEventRecord): RunEventRecord { this.events.set(rec.id, rec); return rec; }
 
   // ------------------------------------------- owner-dashboard registry
   listContent(): ContentRecord[] {

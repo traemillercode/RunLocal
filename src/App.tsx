@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { BottomNav } from "./components/BottomNav";
 import { CitySheet, Header } from "./components/Header";
+import { DesktopSidebar } from "./components/DesktopSidebar";
 import { CITIES } from "./data/cities";
 import { ToastProvider } from "./lib/toast";
 import { useAppState } from "./lib/store";
@@ -26,7 +27,9 @@ import { MyRunsPage } from "./pages/MyRunsPage";
 import { PersonalRunsPage } from "./pages/PersonalRunsPage";
 import { PastEventsPage } from "./pages/PastEventsPage";
 import { GroupsPage } from "./pages/GroupsPage";
+import { MarketingPage } from "./pages/MarketingPage";
 import { GroupDetailPage } from "./pages/GroupDetailPage";
+import { MyGroupsPage } from "./pages/MyGroupsPage";
 import { cleanCallbackUrl, parseAuthCallback } from "./lib/recovery";
 import * as supabase from "./lib/supabase";
 
@@ -65,16 +68,24 @@ function Shell() {
   const location = useLocation();
   const noNav = NO_NAV_PATHS.has(location.pathname);
   return (
+<<<<<<< HEAD
     <div className="min-h-dvh bg-[#F7F8FA] text-slate-900">
+=======
+    <div className="min-h-dvh bg-[#f7f7f5] text-slate-900">
+>>>>>>> origin/main
       <Header city={city} onOpenCitySheet={() => setCityOpen(true)} />
-      <main key={location.pathname}>
+      <DesktopSidebar city={city} onOpenCitySheet={() => setCityOpen(true)} />
+      <main key={location.pathname} className="desktop-main">
         <ModeratedProvider cityId={city.id}>
           <PublicContentProvider cityId={city.id}>
             <Routes>
             <Route path="/" element={<EventsPage city={city} store={store} />} />
+            <Route path="/landing" element={<MarketingPage />} />
+            <Route path="/events" element={<EventsPage city={city} store={store} />} />
             <Route path="/events/:eventId" element={<EventDetailPage city={city} store={store} />} />
             <Route path="/past-events" element={<PastEventsPage city={city} />} />
             <Route path="/groups" element={<GroupsPage city={city} />} />
+            <Route path="/my-groups" element={<MyGroupsPage />} />
             <Route path="/groups/:groupId" element={<GroupRoute />} />
             <Route path="/races" element={<RacesPage city={city} />} />
             <Route path="/forum" element={<ForumPage city={city} />} />

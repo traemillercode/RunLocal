@@ -155,6 +155,7 @@ export type AdminAction =
   | "admin.audit"
   | "admin.purge"
   | "admin.pending_list"
+  | "admin.overview"
   | "admin.dashboard"
   | "admin.flag_dismiss"
   | "admin.flag_hide"
@@ -179,6 +180,14 @@ export type AdminAction =
   | "admin.trust_threshold"
   | "admin.safety_report_list"
   | "admin.safety_report_resolve"
+  | "admin.event_list"
+  | "admin.event_create"
+  | "admin.event_edit"
+  | "admin.event_approve"
+  | "admin.event_publish"
+  | "admin.event_hide"
+  | "admin.event_unhide"
+  | "admin.event_archive"
   | "cityadmin.dashboard"
   | "cityadmin.submission_list"
   | "cityadmin.submission_approve"
@@ -189,7 +198,12 @@ export type AdminAction =
   | "cityadmin.group_rrca"
   | "cityadmin.content_highlight"
   | "cityadmin.audit"
-  | "account.delete";
+  | "account.delete"
+  | "group.membership_request"
+  | "group.membership_approve"
+  | "group.membership_decline"
+  | "group.membership_leave"
+  | "group.membership_remove";
 
 export interface AuditEntry {
   id: string;
@@ -210,6 +224,13 @@ export interface AuditEntry {
   cityId: string | null;
 }
 
+export interface RunEventRecord {
+  id: string; seedRefId: string | null; cityId: string; groupId: string; title: string;
+  dayOfWeek: number; time: string; location: string; distanceLabel: string; invite: InviteLabel; externalUrl: string | null;
+  provenance: "seed" | "community" | "admin"; status: "draft" | "approved" | "published" | "hidden" | "archived";
+  hidden: boolean; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; archivedAt: string | null;
+}
+
 export interface PersistedDb {
   accounts: AccountRecord[];
   sessions: SessionRecord[];
@@ -222,8 +243,10 @@ export interface PersistedDb {
    * ONLY ids, titles, and moderation flags — no sensitive data.
    */
   content: ContentRecord[];
+  events?: RunEventRecord[];
   /** Owner-dashboard group records: RRCA badge state + internal note. */
   groups: GroupModRecord[];
+  memberships?: GroupMembershipRecord[];
   /** Content flags (reports). Reasons are owner-only, never public. */
   flags: FlagRecord[];
   /**
@@ -257,8 +280,14 @@ export interface PersistedDb {
   joinRequestRate?: Record<string, number[]>;
   safetyReports?: SafetyReportRecord[];
   safetyReportRate?: Record<string, number[]>;
+  notificationPreferences?: NotificationPreferenceRecord[];
+  notifications?: NotificationRecord[];
 }
 
+export const NOTIFICATION_CATEGORIES = ["run_reminders", "community_updates", "account_alerts"] as const;
+export type NotificationCategory = typeof NOTIFICATION_CATEGORIES[number];
+export interface NotificationPreferenceRecord { accountId: string; run_reminders: boolean; community_updates: boolean; account_alerts: boolean; updatedAt: string; }
+export interface NotificationRecord { id: string; accountId: string; category: NotificationCategory; title: string; body: string; createdAt: string; readAt: string | null; }
 export interface MatchingPreferencesRecord {
   accountId: string;
   enabled: boolean;
@@ -393,6 +422,12 @@ export interface GroupModRecord {
   coverPhotoRef?: string|null; logoPhotoRef?: string|null; ownerId?: string; leaderIds?: string[]; membershipMode?: MembershipMode; status?: GroupStatus;
   rrcaBadge: boolean; rrcaNote: string | null; rrcaNoteUpdatedAt: string | null;
   rejectionReason?: string|null;
+}
+
+export type GroupMembershipStatus = "pending" | "active" | "declined" | "revoked" | "left";
+export interface GroupMembershipRecord {
+  id: string; groupId: string; accountId: string; cityId: string; status: GroupMembershipStatus;
+  requestedAt: string; updatedAt: string; decidedAt: string | null; decidedBy: string | null;
 }
 
 export type FlagStatus = "open" | "dismissed" | "hidden";

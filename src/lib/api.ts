@@ -73,6 +73,14 @@ export async function checkUsernameAvailability(username: string): Promise<ApiRe
   return result.ok ? normalizeUsernameAvailabilityResponse(result.data) : result;
 }
 
+export type NotificationPreferences = { run_reminders:boolean; community_updates:boolean; account_alerts:boolean; };
+export type InAppNotification = { id:string; category:keyof NotificationPreferences; title:string; body:string; createdAt:string; readAt:string|null };
+export const getNotificationPreferences = () => request<{preferences: NotificationPreferences}>("/api/notifications/preferences");
+export const updateNotificationPreferences = (patch: Partial<NotificationPreferences>) => request<{preferences: NotificationPreferences}>("/api/notifications/preferences", {method:"PATCH", body:JSON.stringify(patch)});
+export const getNotifications = () => request<{notifications:InAppNotification[]; unreadCount:number}>("/api/notifications");
+export const markNotificationRead = (id:string) => request<{status:string}>(`/api/notifications/${encodeURIComponent(id)}/read`, {method:"POST"});
+export const markAllNotificationsRead = () => request<{status:string}>("/api/notifications/read-all", {method:"POST"});
+
 // ------------------------------------------------------------------ health
 export interface HealthInfo {
   ok: true;
@@ -204,6 +212,16 @@ export function cmsRefUrl(ref: string): string { return `/api/cms/refs/${encodeU
 export function adminCmsRefUrl(ref: string): string { return `/api/admin/cms/refs/${encodeURIComponent(ref)}`; }
 
 // -------------------------------------------------------------------- admin
+export interface AdminOverview {
+  scope: { kind: "global" | "city"; cityId: string | null };
+  generatedAt: string;
+  queues: { pendingVerification: number; pendingSubmissions: number; openSafetyReports: number; contentNeedingReview: number };
+  analytics: { publishedContent: number | null; rsvpTotal: number | null; generatedAt: string; unavailable: boolean };
+}
+export function adminGetOverview(reason: string): Promise<ApiResult<AdminOverview>> {
+  return adminRequest("/api/admin/overview", reason);
+}
+
 export interface AdminSearchRow {
   id: string;
   name: string;
@@ -432,6 +450,12 @@ export interface PublicApprovedContent {
 export function getPublicContent(cityId: string): Promise<ApiResult<PublicApprovedContent>> {
   return request(`/api/content?city=${encodeURIComponent(cityId)}`);
 }
+export interface CanonicalEvent { id: string; seedRefId: string | null; cityId: string; groupId: string; title: string; dayOfWeek: number; time: string; location: string; distanceLabel: string; invite: "Open to all" | "Members + guests" | "RSVP requested"; externalUrl: string | null; provenance: "seed" | "community" | "admin"; status: "draft" | "approved" | "published" | "hidden" | "archived"; hidden: boolean; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; archivedAt: string | null; }
+export function getCanonicalEvents(cityId: string): Promise<ApiResult<{ cityId: string | null; events: CanonicalEvent[] }>> { return request(`/api/events?city=${encodeURIComponent(cityId)}`); }
+export function adminGetEvents(cityId: string | null, reason: string): Promise<ApiResult<{ events: CanonicalEvent[] }>> { return adminRequest(`/api/admin/events${cityId ? `?city=${encodeURIComponent(cityId)}` : ""}`, reason); }
+export function adminCreateEvent(input: Partial<CanonicalEvent>, reason: string): Promise<ApiResult<{ event: CanonicalEvent }>> { return adminRequest("/api/admin/events", reason, { method: "POST", body: JSON.stringify(input) }); }
+export function adminEditEvent(id: string, input: Partial<CanonicalEvent>, reason: string): Promise<ApiResult<{ event: CanonicalEvent }>> { return adminRequest(`/api/admin/events/${encodeURIComponent(id)}`, reason, { method: "PATCH", body: JSON.stringify(input) }); }
+export function adminTransitionEvent(id: string, action: "approve" | "publish" | "hide" | "unhide" | "archive", reason: string): Promise<ApiResult<{ event: CanonicalEvent }>> { return adminRequest(`/api/admin/events/${encodeURIComponent(id)}/${action}`, reason, { method: "POST" }); }
 export function getPublicGroups(cityId: string): Promise<ApiResult<{cityId:string;groups:PublicUserGroup[]}>> { return request(`/api/groups?city=${encodeURIComponent(cityId)}`); }
 export function getPublicGroup(id: string): Promise<ApiResult<{group:PublicUserGroup}>> { return request(`/api/groups/${encodeURIComponent(id)}`); }
 
@@ -682,3 +706,8 @@ export function adminGetTrust(reason: string): Promise<ApiResult<AdminTrustView>
 export function adminSetTrustThreshold(threshold: number, reason: string): Promise<ApiResult<{ threshold: number; newlyUnderReview: number }>> {
   return adminRequest("/api/admin/trust/threshold", reason, { method: "POST", body: JSON.stringify({ threshold }) });
 }
+
+export interface MyGroupMembership { id:string; groupId:string; cityId:string; groupName:string; status:"pending"|"active"|"declined"|"revoked"|"left"; requestedAt:string; updatedAt:string }
+export function getMyGroups(): Promise<ApiResult<{memberships:MyGroupMembership[]}>> { return request("/api/me/groups"); }
+export function requestGroupMembership(groupId:string): Promise<ApiResult<{membership:MyGroupMembership}>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership`, {method:"POST",body:"{}"}); }
+export function updateGroupMembership(groupId:string, action:"leave"|"approve"|"decline"|"remove", accountId?:string): Promise<ApiResult<{membership:MyGroupMembership}>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership/${action}`, {method:"POST",body:JSON.stringify(accountId?{accountId}:{})}); }

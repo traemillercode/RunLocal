@@ -15,6 +15,7 @@ import { useAccount } from "../state/account";
 import { useModerated } from "../state/moderated";
 import { usePublicContent } from "../state/content";
 import { GROUP_TYPE_LABELS, type City } from "../types";
+import { HomeRightRail } from "../components/HomeRightRail";
 
 export function EventsPage({ city }: { city: City; store: AppStore }) {
   const toast = useToast();
@@ -26,6 +27,14 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
   const [groupSheetOpen, setGroupSheetOpen] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
   const [myRunIds, setMyRunIds] = useState<Set<string>>(new Set());
+  const [canonicalEvents, setCanonicalEvents] = useState<api.CanonicalEvent[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void api.getCanonicalEvents(city.id).then((r) => {
+      if (alive && r.ok) setCanonicalEvents(r.data.events);
+    });
+    return () => { alive = false; };
+  }, [city.id]);
   const weekStart = startOfWeek(new Date());
   const canRsvp = canDo(role, "rsvp");
   useEffect(() => {
@@ -54,7 +63,8 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
     // Recurring seed slots describe the full weekly schedule, including a
     // Monday slot after Monday has passed; one-time community activity is
     // filtered separately below by its calendar date.
-    const resolved = resolveWeekEvents([...city.events, ...recurring], today)
+    const canonical = (canonicalEvents ?? []).filter((e) => e.status === "published" && !e.hidden && !e.archivedAt).map((e) => ({ id: e.id, groupId: e.groupId, title: e.title, dayOfWeek: e.dayOfWeek, time: e.time, location: e.location, distanceLabel: e.distanceLabel, invite: e.invite, externalUrl: e.externalUrl ?? undefined }));
+    const resolved = resolveWeekEvents([...city.events, ...canonical, ...recurring], today)
       .filter((e) => !hidden.has(`event:${e.id}`))
       .sort((a, b) => {
         const ha = highlights.get(`event:${a.id}`);
@@ -120,7 +130,8 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+    <div className="desktop-browse-layout mx-auto w-full max-w-md px-4 pb-32 pt-4">
+      <div className="desktop-two-column"><div>
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">This week</h1>
@@ -145,6 +156,13 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
         >
           <Icon name="users" className="h-3.5 w-3.5" /> Start a group
         </PillButton>
+      </div>
+      <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[#14171C] p-3.5 text-white shadow-sm">
+        <img src="/icons/icon-192.png" alt="" className="h-11 w-11 shrink-0 rounded-xl" />
+        <div className="min-w-0">
+          <p className="text-sm font-extrabold tracking-tight">Run <span className="text-[#FF5741]">Local</span></p>
+          <p className="mt-0.5 text-xs leading-relaxed text-white/70">Local runs, races, and community — starting in {city.name}.</p>
+        </div>
       </div>
       <HomeCityBanner />
       <Link to="/past-events" className="mt-3 inline-flex min-h-10 items-center gap-1 rounded-full bg-slate-100 px-3 text-xs font-bold text-slate-700">View past events <Icon name="chevronRight" className="h-4 w-4" /></Link>
@@ -298,6 +316,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
         </p>
       ) : null}
 
+      </div><HomeRightRail city={city} /></div>
       <IndependentEventSheet open={eventSheetOpen} onClose={() => setEventSheetOpen(false)} cityId={city.id} />
       <GroupSubmissionSheet open={groupSheetOpen} onClose={() => setGroupSheetOpen(false)} cityId={city.id} />
 
