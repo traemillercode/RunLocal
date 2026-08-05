@@ -22,7 +22,7 @@ import { PASSWORD_REQUIREMENTS, passwordRequirements } from "./LoginPage";
 import { normalizeUsername, USERNAME_HINT, USERNAME_PROMPT } from "../lib/username";
 
 const inputCls =
-  "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
+  "h-12 w-full rounded-[10px] border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
 /** Shared signup policy: password changes must satisfy the same checks. */
 export function changePasswordValidation(password: string, confirmation: string): string | null {
@@ -33,13 +33,18 @@ export function changePasswordValidation(password: string, confirmation: string)
   return null;
 }
 
+/** Settings password changes require a live, verified, non-suspended account. */
+export function passwordChangeEligibility(status: PublicAccount["status"], suspended: boolean): string | null {
+  return status === "verified" && !suspended ? null : "Password changes are available only for verified, active accounts.";
+}
+
 function UsernameEditor({ account, refresh }: { account: PublicAccount; refresh: () => Promise<void> }) {
   const [open, setOpen] = useState(account.username == null); const [value, setValue] = useState(account.username ?? ""); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); const [saved, setSaved] = useState(false);
   const save = async () => { setError(null); setSaved(false); const normalized = normalizeUsername(value); if (!normalized) { setError("Use 3–24 characters: letters, numbers, _ or -, starting with a letter."); return; } setBusy(true); const r = await api.setUsername(normalized); setBusy(false); if (r.ok) { setValue(r.data.account.username ?? normalized); setSaved(true); setOpen(false); await refresh(); } else setError(r.error.code === "username_taken" ? "That username is already taken — try another." : r.error.message ?? "Couldn't save your username. Try again."); };
   if (!open) return <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70"><div className="flex items-center justify-between"><div><h2 className="text-[15px] font-bold text-slate-900">Username</h2><p className="font-semibold">@{account.username ?? "not set"}</p></div><button type="button" onClick={() => setOpen(true)} className="rounded-[10px] bg-slate-100 px-4 py-2 text-sm font-semibold">{account.username ? "Change" : "Set"}</button></div><p className="mt-1 text-[11px] text-slate-400">{USERNAME_HINT}</p></section>;
   return <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70"><h2 className="text-[15px] font-bold">{account.username ? "Change username" : "Choose your username"}</h2><p className="mt-1 text-sm text-slate-600">{USERNAME_PROMPT}</p><input value={value} onChange={e => {setValue(e.target.value);setError(null)}} placeholder="jordanlee" className={inputCls+" mt-3"} autoComplete="username" />{error ? <p role="alert" className="mt-1 text-xs text-red-600">{error}</p> : null}{saved ? <p role="status" className="mt-1 text-xs text-emerald-700">Username saved.</p> : null}<div className="mt-3 flex gap-2"><PillButton variant="primary" className="flex-1" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save username"}</PillButton><PillButton variant="ghost" onClick={() => setOpen(false)}>Cancel</PillButton></div></section>;
 }
-function ChangePasswordSettings() {
+function ChangePasswordSettings({ account }: { account: PublicAccount }) {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,8 +52,18 @@ function ChangePasswordSettings() {
   const [saved, setSaved] = useState(false);
   const checks = passwordRequirements(password);
 
+  useEffect(() => {
+    if (passwordChangeEligibility(account.status, account.suspended)) {
+      setError("Password changes are available only for verified, active accounts.");
+    }
+  }, [account]);
+
   const submit = async () => {
     setError(null);
+    if (passwordChangeEligibility(account.status, account.suspended)) {
+      setError("Password changes are available only for verified, active accounts.");
+      return;
+    }
     setSaved(false);
     const validationError = changePasswordValidation(password, confirmation);
     if (validationError) {
@@ -82,7 +97,7 @@ function ChangePasswordSettings() {
         </label>
         {password.length > 0 ? (
           <ul aria-label="Password requirements" className="grid grid-cols-1 gap-1 text-xs text-slate-500">
-            {PASSWORD_REQUIREMENTS.map((requirement, i) => <li key={requirement.key} className={checks[i] ? "text-emerald-700" : "text-slate-500"}>{checks[i] ? "✓" : "○"} {requirement.label}</li>)}
+            {PASSWORD_REQUIREMENTS.map((requirement, i) => <li key={requirement.key} className={checks[i] ? "text-emerald-700" : "text-slate-500"}><span aria-hidden="true">{checks[i] ? "✓" : "○"}</span>{" "}{requirement.label}</li>)}
           </ul>
         ) : null}
         <label className="block">
@@ -264,7 +279,7 @@ export function SettingsPage() {
 
       {signedIn && account ? <UsernameEditor account={account} refresh={refresh} /> : null}
       {signedIn && account ? <ProfilePhotoSettings account={account} refresh={refresh} /> : null}
-      {signedIn && account ? <ChangePasswordSettings /> : null}
+      {signedIn && account ? <ChangePasswordSettings account={account} /> : null}
       {signedIn && account ? <ActivityConnections /> : null}
       {/* Account */}
       <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
