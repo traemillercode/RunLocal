@@ -45,3 +45,17 @@ describe("owner admin verification HTTP routes", () => {
     expect(JSON.parse(missing.body).error).toBe("no_selfie");
   });
 });
+
+describe("admin purge cookie separation", () => {
+  it("rejects a normal user session placed in the admin cookie", async () => {
+    process.env.RUN_LOCAL_ADMIN_KEY = "purge-test-key";
+    process.env.RUN_LOCAL_ADMIN_EMAIL = "admin@test";
+    const db = createMemoryStore();
+    const user = db.createAccount({ name: "User", email: "user@example.com" });
+    const userSession = db.createSession(user.id, "198.51.100.8");
+    const response = await call(db, "POST", "/api/admin/purge", `runlocal_admin=${userSession.id}`, "retention review");
+    expect(response.status).toBe(401);
+    delete process.env.RUN_LOCAL_ADMIN_KEY;
+    delete process.env.RUN_LOCAL_ADMIN_EMAIL;
+  });
+});

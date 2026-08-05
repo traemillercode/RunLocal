@@ -8,6 +8,7 @@ import {
   adminExportRows,
   adminGetRecord,
   adminLogin,
+  adminPending,
   adminSearch,
   adminSetStatus,
   adminViewSelfie,
@@ -65,14 +66,34 @@ describe("admin authorization", () => {
     if (!r.ok) expect(r.error).toBe("unauthorized");
   });
 
-  it("search requires a reason and audits the lookup", () => {
+  it("routine search succeeds without a user reason", () => {
     const db = createMemoryStore();
     const login = adminLogin(db, KEY, "198.51.100.7", T0);
     if (!login.ok) throw new Error("login failed");
     const r = adminSearch(db, ctx(login.data.sessionId), "jordan", T0);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe("reason_required");
-    expect(db.listAudit(10).filter((a) => a.action === "admin.search")).toHaveLength(0);
+    expect(r.ok).toBe(true);
+    expect(db.listAudit(10).find((a) => a.action === "admin.search")?.reason).toBe("Routine admin read");
+  });
+
+  it("pending queue is owner-only and routine access needs no user reason", () => {
+    const db = createMemoryStore();
+    const pending = db.createAccount({ name: "Pending", email: "pending@example.com" });
+    db.updateAccount(pending.id, { status: "pending" });
+    const keyLogin = adminLogin(db, KEY, "198.51.100.7", T0);
+    if (!keyLogin.ok) throw new Error("login failed");
+    const keyDenied = adminPending(db, ctx(keyLogin.data.sessionId), T0);
+    expect(keyDenied.ok).toBe(false);
+    if (!keyDenied.ok) expect(keyDenied.error).toBe("unauthorized");
+    const cityAdmin = db.createAccount({ name: "City Admin", email: "city@example.com", role: "city_admin", adminCityId: "columbia-mo" });
+    const userSession = db.createSession(cityAdmin.id, "198.51.100.8", T0);
+    const cityDenied = adminPending(db, ctx(null, userSession.id), T0);
+    expect(cityDenied.ok).toBe(false);
+    const owner = db.createAccount({ name: "Owner", email: process.env.RUN_LOCAL_OWNER_EMAIL ?? "traemiller.email@gmail.com" });
+    const ownerSession = db.createSession(owner.id, "198.51.100.9", T0);
+    const allowed = adminPending(db, { adminSessionId: null, userSessionId: ownerSession.id, ip: "198.51.100.9" }, T0);
+    expect(allowed.ok).toBe(true);
+    if (allowed.ok) expect(allowed.data.some((row) => row.id === pending.id)).toBe(true);
+    void userSession;
   });
 
   it("reason must be meaningful (5–500 chars)", () => {
@@ -80,6 +101,17 @@ describe("admin authorization", () => {
     expect(validReason("    ")).toBe(false);
     expect(validReason("safety review")).toBe(true);
     expect(validReason("x".repeat(501))).toBe(false);
+  });
+
+  it("search matches username queries", () => {
+    const db = createMemoryStore();
+    const rec = db.createAccount({ name: "Runner", email: "runner@example.com" });
+    db.updateAccount(rec.id, { username: "pace-setter" });
+    const login = adminLogin(db, KEY, "198.51.100.7", T0);
+    if (!login.ok) throw new Error("login failed");
+    const result = adminSearch(db, ctx(login.data.sessionId), "pace-setter", T0);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.map((row) => row.id)).toContain(rec.id);
   });
 
   it("successful search masks the phone and audits with admin/reason", () => {
@@ -117,6 +149,24 @@ describe("admin authorization", () => {
     }
     const audits = db.listAudit(10);
     expect(audits.some((a) => a.action === "admin.view_record" && a.targetId === rec.id)).toBe(true);
+  });
+
+  it("approval and rejection reject short reasons and accept a valid reason", () => {
+    const db = createMemoryStore();
+    const rejected = db.createAccount({ name: "Reject", email: "reject@example.com" });
+    const approved = db.createAccount({ name: "Approve", email: "approve@example.com" });
+    db.updateAccount(approved.id, { phase: "pending_review", selfieRef: `${approved.id}_selfie.jpg` });
+    const login = adminLogin(db, KEY, "198.51.100.7", T0);
+    if (!login.ok) throw new Error("login failed");
+    for (const reason of [undefined, "no"]) {
+      const result = adminSetStatus(db, ctx(login.data.sessionId, reason), rejected.id, "rejected", T0);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error).toBe("reason_required");
+    }
+    const acceptedReject = adminSetStatus(db, ctx(login.data.sessionId, "identity review complete"), rejected.id, "rejected", T0);
+    expect(acceptedReject.ok).toBe(true);
+    const acceptedApprove = adminSetStatus(db, ctx(login.data.sessionId, "identity confirmed by staff"), approved.id, "verified", T0);
+    expect(acceptedApprove.ok).toBe(true);
   });
 
   it("approve transitions pending → verified (requires pending_review + selfie) and is audited", () => {
