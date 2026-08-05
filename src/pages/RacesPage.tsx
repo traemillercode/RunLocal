@@ -45,17 +45,17 @@ function RaceCard({ race, featured = false, pinned = false }: { race: Race; feat
           {race.organizer} · {race.price}
         </p>
       </div>
-      <div className="border-t border-slate-100 px-4 py-2.5">
+      <div className="flex flex-col gap-1.5 border-t border-slate-100 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between">
         <a
           href={race.registrationUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[#14171C] text-sm font-semibold text-white active:bg-[#252a31]"
+          className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[#14171C] text-sm font-semibold text-white active:bg-[#252a31] lg:w-auto lg:px-4"
         >
           {race.registrationOpen ? "Register" : "View details"}
           <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
         </a>
-        <p className="mt-1.5 text-center text-[11px] text-slate-400">{race.registrationNote ?? "Opens on the organizer's site"}</p>
+        <p className="text-center text-[11px] text-slate-400 lg:text-right">{race.registrationNote ?? "Opens on the organizer's site"}</p>
       </div>
     </article>
   );
@@ -97,7 +97,9 @@ export function RacesPage({ city }: { city: City }) {
   }, [city.races, userRaces, hidden, highlights]);
 
   return (
-    <div className="desktop-browse-layout mx-auto w-full max-w-md px-4 pb-32 pt-4">
+    <>
+    <div className="desktop-races-layout desktop-browse-layout mx-auto w-full px-4 pb-32 pt-4">
+      <div className="min-w-0">
       <div className="flex flex-col gap-3 min-[420px]:flex-row min-[420px]:items-end min-[420px]:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Races</h1>
@@ -137,9 +139,26 @@ export function RacesPage({ city }: { city: City }) {
       <p className="mt-4 text-center text-[11px] leading-relaxed text-slate-400">
         Sample seed listings for the MVP plus approved community submissions — always confirm details on the organizer's site.
       </p>
-
-      <RaceSubmissionSheet open={sheetOpen} onClose={() => setSheetOpen(false)} cityId={city.id} />
-      <VerifiedGateSheet open={gateOpen} onClose={() => setGateOpen(false)} role={role} actionLabel="Submitting races" pendingLabel="Your profile is still in review." />
+      </div>
+      <aside className="desktop-races-rail" aria-label="Race listings guidance">
+        <section>
+          <p className="desktop-rail-kicker">Race listings</p>
+          <h2>Upcoming in {city.name}</h2>
+          <p>{races.length} approved listing{races.length === 1 ? "" : "s"} visible here. Check each organizer's site for current details.</p>
+        </section>
+        <section>
+          <p className="desktop-rail-kicker">Registration</p>
+          <p>Registration and event details are handled by each race organizer. Use the link on a listing to confirm availability and requirements.</p>
+        </section>
+        <section>
+          <p className="desktop-rail-kicker">Community submissions</p>
+          <p>Verified runners can submit a race for review using the Submit a race button above.</p>
+        </section>
+      </aside>
     </div>
+
+    <RaceSubmissionSheet open={sheetOpen} onClose={() => setSheetOpen(false)} cityId={city.id} />
+    <VerifiedGateSheet open={gateOpen} onClose={() => setGateOpen(false)} role={role} actionLabel="Submitting races" pendingLabel="Your profile is still in review." />
+    </>
   );
 }

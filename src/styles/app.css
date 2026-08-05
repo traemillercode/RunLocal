@@ -73,3 +73,13 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
 }
 @media (min-width: 1024px) and (hover: hover) and (pointer: fine) { .desktop-nav a, .desktop-account a, .desktop-city, .desktop-brand { transition: background-color 160ms ease, color 160ms ease, transform 160ms ease; } .desktop-nav a:hover { transform: translateX(2px); } }
 @media (min-width: 1024px) and (max-width: 1100px) { .desktop-sidebar { width: 216px; } .desktop-main { margin-left: 216px; } .desktop-forum-layout, .desktop-detail-layout { grid-template-columns: minmax(0, 1fr) 240px; gap: 20px; } }
+
+/* Races stays comfortably single-column until there is room for a useful rail. */
+@media (min-width: 1180px) {
+  .desktop-races-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: clamp(24px, 3vw, 40px); align-items: start; }
+  .desktop-races-rail { position: sticky; top: 32px; display: grid; gap: 16px; align-self: start; }
+  .desktop-races-rail section { border: 1px solid #e2e8f0; border-radius: 10px; background: white; padding: 18px; box-shadow: 0 1px 2px rgb(15 23 42 / 0.04); }
+  .desktop-races-rail h2 { margin-top: 4px; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+  .desktop-races-rail section > p:not(.desktop-rail-kicker) { margin-top: 6px; font-size: 13px; line-height: 1.5; color: #64748b; }
+}
+@media (max-width: 1179px) { .desktop-races-rail { display: none; } }
