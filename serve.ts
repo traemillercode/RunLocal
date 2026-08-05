@@ -24,7 +24,8 @@
 // admin selfie endpoint can read them.
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
+import { join, normalize } from "node:path";
+import { resolveStaticPath, staticHeaders } from "./src/server/static";
 import { Db } from "./src/server/store";
 import { apiHandler, pruneSessionsWith } from "./src/server/api";
 import { purgeEligible } from "./src/server/retention";
@@ -69,20 +70,6 @@ await runRetentionPurge();
 const purgeInterval = setInterval(() => void runRetentionPurge(), 24 * 60 * 60 * 1000);
 purgeInterval.unref();
 
-const TYPES: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".webmanifest": "application/manifest+json",
-  ".json": "application/json",
-  ".ico": "image/x-icon",
-  ".woff2": "font/woff2",
-  ".jpg": "image/jpeg",
-};
-
 const server = createServer(async (req, res) => {
   try {
     // 1) API + admin endpoints (same origin as the SPA).
@@ -111,7 +98,7 @@ const server = createServer(async (req, res) => {
       try {
         const upData = await readFile(upFile);
         const upExt = extname(upFile);
-        res.writeHead(200, { "content-type": TYPES[upExt] ?? "application/octet-stream", "cache-control": "public, max-age=3600" });
+        res.writeHead(200, { ...staticHeaders(upFile), "cache-control": "public, max-age=3600" });
         res.end(upData);
         return;
       } catch {
@@ -131,14 +118,10 @@ const server = createServer(async (req, res) => {
       data = await readFile(filePath);
     } catch {
       // Extensionless OAuth callback is an SPA document, never a binary download.
-      servedPath = join(root, "index.html");
+      servedPath = resolveStaticPath(filePath, join(root, "index.html"), false);
       data = await readFile(servedPath);
     }
-    const ext = extname(servedPath);
-    res.writeHead(200, {
-      "content-type": TYPES[ext] ?? "application/octet-stream",
-      "cache-control": ext === ".html" ? "no-cache" : "public, max-age=3600",
-    });
+    res.writeHead(200, staticHeaders(servedPath));
     res.end(data);
   } catch {
     if (!res.headersSent) res.writeHead(500).end("server error");
