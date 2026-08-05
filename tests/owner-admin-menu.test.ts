@@ -113,7 +113,7 @@ describe("non-owner denial", () => {
     const { adminLogin } = await import("../src/server/admin");
     const login = adminLogin(db, KEY, "198.51.100.7", T0);
     if (!login.ok) throw new Error("login failed");
-    const r = adminPending(db, ctx(login.data.sessionId, null, "moderating queue"), T0);
+    const r = adminPending(db, ctx(login.data.sessionId, null), T0);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe("unauthorized");
   });
@@ -155,7 +155,7 @@ describe("pending-user admin actions", () => {
       expect(json).not.toContain("203.0.113.9");
       expect(json).not.toContain("loginIps");
     }
-    expect(db.listAudit(10).some((a) => a.action === "admin.pending_list")).toBe(true);
+    expect(db.listAudit(10).some((a) => a.action === "admin.pending_list")).toBe(false);
   });
 
   it("cannot approve a user as Verified without the pending_review verification state", () => {

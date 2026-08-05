@@ -20,10 +20,13 @@ import type {
   ContentRecord,
   FlagRecord,
   GroupModRecord,
+  GroupMembershipRecord,
   PersistedDb,
   SessionRecord,
   SubmissionRecord,
   VerifyPhase,
+  SafetyReportRecord,
+  RunEventRecord,
 } from "./types";
 
 export const DEFAULT_RETENTION_YEARS = 3;
@@ -156,7 +159,9 @@ export class Db {
   private codes = new Map<string, CodeRecord>();
   private audits: AuditEntry[] = [];
   private content = new Map<string, ContentRecord>();
+  private events = new Map<string, RunEventRecord>();
   private groups = new Map<string, GroupModRecord>();
+  private memberships = new Map<string, GroupMembershipRecord>();
   private flags: FlagRecord[] = [];
   private submissions = new Map<string, SubmissionRecord>();
   private activities = new Map<string, import("./activity").Activity>();
@@ -170,6 +175,18 @@ export class Db {
   private appeals = new Map<string, import("./types").AppealRecord>();
   private recognitions = new Map<string, import("./types").RecognitionRecord>();
   private attendance = new Map<string, import("./types").AttendanceRecord>();
+  private personalRuns = new Map<string, import("./types").PersonalRunRecord>();
+  private matchingPreferences = new Map<string, import("./types").MatchingPreferencesRecord>();
+  private joinRequests = new Map<string, import("./types").JoinRequestRecord>();
+  private blocks = new Map<string, import("./types").BlockRecord>();
+  /** Persisted per-account JoinRequest timestamps. Old entries are pruned on every check. */
+  private joinRequestRate = new Map<string, number[]>();
+  private safetyReports = new Map<string, SafetyReportRecord>();
+  private safetyReportRate = new Map<string, number[]>();
+  private notificationPreferences = new Map<string, import("./types").NotificationPreferenceRecord>();
+  private notifications = new Map<string, import("./types").NotificationRecord>();
+  private discussions = new Map<string, import("./types").DiscussionRecord>();
+  private discussionRate = new Map<string, number[]>();
   /**
    * Private upload bytes (credential proofs) kept in memory so in-memory/test
    * stores can serve them back; file-backed stores mirror the bytes to disk
@@ -228,7 +245,9 @@ export class Db {
       // Pre-multi-city audit entries have no cityId — normalize to null.
       this.audits = (parsed.audits ?? []).map((a) => ({ ...a, cityId: a.cityId ?? null }));
       for (const r of parsed.content ?? []) this.content.set(r.id, r);
+      for (const e of parsed.events ?? []) this.events.set(e.id, e);
       for (const g of parsed.groups ?? []) this.groups.set(g.id, g);
+      for (const m of parsed.memberships ?? []) this.memberships.set(m.id, m);
       this.flags = parsed.flags ?? [];
       for (const s of parsed.submissions ?? []) this.submissions.set(s.id, s);
       for (const a of parsed.activities ?? []) this.activities.set(a.id, a);
@@ -242,6 +261,19 @@ export class Db {
       for (const a of parsed.appeals ?? []) this.appeals.set(a.id, a);
       for (const r of parsed.recognitions ?? []) this.recognitions.set(`${r.accountId}:${r.role}`, r);
       for (const a of parsed.attendance ?? []) this.attendance.set(a.id, a);
+      for (const r of parsed.personalRuns ?? []) this.personalRuns.set(r.id, r);
+      for (const p of parsed.matchingPreferences ?? []) this.matchingPreferences.set(p.accountId, p);
+      for (const j of parsed.joinRequests ?? []) this.joinRequests.set(j.id, { ...j, requesterAccepted: j.requesterAccepted ?? false, recipientAccepted: j.recipientAccepted ?? false });
+      for (const b of parsed.blocks ?? []) this.blocks.set(`${b.blockerId}:${b.blockedId}`, b);
+      for (const r of parsed.safetyReports ?? []) this.safetyReports.set(r.id, r);
+      for (const p of parsed.notificationPreferences ?? []) this.notificationPreferences.set(p.accountId, p);
+      for (const n of parsed.notifications ?? []) this.notifications.set(n.id, n);
+      for (const d of parsed.discussions ?? []) this.discussions.set(d.id, d);
+      for (const [accountId, timestamps] of Object.entries(parsed.discussionRate ?? {})) this.discussionRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
+      for (const [accountId, timestamps] of Object.entries(parsed.safetyReportRate ?? {})) this.safetyReportRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
+      for (const [accountId, timestamps] of Object.entries(parsed.joinRequestRate ?? {})) {
+        this.joinRequestRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
+      }
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -256,7 +288,9 @@ export class Db {
       codes: [...this.codes.values()],
       audits: this.audits,
       content: [...this.content.values()],
+      events: [...this.events.values()],
       groups: [...this.groups.values()],
+      memberships: [...this.memberships.values()],
       flags: this.flags,
       submissions: [...this.submissions.values()],
       activities: [...this.activities.values()],
@@ -270,6 +304,17 @@ export class Db {
       appeals: [...this.appeals.values()],
       recognitions: [...this.recognitions.values()],
       attendance: [...this.attendance.values()],
+      personalRuns: [...this.personalRuns.values()],
+      matchingPreferences: [...this.matchingPreferences.values()],
+      joinRequests: [...this.joinRequests.values()],
+      blocks: [...this.blocks.values()],
+      joinRequestRate: Object.fromEntries(this.joinRequestRate.entries()),
+      safetyReports: [...this.safetyReports.values()],
+      safetyReportRate: Object.fromEntries(this.safetyReportRate.entries()),
+      notificationPreferences: [...this.notificationPreferences.values()],
+      notifications: [...this.notifications.values()],
+      discussions: [...this.discussions.values()],
+      discussionRate: Object.fromEntries(this.discussionRate.entries()),
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -277,6 +322,17 @@ export class Db {
     await rename(tmp, file);
   }
 
+  getNotificationPreferences(accountId: string) { return this.notificationPreferences.get(accountId) ?? { accountId, run_reminders:false, community_updates:false, account_alerts:false, updatedAt:this.now().toISOString() }; }
+  setNotificationPreferences(accountId: string, patch: Partial<Pick<import("./types").NotificationPreferenceRecord,"run_reminders"|"community_updates"|"account_alerts">>) { const next={...this.getNotificationPreferences(accountId),...patch,accountId,updatedAt:this.now().toISOString()}; this.notificationPreferences.set(accountId,next); return next; }
+  addNotification(notification: import("./types").NotificationRecord) { this.notifications.set(notification.id, notification); return notification; }
+  listNotifications(accountId: string) { return [...this.notifications.values()].filter(n=>n.accountId===accountId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
+  updateNotification(id: string, accountId: string, patch: {readAt:string|null}) { const n=this.notifications.get(id); if(!n||n.accountId!==accountId)return undefined; n.readAt=patch.readAt; return n; }
+  markAllNotificationsRead(accountId:string) { const at=this.now().toISOString(); for(const n of this.notifications.values()) if(n.accountId===accountId)n.readAt=at; }
+  listDiscussions(occurrenceId: string) { return [...this.discussions.values()].filter(d => d.occurrenceId === occurrenceId && d.state === "visible").sort((a,b) => a.createdAt.localeCompare(b.createdAt)); }
+  getDiscussion(id: string) { return this.discussions.get(id); }
+  addDiscussion(d: import("./types").DiscussionRecord) { this.discussions.set(d.id, d); return d; }
+  updateDiscussion(id: string, patch: Partial<import("./types").DiscussionRecord>) { const d=this.discussions.get(id); if (!d) return undefined; const n={...d,...patch,updatedAt:this.now().toISOString()}; this.discussions.set(id,n); return n; }
+  consumeDiscussionRate(accountId:string, nowMs:number, limit=10, windowMs=60*60*1000) { const current=(this.discussionRate.get(accountId)??[]).filter(t=>nowMs-t<windowMs); if(current.length>=limit){this.discussionRate.set(accountId,current);return false;} current.push(nowMs);this.discussionRate.set(accountId,current);return true; }
   // ---------------------------------------------------------------- accounts
   listAccounts(): AccountRecord[] {
     return [...this.accounts.values()];
@@ -379,6 +435,34 @@ export class Db {
     this.deleteCode(id);
   }
 
+  // ------------------------------------------------------ private matching data
+  getMatchingPreferences(accountId: string): import("./types").MatchingPreferencesRecord | undefined { return this.matchingPreferences.get(accountId); }
+  setMatchingPreferences(record: import("./types").MatchingPreferencesRecord): void { this.matchingPreferences.set(record.accountId, record); }
+  listJoinRequests(accountId: string): import("./types").JoinRequestRecord[] { return [...this.joinRequests.values()].filter((r) => r.requesterId === accountId || r.recipientId === accountId); }
+  getJoinRequest(id: string): import("./types").JoinRequestRecord | undefined { return this.joinRequests.get(id); }
+  addJoinRequest(record: import("./types").JoinRequestRecord): void { this.joinRequests.set(record.id, record); }
+  updateJoinRequest(id: string, patch: Partial<import("./types").JoinRequestRecord>): import("./types").JoinRequestRecord | undefined { const r = this.joinRequests.get(id); if (!r) return undefined; const next = { ...r, ...patch }; this.joinRequests.set(id, next); return next; }
+  findPendingJoinRequest(requesterId: string, recipientId: string, contextType: "event" | "personal_run", contextId: string): import("./types").JoinRequestRecord | undefined { return [...this.joinRequests.values()].find((r) => r.requesterId === requesterId && r.recipientId === recipientId && r.contextType === contextType && r.contextId === contextId && r.state === "pending"); }
+  isBlocked(a: string, b: string): boolean { return this.blocks.has(`${a}:${b}`) || this.blocks.has(`${b}:${a}`); }
+  addBlock(record: import("./types").BlockRecord): void { this.blocks.set(`${record.blockerId}:${record.blockedId}`, record); }
+  /** Sliding-window limiter: returns true and records a request, persisting on caller's next persist(). */
+  consumeJoinRequestRate(accountId: string, nowMs: number, limit: number, windowMs: number): boolean {
+    const cutoff = nowMs - windowMs;
+    const current = (this.joinRequestRate.get(accountId) ?? []).filter((t) => t > cutoff).slice(-limit);
+    if (current.length >= limit) { this.joinRequestRate.set(accountId, current); return false; }
+    current.push(nowMs);
+    this.joinRequestRate.set(accountId, current);
+    return true;
+  }
+  removeBlock(blockerId: string, blockedId: string): void { this.blocks.delete(`${blockerId}:${blockedId}`); }
+  listBlocks(blockerId: string): import("./types").BlockRecord[] { return [...this.blocks.values()].filter(b => b.blockerId === blockerId); }
+  invalidateJoinRequests(a: string, b: string): number { let n=0; for (const r of this.joinRequests.values()) if (((r.requesterId===a&&r.recipientId===b)||(r.requesterId===b&&r.recipientId===a)) && (r.state === "pending" || r.state === "accepted")) { r.state="blocked"; r.updatedAt=new Date().toISOString(); n++; } return n; }
+
+  listSafetyReports(): SafetyReportRecord[] { return [...this.safetyReports.values()]; }
+  getSafetyReport(id: string): SafetyReportRecord | undefined { return this.safetyReports.get(id); }
+  addSafetyReport(r: SafetyReportRecord): void { this.safetyReports.set(r.id, r); }
+  updateSafetyReport(id: string, patch: Partial<SafetyReportRecord>): SafetyReportRecord | undefined { const r=this.safetyReports.get(id); if (!r) return; const next={...r,...patch}; this.safetyReports.set(id,next); return next; }
+  consumeSafetyReportRate(accountId:string, nowMs:number, limit=3, windowMs=60*60*1000): boolean { const current=(this.safetyReportRate.get(accountId)??[]).filter(t=>nowMs-t<windowMs); if(current.length>=limit){this.safetyReportRate.set(accountId,current);return false;} current.push(nowMs);this.safetyReportRate.set(accountId,current);return true; }
   getSettings<T>(fallback:T): T { return (this.settings ?? fallback) as T; }
   setSettings(settings: import("./types").SiteSettings): void { this.settings = settings; }
   getCity(id:string): import("./types").CmsCity | undefined { return this.cities.get(id); }
@@ -488,6 +572,20 @@ export class Db {
     this.codes.delete(accountId);
   }
 
+  // --------------------------------------------------------- memberships
+  listMemberships(accountId?: string): GroupMembershipRecord[] {
+    return [...this.memberships.values()].filter((m) => !accountId || m.accountId === accountId);
+  }
+  getMembership(groupId: string, accountId: string): GroupMembershipRecord | undefined {
+    return [...this.memberships.values()].find((m) => m.groupId === groupId && m.accountId === accountId);
+  }
+  getMembershipById(id: string): GroupMembershipRecord | undefined { return this.memberships.get(id); }
+  addMembership(m: GroupMembershipRecord): void { this.memberships.set(m.id, m); }
+  updateMembership(id: string, patch: Partial<GroupMembershipRecord>): GroupMembershipRecord | undefined {
+    const current = this.memberships.get(id); if (!current) return undefined;
+    const next = { ...current, ...patch }; this.memberships.set(id, next); return next;
+  }
+
   // ------------------------------------------------------------------- audit
   appendAudit(
     entry: Omit<AuditEntry, "id" | "at" | "cityId"> & { cityId?: string | null },
@@ -506,6 +604,11 @@ export class Db {
     this.audits = this.audits.filter((a) => new Date(a.at).getTime() >= cutoff);
     return before - this.audits.length;
   }
+
+  // ------------------------------------------- canonical event registry
+  listEvents(): RunEventRecord[] { return [...this.events.values()]; }
+  getEvent(id: string): RunEventRecord | undefined { return this.events.get(id); }
+  setEvent(rec: RunEventRecord): RunEventRecord { this.events.set(rec.id, rec); return rec; }
 
   // ------------------------------------------- owner-dashboard registry
   listContent(): ContentRecord[] {
@@ -624,6 +727,10 @@ export class Db {
   hasAttendance(accountId: string, eventId: string) { return [...this.attendance.values()].some(a => a.accountId === accountId && a.eventId === eventId); }
   addAttendance(a: import("./types").AttendanceRecord) { this.attendance.set(a.id, a); return a; }
   removeAttendance(id: string) { this.attendance.delete(id); }
+  listPersonalRuns(accountId?: string) { return [...this.personalRuns.values()].filter(r => !accountId || r.accountId === accountId); }
+  getPersonalRun(id: string) { return this.personalRuns.get(id); }
+  addPersonalRun(r: import("./types").PersonalRunRecord) { this.personalRuns.set(r.id, r); return r; }
+  updatePersonalRun(id: string, patch: Partial<import("./types").PersonalRunRecord>) { const r=this.personalRuns.get(id); if (!r) return undefined; const next={...r,...patch}; this.personalRuns.set(id,next); return next; }
 
   // ---------------------------------------------------------------- uploads
   private uploadDir(kind: "private" | "public"): string {

@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { normalizeErrorMessage } from "./errors";
 
 export const SUPABASE_REQUIRED_ENV = ["VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY"] as const;
-export interface SupabaseClientConfig { configured: boolean; missing: string[]; urlInvalid: boolean; url: string | null; anonKey: string | null; redirectUrl: string; emailDelivery: "provider-managed" | "not-configured" }
+export interface SupabaseClientConfig { configured: boolean; missing: string[]; urlInvalid: boolean; url: string | null; anonKey: string | null; redirectUrl: string; redirectConfigured: boolean; emailDelivery: "provider-managed" | "not-configured" }
 
 export const productionOrigin = "https://runlocal.ctonew.app";
 export function authRedirectUrl(env: Record<string, string | undefined> = import.meta.env as Record<string, string | undefined>): string {
@@ -14,7 +14,8 @@ export function supabaseClientConfig(env: Record<string, string | undefined> = i
   let valid = false; try { const u = new URL(rawUrl); valid = u.protocol === "https:" || (u.protocol === "http:" && ["localhost", "127.0.0.1"].includes(u.hostname)); } catch {}
   if (!rawUrl || !valid) missing.push("VITE_SUPABASE_URL");
   if (!anonKey) missing.push("VITE_SUPABASE_ANON_KEY");
-  return { configured: missing.length === 0, missing, urlInvalid: Boolean(rawUrl && !valid), url: valid ? rawUrl : null, anonKey: anonKey || null, redirectUrl: authRedirectUrl(env), emailDelivery: env.VITE_SUPABASE_SMTP_CONFIGURED === "true" ? "provider-managed" : "not-configured" };
+  const redirectConfigured = Boolean(env.VITE_AUTH_REDIRECT_URL?.trim());
+  return { configured: missing.length === 0, missing, urlInvalid: Boolean(rawUrl && !valid), url: valid ? rawUrl : null, anonKey: anonKey || null, redirectUrl: authRedirectUrl(env), redirectConfigured, emailDelivery: env.VITE_SUPABASE_SMTP_CONFIGURED === "true" ? "provider-managed" : "not-configured" };
 }
 export interface SupabaseAuthLike {
   signUp?: SupabaseClient["auth"]["signUp"];
@@ -23,6 +24,8 @@ export interface SupabaseAuthLike {
   resend?: SupabaseClient["auth"]["resend"];
   updateUser?: SupabaseClient["auth"]["updateUser"];
   setSession?: SupabaseClient["auth"]["setSession"];
+  getSession?: SupabaseClient["auth"]["getSession"];
+  exchangeCodeForSession?: SupabaseClient["auth"]["exchangeCodeForSession"];
 }
 const missingMessage = "Password sign-in is not configured on this deployment (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are missing).";
 function authFor(cfg: SupabaseClientConfig): SupabaseAuthLike { return createClient(cfg.url!, cfg.anonKey!).auth; }
@@ -52,10 +55,11 @@ function mapError(rawError: unknown): AuthResult {
   if (/rate|too many|security purposes/i.test(message)) return { ok:false, code:"rate_limited", message:"Too many attempts. Wait a moment and try again." };
   return { ok:false, code:"failed", message };
 }
-export async function signUp(email: string, password: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}): Promise<AuthResult> {
+export interface SignupProfileMetadata { username: string; display_name: string }
+export async function signUp(email: string, password: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike; data?: SignupProfileMetadata } = {}): Promise<AuthResult> {
   const c = cfg(opts.env); if (!c.configured) return { ok:false, code:"unconfigured", message:missingMessage };
   try {
-    const outcome = await withTimeout((opts.auth ?? authFor(c)).signUp!({ email, password, options: { emailRedirectTo: c.redirectUrl } }));
+    const outcome = await withTimeout((opts.auth ?? authFor(c)).signUp!({ email, password, options: { emailRedirectTo: c.redirectUrl, ...(opts.data ? { data: { username: opts.data.username, display_name: opts.data.display_name } } : {}) } }));
     if (outcome === "timeout") return { ok:false, code:"timeout", message:SIGNUP_TIMEOUT_MESSAGE };
     const { data, error } = outcome;
     if (error) return mapError(error);
@@ -100,6 +104,25 @@ export async function resendConfirmationEmail(email: string, opts: { env?: Recor
     if (/rate|too many|security purposes/i.test(normalizeErrorMessage(error))) return { ok:false, code:"rate_limited", message:"Too many requests. Wait a moment and try again." };
     return { ok:false, code:"failed", message:"Supabase could not resend the confirmation email. Check the address and try again." };
   } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
+}
+export async function getConfirmationSession(opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike; code?: string; accessToken?: string; refreshToken?: string } = {}): Promise<{ ok: true; accessToken: string } | { ok: false; code: "unconfigured" | "unavailable"; message: string }> {
+  const c = cfg(opts.env); if (!c.configured) return { ok: false, code: "unconfigured", message: missingMessage };
+  try {
+    const auth = opts.auth ?? authFor(c);
+    if (opts.accessToken && opts.refreshToken && auth.setSession) {
+      const session = await auth.setSession({ access_token: opts.accessToken, refresh_token: opts.refreshToken });
+      if (!session.error && session.data.session?.access_token) return { ok: true, accessToken: session.data.session.access_token };
+    }
+    if (opts.code && auth.exchangeCodeForSession) {
+      const exchanged = await auth.exchangeCodeForSession(opts.code);
+      if (exchanged.error || !exchanged.data.session?.access_token) return { ok: false, code: "unavailable", message: "Your confirmation link could not establish a session. Log in to continue." };
+      return { ok: true, accessToken: exchanged.data.session.access_token };
+    }
+    if (!auth.getSession) return { ok: false, code: "unavailable", message: "Your email is confirmed. Log in to continue." };
+    const current = await auth.getSession();
+    if (current.error || !current.data.session?.access_token) return { ok: false, code: "unavailable", message: "Your email is confirmed. Log in to continue." };
+    return { ok: true, accessToken: current.data.session.access_token };
+  } catch { return { ok: false, code: "unavailable", message: "Your email is confirmed. Log in to continue." }; }
 }
 export async function setRecoverySession(accessToken: string, refreshToken: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}) {
   const c=cfg(opts.env); if(!c.configured) return {ok:false as const, code:"unconfigured", message:missingMessage};

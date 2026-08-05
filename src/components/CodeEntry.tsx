@@ -75,7 +75,7 @@ export function CodeEntry({
             if (next.focus !== value.focus) onChange(next);
             refs.current[i]?.select();
           }}
-          className="h-14 w-11 rounded-xl border border-slate-300 bg-white text-center text-xl font-bold text-slate-900 outline-none focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60 sm:w-12"
+          className="h-14 w-11 rounded-xl border border-slate-300 bg-white text-center text-xl font-bold text-slate-900 outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60 sm:w-12"
         />
       ))}
     </div>

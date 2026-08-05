@@ -449,9 +449,10 @@ export interface PendingQueueRow {
  * name, email, funnel phase, requested role, signup time. No phone, no selfie
  * reference, no IPs, no timestamps beyond signup.
  */
-export function adminPending(db: Db, ctx: AdminCtx, now = new Date()): AdminResult<PendingQueueRow[]> {
-  const auth = authorizeOwner(db, ctx, "admin.pending_list", null, now);
-  if (!auth.ok) return auth;
+/** Read-only owner queue access. Reads are authorized but not audit mutations;
+ * consequential decisions below still require authorizeAdmin + a reason. */
+export function adminPending(db: Db, ctx: AdminCtx, _now = new Date()): AdminResult<PendingQueueRow[]> {
+  if (!ownerSessionAccount(db, ctx)) return { ok: false, status: 401, error: "unauthorized" };
   const rows = db
     .listAccounts()
     .filter((a) => !a.deletedAt && a.status === "pending")

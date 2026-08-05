@@ -29,6 +29,8 @@ export interface SupabaseServerConfig {
   urlInvalid: boolean;
   url: string | null;
   anonKey: string | null;
+  /** Explicit callback URL presence; fallback remains supported for current deployments. */
+  redirectConfigured: boolean;
 }
 
 export function supabaseConfig(env: Record<string, string | undefined> = process.env): SupabaseServerConfig {
@@ -53,6 +55,7 @@ export function supabaseConfig(env: Record<string, string | undefined> = process
     urlInvalid: Boolean(rawUrl && !urlValid),
     url: urlValid ? rawUrl : null,
     anonKey: anonKey || null,
+    redirectConfigured: Boolean(env.VITE_AUTH_REDIRECT_URL?.trim()),
   };
 }
 

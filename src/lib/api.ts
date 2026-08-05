@@ -28,11 +28,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
       credentials: "same-origin",
     });
     const text = await res.text();
-    let body: unknown = {};
+    let body: unknown;
     try {
-      body = text ? JSON.parse(text) : {};
+      body = text ? JSON.parse(text) : null;
     } catch {
-      body = { error: "invalid_response" };
+      return { ok: false, error: new ApiError(502, "invalid_response", "The server returned an invalid response. Please try again.") };
     }
     if (!res.ok) {
       const b = body && typeof body === "object" ? body as { error?: unknown; message?: unknown } : {};
@@ -47,6 +47,40 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
   }
 }
 
+// ------------------------------------------------------- username availability
+export interface UsernameAvailability {
+  valid: boolean;
+  available: boolean;
+}
+
+/**
+ * Validate the availability payload instead of treating an unexpected 2xx body
+ * as "taken". A stale proxy/server can return the SPA HTML with a 200, and a
+ * malformed payload must leave signup in the explicit error state.
+ */
+export function normalizeUsernameAvailabilityResponse(body: unknown): ApiResult<UsernameAvailability> {
+  if (body && typeof body === "object") {
+    const candidate = body as { valid?: unknown; available?: unknown };
+    if (typeof candidate.valid === "boolean" && typeof candidate.available === "boolean") {
+      return { ok: true, data: { valid: candidate.valid, available: candidate.available } };
+    }
+  }
+  return { ok: false, error: new ApiError(502, "invalid_response", "The server returned an invalid username availability response.") };
+}
+
+export async function checkUsernameAvailability(username: string): Promise<ApiResult<UsernameAvailability>> {
+  const result = await request<unknown>(`/api/username/availability?username=${encodeURIComponent(username)}`);
+  return result.ok ? normalizeUsernameAvailabilityResponse(result.data) : result;
+}
+
+export type NotificationPreferences = { run_reminders:boolean; community_updates:boolean; account_alerts:boolean; };
+export type InAppNotification = { id:string; category:keyof NotificationPreferences; title:string; body:string; createdAt:string; readAt:string|null };
+export const getNotificationPreferences = () => request<{preferences: NotificationPreferences}>("/api/notifications/preferences");
+export const updateNotificationPreferences = (patch: Partial<NotificationPreferences>) => request<{preferences: NotificationPreferences}>("/api/notifications/preferences", {method:"PATCH", body:JSON.stringify(patch)});
+export const getNotifications = () => request<{notifications:InAppNotification[]; unreadCount:number}>("/api/notifications");
+export const markNotificationRead = (id:string) => request<{status:string}>(`/api/notifications/${encodeURIComponent(id)}/read`, {method:"POST"});
+export const markAllNotificationsRead = () => request<{status:string}>("/api/notifications/read-all", {method:"POST"});
+
 // ------------------------------------------------------------------ health
 export interface HealthInfo {
   ok: true;
@@ -54,6 +88,8 @@ export interface HealthInfo {
   supabaseConfigured: boolean;
   /** Names of missing provider vars only — never values, never secrets. */
   supabaseMissing: string[];
+  /** Whether VITE_AUTH_REDIRECT_URL was explicitly supplied at startup. */
+  authRedirectConfigured: boolean;
   adminConfigured: boolean;
   retentionYears: number;
   retention: { retentionYears: number; eligibleForPurge: number; totalAccounts: number };
@@ -68,8 +104,25 @@ export function getMe(): Promise<ApiResult<Me>> {
 }
 
 // ---------------------------------------------------------------- accounts
-export function createAccount(input: { name: string; username: string; email: string; phone?: string; birthdate: string; cityId: string; requestedRole?: "runner" | "group_leader"; noSession?: boolean }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
-  return request("/api/accounts", { method: "POST", body: JSON.stringify(input) });
+export function normalizeAccountResponse(body: unknown): ApiResult<{ account: import("./accounts").PublicAccount }> {
+  if (body && typeof body === "object" && "account" in body && body.account && typeof body.account === "object") {
+    return { ok: true, data: body as { account: import("./accounts").PublicAccount } };
+  }
+  return { ok: false, error: new ApiError(502, "invalid_response", "The server returned an invalid account response. Please try again.") };
+}
+export async function createAccount(input: { name: string; username: string; email: string; phone?: string; birthdate: string; cityId: string; requestedRole?: "runner" | "group_leader"; noSession?: boolean }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
+  const result = await request<unknown>("/api/accounts", { method: "POST", body: JSON.stringify(input) });
+  return result.ok ? normalizeAccountResponse(result.data) : result;
+}
+
+/** Set or change the signed-in user's unique public handle (server-normalized). */
+export function setUsername(username: string): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
+  return request("/api/profile/username", { method: "POST", body: JSON.stringify({ username }) });
+}
+
+/** Set or change the signed-in user's home city (server-validated against known city entities). */
+export function setHomeCity(cityId: string): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
+  return request("/api/profile/city", { method: "POST", body: JSON.stringify({ cityId }) });
 }
 
 /** Set or change the signed-in user's unique public handle (server-normalized). */
@@ -84,6 +137,9 @@ export function setHomeCity(cityId: string): Promise<ApiResult<{ account: import
 
 export function uploadProfilePhoto(photoDataUrl: string): Promise<ApiResult<{ photoUrl: string }>> {
   return request("/api/profile/photo", { method: "POST", body: JSON.stringify({ photo: photoDataUrl }) });
+}
+export function uploadGroupPhoto(photoDataUrl: string): Promise<ApiResult<{ photoRef: string }>> {
+  return request("/api/group/photo", { method: "POST", body: JSON.stringify({ photo: photoDataUrl }) });
 }
 
 // -------------------------------------------------------------- verification
@@ -166,6 +222,16 @@ export function cmsRefUrl(ref: string): string { return `/api/cms/refs/${encodeU
 export function adminCmsRefUrl(ref: string): string { return `/api/admin/cms/refs/${encodeURIComponent(ref)}`; }
 
 // -------------------------------------------------------------------- admin
+export interface AdminOverview {
+  scope: { kind: "global" | "city"; cityId: string | null };
+  generatedAt: string;
+  queues: { pendingVerification: number; pendingSubmissions: number; openSafetyReports: number; contentNeedingReview: number };
+  analytics: { publishedContent: number | null; rsvpTotal: number | null; generatedAt: string; unavailable: boolean };
+}
+export function adminGetOverview(reason: string): Promise<ApiResult<AdminOverview>> {
+  return adminRequest("/api/admin/overview", reason);
+}
+
 export interface AdminSearchRow {
   id: string;
   name: string;
@@ -241,9 +307,10 @@ export function adminSetStatus(id: string, action: "approve" | "reject", reason:
   return adminRequest(`/api/admin/records/${id}/${action}?role=${role}`, reason, { method: "POST" });
 }
 
-/** Owner-only: fetch the pending-users queue (audited with the reason). */
-export function adminPending(reason: string): Promise<ApiResult<{ results: PendingQueueRow[] }>> {
-  return adminRequest("/api/admin/pending", reason);
+/** Owner-only read: fetch the pending-users queue. Read access is authorized
+ * server-side without an audit reason; decisions remain reason-required. */
+export function adminPending(): Promise<ApiResult<{ results: PendingQueueRow[] }>> {
+  return request("/api/admin/pending");
 }
 
 export function adminDeleteRecord(id: string, reason: string): Promise<ApiResult<{ ok: true }>> {
@@ -334,7 +401,7 @@ export function submitRace(input: {
 
 export function submitGroup(input: {
   cityId?: string; name: string; description?: string; groupType: "rrca-chartered" | "community";
-  groupmeUrl?: string; facebookUrl?: string; instagramUrl?: string; websiteUrl?: string;
+  groupmeUrl?: string; facebookUrl?: string; instagramUrl?: string; websiteUrl?: string; coverPhoto?: string; logoPhoto?: string; membershipMode?: "open" | "request";
 }): Promise<ApiResult<{ submission: { id: string; status: string } }>> {
   return request("/api/submissions/group", { method: "POST", body: JSON.stringify(input) });
 }
@@ -379,7 +446,7 @@ export interface PublicUserRace {
 }
 export interface PublicUserGroup {
   id: string; kind: "group"; name: string; groupType: "rrca-chartered" | "community"; description: string;
-  groupmeUrl: string | null; facebookUrl: string | null; instagramUrl: string | null; websiteUrl: string | null;
+  groupmeUrl: string | null; facebookUrl: string | null; instagramUrl: string | null; websiteUrl: string | null; coverPhotoUrl?: string; logoPhotoUrl?: string; membershipMode?: "open" | "request"; rrcaVerified?: boolean; leaders?: {id:string;name:string}[];
 }
 export interface PublicUserEvent {
   id: string; kind: "event"; title: string; type: "one_time" | "recurring"; date: string | null;
@@ -393,6 +460,14 @@ export interface PublicApprovedContent {
 export function getPublicContent(cityId: string): Promise<ApiResult<PublicApprovedContent>> {
   return request(`/api/content?city=${encodeURIComponent(cityId)}`);
 }
+export interface CanonicalEvent { id: string; seedRefId: string | null; cityId: string; groupId: string; title: string; dayOfWeek: number; time: string; location: string; distanceLabel: string; invite: "Open to all" | "Members + guests" | "RSVP requested"; externalUrl: string | null; provenance: "seed" | "community" | "admin"; status: "draft" | "approved" | "published" | "hidden" | "archived"; hidden: boolean; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; archivedAt: string | null; }
+export function getCanonicalEvents(cityId: string): Promise<ApiResult<{ cityId: string | null; events: CanonicalEvent[] }>> { return request(`/api/events?city=${encodeURIComponent(cityId)}`); }
+export function adminGetEvents(cityId: string | null, reason: string): Promise<ApiResult<{ events: CanonicalEvent[] }>> { return adminRequest(`/api/admin/events${cityId ? `?city=${encodeURIComponent(cityId)}` : ""}`, reason); }
+export function adminCreateEvent(input: Partial<CanonicalEvent>, reason: string): Promise<ApiResult<{ event: CanonicalEvent }>> { return adminRequest("/api/admin/events", reason, { method: "POST", body: JSON.stringify(input) }); }
+export function adminEditEvent(id: string, input: Partial<CanonicalEvent>, reason: string): Promise<ApiResult<{ event: CanonicalEvent }>> { return adminRequest(`/api/admin/events/${encodeURIComponent(id)}`, reason, { method: "PATCH", body: JSON.stringify(input) }); }
+export function adminTransitionEvent(id: string, action: "approve" | "publish" | "hide" | "unhide" | "archive", reason: string): Promise<ApiResult<{ event: CanonicalEvent }>> { return adminRequest(`/api/admin/events/${encodeURIComponent(id)}/${action}`, reason, { method: "POST" }); }
+export function getPublicGroups(cityId: string): Promise<ApiResult<{cityId:string;groups:PublicUserGroup[]}>> { return request(`/api/groups?city=${encodeURIComponent(cityId)}`); }
+export function getPublicGroup(id: string): Promise<ApiResult<{group:PublicUserGroup}>> { return request(`/api/groups/${encodeURIComponent(id)}`); }
 
 // ------------------------------------------------- owner dashboard (admin)
 export interface DashboardFlagView {
@@ -485,7 +560,8 @@ export type ActivityProvider = "strava" | "garmin" | "coros" | "suunto";
 export type ShareMode = "auto" | "manual" | "private";
 export interface PublicActivityCard { id: string; type: string; distanceMeters: number; durationSeconds: number; provider: ActivityProvider; attribution: string; sharedAt: string; }
 export function getActivityFeed(city: string): Promise<ApiResult<{ cards: PublicActivityCard[] }>> { return request(`/api/activity/feed?city=${encodeURIComponent(city)}`); }
-export function getConnection(provider: ActivityProvider): Promise<ApiResult<{ authorizeUrl?: string; connected?: boolean; shareMode?: ShareMode }>> { return request(`/api/connections/${provider}`); }
+export type ProviderStatus = { provider: ActivityProvider; offered: boolean; configured: boolean; connected: boolean; state: "unavailable" | "coming_soon" | "not_configured" | "available" | "connected"; authorizeUrl?: string; missing?: string[] };
+export function getProviderStatus(provider: ActivityProvider): Promise<ApiResult<ProviderStatus>> { return request(`/api/connections/${provider}`); }
 export function disconnectConnection(provider: ActivityProvider, deleteActivities: boolean): Promise<ApiResult<{ disconnected: boolean; deletedActivities: boolean }>> { return request(`/api/connections/${provider}/disconnect`, { method: "POST", body: JSON.stringify({ deleteActivities }) }); }
 
 // ------------------------------------------------------- credentials & trust
@@ -548,10 +624,23 @@ export function getRecognitions(cityId: string): Promise<ApiResult<{ recognition
   return request(`/api/recognitions?city=${encodeURIComponent(cityId)}`);
 }
 
+export interface MyRunView { id: string; eventId: string; occurrenceId?: string | null; cityId: string; title: string; date: string; time: string; location: string; groupId: string; rsvpedAt: string; }
+export const PERSONAL_RUN_CONSENT_VERSION = "2026-08-04.v1";
+export interface PersonalRun { id:string; accountId:string; cityId:string; title:string; startsAt:string; locationLabel:string|null; distanceLabel:string|null; notes:string|null; visibility:"private"; consentVersion:string; consentedAt:string; createdAt:string; updatedAt:string; deletedAt:string|null; }
+export function getPersonalRuns(): Promise<ApiResult<{runs: PersonalRun[]}>> { return request("/api/personal-runs"); }
+export function createPersonalRun(input: Omit<PersonalRun, "id"|"accountId"|"visibility"|"consentVersion"|"consentedAt"|"createdAt"|"updatedAt"|"deletedAt"> & {consent:true}): Promise<ApiResult<{run:PersonalRun}>> { return request("/api/personal-runs", {method:"POST", body:JSON.stringify({...input, consentVersion: PERSONAL_RUN_CONSENT_VERSION})}); }
+export function updatePersonalRun(id:string, input: Partial<Pick<PersonalRun,"cityId"|"title"|"startsAt"|"locationLabel"|"distanceLabel"|"notes">> & {consent:true}): Promise<ApiResult<{run:PersonalRun}>> { return request(`/api/personal-runs/${encodeURIComponent(id)}`, {method:"PATCH", body:JSON.stringify({...input, consentVersion: PERSONAL_RUN_CONSENT_VERSION})}); }
+export function deletePersonalRun(id:string): Promise<ApiResult<{deleted:boolean}>> { return request(`/api/personal-runs/${encodeURIComponent(id)}`, {method:"DELETE"}); }
+export function getMyRuns(): Promise<ApiResult<{ runs: MyRunView[] }>> { return request("/api/my/runs"); }
+
 /** Server-side RSVP — the shared-attendance basis for rating eligibility. */
-export function rsvpEvent(eventId: string, rsvp: boolean = true): Promise<ApiResult<{ rsvped: boolean }>> {
-  return request("/api/events/rsvp", { method: "POST", body: JSON.stringify({ eventId, rsvp }) });
+export function rsvpEvent(eventId: string, rsvp: boolean = true, runDate?: string): Promise<ApiResult<{ rsvped: boolean }>> {
+  return request("/api/events/rsvp", { method: "POST", body: JSON.stringify({ eventId, rsvp, ...(runDate ? { runDate } : {}) }) });
 }
+export interface DiscussionView { id:string; kind:"thread"|"comment"; parentId:string|null; occurrenceId:string; eventId:string; cityId:string; title:string|null; body:string; authorId:string; createdAt:string; updatedAt:string; }
+export function getOccurrenceDiscussion(eventId:string, occurrenceId:string): Promise<ApiResult<{discussion:DiscussionView[]}>> { return request(`/api/events/${encodeURIComponent(eventId)}/occurrences/${encodeURIComponent(occurrenceId)}/discussion`); }
+export function createDiscussion(eventId:string, occurrenceId:string, input:{title?:string;body:string;parentId?:string}): Promise<ApiResult<{discussion:DiscussionView}>> { return request(`/api/events/${encodeURIComponent(eventId)}/occurrences/${encodeURIComponent(occurrenceId)}/discussion`, {method:"POST",body:JSON.stringify(input)}); }
+export function deleteDiscussion(eventId:string, occurrenceId:string, id:string): Promise<ApiResult<{deleted:boolean}>> { return request(`/api/events/${encodeURIComponent(eventId)}/occurrences/${encodeURIComponent(occurrenceId)}/discussion/${encodeURIComponent(id)}`, {method:"DELETE"}); }
 
 export function submitRating(input: {
   revieweeId: string;
@@ -632,3 +721,8 @@ export function adminGetTrust(reason: string): Promise<ApiResult<AdminTrustView>
 export function adminSetTrustThreshold(threshold: number, reason: string): Promise<ApiResult<{ threshold: number; newlyUnderReview: number }>> {
   return adminRequest("/api/admin/trust/threshold", reason, { method: "POST", body: JSON.stringify({ threshold }) });
 }
+
+export interface MyGroupMembership { id:string; groupId:string; cityId:string; groupName:string; status:"pending"|"active"|"declined"|"revoked"|"left"; requestedAt:string; updatedAt:string }
+export function getMyGroups(): Promise<ApiResult<{memberships:MyGroupMembership[]}>> { return request("/api/me/groups"); }
+export function requestGroupMembership(groupId:string): Promise<ApiResult<{membership:MyGroupMembership}>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership`, {method:"POST",body:"{}"}); }
+export function updateGroupMembership(groupId:string, action:"leave"|"approve"|"decline"|"remove", accountId?:string): Promise<ApiResult<{membership:MyGroupMembership}>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership/${action}`, {method:"POST",body:JSON.stringify(accountId?{accountId}:{})}); }

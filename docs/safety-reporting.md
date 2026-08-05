@@ -1,0 +1,2 @@
+# Safety reporting security model
+Reports are authenticated, verified-runner-only, context-bound (shared event, participant JoinRequest, or private run), city-scoped, bounded to 500 characters, duplicate-protected, rate-limited, and persisted. Reporter identity and reason are never returned in ordinary-user DTOs. Admin listing and status transitions must use existing audited global/city authorization; city admins are restricted to their city. Blocks invalidate report contexts.

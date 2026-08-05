@@ -95,7 +95,7 @@ export function CredentialList({ credentials }: { credentials: CredentialView[] 
                 href={credentialProofUrl(c.id)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-[#0b2b22] underline decoration-[#c8f169] decoration-2 underline-offset-2"
+                className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-[#14171C] underline decoration-[#FF5741] decoration-2 underline-offset-2"
               >
                 <Icon name="external" className="h-3.5 w-3.5" /> View proof (private, owner-only)
               </a>
@@ -175,7 +175,7 @@ export function CredentialSubmitForm({
   };
 
   const inputCls =
-    "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+    "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
   return (
     <div className="mt-3 space-y-3">
@@ -226,7 +226,7 @@ export function CredentialSubmitForm({
           type="file"
           accept="application/pdf,image/jpeg,image/png"
           onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
-          className="block w-full text-[13px] text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-[#0b2b22] file:px-4 file:py-2 file:text-[13px] file:font-semibold file:text-white"
+          className="block w-full text-[13px] text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-[#14171C] file:px-4 file:py-2 file:text-[13px] file:font-semibold file:text-white"
         />
         {proofName ? <p className="mt-1 text-[11px] text-emerald-700">Selected: {proofName}</p> : null}
       </div>
@@ -318,7 +318,7 @@ export function AppealForm({ busy, error, onSubmit }: { busy: boolean; error: st
         rows={3}
         maxLength={500}
         placeholder="Tell an admin what happened and why the review should be reconsidered…"
-        className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60"
+        className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
       />
       {localError ?? error ? (
         <p role="alert" className="mt-1 text-xs font-medium text-red-600">{localError ?? error}</p>
@@ -408,7 +408,7 @@ export function TrustProfileSection({ me }: { me: { id: string; name: string; em
                 setFormOpen(true);
                 setError(null);
               }}
-              className="shrink-0 rounded-full bg-[#0b2b22] px-4 py-2 text-[13px] font-semibold text-white active:bg-[#124d3c]"
+              className="shrink-0 rounded-[10px] bg-[#14171C] px-4 py-2 text-[13px] font-semibold text-white active:bg-[#252a31]"
             >
               Add credential
             </button>

@@ -1,11 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EventCard } from "../components/EventCard";
 import { HomeCityBanner } from "../components/HomeCityBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { GroupSubmissionSheet, IndependentEventSheet } from "../components/SubmissionSheets";
 import { Chip, Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
-import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS } from "../lib/dates";
+import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS, occurrenceHasStarted } from "../lib/dates";
+import { filterOneTimeEvents } from "../lib/activityDates";
+import { Link } from "react-router-dom";
 import { canDo, roleLabel } from "../lib/accounts";
 import type { AppStore } from "../lib/store";
 import { useToast } from "../lib/toast";
@@ -13,8 +15,9 @@ import { useAccount } from "../state/account";
 import { useModerated } from "../state/moderated";
 import { usePublicContent } from "../state/content";
 import { GROUP_TYPE_LABELS, type City } from "../types";
+import { HomeRightRail } from "../components/HomeRightRail";
 
-export function EventsPage({ city, store }: { city: City; store: AppStore }) {
+export function EventsPage({ city }: { city: City; store: AppStore }) {
   const toast = useToast();
   const { role, me } = useAccount();
   const { hidden, highlights, groupBadges } = useModerated();
@@ -23,8 +26,21 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
   const [eventSheetOpen, setEventSheetOpen] = useState(false);
   const [groupSheetOpen, setGroupSheetOpen] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
+  const [myRunIds, setMyRunIds] = useState<Set<string>>(new Set());
+  const [canonicalEvents, setCanonicalEvents] = useState<api.CanonicalEvent[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void api.getCanonicalEvents(city.id).then((r) => {
+      if (alive && r.ok) setCanonicalEvents(r.data.events);
+    });
+    return () => { alive = false; };
+  }, [city.id]);
   const weekStart = startOfWeek(new Date());
   const canRsvp = canDo(role, "rsvp");
+  useEffect(() => {
+    if (!canRsvp) { setMyRunIds(new Set()); return; }
+    void api.getMyRuns().then((r) => { if (r.ok) setMyRunIds(new Set(r.data.runs.map((run) => run.eventId))); });
+  }, [canRsvp]);
   const isGroupLeader = me?.status === "signed_in" && me.account.role === "group_leader";
 
   // Merge approved recurring independent events into the weekly model. Only
@@ -43,8 +59,13 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
         invite: e.invite,
         externalUrl: e.externalUrl ?? undefined,
       }));
-    const resolved = resolveWeekEvents([...city.events, ...recurring], new Date())
-      .filter((e) => !hidden.has(`event:${e.id}`))
+    const today = new Date();
+    // Recurring seed slots describe the full weekly schedule, including a
+    // Monday slot after Monday has passed; one-time community activity is
+    // filtered separately below by its calendar date.
+    const canonical = (canonicalEvents ?? []).filter((e) => e.status === "published" && !e.hidden && !e.archivedAt).map((e) => ({ id: e.id, groupId: e.groupId, title: e.title, dayOfWeek: e.dayOfWeek, time: e.time, location: e.location, distanceLabel: e.distanceLabel, invite: e.invite, externalUrl: e.externalUrl ?? undefined }));
+    const resolved = resolveWeekEvents([...city.events, ...canonical, ...recurring], today)
+      .filter((e) => !hidden.has(`event:${e.id}`) && !occurrenceHasStarted(e, today))
       .sort((a, b) => {
         const ha = highlights.get(`event:${a.id}`);
         const hb = highlights.get(`event:${b.id}`);
@@ -60,7 +81,7 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
         e.location.toLowerCase().includes(q) ||
         (city.groups.find((g) => g.id === e.groupId)?.name.toLowerCase() ?? "").includes(q),
     );
-  }, [city, query, hidden, highlights, userEvents]);
+  }, [city, query, hidden, highlights, userEvents, canonicalEvents]);
 
   const groups = useMemo(() => {
     const map = new Map<string, typeof events>();
@@ -77,8 +98,8 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
   const oneOffThisWeek = useMemo(() => {
     const start = startOfWeek(new Date());
     const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6, 23, 59, 59);
-    return userEvents
-      .filter((e) => e.type === "one_time" && e.date)
+    return filterOneTimeEvents(userEvents, "upcoming")
+      .filter((e) => e.date)
       .filter((e) => {
         const d = new Date(`${e.date}T00:00:00`);
         return d >= start && d <= end && !hidden.has(`event:${e.id}`);
@@ -91,14 +112,14 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
       setGateOpen(true);
       return;
     }
-    const nowRsvped = !store.state.rsvped[eventId];
+    const nowRsvped = !myRunIds.has(eventId);
     // Server-side RSVP: shared-attendance record (rating eligibility basis).
     void api.rsvpEvent(eventId, nowRsvped).then((r) => {
       if (!r.ok) {
         toast(r.error.message ?? "Couldn't save your RSVP. Try again.", "info");
         return;
       }
-      store.toggleRsvp(eventId);
+      setMyRunIds((ids) => { const next = new Set(ids); if (nowRsvped) next.add(eventId); else next.delete(eventId); return next; });
       toast(nowRsvped ? `You're in for "${title}"!` : `RSVP removed for "${title}".`, nowRsvped ? "success" : "neutral");
     });
   };
@@ -109,7 +130,8 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+    <div className="desktop-browse-layout mx-auto w-full max-w-md px-4 pb-32 pt-4">
+      <div className="desktop-two-column"><div>
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">This week</h1>
@@ -135,7 +157,15 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
           <Icon name="users" className="h-3.5 w-3.5" /> Start a group
         </PillButton>
       </div>
+      <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[#14171C] p-3.5 text-white shadow-sm">
+        <img src="/icons/icon-192.png" alt="" className="h-11 w-11 shrink-0 rounded-xl" />
+        <div className="min-w-0">
+          <p className="text-sm font-extrabold tracking-tight">Run <span className="text-[#FF5741]">Local</span></p>
+          <p className="mt-0.5 text-xs leading-relaxed text-white/70">Local runs, races, and community — starting in {city.name}.</p>
+        </div>
+      </div>
       <HomeCityBanner />
+      <Link to="/past-events" className="mt-3 inline-flex min-h-10 items-center gap-1 rounded-full bg-slate-100 px-3 text-xs font-bold text-slate-700">View past events <Icon name="chevronRight" className="h-4 w-4" /></Link>
       <div className="relative mt-4">
         <Icon name="search" className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
         <input
@@ -145,7 +175,7 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
           placeholder="Search runs, routes, or groups"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="h-12 w-full appearance-none rounded-full border border-slate-200 bg-white pl-11 pr-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60 [&::-webkit-search-cancel-button]:appearance-none"
+          className="h-12 w-full appearance-none rounded-full border border-slate-200 bg-white pl-11 pr-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60 [&::-webkit-search-cancel-button]:appearance-none"
         />
       </div>
       {groups.length === 0 ? (
@@ -183,8 +213,8 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
                         </div>
                         {e.externalUrl ? (
                           <div className="border-t border-slate-100 px-4 py-2.5">
-                            <a href={e.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[#0b2b22] text-sm font-semibold text-white">
-                              Details <Icon name="external" className="h-4 w-4 text-[#c8f169]" />
+                            <a href={e.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[#14171C] text-sm font-semibold text-white">
+                              Details <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
                             </a>
                           </div>
                         ) : null}
@@ -193,7 +223,7 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
                       <EventCard
                         event={e}
                         city={city}
-                        rsvped={!!store.state.rsvped[e.id]}
+                        rsvped={myRunIds.has(e.id)}
                         canRsvp={canRsvp}
                         onRsvp={() => onRsvp(e.id, e.title)}
                         featured={hl?.featured}
@@ -230,8 +260,8 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
                     <div className="space-y-1.5 px-4 pb-4 text-[13px] text-slate-600">
                       <p className="flex items-center gap-2"><Icon name="mapPin" className="h-4 w-4 text-slate-400" />{e.location}</p>
                       {e.externalUrl ? (
-                        <a href={e.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full bg-[#0b2b22] text-sm font-semibold text-white">
-                          Details <Icon name="external" className="h-4 w-4 text-[#c8f169]" />
+                        <a href={e.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[#14171C] text-sm font-semibold text-white">
+                          Details <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
                         </a>
                       ) : null}
                     </div>
@@ -286,6 +316,7 @@ export function EventsPage({ city, store }: { city: City; store: AppStore }) {
         </p>
       ) : null}
 
+      </div><HomeRightRail city={city} /></div>
       <IndependentEventSheet open={eventSheetOpen} onClose={() => setEventSheetOpen(false)} cityId={city.id} />
       <GroupSubmissionSheet open={groupSheetOpen} onClose={() => setGroupSheetOpen(false)} cityId={city.id} />
 

@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GlobalAdminSection } from "../components/GlobalAdminSection";
 import { AdminTrustSection } from "../components/AdminTrustSection";
+import { EventCmsSection } from "../components/EventCmsSection";
 import { Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
 import type { AdminRecordView, AdminSearchRow, AuditEntryView, DashboardView, PendingQueueRow } from "../lib/api";
@@ -21,17 +22,17 @@ import { CITIES } from "../data/cities";
 import { useAccount } from "../state/account";
 
 const inputCls =
-  "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+  "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
 const reasonCls =
-  "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#0b2b22] focus:ring-2 focus:ring-[#c8f169]/60";
+  "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
 function Err({ msg }: { msg: string }) {
-  return <p className="flex items-start gap-2 rounded-xl bg-red-50 p-3.5 text-[13px] leading-relaxed text-red-800">{msg}</p>;
+  return <p role="alert" className="flex items-start gap-2 rounded-xl bg-red-50 p-3.5 text-[13px] leading-relaxed text-red-800">{msg}</p>;
 }
 
 function Info({ msg }: { msg: string }) {
-  return <p className="flex items-start gap-2 rounded-xl bg-sky-50 p-3.5 text-[13px] leading-relaxed text-sky-900">{msg}</p>;
+  return <p role="status" className="flex items-start gap-2 rounded-xl bg-sky-50 p-3.5 text-[13px] leading-relaxed text-sky-900">{msg}</p>;
 }
 
 function fmt(iso: string | null): string {
@@ -46,7 +47,7 @@ function maskIp(ip: string | null): string {
 
 export function AdminPage() {
   const navigate = useNavigate();
-  const { me } = useAccount();
+  const { me, refresh: refreshAccount } = useAccount();
   // The owner/super-admin (server-derived isOwner flag from /api/me) gets the
   // control center through their normal signed-in session — no key needed.
   // Everyone else sees the key-based safety tool login exactly as before.
@@ -71,6 +72,9 @@ export function AdminPage() {
   // pending queue (owner-only)
   const [pending, setPending] = useState<PendingQueueRow[] | null>(null);
   const [queueError, setQueueError] = useState<string | null>(null);
+  const [overview, setOverview] = useState<api.AdminOverview | null>(null);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
+  const [overviewBusy, setOverviewBusy] = useState(false);
   const [roleSel, setRoleSel] = useState<Record<string, "runner" | "group_leader">>({});
 
   // detail
@@ -199,14 +203,23 @@ export function AdminPage() {
     setDashReason("");
   };
 
+  const loadOverview = async () => {
+    setOverviewError(null);
+    if (!reason.trim() || reason.trim().length < 5) {
+      setOverviewError("Enter a reason (min 5 characters) to load the overview.");
+      return;
+    }
+    setOverviewBusy(true);
+    const r = await api.adminGetOverview(reason.trim());
+    setOverviewBusy(false);
+    if (r.ok) setOverview(r.data);
+    else setOverviewError(r.error.status === 401 ? "Your admin session expired — sign in again." : r.error.message ?? "Could not load the overview.");
+  };
+
   // ---- owner-only pending queue -----------------------------------------
   const loadQueue = async () => {
     setQueueError(null);
-    if (!reason.trim() || reason.trim().length < 5) {
-      setQueueError("Enter a reason (min 5 characters) to load the pending queue.");
-      return;
-    }
-    const r = await api.adminPending(reason.trim());
+    const r = await api.adminPending();
     if (r.ok) {
       setPending(r.data.results);
       setQueueError(null);
@@ -239,6 +252,7 @@ export function AdminPage() {
     const r = await api.adminSetStatus(row.id, "approve", reason.trim(), role);
     if (r.ok) {
       setQueueError(null);
+      await refreshAccount();
       void loadQueue();
     } else if (r.error.code === "verification_incomplete") {
       setQueueError("Approval blocked: the required verification state (email + selfie, pending_review) isn't complete.");
@@ -419,7 +433,10 @@ export function AdminPage() {
     }
     // Stream via authed fetch (audited server-side) and display as object URL.
     try {
-      const res = await fetch(api.adminSelfieUrl(record.id), { credentials: "same-origin" });
+      const res = await fetch(api.adminSelfieUrl(record.id), {
+        credentials: "same-origin",
+        headers: { "x-audit-reason": reason.trim() },
+      });
       if (!res.ok) {
         setDetailError(res.status === 401 ? "Admin session expired — sign in again." : "Selfie could not be loaded.");
         return;
@@ -492,7 +509,7 @@ export function AdminPage() {
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Admin control center</h1>
           <p className="text-sm font-medium text-slate-500">
             Signed in as {adminName}
-            {isOwner ? <span className="ml-1.5 font-semibold text-[#0b2b22]">(Super Admin)</span> : null}
+            {isOwner ? <span className="ml-1.5 font-semibold text-[#14171C]">(Super Admin)</span> : null}
           </p>
         </div>
         <button type="button" onClick={() => void doLogout()} className="min-h-11 rounded-full px-4 text-sm font-semibold text-slate-600 active:bg-slate-100">
@@ -500,16 +517,28 @@ export function AdminPage() {
         </button>
       </div>
 
+      <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70" aria-labelledby="admin-overview-heading">
+        <div className="flex items-start justify-between gap-3">
+          <div><h2 id="admin-overview-heading" className="text-[15px] font-bold text-slate-900">Attention overview</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Server-derived queue counts for your permitted scope. No private run or identity details.</p></div>
+          <PillButton variant="secondary" className="min-h-9 shrink-0 px-3 text-xs" disabled={overviewBusy} onClick={() => void loadOverview()}>{overviewBusy ? "Refreshing…" : "Refresh"}</PillButton>
+        </div>
+        {overview ? <><p className="mt-3 text-[11px] text-slate-500">Updated {fmt(overview.generatedAt)} · {overview.scope.kind === "global" ? "All cities" : "Assigned city"}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">{([["Pending verification", overview.queues.pendingVerification, "pending-users"],["Pending submissions", overview.queues.pendingSubmissions, "submissions"],["Open safety reports", overview.queues.openSafetyReports, "dashboard"],["Content to review", overview.queues.contentNeedingReview, "dashboard"]] as const).map(([label,count,target]) => <button type="button" key={label} onClick={() => document.getElementById(target)?.scrollIntoView({behavior:"smooth"})} className="rounded-xl border border-slate-200 p-3 text-left hover:border-slate-400"><span className="block text-2xl font-bold text-slate-900">{count}</span><span className="text-xs font-semibold text-slate-600">{label}</span></button>)}</div>
+          <p className="mt-3 text-xs text-slate-500">Published content: {overview.analytics.unavailable ? "Unavailable" : overview.analytics.publishedContent ?? "—"} · RSVP total: {overview.analytics.unavailable ? "Unavailable" : overview.analytics.rsvpTotal ?? "—"}</p>
+        </> : <p className="mt-3 text-sm text-slate-500">Load the overview to see current counts.</p>}
+        {overviewError ? <Err msg={overviewError} /> : null}
+      </section>
       {/* Owner-only pending queue */}
       {isOwner ? (
-        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+        <section id="pending-users" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <h2 className="text-[15px] font-bold text-slate-900">Pending users</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            Accounts awaiting verification, newest first. Rows are redacted — no phone, selfie, or IP data here.
+            Read-only queue access for Super Admin. Approve and reject actions require an audited reason below. Accounts awaiting verification, newest first. Rows are redacted — no phone, selfie, or IP data here.
             Approve only after the user reached the "Under review" state (email + selfie submitted).
           </p>
           <div className="mt-3 space-y-3">
-            <textarea rows={2} placeholder="Reason for accessing the queue (required, audited)" value={reason} onChange={(e) => setReason(e.target.value)} className={reasonCls} />
+            <textarea rows={2} placeholder="Reason for approval or rejection (required, audited)" value={reason} onChange={(e) => setReason(e.target.value)} className={reasonCls} />
             <PillButton variant="primary" className="w-full" onClick={() => void loadQueue()}>
               <Icon name="search" className="h-4 w-4" /> Load pending queue
             </PillButton>
@@ -565,8 +594,8 @@ export function AdminPage() {
       <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
         <h2 className="text-[15px] font-bold text-slate-900">Submission queue</h2>
         <p className="mt-0.5 text-xs text-slate-500">
-          Community-submitted races, groups, and independent events awaiting review. Approve publishes them publicly (groups grant the submitter the Group
-          Leader role); reject requires a reason the submitter will see. Every action is audited with the reason above.
+          Community-submitted races, groups, and independent events awaiting review. Pending items are not public; approve publishes them (groups grant the submitter the Group
+          Leader role), while reject requires a reason the submitter will see. Every action is audited with the reason above.
         </p>
         <div className="mt-3 space-y-3">
           <textarea rows={2} placeholder="Reason for loading/deciding the queue (required, audited; rejection reason goes to the submitter)" value={subReason} onChange={(e) => setSubReason(e.target.value)} className={reasonCls} />
@@ -613,7 +642,7 @@ export function AdminPage() {
                 Moderation, RRCA badges, and highlights for one city. Every action is reason-required and audited.
               </p>
             </div>
-            <button type="button" onClick={goLookup} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-[#0b2b22] px-4 text-xs font-semibold text-white active:bg-[#124d3c]">
+            <button type="button" onClick={goLookup} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[10px] bg-[#14171C] px-4 text-xs font-semibold text-white active:bg-[#252a31]">
               <Icon name="search" className="h-4 w-4" /> Verification lookup
             </button>
           </div>
@@ -626,7 +655,7 @@ export function AdminPage() {
                   setDashCity(e.target.value);
                   setDash(null);
                 }}
-                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-[#0b2b22]"
+                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-[#14171C]"
               >
                 {CITIES.filter((c) => c.live).map((c) => (
                   <option key={c.id} value={c.id}>
@@ -792,7 +821,7 @@ export function AdminPage() {
                             type="checkbox"
                             checked={draft.badge}
                             onChange={(e) => setRrcaDrafts((m) => ({ ...m, [g.id]: { ...draft, badge: e.target.checked } }))}
-                            className="h-4 w-4 accent-[#0b2b22]"
+                            className="h-4 w-4 accent-[#14171C]"
                           />
                           {g.name}
                           {g.rrcaBadge ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-800">RRCA badge on</span> : null}
@@ -802,7 +831,7 @@ export function AdminPage() {
                           placeholder="Internal charter note (e.g. charter number + date verified)"
                           value={draft.note}
                           onChange={(e) => setRrcaDrafts((m) => ({ ...m, [g.id]: { ...draft, note: e.target.value } }))}
-                          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-[#0b2b22]"
+                          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-[#14171C]"
                         />
                         <PillButton
                           variant="ghost"
@@ -841,7 +870,7 @@ export function AdminPage() {
                                 type="button"
                                 disabled={busy}
                                 onClick={() => void dashAction(c.id, "toggle featured", () => api.adminSetHighlight(c.id, { featured: !c.featured }, dashReason.trim()))}
-                                className={`min-h-9 rounded-full px-3 text-xs font-semibold transition-colors ${c.featured ? "bg-[#c8f169] text-[#0b2b22]" : "bg-slate-100 text-slate-500 active:bg-slate-200"}`}
+                                className={`min-h-9 rounded-full px-3 text-xs font-semibold transition-colors ${c.featured ? "bg-[#FF5741] text-[#14171C]" : "bg-slate-100 text-slate-500 active:bg-slate-200"}`}
                               >
                                 Featured
                               </button>
@@ -867,6 +896,7 @@ export function AdminPage() {
       ) : null}
 
       {/* Global Admin — site settings & CMS (key admin or owner; audited) */}
+      <EventCmsSection />
       <GlobalAdminSection />
       {/* Global Admin — community trust & credentials (audited) */}
       <AdminTrustSection />

@@ -10,7 +10,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Db, newId, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPublicAccount, MIN_AGE } from "./store";
 import type { AccountRecord } from "./types";
+import { PERSONAL_RUN_CONSENT_VERSION, MATCHING_CONSENT_VERSION } from "./types";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
+import { listSafetyReportsAdmin, decideSafetyReport } from "./safety";
+import { adminOverview } from "./adminOverview";
+import type { SafetyReportStatus } from "./types";
 
 import { supabaseConfig, verifySupabaseToken, applySupabaseIdentity } from "./supabase";
 import {
@@ -36,6 +40,10 @@ import {
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
+import { resolveOccurrence, defaultOccurrenceDate } from "./occurrences";
+import { publicGroups, publicGroup } from "./groups";
+import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
+import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import {
   dashboardOverview,
@@ -62,6 +70,7 @@ import { decideSubmission,
   submissionQueue,
   citySubmissionQueue,
   cityDecideSubmission,
+  requireVerifiedSubmitter,
 } from "./submissions";
 import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
 import {
@@ -88,6 +97,9 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 MB decoded
 // In-memory rate limiting (documented: replace with a shared store at scale).
 const emailSendLog = new Map<string, number[]>();
 const adminLoginAttempts = new Map<string, number[]>();
+/** Persisted/shared limiter policy: 10 JoinRequests per account per rolling 60 minutes. */
+const JOIN_REQUEST_LIMIT = 10;
+const JOIN_REQUEST_WINDOW_MS = 60 * 60 * 1000;
 
 export interface ApiDeps {
   db: Db;
@@ -97,6 +109,7 @@ export interface ApiError {
   status: number;
   error: string;
   message?: string;
+  provider?: string;
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -251,6 +264,7 @@ async function handleApi(
   const ip = getIp(req);
   const secure = isSecure(req);
   const now = new Date();
+  if (["POST", "PATCH", "DELETE"].includes(method) && !originAllowed(req)) return err(res, { status: 403, error: "origin_not_allowed" }), true;
 
   // ---- health (non-sensitive config booleans for the UI) -----------------
   if (method === "GET" && url.pathname === "/api/health") {
@@ -261,6 +275,7 @@ async function handleApi(
       // values, and never the anon key itself.
       supabaseConfigured: supabase.configured,
       supabaseMissing: supabase.missing,
+      authRedirectConfigured: supabase.redirectConfigured,
       adminConfigured: adminConfigured(),
       retentionYears: db.retentionYears,
       retention: retentionStatus(db, now),
@@ -297,10 +312,55 @@ async function handleApi(
     return ok(res, publicModerated(db, cityId)), true;
   }
 
+  if (method === "GET" && url.pathname === "/api/events") {
+    const cityId = url.searchParams.get("city") ?? undefined;
+    return ok(res, { cityId: cityId ?? null, events: publicEvents(db, cityId) }), true;
+  }
   // ---- public approved community content (no auth) -------------------------
   // Only APPROVED submissions ever appear here (pending/rejected never leave
   // the server), and owner-hidden content is excluded. No emails, phones, IPs,
   // or rejection reasons — just the public listing facts.
+  if (method === "GET" && url.pathname === "/api/groups") {
+    const cityId = url.searchParams.get("city") ?? "";
+    if (!cityId || !cityExists(db, cityId)) return err(res, { status: 400, error: "invalid_city" }), true;
+    return ok(res, { cityId, groups: publicGroups(db, cityId) }), true;
+  }
+  const groupDetail = /^\/api\/groups\/([a-f0-9-]+)$/.exec(url.pathname);
+  if (method === "GET" && groupDetail) { const group = publicGroup(db, groupDetail[1]); if (!group) return err(res,{status:404,error:"not_found"}),true; return ok(res,{group}),true; }
+
+  if (method === "GET" && url.pathname === "/api/me/groups") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    return ok(res, { memberships: myMemberships(db, sess.accountId) }), true;
+  }
+  const membershipPath = /^\/api\/groups\/([^/]+)\/membership$/.exec(url.pathname);
+  if (membershipPath && method === "POST") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const group = db.getGroup(membershipPath[1]); if (!group) return err(res,{status:404,error:"not_found"}),true;
+    const account = db.getAccount(sess.accountId); if (!account || account.status !== "verified") return err(res,{status:403,error:"verified_runner_required"}),true;
+    if (account.cityId !== group.cityId) return err(res,{status:403,error:"cross_city_forbidden"}),true;
+    const current = db.getMembership(group.id, account.id);
+    if (current && (current.status === "pending" || current.status === "active")) return ok(res,{membership:membershipDto(db,current)}),true;
+    const status = group.membershipMode === "open" ? "active" : "pending";
+    const membership = createMembership(db, group.id, account.id, status, now)!;
+    db.appendAudit({admin:account.email, action:"group.membership_request", reason:"Member membership request", targetId:group.id, ip, cityId:group.cityId}); await db.persist();
+    return ok(res,{membership:membershipDto(db,membership)}),true;
+  }
+  const membershipAction = /^\/api\/groups\/([^/]+)\/membership\/(leave|approve|decline|remove)$/.exec(url.pathname);
+  if (membershipAction && method === "POST") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const group = db.getGroup(membershipAction[1]); if (!group) return err(res,{status:404,error:"not_found"}),true;
+    const body = await readJson(req) as Record<string,unknown>; const account = db.getAccount(sess.accountId);
+    const targetId = typeof body.accountId === "string" ? body.accountId : sess.accountId;
+    const membership = db.getMembership(group.id,targetId); if (!membership) return err(res,{status:404,error:"membership_not_found"}),true;
+    const leader = canAdministerMembership(group, account ?? undefined, db.getAccount(targetId), membership);
+    if (membershipAction[2] === "leave" && targetId === sess.accountId) { membership.status="left"; }
+    else if (!leader && !isOwnerEmail(account?.email ?? "")) return err(res,{status:403,error:"forbidden"}),true;
+    else membership.status = membershipAction[2] === "approve" ? "active" : membershipAction[2] === "decline" ? "declined" : "revoked";
+    membership.updatedAt=now.toISOString(); membership.decidedAt=now.toISOString(); membership.decidedBy=sess.accountId;
+    db.updateMembership(membership.id,membership); db.appendAudit({admin:account?.email ?? "unknown",action:(membershipAction[2] === "leave" ? "group.membership_leave" : membershipAction[2] === "approve" ? "group.membership_approve" : membershipAction[2] === "decline" ? "group.membership_decline" : "group.membership_remove") as import("./types").AdminAction,reason:"Membership lifecycle action",targetId:group.id,ip,cityId:group.cityId}); await db.persist();
+    return ok(res,{membership:membershipDto(db,membership)}),true;
+  }
+
   if (method === "GET" && url.pathname === "/api/content") {
     const cityId = url.searchParams.get("city") ?? "";
     // Any KNOWN city serves its content history — deactivated and invite-only
@@ -324,8 +384,16 @@ async function handleApi(
     const account=db.getAccount(sess.accountId); if (!account || account.status!=="verified") return err(res,{status:403,error:"verified_runner_required"}),true;
     // CMS provider toggle: a disabled provider is not offered on this site,
     // regardless of whether deployment credentials exist.
-    if (!providerEnabled(db, provider)) return err(res,{status:403,error:"provider_disabled"}),true;
-    if (method === "GET") { if (!adapters[provider].configured()) return err(res,{status:503,...configError(provider)}),true; const state=oauthState(sess.accountId,provider); return ok(res,{authorizeUrl:adapters[provider].authorizeUrl(state)}), true; }
+    const offered = providerEnabled(db, provider);
+    const connected = Boolean(db.getToken(sess.accountId, provider));
+    if (method === "GET") {
+      if (!offered) return ok(res, { provider, offered: false, configured: adapters[provider].configured(), connected, state: "unavailable" }), true;
+      if (provider !== "strava") return ok(res, { provider, offered: true, configured: false, connected, state: "coming_soon", error: "provider_coming_soon" }), true;
+      if (!adapters.strava.configured()) return ok(res, { provider, offered: true, configured: false, connected, state: "not_configured", missing: configError("strava").missing }), true;
+      return ok(res, { provider, offered: true, configured: true, connected, state: connected ? "connected" : "available", authorizeUrl: connected ? undefined : adapters.strava.authorizeUrl(oauthState(sess.accountId, "strava")) }), true;
+    }
+    if (provider !== "strava") return err(res, { status: 409, error: "provider_coming_soon" }), true;
+    if (!offered || !adapters.strava.configured()) return err(res, { status: 503, error: "provider_not_configured" }), true;
     const body=await readJson(req) as Record<string,unknown>; const mode=body.shareMode;
     if (mode!==undefined && mode!=="auto" && mode!=="manual" && mode!=="private") return err(res,{status:400,error:"invalid_share_mode"}),true;
     if (!adapters[provider].configured()) return err(res,{status:503,...configError(provider)}),true;
@@ -366,6 +434,26 @@ async function handleApi(
     let normalized; try { normalized = normalizeActivity(p, body.activity); } catch { err(res, { status: 400, error: "invalid_activity" }); return true; }
     const a = { ...normalized, id: newId(), accountId: sess.accountId, shareMode: "manual" as ShareMode, caption: typeof body.caption === "string" ? body.caption.slice(0, 280) : null };
     db.addActivity(a); await db.persist(); ok(res, { card: publicActivityCard(a) }); return true;
+  }
+
+  // ---- account-owned notification preferences and inbox -------------------
+  if (url.pathname.startsWith("/api/notifications")) {
+    const sess=requireSession(db,cookies); if(!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    if (method === "GET" && url.pathname === "/api/notifications/preferences") return ok(res,{preferences:db.getNotificationPreferences(sess.accountId)}),true;
+    if (method === "PATCH" && url.pathname === "/api/notifications/preferences") { const b=await readJson(req) as Record<string,unknown>; const allowed=["run_reminders","community_updates","account_alerts"] as const; const patch: Record<string,boolean>={}; for(const k of allowed) if(b[k]!==undefined){if(typeof b[k]!=="boolean") return err(res,{status:400,error:"invalid_preferences"}),true; patch[k]=b[k] as boolean;} const preferences=db.setNotificationPreferences(sess.accountId,patch); await db.persist(); return ok(res,{preferences}),true; }
+    if (method === "GET" && url.pathname === "/api/notifications") { const items=db.listNotifications(sess.accountId); return ok(res,{notifications:items,unreadCount:items.filter(n=>!n.readAt).length}),true; }
+    if (method === "POST" && url.pathname === "/api/notifications/read-all") { db.markAllNotificationsRead(sess.accountId); await db.persist(); return ok(res,{status:"ok"}),true; }
+    const m=/^\/api\/notifications\/([^/]+)\/read$/.exec(url.pathname); if(method==="POST"&&m){ if(!db.updateNotification(m[1],sess.accountId,{readAt:new Date().toISOString()})) return err(res,{status:404,error:"not_found"}),true; await db.persist(); return ok(res,{status:"ok"}),true; }
+  }
+  // ---- public username availability (format + uniqueness only) -----------
+  // This endpoint is intentionally narrow: usernames are public profile identity,
+  // and the response contains no account metadata or sensitive information.
+  if (method === "GET" && url.pathname === "/api/username/availability") {
+    const raw = url.searchParams.get("username") ?? "";
+    const username = normalizeUsername(raw);
+    if (!username) return ok(res, { valid: false, available: false }), true;
+    const taken = db.getAccountByUsername(username);
+    return ok(res, { valid: true, available: !taken || Boolean(taken.deletedAt) }), true;
   }
 
   // ---- account creation (signup completion) ------------------------------
@@ -570,6 +658,21 @@ async function handleApi(
   // deterministically on the normalized case-insensitive form. The check +
   // write run in one synchronous turn of the single-threaded store, so a
   // concurrent request can never claim the same name in between.
+  if (method === "POST" && url.pathname === "/api/group/photo") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { photo?: unknown };
+    const rec = db.getAccount(sess.accountId);
+    if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const verified = requireVerifiedSubmitter(db, sess.accountId);
+    if (!verified.ok) return err(res, { status: verified.status, error: verified.error, message: verified.message }), true;
+    if (typeof body.photo !== "string") return err(res, { status: 400, error: "invalid_image" }), true;
+    const img = decodeImage(body.photo);
+    if (!img.ok) return err(res, { status: 400, error: img.error }), true;
+    const filename = `${rec.id}_group_${newId()}.${img.ext}`;
+    await db.writePublicUpload(filename, img.bytes);
+    return ok(res, { photoRef: filename }), true;
+  }
   if (method === "POST" && url.pathname === "/api/profile/username") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
@@ -769,6 +872,19 @@ async function handleApi(
     return ok(res, { submissions: mySubmissions(db, sess.accountId) }), true;
   }
 
+  // ---- private My Runs (occurrence-aware RSVP attendance) -----------------
+  if (method === "GET" && url.pathname === "/api/my/runs") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(sess.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const runs = (db.listAttendance(sess.accountId).filter(a => a.role === "rsvp").flatMap((a): any => {
+      if (!a.occurrenceId || !a.runDate) return [{ id:a.id, eventId:a.eventId.replace(/^event:/,""), occurrenceId:null, runDate:a.createdAt.slice(0,10), startsAt:null, cityId:rec.cityId, title:"Past run RSVP", date:a.createdAt.slice(0,10), time:"Time unavailable", location:"Location unavailable", groupId:"", rsvpedAt:a.createdAt, upcoming:false, past:true }];
+      const occ = resolveOccurrence(db, a.eventId, a.runDate); if (!occ || !occ.event) return [];
+      const ev=occ.event; const upcoming = new Date(occ.startsAt).getTime() >= now.getTime();
+      return [{ id:a.id, eventId:occ.eventId.replace(/^event:/,""), occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt, cityId:ev.cityId, title:ev.title, date:occ.runDate, time:ev.time, location:ev.location, groupId:ev.groupId, rsvpedAt:a.createdAt, upcoming, past:!upcoming }];
+    }) as Array<{ id:string; eventId:string; occurrenceId:string|null; runDate:string; startsAt:string|null; cityId:string|null; title:string; date:string; time:string; location:string; groupId:string; rsvpedAt:string; upcoming:boolean; past:boolean }>).sort((a,b) => (a.startsAt ?? `${a.runDate}T00:00:00Z`).localeCompare(b.startsAt ?? `${b.runDate}T00:00:00Z`) || a.eventId.localeCompare(b.eventId) || a.id.localeCompare(b.id));
+    return ok(res, { runs }), true;
+  }
   // ---- submit a race ------------------------------------------------------
   if (method === "POST" && url.pathname === "/api/submissions/race") {
     const sess = requireSession(db, cookies);
@@ -789,7 +905,7 @@ async function handleApi(
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const body = (await readJson(req)) as {
       cityId?: unknown; name?: unknown; description?: unknown; groupType?: unknown;
-      groupmeUrl?: unknown; facebookUrl?: unknown; instagramUrl?: unknown; websiteUrl?: unknown;
+      groupmeUrl?: unknown; facebookUrl?: unknown; instagramUrl?: unknown; websiteUrl?: unknown; coverPhoto?: unknown; logoPhoto?: unknown; membershipMode?: unknown;
     };
     const result = submitGroup(db, sess.accountId, body, now);
     if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
@@ -893,34 +1009,154 @@ async function handleApi(
     return ok(res, { recognitions: publicRecognitions(db, cityId) }), true;
   }
 
-  // ---- RSVP to an event (server-side shared attendance) -------------------
-  // Verified runners may RSVP — INCLUDING under-review accounts (RSVP is
-  // preserved while under review). The record feeds rating eligibility and is
-  // idempotent.
+  // ---- private matching preferences ----------------------------------------
+  if (url.pathname === "/api/matching/preferences" && (method === "GET" || method === "PATCH")) {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    if (!db.getAccount(s.accountId)) return err(res, { status: 401, error: "sign_in_required" }), true;
+    if (method === "GET") return ok(res, { preferences: db.getMatchingPreferences(s.accountId) ?? { accountId:s.accountId, enabled:false, consentVersion:null, consentedAt:null, cityId:null, timeWindow:null, selfDescribedGender:null, genderPreference:null, updatedAt:null } }), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    if (typeof b.enabled !== "boolean") return err(res, { status:400, error:"invalid_enabled" }), true;
+    if (b.enabled && (b.consent !== true || b.consentVersion !== MATCHING_CONSENT_VERSION)) return err(res, { status:400, error:"consent_required" }), true;
+    const cityId = b.cityId == null ? null : typeof b.cityId === "string" ? b.cityId.trim() : "";
+    const timeWindow = b.timeWindow == null ? null : b.timeWindow;
+    const text = (v:unknown) => v == null || (typeof v === "string" && v.trim().length <= 80);
+    if ((cityId !== null && cityStatus(db, cityId) === null) || (timeWindow !== null && !["morning","afternoon","evening","flexible"].includes(String(timeWindow))) || !text(b.selfDescribedGender) || !text(b.genderPreference)) return err(res, { status:400, error:"invalid_preferences" }), true;
+    const old = db.getMatchingPreferences(s.accountId); const p = { accountId:s.accountId, enabled:b.enabled, consentVersion:b.enabled ? MATCHING_CONSENT_VERSION : null, consentedAt:b.enabled ? (old?.consentedAt ?? now.toISOString()) : null, cityId, timeWindow:timeWindow as any, selfDescribedGender:typeof b.selfDescribedGender === "string" ? b.selfDescribedGender.trim() || null : null, genderPreference:typeof b.genderPreference === "string" ? b.genderPreference.trim() || null : null, updatedAt:now.toISOString() };
+    db.setMatchingPreferences(p); await db.persist(); return ok(res, { preferences:p }), true;
+  }
+
+  // ---- private join requests (no discovery/candidate listing) -------------
+  // Blocking is symmetric for matching and immediately invalidates requests.
+  if (url.pathname === "/api/blocks" && (method === "GET" || method === "POST" || method === "DELETE")) {
+    const s=requireSession(db,cookies); if(!s)return err(res,{status:401,error:"sign_in_required"}),true;
+    if(method === "GET") return ok(res,{blocks:db.listBlocks(s.accountId).map(b=>({blockedId:b.blockedId,createdAt:b.createdAt}))}),true;
+    const b=await readJson(req) as Record<string,unknown>; const target=typeof b.accountId === "string" ? b.accountId : typeof b.blockedId === "string" ? b.blockedId : "";
+    if(!target || target===s.accountId || !db.getAccount(target)) return err(res,{status:400,error:"invalid_block"}),true;
+    if(method === "DELETE") { db.removeBlock(s.accountId,target); await db.persist(); return ok(res,{removed:true}),true; }
+    db.addBlock({blockerId:s.accountId,blockedId:target,createdAt:now.toISOString()}); db.invalidateJoinRequests(s.accountId,target); await db.persist(); return ok(res,{blocked:true}),true;
+  }
+  if (url.pathname === "/api/join-requests" && (method === "GET" || method === "POST")) {
+    const s=requireSession(db,cookies); if(!s)return err(res,{status:401,error:"sign_in_required"}),true;
+    if(method==="GET") return ok(res,{requests:db.listJoinRequests(s.accountId).map(r=>{ if(r.state === "pending" && new Date(r.expiresAt)<=now){db.updateJoinRequest(r.id,{state:"expired",updatedAt:now.toISOString()}); r={...r,state:"expired"};} return {id:r.id,contextType:r.contextType,state:r.state,createdAt:r.createdAt,expiresAt:r.expiresAt,updatedAt:r.updatedAt}; })}),true;
+    const b=await readJson(req) as Record<string,unknown>, target=typeof b.targetId==="string"?b.targetId:"", kind=b.contextType as "event" | "personal_run", context=typeof b.contextId==="string"?b.contextId:"";
+    const requester=db.getAccount(s.accountId), recipient=db.getAccount(target);
+    const eligible=(a: typeof requester) => !!a && !a.deletedAt && a.status === "verified" && !a.underReview;
+    if(!target||target===s.accountId||!eligible(requester)||!eligible(recipient)||(kind!=="event"&&kind!=="personal_run")||!context)return err(res,{status:400,error:"invalid_join_request"}),true;
+    const rp=db.getMatchingPreferences(s.accountId), tp=db.getMatchingPreferences(target);
+    if(!rp?.enabled || rp.consentVersion !== MATCHING_CONSENT_VERSION || !tp?.enabled || tp.consentVersion !== MATCHING_CONSENT_VERSION) return err(res,{status:403,error:"matching_consent_required"}),true;
+    let contextCity: string | null = null;
+    if(kind==="personal_run"){const run=db.getPersonalRun(context);if(!run||run.accountId!==target||run.deletedAt)return err(res,{status:404,error:"not_found"}),true; contextCity=run.cityId;}
+    else { const eid=resolveEventId(db,context), event=eid ? db.getContent(eid) : undefined; if(!event || !db.hasAttendance(s.accountId,eid!)) return err(res,{status:403,error:"event_eligibility_required"}),true; contextCity=event.cityId; }
+    if(requester?.cityId !== contextCity || recipient?.cityId !== contextCity || rp.cityId !== contextCity || tp.cityId !== contextCity)return err(res,{status:403,error:"cross_city"}),true;
+    if(db.isBlocked(s.accountId,target))return err(res,{status:403,error:"blocked"}),true;
+    if (!db.consumeJoinRequestRate(s.accountId, now.getTime(), JOIN_REQUEST_LIMIT, JOIN_REQUEST_WINDOW_MS)) return err(res, { status: 429, error: "rate_limited", message: "Too many join requests. Try again later." }), true;
+    if(db.findPendingJoinRequest(s.accountId,target,kind,context))return err(res,{status:409,error:"duplicate_request"}),true;
+    const r: import("./types").JoinRequestRecord={id:newId(),requesterId:s.accountId,recipientId:target,contextType:kind,contextId:context,state:"pending",requesterAccepted:false,recipientAccepted:false,createdAt:now.toISOString(),expiresAt:new Date(now.getTime()+7*86400000).toISOString(),updatedAt:now.toISOString()};db.addJoinRequest(r);await db.persist();return ok(res,{request:{id:r.id,state:r.state,contextType:r.contextType,createdAt:r.createdAt,expiresAt:r.expiresAt,updatedAt:r.updatedAt},mutual:false}),true;
+  }
+  const ja=/^\/api\/join-requests\/([^/]+)\/(accept|decline|cancel)$/.exec(url.pathname);
+  if(ja&&method==="POST"){const s=requireSession(db,cookies);if(!s)return err(res,{status:401,error:"sign_in_required"}),true;const r=db.getJoinRequest(ja[1]);if(!r)return err(res,{status:404,error:"not_found"}),true;if(r.state!=="pending")return err(res,{status:409,error:"invalid_state"}),true;if(new Date(r.expiresAt)<=now){db.updateJoinRequest(r.id,{state:"expired",updatedAt:now.toISOString()});await db.persist();return err(res,{status:409,error:"expired"}),true;}const action=ja[2];if((action==="accept" && r.requesterId!==s.accountId && r.recipientId!==s.accountId)||(action==="decline"&&r.recipientId!==s.accountId)||(action==="cancel"&&r.requesterId!==s.accountId))return err(res,{status:403,error:"forbidden"}),true;const requesterAccepted = r.requesterAccepted || (action === "accept" && r.requesterId === s.accountId); const recipientAccepted = r.recipientAccepted || (action === "accept" && r.recipientId === s.accountId); const state: import("./types").JoinRequestState=action==="accept"?(requesterAccepted && recipientAccepted ? "accepted" : "pending"):action==="decline"?"declined":"cancelled"; const next={...r,state,requesterAccepted,recipientAccepted,updatedAt:now.toISOString()};db.updateJoinRequest(r.id,next);await db.persist();return ok(res,{request:{id:next.id,contextType:next.contextType,state:next.state,createdAt:next.createdAt,expiresAt:next.expiresAt,updatedAt:next.updatedAt},mutual:state === "accepted"}),true;}
+
+  // ---- strictly private PersonalRun records -------------------------------
+  // Account identity is always derived from the HttpOnly session. PersonalRuns
+  // never enter public content, admin dashboards, or matching surfaces.
+  if (url.pathname === "/api/personal-runs" && (method === "GET" || method === "POST")) {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(s.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    if (method === "GET") return ok(res, { runs: db.listPersonalRuns(s.accountId).filter(r => !r.deletedAt) }), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    const cityId = typeof b.cityId === "string" ? b.cityId.trim() : "";
+    const title = typeof b.title === "string" ? b.title.trim() : "";
+    const startsAt = typeof b.startsAt === "string" ? b.startsAt : "";
+    const validText = (v: unknown, max: number) => v === undefined || v === null || (typeof v === "string" && v.trim().length <= max);
+    if (!cityId || cityStatus(db, cityId) === null) return err(res, { status: 400, error: "invalid_city" }), true;
+    if (!title || title.length > 120 || !validText(b.locationLabel, 160) || !validText(b.distanceLabel, 80) || !validText(b.notes, 1000)) return err(res, { status: 400, error: "invalid_personal_run" }), true;
+    const parsed = new Date(startsAt); const nowMs = now.getTime();
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:?\d{2})$/.test(startsAt) || Number.isNaN(parsed.getTime()) || parsed.getTime() < nowMs - 24 * 60 * 60 * 1000 || parsed.getTime() > nowMs + 2 * 365 * 24 * 60 * 60 * 1000) return err(res, { status: 400, error: "invalid_starts_at" }), true;
+    if (b.consentVersion !== PERSONAL_RUN_CONSENT_VERSION || b.consent !== true) return err(res, { status: 400, error: "consent_required" }), true;
+    const r = { id: newId(), accountId: s.accountId, cityId, title, startsAt: parsed.toISOString(), locationLabel: typeof b.locationLabel === "string" && b.locationLabel.trim() ? b.locationLabel.trim() : null, distanceLabel: typeof b.distanceLabel === "string" && b.distanceLabel.trim() ? b.distanceLabel.trim() : null, notes: typeof b.notes === "string" && b.notes.trim() ? b.notes.trim() : null, visibility: "private" as const, consentVersion: PERSONAL_RUN_CONSENT_VERSION, consentedAt: now.toISOString(), createdAt: now.toISOString(), updatedAt: now.toISOString(), deletedAt: null };
+    db.addPersonalRun(r); await db.persist(); return ok(res, { run: r }), true;
+  }
+  const personalRunId = /^\/api\/personal-runs\/([^/]+)$/.exec(url.pathname);
+  if (personalRunId && (method === "PATCH" || method === "DELETE")) {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(s.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const run = db.getPersonalRun(decodeURIComponent(personalRunId[1]));
+    if (!run || run.accountId !== s.accountId || run.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
+    if (method === "DELETE") { db.updatePersonalRun(run.id, { deletedAt: now.toISOString(), updatedAt: now.toISOString() }); await db.persist(); return ok(res, { deleted: true }), true; }
+    const b = await readJson(req) as Record<string, unknown>;
+    // PATCH uses the same complete validation contract as POST. Merge only
+    // editable fields; identity and privacy fields always come from `run`.
+    if (b.consent !== true || b.consentVersion !== PERSONAL_RUN_CONSENT_VERSION) return err(res, { status: 400, error: "consent_required" }), true;
+    const cityId = typeof b.cityId === "string" ? b.cityId.trim() : run.cityId;
+    const title = typeof b.title === "string" ? b.title.trim() : run.title;
+    const startsAt = typeof b.startsAt === "string" ? b.startsAt : run.startsAt;
+    const validText = (v: unknown, max: number) => v === undefined || v === null || (typeof v === "string" && v.trim().length <= max);
+    if (!cityId || cityStatus(db, cityId) === null || !title || title.length > 120 || !validText(b.locationLabel, 160) || !validText(b.distanceLabel, 80) || !validText(b.notes, 1000)) return err(res, { status: 400, error: "invalid_personal_run" }), true;
+    const parsed = new Date(startsAt); const nowMs = now.getTime();
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:?\d{2})$/.test(startsAt) || Number.isNaN(parsed.getTime()) || parsed.getTime() < nowMs - 24 * 60 * 60 * 1000 || parsed.getTime() > nowMs + 2 * 365 * 24 * 60 * 60 * 1000) return err(res, { status: 400, error: "invalid_starts_at" }), true;
+    const next = db.updatePersonalRun(run.id, { cityId, title, startsAt: parsed.toISOString(), locationLabel: typeof b.locationLabel === "string" ? b.locationLabel.trim() || null : run.locationLabel, distanceLabel: typeof b.distanceLabel === "string" ? b.distanceLabel.trim() || null : run.distanceLabel, notes: typeof b.notes === "string" ? b.notes.trim() || null : run.notes, consentVersion: PERSONAL_RUN_CONSENT_VERSION, consentedAt: now.toISOString(), updatedAt: now.toISOString() }); await db.persist(); return ok(res, { run: next }), true;
+  }
+
+  // ---- occurrence-scoped run-day discussion -------------------------------
+  const discussionPath = /^\/api\/events\/([^/]+)\/occurrences\/([^/]+)\/discussion(?:\/([^/]+))?$/i.exec(url.pathname);
+  if (discussionPath && (method === "GET" || method === "POST" || method === "DELETE")) {
+    const eventParam = decodeURIComponent(discussionPath[1]);
+    const occurrenceId = decodeURIComponent(discussionPath[2]);
+    const event = db.listEvents().find(e => e.id === eventParam || e.seedRefId === eventParam || e.id === `event:${eventParam}`);
+    // Occurrence IDs are `event:<event-id>:<YYYY-MM-DD>`; split only at the
+    // final colon because event IDs themselves may contain colons.
+    const separator = occurrenceId.lastIndexOf(":");
+    const occurrenceEventId = separator > 0 ? occurrenceId.slice(0, separator) : "";
+    const runDate = separator > 0 ? occurrenceId.slice(separator + 1) : "";
+    const occ = event && (event.id === occurrenceEventId || event.id === occurrenceEventId.replace(/^event:/, "") || event.seedRefId === occurrenceEventId.replace(/^event:/, ""))
+      ? resolveOccurrence(db, event.id, runDate) : null;
+    if (!event || !occ || occ.occurrenceId !== occurrenceId || event.status !== "published" || event.hidden || event.archivedAt) return err(res, { status: 404, error: "discussion_unavailable" }), true;
+    const publicDto = (d: import("./types").DiscussionRecord) => ({ id:d.id, kind:d.kind, parentId:d.parentId, occurrenceId:d.occurrenceId, eventId:d.eventId, cityId:d.cityId, title:d.title, body:d.body, authorId:d.authorId, createdAt:d.createdAt, updatedAt:d.updatedAt });
+    // Discussion reads are private to verified participants; this is not a public forum.
+    const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const account = db.getAccount(sess.accountId);
+    const attendance = account && db.listAttendance(account.id).some(a => (a.role === "rsvp" || a.role === "host") && a.eventId === event.id && a.occurrenceId === occurrenceId);
+    if (!account || account.deletedAt || account.status !== "verified" || !attendance || account.cityId !== event.cityId) return err(res, { status: 403, error: "participant_required" }), true;
+    if (method === "GET") return ok(res, { discussion: db.listDiscussions(occurrenceId).map(publicDto) }), true;
+    if (account.suspended && (!account.suspendedUntil || new Date(account.suspendedUntil) > now)) return err(res, { status: 403, error: "suspended" }), true;
+    if (!db.consumeDiscussionRate(account.id, now.getTime())) return err(res, { status: 429, error: "rate_limited" }), true;
+    if (method === "DELETE") {
+      const target = db.getDiscussion(decodeURIComponent(discussionPath[3] ?? ""));
+      if (!target || target.authorId !== account.id || target.occurrenceId !== occurrenceId || target.state === "deleted") return err(res, { status: 404, error: "not_found" }), true;
+      db.updateDiscussion(target.id, { state: "deleted", body: "", title: null }); await db.persist(); return ok(res, { deleted: true }), true;
+    }
+    const b = await readJson(req) as Record<string, unknown>;
+    const body = typeof b.body === "string" ? b.body.trim() : "";
+    const title = typeof b.title === "string" ? b.title.trim() : null;
+    const parentId = typeof b.parentId === "string" ? b.parentId : null;
+    if (!body || body.length > 1000 || (title !== null && (!title || title.length > 120)) || (parentId && (!db.getDiscussion(parentId) || db.getDiscussion(parentId)?.occurrenceId !== occurrenceId))) return err(res, { status: 400, error: "invalid_discussion" }), true;
+    const kind = parentId ? "comment" : "thread";
+    if (kind === "thread" && title === null) return err(res, { status: 400, error: "title_required" }), true;
+    const record: import("./types").DiscussionRecord = { id:newId(), kind, parentId, occurrenceId, eventId:event.id, cityId:event.cityId, authorId:account.id, title:title ? title.slice(0,120) : null, body:body.slice(0,1000), state:"visible", createdAt:now.toISOString(), updatedAt:now.toISOString() };
+    db.addDiscussion(record);
+    const recipients = new Set(db.listDiscussions(occurrenceId).filter(d => d.authorId !== account.id && !db.isBlocked(account.id,d.authorId)).map(d => d.authorId));
+    if (parentId) { const parent=db.getDiscussion(parentId); if(parent && parent.authorId !== account.id && !db.isBlocked(account.id,parent.authorId)) recipients.add(parent.authorId); }
+    for (const recipient of recipients) if (db.getNotificationPreferences(recipient).community_updates) db.addNotification({id:newId(),accountId:recipient,category:"community_updates",title:"New run-day discussion activity",body:"Someone added to a run you joined.",createdAt:now.toISOString(),readAt:null});
+    await db.persist(); return ok(res, { discussion: publicDto(record) }), true;
+  }
+
+  // ---- RSVP to an event occurrence (server-validated schedule) ------------
   if (url.pathname === "/api/events/rsvp" && method === "POST") {
     const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
     const rec = db.getAccount(s.accountId); if (!rec || rec.deletedAt || rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
-    const b = await readJson(req) as Record<string, unknown>;
-    const registryId = resolveEventId(db, typeof b.eventId === "string" ? b.eventId : "");
-    if (!registryId) return err(res, { status: 400, error: "invalid_event", message: "That event isn't in the current listings." }), true;
-    const want = b.rsvp !== false;
-    if (want) {
-      if (!db.hasAttendance(s.accountId, registryId)) {
-        db.addAttendance({ id: crypto.randomUUID().replace(/-/g, ""), accountId: s.accountId, eventId: registryId, role: "rsvp", createdAt: now.toISOString() });
-        await db.persist();
-      }
-    } else {
-      // Un-RSVP removes ONLY the runner's own rsvp record; host records
-      // (created by admin approval) are never removed this way.
-      const mine = db.listAttendance(s.accountId).find((a) => a.eventId === registryId && a.role === "rsvp");
-      if (mine) {
-        db.removeAttendance(mine.id);
-        await db.persist();
-      }
-    }
-    return ok(res, { rsvped: want }), true;
+    const b = await readJson(req) as Record<string, unknown>; const requestedId = typeof b.eventId === "string" ? b.eventId : "";
+    const rawId = requestedId.replace(/^event:/, "");
+    const known = db.listEvents().find(e => e.id === requestedId || e.id === rawId || e.seedRefId === rawId);
+    const date = typeof b.runDate === "string" ? b.runDate : (known ? defaultOccurrenceDate(known, now) : "");
+    const occ = resolveOccurrence(db, requestedId, date);
+    if (!occ) return err(res, { status: 400, error: "invalid_occurrence", message: "That date is not a scheduled occurrence of this event." }), true;
+    const want = b.rsvp !== false; const mine = db.listAttendance(s.accountId).filter(a => a.role === "rsvp" && a.eventId === occ.eventId && a.occurrenceId === occ.occurrenceId);
+    if (want) { if (!mine.length) { db.addAttendance({ id: crypto.randomUUID().replace(/-/g,""), accountId:s.accountId, eventId:occ.eventId, role:"rsvp", createdAt:now.toISOString(), occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt }); await db.persist(); } }
+    else { for (const a of mine) db.removeAttendance(a.id); if (mine.length) await db.persist(); }
+    return ok(res, { rsvped: want, occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt }), true;
   }
-
   // ---- ratings (server-eligible: shared RSVP/host attendance only) --------
   if (url.pathname === "/api/ratings" && method === "POST") {
     const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
@@ -954,6 +1190,24 @@ async function handleApi(
     evaluateTrustStatus(db, b.subjectId, now);
     await db.persist();
     return ok(res, { submitted: true }), true;
+  }
+
+  // ---- scoped safety reports: verified runners only -----------------------
+  if (url.pathname === "/api/safety-reports" && method === "POST") {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const reporter = db.getAccount(s.accountId); if (!reporter || reporter.deletedAt || reporter.status !== "verified" || reporter.underReview) return err(res, { status: 403, error: "verified_runner_required" }), true;
+    if (!db.consumeSafetyReportRate(s.accountId, now.getTime())) return err(res, { status: 429, error: "rate_limited" }), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    if (typeof b.subjectId !== "string" || typeof b.contextType !== "string" || typeof b.contextId !== "string" || typeof b.reason !== "string" || !["join_request","event","personal_run"].includes(b.contextType)) return err(res, { status: 400, error: "invalid_report" }), true;
+    const reasonText = b.reason.trim(); if (reasonText.length < 5 || reasonText.length > 500) return err(res, { status: 400, error: "invalid_reason" }), true;
+    const subject = db.getAccount(b.subjectId); if (!subject || subject.deletedAt || subject.id === reporter.id) return err(res, { status: 404, error: "not_found" }), true;
+    let cityId: string | null = null;
+    if (b.contextType === "join_request") { const jr = db.getJoinRequest(b.contextId); if (!jr || (jr.requesterId !== reporter.id && jr.recipientId !== reporter.id) || (jr.requesterId !== b.subjectId && jr.recipientId !== b.subjectId) || db.isBlocked(reporter.id, b.subjectId)) return err(res, { status: 403, error: "invalid_context" }), true; const run = jr.contextType === "personal_run" ? db.getPersonalRun(jr.contextId) : null; cityId = run?.cityId ?? reporter.cityId; }
+    else if (b.contextType === "personal_run") { const run = db.getPersonalRun(b.contextId); if (!run || run.deletedAt || run.accountId !== b.subjectId || reporter.cityId !== run.cityId || db.isBlocked(reporter.id, b.subjectId)) return err(res, { status: 403, error: "invalid_context" }), true; cityId = run.cityId; }
+    else { if (!db.hasAttendance(reporter.id, b.contextId) || !db.hasAttendance(subject.id, b.contextId)) return err(res, { status: 403, error: "invalid_context" }), true; cityId = reporter.cityId; }
+    if (!cityId || (db.listSafetyReports().some(r => r.reporterId === reporter.id && r.subjectId === subject.id && r.contextType === b.contextType && r.contextId === b.contextId && r.status !== "dismissed"))) return err(res, { status: 409, error: "duplicate_report" }), true;
+    const report = { id: newId(), reporterId: reporter.id, subjectId: subject.id, cityId, contextType: b.contextType as any, contextId: b.contextId, reason: reasonText.slice(0, 500), status: "open" as const, createdAt: now.toISOString(), updatedAt: now.toISOString(), resolvedAt: null };
+    db.addSafetyReport(report); await db.persist(); return ok(res, { report: { id: report.id, status: report.status } }), true;
   }
 
   // ---- my appeals (own records only) --------------------------------------
@@ -1145,8 +1399,14 @@ async function handleAdmin(
     return ok(res, { threshold: t, newlyUnderReview }), true;
   }
 
+  if (method === "GET" && url.pathname === "/api/admin/overview") {
+    const result = adminOverview(db, ctx, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, result.data), true;
+  }
   if (method === "GET" && url.pathname === "/api/admin/pending") {
-    const result = adminPending(db, ctx, now);
+    const result = adminPending(db, ctx);
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, { results: result.data }), true;
@@ -1174,9 +1434,35 @@ async function handleAdmin(
     return ok(res, { ok: true, submission: { id: result.data.id, status: result.data.status } }), true;
   }
 
+  if (url.pathname === "/api/admin/events" && method === "GET") {
+    const result = listAdminEvents(db, ctx, url.searchParams.get("city") ?? undefined, now);
+    if (!result.ok) return sendErr(result), true; await db.persist(); return ok(res, { events: result.data }), true;
+  }
+  if (url.pathname === "/api/admin/events" && method === "POST") {
+    const result = createEvent(db, ctx, (await readJson(req)) as Record<string, unknown>, now);
+    if (!result.ok) return sendErr(result), true; await db.persist(); return ok(res, { event: result.data }), true;
+  }
+  const eventEdit = /^\/api\/admin\/events\/([^/]+)$/.exec(url.pathname);
+  if (eventEdit && method === "PATCH") {
+    const result = editEvent(db, ctx, eventEdit[1], (await readJson(req)) as Record<string, unknown>, now);
+    if (!result.ok) return sendErr(result), true; await db.persist(); return ok(res, { event: result.data }), true;
+  }
+  const eventTransition = /^\/api\/admin\/events\/([^/]+)\/(approve|publish|hide|unhide|archive)$/.exec(url.pathname);
+  if (eventTransition && method === "POST") {
+    const result = transitionEvent(db, ctx, eventTransition[1], eventTransition[2] as "approve"|"publish"|"hide"|"unhide"|"archive", now);
+    if (!result.ok) return sendErr(result), true; await db.persist(); return ok(res, { event: result.data }), true;
+  }
   // GET /api/admin/dashboard?city= — owner-only moderation dashboard overview
   if (method === "GET" && url.pathname === "/api/admin/dashboard") {
     const result = dashboardOverview(db, ctx, url.searchParams.get("city") ?? "", now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, result.data), true;
+  }
+
+  // GET /api/admin/overview — reason-gated, aggregate-only attention counts
+  if (method === "GET" && url.pathname === "/api/admin/overview") {
+    const result = adminOverview(db, ctx, now);
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, result.data), true;
@@ -1294,7 +1580,7 @@ async function handleAdmin(
     }
     // Role to assign on approval (owner/operator picks in the control center).
     const role = url.searchParams.get("role") === "group_leader" ? "group_leader" : "runner";
-    const result = adminSetStatus(db, ctx, id, action as "verified" | "rejected", now, role);
+    const result = adminSetStatus(db, ctx, id, action === "approve" ? "verified" : "rejected", now, role);
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, { ok: true, account: toPublicAccount(result.data, isOwnerEmail(result.data.email)) }), true;
@@ -1336,6 +1622,25 @@ async function handleAdmin(
     db.appendAudit({ admin: adminEmail(), action: "admin.purge", reason: ctx.reason!.trim().slice(0, 500), targetId: null, ip }, now);
     await db.persist();
     return ok(res, { purged: result.purged.length, retained: result.retained.length }), true;
+  }
+
+  // Safety reports: scoped, privacy-safe admin DTOs.
+  if (method === "GET" && url.pathname === "/api/admin/safety-reports") {
+    const city = url.searchParams.get("city");
+    const result = listSafetyReportsAdmin(db, ctx, city, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { reports: result.data }), true;
+  }
+  const safetyDecision = /^\/api\/admin\/safety-reports\/([a-f0-9]{32})\/?$/.exec(url.pathname);
+  if (method === "POST" && safetyDecision) {
+    const body = (await readJson(req)) as { status?: unknown };
+    const status = body.status;
+    if (status !== "open" && status !== "under_review" && status !== "resolved" && status !== "dismissed") return err(res, {status:400,error:"invalid_status"}), true;
+    const result = decideSafetyReport(db, ctx, safetyDecision[1], status as SafetyReportStatus, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { report: result.data }), true;
   }
 
   // ==================== MULTI-CITY ADMIN FOUNDATION ========================
