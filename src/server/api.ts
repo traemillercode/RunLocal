@@ -109,6 +109,7 @@ export interface ApiError {
   status: number;
   error: string;
   message?: string;
+  provider?: string;
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
