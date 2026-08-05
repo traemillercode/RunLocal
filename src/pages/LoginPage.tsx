@@ -517,7 +517,7 @@ export function LoginPage() {
                     />
                   </label>
                 </div>
-                {photoError ? <p className="mt-1.5 text-xs font-medium text-red-600">{photoError}</p> : null}
+                {photoError ? <p role="alert" className="mt-1.5 text-xs font-medium text-red-600">{photoError}</p> : null}
                 <span className="mt-1 block text-[11px] text-slate-400">Optional — you can add it later. This photo is public.</span>
               </label>
               <div>
@@ -599,7 +599,7 @@ export function LoginPage() {
             </label>
           )}
           {error && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-[13px] text-red-800">{authErrorText(error)}</p>}
-          {notice && <p className="rounded-xl bg-emerald-50 p-3.5 text-[13px] text-emerald-900">{notice}</p>}
+          {notice && <p role="status" className="rounded-xl bg-emerald-50 p-3.5 text-[13px] text-emerald-900">{notice}</p>}
           {pendingConfirmationEmail && (
             <ResendConfirmationBox
               email={pendingConfirmationEmail}
