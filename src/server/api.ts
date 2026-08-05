@@ -40,7 +40,7 @@ import {
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
 import { publicGroups, publicGroup } from "./groups";
-import { membershipDto, myMemberships, createMembership } from "./memberships";
+import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import {
@@ -348,7 +348,7 @@ async function handleApi(
     const body = await readJson(req) as Record<string,unknown>; const account = db.getAccount(sess.accountId);
     const targetId = typeof body.accountId === "string" ? body.accountId : sess.accountId;
     const membership = db.getMembership(group.id,targetId); if (!membership) return err(res,{status:404,error:"membership_not_found"}),true;
-    const leader = (group.leaderIds ?? []).includes(sess.accountId) || (group.ownerId === sess.accountId);
+    const leader = canAdministerMembership(group, account ?? undefined, db.getAccount(targetId), membership);
     if (membershipAction[2] === "leave" && targetId === sess.accountId) { membership.status="left"; }
     else if (!leader && !isOwnerEmail(account?.email ?? "")) return err(res,{status:403,error:"forbidden"}),true;
     else membership.status = membershipAction[2] === "approve" ? "active" : membershipAction[2] === "decline" ? "declined" : "revoked";
