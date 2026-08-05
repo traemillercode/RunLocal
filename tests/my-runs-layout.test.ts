@@ -17,9 +17,11 @@ describe("My Runs middle sizing", () => {
   });
 
   it("keeps actions padded and touch-safe, including empty-state browse", () => {
-    expect(source).toContain("min-h-11 shrink-0 rounded-full bg-slate-100 px-4 py-2");
-    expect(source).toContain("min-h-11 items-center rounded-full bg-[#14171C] px-4 py-2");
+    expect(source).toContain("min-h-11 shrink-0 rounded-[10px] bg-slate-100 px-4 py-2");
+    expect(source).toContain("min-h-11 items-center rounded-[10px] bg-[#14171C] px-4 py-2");
     expect(source).toContain("min-h-11 items-center rounded-lg px-4 py-2 text-sm font-bold");
+    expect(source).not.toContain("min-h-11 shrink-0 rounded-full");
+    expect(source).not.toContain("min-h-11 items-center rounded-full");
   });
 
   it("does not introduce global or broad width overrides", () => {
