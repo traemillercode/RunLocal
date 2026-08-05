@@ -45,13 +45,12 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
   .desktop-nav a.active, .desktop-nav a:hover, .desktop-account a:hover { background: rgba(255,255,255,.1); color: white; }
   .desktop-nav a.active { box-shadow: inset 3px 0 #ff5741; }
   .desktop-account { margin-top: auto; border-top: 1px solid rgba(255,255,255,.12); padding-top: 16px; }
-  /* Form actions stay full-width on mobile; on desktop they size to their label
-     unless a layout explicitly opts into a wider action row. */
+  /* Navigation rows fill the sidebar; the city selector remains content-sized. */
+  .desktop-nav a, .desktop-account a { width: 100%; }
+  /* Only controls explicitly opted into compact desktop sizing change width.
+     Full-width actions retain their composition at every viewport. */
   .desktop-compact-control { width: fit-content; max-width: 100%; }
-  .desktop-compact-control.flex-1 { flex: 0 0 auto; }
-  /* Raw admin/settings action buttons use the existing utility classes. Keep
-     inputs and content surfaces untouched while compacting only controls. */
-  .desktop-main button.w-full, .desktop-main a.w-full { width: fit-content; max-width: 100%; }
+  .desktop-main .desktop-compact-control.w-full { width: 100%; }
   .desktop-main { margin-left: 240px; min-height: 100dvh; min-width: 0; }
   .desktop-main > .desktop-browse-layout { max-width: 1240px !important; padding-left: clamp(24px, 4vw, 56px); padding-right: clamp(24px, 4vw, 56px); }
   .desktop-main > .desktop-reading { max-width: 1240px !important; }
