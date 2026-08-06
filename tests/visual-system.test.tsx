@@ -8,7 +8,7 @@ describe("Run Local visual system", () => {
     const manifest = readFileSync(resolve(root, "public/manifest.webmanifest"), "utf8");
     const html = readFileSync(resolve(root, "index.html"), "utf8");
     expect(manifest).toContain('"theme_color": "#14171C"');
-    expect(manifest).toContain('"src": "/icons/icon-512.png"');
+    expect(manifest).toContain('"src": "/app/icons/icon-512.png"');
     expect(html).toContain('href="/app/favicon.svg"');
   });
 
