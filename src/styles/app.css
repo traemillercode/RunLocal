@@ -87,3 +87,16 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
   .desktop-races-rail section > p:not(.desktop-rail-kicker) { margin-top: 6px; font-size: 13px; line-height: 1.5; color: #64748b; }
 }
 @media (max-width: 1179px) { .desktop-races-rail { display: none; } }
+
+/* Desktop pointer affordances only: never change touch behavior or provide functionality. */
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .desktop-event-card:hover, .desktop-race-card:hover, .desktop-forum-card:hover, .desktop-group-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgb(15 23 42 / 0.10);
+  }
+  .desktop-detail-card:hover, .desktop-detail-panel:hover { box-shadow: 0 6px 18px rgb(15 23 42 / 0.08); }
+  .desktop-event-card, .desktop-race-card, .desktop-forum-card, .desktop-group-card, .desktop-detail-card, .desktop-detail-panel { transition: transform 160ms ease, box-shadow 160ms ease; }
+}
+@media (min-width: 1024px) {
+  .desktop-account-action { display: flex; width: 100%; min-height: 46px; align-items: center; gap: 12px; border-radius: 10px; padding: 0 12px; color: #cbd5e1; font-size: 14px; font-weight: 700; text-align: left; }
+}

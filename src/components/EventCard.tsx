@@ -24,7 +24,7 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
   const label = group ? (rrca ? GROUP_TYPE_LABELS["rrca-chartered"] : GROUP_TYPE_LABELS.community) : null;
   return (
     <article
-      className={`relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 transition-shadow before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-[#FF5741] before:to-[#ff9a7f] ${
+      className={`desktop-event-card relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 transition-shadow before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-[#FF5741] before:to-[#ff9a7f] ${
         event.isToday ? "ring-2 ring-[#FF5741] shadow-md" : "ring-slate-200/70"
       }`}
     >

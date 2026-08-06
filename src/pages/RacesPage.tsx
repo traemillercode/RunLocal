@@ -12,7 +12,7 @@ import type { City, Race } from "../types";
 
 function RaceCard({ race, featured = false, pinned = false }: { race: Race; featured?: boolean; pinned?: boolean }) {
   return (
-    <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+    <article className="desktop-race-card overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
       <div className="flex items-start justify-between gap-3 p-4 pb-3">
         <div className="min-w-0">
           <h3 className="text-[15px] font-bold leading-snug text-slate-900">{race.name}</h3>

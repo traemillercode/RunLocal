@@ -64,7 +64,7 @@ function PostCard({
     .toUpperCase();
 
   return (
-    <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+    <article className="desktop-forum-card overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
       <div className="flex gap-3 p-4 pb-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-[13px] font-bold text-slate-600">
           {initials}
