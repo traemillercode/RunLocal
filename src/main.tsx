@@ -14,4 +14,3 @@ createRoot(document.getElementById("root")!).render(
     {import.meta.env.PROD && <ServiceWorkerUpdate />}
   </StrictMode>,
 );
-
