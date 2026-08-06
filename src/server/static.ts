@@ -23,6 +23,6 @@ export function staticHeaders(servedPath: string): Record<string, string> {
   const ext = extname(servedPath);
   return {
     "content-type": STATIC_TYPES[ext] ?? "application/octet-stream",
-    "cache-control": ext === ".html" ? "no-cache" : "public, max-age=3600",
+    "cache-control": ext === ".html" || ext === ".js" || ext === ".webmanifest" ? "no-cache" : "public, max-age=3600",
   };
 }

@@ -20,9 +20,9 @@ describe("Run Local branding assets", () => {
   it("keeps favicon and manifest references on the same brand family", () => {
     const manifest = JSON.parse(readFileSync("public/manifest.webmanifest", "utf8"));
     expect(manifest.icons).toEqual(expect.arrayContaining([
-      expect.objectContaining({ src: "/icons/icon-192.png", sizes: "192x192" }),
-      expect.objectContaining({ src: "/icons/icon-512.png", sizes: "512x512" }),
-      expect.objectContaining({ src: "/favicon.svg" }),
+      expect.objectContaining({ src: "/app/icons/icon-192.png", sizes: "192x192" }),
+      expect.objectContaining({ src: "/app/icons/icon-512.png", sizes: "512x512" }),
+      expect.objectContaining({ src: "/app/favicon.svg" }),
     ]));
     expect(readFileSync("public/favicon.svg", "utf8")).toContain("#FF5741");
   });
