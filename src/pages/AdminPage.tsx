@@ -447,7 +447,7 @@ export function AdminPage() {
 
   if (backendDown) {
     return (
-      <div className="mx-auto w-full max-w-md px-4 pb-32 pt-6">
+      <div className="mx-auto w-full max-w-md px-4 pb-32 pt-6 desktop-reading">
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <h1 className="text-xl font-extrabold text-slate-900">Admin safety tool</h1>
           <div className="mt-4"><Err msg="The Run Local server is unreachable — the admin API is not available right now. Try again later." /></div>
@@ -458,7 +458,7 @@ export function AdminPage() {
 
   if (!health?.adminConfigured && !isOwner) {
     return (
-      <div className="mx-auto w-full max-w-md px-4 pb-32 pt-6">
+      <div className="mx-auto w-full max-w-md px-4 pb-32 pt-6 desktop-reading">
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <h1 className="text-xl font-extrabold text-slate-900">Admin safety tool</h1>
           <div className="mt-4">
@@ -491,7 +491,7 @@ export function AdminPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Admin control center</h1>
