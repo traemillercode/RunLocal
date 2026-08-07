@@ -109,9 +109,13 @@ describe("content management: permission boundaries", () => {
     expect(JSON.parse(cityOk.body).content.hidden).toBe(true);
     const ok = await call(db, "POST", `/api/admin/content/${contentId}/restore`, { cookie: keyCookie, reason: "restore after review" });
     expect(ok.status).toBe(200);
-    // city admin cross-city (jefferson-city content id) is denied even with a reason
+    // city admin cross-city (jc-mo content id) is denied even with a reason.
+    // Register Jefferson City as an active city in the runtime registry (its
+    // seeded id is `jc-mo` — the seed fallback is only "coming_soon", which
+    // rejects submissions) so the foreign submission itself is valid.
+    db.setCity({ id: "jc-mo", name: "Jefferson City", state: "MO", slug: "jc-mo", status: "active", headerImageRef: null, accent: null });
     const sub = await call(db, "POST", "/api/submissions/race", {
-      body: { cityId: "jefferson-city-mo", name: "Capital 5K", distances: "5K", date: "2027-07-01", location: "Memorial Park", registrationUrl: "https://example.com/capital", description: "State capitol race." },
+      body: { cityId: "jc-mo", name: "Capital 5K", distances: "5K", date: "2027-07-01", location: "Memorial Park", registrationUrl: "https://example.com/capital", description: "State capitol race." },
       cookie: runnerCookie,
     });
     const jcId = (JSON.parse(sub.body) as { submission: { id: string } }).submission.id;

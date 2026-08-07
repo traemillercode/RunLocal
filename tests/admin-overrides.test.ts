@@ -7,12 +7,37 @@
  *  - posting works without a fresh login after server-side verification
  *  - City Admin grant auto-verifies completed funnels, never bypasses them
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { apiHandler } from "../src/server/api";
 import { createMemoryStore, type Db } from "../src/server/store";
-import { assignCityAdmin } from "../src/server/admin";
-import { DEFAULT_OWNER_EMAIL } from "../src/server/owner";
+import { ADMIN_EMAIL_VAR, ADMIN_KEY_VAR, assignCityAdmin } from "../src/server/admin";
+import { DEFAULT_OWNER_EMAIL, OWNER_EMAIL_VAR } from "../src/server/owner";
+import { seedCmsCities } from "../src/server/cms";
+
+// Key-admin authz is env-driven; pin the vars so the audit actor identity and
+// admin availability are deterministic regardless of the ambient shell env.
+// The previous values are restored afterwards so a shared worker never leaks
+// the pinned admin identity (or a missing key) into other test files.
+const KEY = "test-admin-overrides-key";
+let prevAdminKey: string | undefined;
+let prevAdminEmail: string | undefined;
+let prevOwnerEmail: string | undefined;
+beforeEach(() => {
+  prevAdminKey = process.env[ADMIN_KEY_VAR];
+  prevAdminEmail = process.env[ADMIN_EMAIL_VAR];
+  prevOwnerEmail = process.env[OWNER_EMAIL_VAR];
+  process.env[ADMIN_KEY_VAR] = KEY;
+  process.env[ADMIN_EMAIL_VAR] = "admin@example.com";
+});
+afterEach(() => {
+  if (prevAdminKey === undefined) delete process.env[ADMIN_KEY_VAR];
+  else process.env[ADMIN_KEY_VAR] = prevAdminKey;
+  if (prevAdminEmail === undefined) delete process.env[ADMIN_EMAIL_VAR];
+  else process.env[ADMIN_EMAIL_VAR] = prevAdminEmail;
+  if (prevOwnerEmail === undefined) delete process.env[OWNER_EMAIL_VAR];
+  else process.env[OWNER_EMAIL_VAR] = prevOwnerEmail;
+});
 
 function req(method: string, path: string, opts: { body?: unknown; cookie?: string; reason?: string } = {}): IncomingMessage {
   const headers: Record<string, string> = { "x-forwarded-proto": "https" };
@@ -146,12 +171,14 @@ describe("admin overrides: cross-owner, city boundaries, audit", () => {
     const id = json(queue.body).results[0].id;
     await call(db, "POST", `/api/admin/submissions/${id}/approve`, { cookie: keyCookie, reason: "approving run" });
     const contentId = `event:user-${id}`;
-    // RSVP + discussion + rating on that event
-    const rsvp = await call(db, "POST", "/api/events/rsvp", { body: { eventId: contentId }, cookie: runnerCookie });
+    // RSVP + discussion + rating on that event (explicit occurrence — the
+    // approved event is a one_time run on 2027-03-14)
+    const rsvp = await call(db, "POST", "/api/events/rsvp", { body: { eventId: contentId, runDate: "2027-03-14" }, cookie: runnerCookie });
     expect(rsvp.status).toBe(200);
     db.addDiscussion({ id: "disc-1", eventId: contentId, occurrenceId: `${contentId}:2027-03-14`, cityId: "columbia-mo", kind: "thread", parentId: null, title: "Who's in?", body: "Weather looks good.", authorId: runner.id, state: "visible", createdAt: "2027-03-01T00:00:00.000Z", updatedAt: "2027-03-01T00:00:00.000Z" });
     db.addRating({ id: "rating-1", reviewerId: runner.id, revieweeId: runner.id, eventId: contentId, positive: true, tags: ["reliable"], createdAt: "2027-03-02T00:00:00.000Z", reason: null });
-    expect(db.listAttendance(runner.id)).toHaveLength(1);
+    // host + RSVP rows for the submitter (admin approval grants host attendance)
+    expect(db.listAttendance(runner.id)).toHaveLength(2);
     expect(db.listRatings()).toHaveLength(1);
     // admin soft-deletes the event
     const del = await call(db, "POST", `/api/admin/content/${contentId}/delete`, { cookie: keyCookie, reason: "duplicate listing" });
@@ -183,9 +210,9 @@ describe("verification freshness: posting without a fresh login", () => {
     const pending = db.createAccount({ name: "Pending", email: "pending@example.com" });
     db.updateAccount(pending.id, { status: "pending", phase: "pending_review", selfieRef: "selfie-1" });
     const cookie = `runlocal_sid=${db.createSession(pending.id, "198.51.100.20").id}`;
-    // before approval: posting is denied
+    // before approval: posting is denied (signed in, but not yet verified)
     const denied = await call(db, "POST", "/api/submissions/race", { body: RACE, cookie });
-    expect(denied.status).toBe(401);
+    expect(denied.status).toBe(403);
     // owner approves server-side while the same session is still live
     db.updateAccount(pending.id, { status: "verified", verifiedAt: new Date().toISOString() });
     // same session, no relogin, no new cookie: posting now succeeds
@@ -203,6 +230,7 @@ describe("verification freshness: posting without a fresh login", () => {
 describe("city-admin grant and the verification funnel", () => {
   it("grant auto-verifies an account that completed the funnel; never bypasses an incomplete funnel", async () => {
     const db = createMemoryStore();
+    seedCmsCities(db); // city registry — assignCityAdmin validates against it
     const owner = db.createAccount({ name: "Owner", email: DEFAULT_OWNER_EMAIL });
     db.updateAccount(owner.id, { status: "verified" });
     const ownerSession = db.createSession(owner.id, "198.51.100.30");
