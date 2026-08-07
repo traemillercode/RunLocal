@@ -632,8 +632,9 @@ export function AdminPage() {
 
       {/* Owner-only dashboard: moderation, RRCA, featured/pinned */}
       {isOwner ? (
-        {!isCityAdmin && authed && <ContentManagementSection />}
-      <section id="dashboard" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+        <>
+          {!isCityAdmin && authed && <ContentManagementSection />}
+          <section id="dashboard" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <div className="flex items-start justify-between gap-2">
             <div>
               <h2 className="text-[15px] font-bold text-slate-900">City dashboard</h2>
@@ -891,7 +892,8 @@ export function AdminPage() {
               </div>
             </div>
           ) : null}
-        </section>
+          </section>
+        </>
       ) : null}
 
       {/* Global Admin — site settings & CMS (key admin or owner; audited) */}

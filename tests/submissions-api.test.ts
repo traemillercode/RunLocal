@@ -203,14 +203,14 @@ describe("admin submission queue + decisions over HTTP", () => {
     const { res: res2, fake: fake2 } = makeRes();
     await apiHandler(makeReq("GET", "/api/admin/submissions", { cookie: `runlocal_admin=${adminSession.id}` }), res2, db);
     expect(fake2.status).toBe(200);
-    const rows = (JSON.parse(fake2.body) as { results: { title: string; submitterName: string }[] }).results;
+    const rows = (JSON.parse(fake2.body) as { results: { id: string; title: string; submitterName: string }[] }).results;
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ title: "River 5K", submitterName: "Runner" });
     expect(fake2.body).not.toContain("example.com");
     // the routine read is still audited with the server-generated reason
     expect(db.listAudit(10).some((a) => a.action === "admin.submission_list")).toBe(true);
     // but a decision without a reason is still rejected
-    const id = rows[0]!.id ?? rows[0].id;
+    const id = rows[0]!.id;
     const { res: res3, fake: fake3 } = makeRes();
     await apiHandler(makeReq("POST", `/api/admin/submissions/${id}/approve`, { cookie: `runlocal_admin=${adminSession.id}` }), res3, db);
     expect(fake3.status).toBe(400);

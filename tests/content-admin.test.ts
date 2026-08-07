@@ -20,15 +20,17 @@ function req(method: string, path: string, opts: { body?: unknown; cookie?: stri
   const headers: Record<string, string> = { "x-forwarded-proto": "https" };
   if (opts.reason) headers["x-audit-reason"] = opts.reason;
   if (opts.cookie) headers.cookie = opts.cookie;
-  const body = opts.body === undefined ? "" : JSON.stringify(opts.body);
   return {
     method,
     url: path,
     headers,
     socket: { remoteAddress: "198.51.100.9" },
     [Symbol.asyncIterator]() {
-      let sent = false;
-      return { next: async () => ({ done: sent, value: sent ? undefined : (body as unknown) }) };
+      const chunks = opts.body === undefined ? [] : [JSON.stringify(opts.body)];
+      let i = 0;
+      return {
+        next: async () => (i < chunks.length ? { done: false as const, value: chunks[i++] } : { done: true as const, value: undefined }),
+      };
     },
   } as unknown as IncomingMessage;
 }
@@ -61,10 +63,10 @@ function makeAdminDb(): { db: Db; keyCookie: string; ownerCookie: string; cityCo
   return { db, keyCookie, ownerCookie, cityCookie, runnerCookie };
 }
 
-async function approveRace(db: Db, keyCookie: string): Promise<{ id: string; contentId: string }> {
-  await call(db, "POST", "/api/submissions/race", { body: RACE, cookie: keyCookie });
+async function approveRace(db: Db, runnerCookie: string, keyCookie: string): Promise<{ id: string; contentId: string }> {
+  await call(db, "POST", "/api/submissions/race", { body: RACE, cookie: runnerCookie });
   const queue = await call(db, "GET", "/api/admin/submissions", { cookie: keyCookie });
-  const rows = (JSON.parse(queue.body) as { results: { id: string }[] }).results;
+  const rows = (JSON.parse(queue.body) as { results: { id: string; title: string }[] }).results;
   const id = rows[0].id;
   await call(db, "POST", `/api/admin/submissions/${id}/approve`, { cookie: keyCookie, reason: "approving race" });
   return { id, contentId: `race:user-${id}` };
@@ -73,6 +75,7 @@ async function approveRace(db: Db, keyCookie: string): Promise<{ id: string; con
 describe("content management: permission boundaries", () => {
   it("list requires a global admin session; owner and key admin pass, runner and city admin are denied", async () => {
     const { db, keyCookie, ownerCookie, cityCookie, runnerCookie } = makeAdminDb();
+    await approveRace(db, runnerCookie, keyCookie);
     for (const cookie of [undefined, runnerCookie, cityCookie]) {
       const r = await call(db, "GET", "/api/admin/content?city=columbia-mo", { cookie });
       expect(r.status).toBe(401);
@@ -88,7 +91,7 @@ describe("content management: permission boundaries", () => {
 
   it("mutations require a reason and reject runners / city admins even with a reason", async () => {
     const { db, keyCookie, runnerCookie, cityCookie } = makeAdminDb();
-    const { contentId } = await approveRace(db, keyCookie);
+    const { contentId } = await approveRace(db, runnerCookie, keyCookie);
     // no reason
     const noReason = await call(db, "POST", `/api/admin/content/${contentId}/hide`, { cookie: keyCookie });
     expect(noReason.status).toBe(400);
@@ -106,8 +109,8 @@ describe("content management: permission boundaries", () => {
 
 describe("content management: hide / restore / archive public effect", () => {
   it("hidden community races disappear from /api/content; restore brings them back", async () => {
-    const { db, keyCookie } = makeAdminDb();
-    const { contentId } = await approveRace(db, keyCookie);
+    const { db, keyCookie, runnerCookie } = makeAdminDb();
+    const { contentId } = await approveRace(db, runnerCookie, keyCookie);
     expect(publicApprovedContent(db, "columbia-mo").races).toHaveLength(1);
     await call(db, "POST", `/api/admin/content/${contentId}/hide`, { cookie: keyCookie, reason: "verified as a duplicate" });
     expect(publicApprovedContent(db, "columbia-mo").races).toHaveLength(0);
@@ -118,8 +121,8 @@ describe("content management: hide / restore / archive public effect", () => {
   });
 
   it("archiving is terminal and also excluded from public; hide on archived is refused", async () => {
-    const { db, keyCookie } = makeAdminDb();
-    const { contentId } = await approveRace(db, keyCookie);
+    const { db, keyCookie, runnerCookie } = makeAdminDb();
+    const { contentId } = await approveRace(db, runnerCookie, keyCookie);
     await call(db, "POST", `/api/admin/content/${contentId}/archive`, { cookie: keyCookie, reason: "cancelled race — no longer exists" });
     expect(publicApprovedContent(db, "columbia-mo").races).toHaveLength(0);
     expect(publicModerated(db, "columbia-mo").archived).toContain(contentId);
@@ -133,26 +136,26 @@ describe("content management: hide / restore / archive public effect", () => {
   });
 
   it("editing a community race title propagates to the submission payload and public listing", async () => {
-    const { db, keyCookie } = makeAdminDb();
-    const { id, contentId } = await approveRace(db, keyCookie);
+    const { db, keyCookie, runnerCookie } = makeAdminDb();
+    const { id, contentId } = await approveRace(db, runnerCookie, keyCookie);
     const r = await call(db, "PATCH", `/api/admin/content/${contentId}`, { body: { title: "River 5K — rescheduled" }, cookie: keyCookie, reason: "correcting name per organizer" });
     expect(r.status).toBe(200);
     expect((JSON.parse(r.body) as { content: { title: string } }).content.title).toBe("River 5K — rescheduled");
     expect(publicApprovedContent(db, "columbia-mo").races[0].name).toBe("River 5K — rescheduled");
-    const my = await call(db, "GET", "/api/my/submissions", { cookie: keyCookie });
+    const my = await call(db, "GET", "/api/my/submissions", { cookie: runnerCookie });
     const mine = (JSON.parse(my.body) as { submissions: { id: string; status: string }[] }).submissions.find((s) => s.id === id);
     expect(mine?.status).toBe("approved");
   });
 
   it("hiding a community group removes it from /api/groups; restore returns it", async () => {
-    const { db, keyCookie } = makeAdminDb();
+    const { db, keyCookie, runnerCookie } = makeAdminDb();
     const submit = await call(db, "POST", "/api/submissions/group", {
       body: { cityId: "columbia-mo", name: "Mizzou Runners", description: "Campus club", groupType: "community", websiteUrl: "https://example.com/club", membershipMode: "open", coverPhoto: "cover-ref", logoPhoto: "logo-ref" },
-      cookie: keyCookie,
+      cookie: runnerCookie,
     });
     expect(submit.status).toBe(200);
     const queue = await call(db, "GET", "/api/admin/submissions", { cookie: keyCookie });
-    const id = (JSON.parse(queue.body) as { results: { id: string }[] }).results.find((r) => r.title === "Mizzou Runners")!.id;
+    const id = (JSON.parse(queue.body) as { results: { id: string; title: string }[] }).results.find((r) => r.title === "Mizzou Runners")!.id;
     await call(db, "POST", `/api/admin/submissions/${id}/approve`, { cookie: keyCookie, reason: "approving club" });
     const groupId = `user-${id}`;
     expect(publicGroups(db, "columbia-mo").some((g) => g.id === groupId)).toBe(true);
@@ -163,14 +166,14 @@ describe("content management: hide / restore / archive public effect", () => {
   });
 
   it("canonical events sync: hiding an event content row hides the public event", async () => {
-    const { db, keyCookie } = makeAdminDb();
+    const { db, keyCookie, runnerCookie } = makeAdminDb();
     const submit = await call(db, "POST", "/api/submissions/event", {
       body: { cityId: "columbia-mo", type: "one_time", title: "Sunday Long Run", date: "2027-03-14", time: "7:00 AM", location: "Cosmo Park", distanceLabel: "10 mi", invite: "Open to all", description: "Long run" },
-      cookie: keyCookie,
+      cookie: runnerCookie,
     });
     expect(submit.status).toBe(200);
     const queue = await call(db, "GET", "/api/admin/submissions", { cookie: keyCookie });
-    const id = (JSON.parse(queue.body) as { results: { id: string }[] }).results.find((r) => r.title === "Sunday Long Run")!.id;
+    const id = (JSON.parse(queue.body) as { results: { id: string; title: string }[] }).results.find((r) => r.title === "Sunday Long Run")!.id;
     await call(db, "POST", `/api/admin/submissions/${id}/approve`, { cookie: keyCookie, reason: "approving run" });
     const contentId = `event:user-${id}`;
     const pub = await call(db, "GET", "/api/events?city=columbia-mo");
@@ -187,7 +190,7 @@ describe("super-admin submission edit + remove", () => {
     const submit = await call(db, "POST", "/api/submissions/race", { body: RACE, cookie: runnerCookie });
     const id = (JSON.parse(submit.body) as { submission: { id: string } }).submission.id;
     // city admin cannot edit
-    const cityDenied = await call(db, "PATCH", `/api/admin/submissions/${id}`, { body: { ...RACE, name: "Hacked" }, cookie: "runlocal_sid=missing", reason: "fix" });
+    const cityDenied = await call(db, "PATCH", `/api/admin/submissions/${id}`, { body: { ...RACE, name: "Hacked" }, cookie: "runlocal_sid=missing", reason: "unauthorized attempt" });
     expect(cityDenied.status).toBe(401);
     // edit with invalid URL is rejected
     const bad = await call(db, "PATCH", `/api/admin/submissions/${id}`, { body: { ...RACE, registrationUrl: "not-a-url" }, cookie: keyCookie, reason: "fixing typo" });
