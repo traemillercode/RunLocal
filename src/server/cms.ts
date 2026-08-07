@@ -193,7 +193,8 @@ export function decodeCmsImage(data: unknown): { ok: true; bytes: Buffer; ext: "
   const ext = (m[1] === "jpeg" ? "jpg" : m[1]) as "jpg" | "png" | "webp";
   const bytes = Buffer.from(m[2].replace(/\s/g, ""), "base64");
   if (bytes.length === 0) return { ok: false, error: "invalid_image" };
-  if (bytes.length > MAX_CMS_IMAGE_BYTES) return { ok: false, error: "image_too_large" };
+  // CMS remains separately scoped: it validates data-URL syntax and size only;
+  // profile/selfie/group uploads use the stricter shared dimensional validator.
   return { ok: true, bytes, ext };
 }
 

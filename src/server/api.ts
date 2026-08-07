@@ -45,6 +45,7 @@ import { publicGroups, publicGroup } from "./groups";
 import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
+import { validateImageBytes } from "./image-validation";
 import {
   dashboardOverview,
   liftSuspension,
@@ -94,6 +95,11 @@ export const ADMIN_COOKIE = "runlocal_admin";
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MAX_JSON_BODY = 6 * 1024 * 1024; // 6 MB (selfie uploads)
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 MB decoded
+
+function validateUploadedImage(bytes: Buffer, ext: string, minEdge: number): string | null {
+  if (ext !== "jpg" && ext !== "png" && ext !== "webp") return "invalid_image";
+  return validateImageBytes(bytes, ext, minEdge, MAX_IMAGE_BYTES);
+}
 
 // In-memory rate limiting (documented: replace with a shared store at scale).
 const emailSendLog = new Map<string, number[]>();
@@ -236,13 +242,15 @@ function rateLimited(map: Map<string, number[]>, key: string, limit: number, win
 }
 
 /** Decode + validate an image data URL. Returns { ok, bytes, error }. */
-function decodeImage(dataUrl: string): { ok: true; bytes: Buffer; ext: string } | { ok: false; error: string } {
+function decodeImage(dataUrl: string, minEdge = 64): { ok: true; bytes: Buffer; ext: string } | { ok: false; error: string } {
   const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=\s]+)$/.exec(dataUrl.trim());
   if (!m) return { ok: false, error: "invalid_image" };
   const ext = m[1] === "jpeg" ? "jpg" : m[1];
   const bytes = Buffer.from(m[2].replace(/\s/g, ""), "base64");
   if (bytes.length === 0) return { ok: false, error: "invalid_image" };
   if (bytes.length > MAX_IMAGE_BYTES) return { ok: false, error: "image_too_large" };
+  const validation = validateUploadedImage(bytes, ext, minEdge);
+  if (validation) return { ok: false, error: validation };
   return { ok: true, bytes, ext };
 }
 
@@ -669,7 +677,7 @@ async function handleApi(
     const verified = requireVerifiedSubmitter(db, sess.accountId);
     if (!verified.ok) return err(res, { status: verified.status, error: verified.error, message: verified.message }), true;
     if (typeof body.photo !== "string") return err(res, { status: 400, error: "invalid_image" }), true;
-    const img = decodeImage(body.photo);
+    const img = decodeImage(body.photo, 256);
     if (!img.ok) return err(res, { status: 400, error: img.error }), true;
     const filename = `${rec.id}_group_${newId()}.${img.ext}`;
     await db.writePublicUpload(filename, img.bytes);

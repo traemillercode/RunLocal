@@ -31,14 +31,16 @@ function session(db: Db, status: "verified" | "pending" = "verified", suspended 
   const s = db.createSession(account.id, "198.51.100.23");
   return `runlocal_sid=${s.id}`;
 }
-const PNG = "data:image/png;base64,iVBORw0KGgo=";
+import { readFileSync } from "node:fs";
+const PNG = `data:image/png;base64,${readFileSync(new URL("./fixtures/valid-512.png", import.meta.url)).toString("base64")}`;
+const WEBP = `data:image/webp;base64,${readFileSync(new URL("./fixtures/valid-256.webp", import.meta.url)).toString("base64")}`;
 
 describe("POST /api/group/photo", () => {
-  it("uploads a supported image for a verified runner", async () => {
+  it.each([PNG, WEBP])("uploads a supported image for a verified runner", async (photo) => {
     const db = createMemoryStore(); const { res, result } = response();
-    await apiHandler(req({ photo: PNG }, session(db)), res, db);
+    await apiHandler(req({ photo }, session(db)), res, db);
     expect(result.status).toBe(200);
-    expect(JSON.parse(result.body).photoRef).toMatch(/^\w+_group_.*\.png$/);
+    expect(JSON.parse(result.body).photoRef).toMatch(/^\w+_group_.*\.(png|webp)$/);
   });
   it("rejects unauthenticated callers", async () => {
     const db = createMemoryStore(); const { res, result } = response();
