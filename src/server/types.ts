@@ -309,6 +309,8 @@ export interface PersistedDb {
   notifications?: NotificationRecord[];
   discussions?: DiscussionRecord[];
   discussionRate?: Record<string, number[]>;
+  waivers?: import("./waivers").GroupWaiverVersion[];
+  waiverSignatures?: import("./waivers").GroupWaiverSignature[];
 }
 
 export interface DiscussionRecord {
