@@ -34,8 +34,16 @@ function useSubmit() {
   const submit = async (fn: () => Promise<api.ApiResult<unknown>>) => {
     setBusy(true);
     setError(null);
-    const r = await fn();
-    setBusy(false);
+    let r: api.ApiResult<unknown>;
+    try {
+      r = await fn();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "The submission could not be sent. Check your connection and try again.";
+      setError(message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
     if (r.ok) {
       toast("Submitted! It's pending approval and will appear publicly once approved.", "success");
       return true;
@@ -91,32 +99,36 @@ export function GroupSubmissionSheet({ open, onClose, onSubmitted, cityId }: { o
     }
     setUploading(true);
     setError(null);
-    const cover = await api.uploadGroupPhoto(f.coverPhoto);
-    if (!cover.ok) {
+    try {
+      const cover = await api.uploadGroupPhoto(f.coverPhoto);
+      if (!cover.ok) {
+        setError(cover.error.message ?? "Cover photo upload failed. Please choose another image and try again.");
+        return;
+      }
+      const logo = await api.uploadGroupPhoto(f.logoPhoto);
+      if (!logo.ok) {
+        setError(logo.error.message ?? "Logo photo upload failed. Please choose another image and try again.");
+        return;
+      }
+      const ok = await submit(() =>
+        api.submitGroup({
+          cityId, name: f.name, description: f.description, groupType: f.groupType as "rrca-chartered" | "community",
+          groupmeUrl: f.groupmeUrl || undefined, facebookUrl: f.facebookUrl || undefined,
+          instagramUrl: f.instagramUrl || undefined, websiteUrl: f.websiteUrl || undefined,
+          coverPhoto: cover.data.photoRef, logoPhoto: logo.data.photoRef, membershipMode: f.membershipMode as "open" | "request",
+        }),
+      );
+      if (ok) {
+        setF({ name: "", description: "", groupType: "community", groupmeUrl: "", facebookUrl: "", instagramUrl: "", websiteUrl: "", coverPhoto: "", logoPhoto: "", membershipMode: "request" });
+        onClose();
+        onSubmitted?.();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Photo upload failed. Check your connection and try again.");
+    } finally {
       setUploading(false);
-      setError(cover.error.message ?? "Cover photo upload failed. Please choose another image and try again.");
-      return;
     }
-    const logo = await api.uploadGroupPhoto(f.logoPhoto);
-    if (!logo.ok) {
-      setUploading(false);
-      setError(logo.error.message ?? "Logo photo upload failed. Please choose another image and try again.");
-      return;
-    }
-    setUploading(false);
-    const ok = await submit(() =>
-      api.submitGroup({
-        cityId, name: f.name, description: f.description, groupType: f.groupType as "rrca-chartered" | "community",
-        groupmeUrl: f.groupmeUrl || undefined, facebookUrl: f.facebookUrl || undefined,
-        instagramUrl: f.instagramUrl || undefined, websiteUrl: f.websiteUrl || undefined,
-        coverPhoto: cover.data.photoRef, logoPhoto: logo.data.photoRef, membershipMode: f.membershipMode as "open" | "request",
-      }),
-    );
-    if (ok) {
-      setF({ name: "", description: "", groupType: "community", groupmeUrl: "", facebookUrl: "", instagramUrl: "", websiteUrl: "", coverPhoto: "", logoPhoto: "", membershipMode: "request" });
-      onClose();
-      onSubmitted?.();
-    }
+    return;
   };
   return (
     <Sheet open={open} onClose={onClose} title="Start a group" subtitle="Verified runners — pending approval before it's public">
