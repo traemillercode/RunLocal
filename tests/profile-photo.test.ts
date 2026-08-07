@@ -19,14 +19,15 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { apiHandler } from "../src/server/api";
 import { staticHeaders } from "../src/server/static";
 import { Db } from "../src/server/store";
 
-const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const JPG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
-const WEBP_BYTES = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x1c, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+const PNG_BYTES = readFileSync(new URL("./fixtures/valid-512.png", import.meta.url));
+const JPG_BYTES = readFileSync(new URL("./fixtures/valid-817x1226.jpg", import.meta.url));
+const WEBP_BYTES = readFileSync(new URL("./fixtures/valid-256.webp", import.meta.url));
 const dataUrl = (mime: string, bytes: Buffer) => `data:${mime};base64,${bytes.toString("base64")}`;
 
 function req(method: string, url: string, cookie?: string, body?: unknown): IncomingMessage {
@@ -98,6 +99,20 @@ describe("POST /api/profile/photo — HTTP contract", () => {
     expect(status).toBe(200);
     expect(body.photoUrl).toBe(`/uploads/public/${accountId}_profile.${ext}`);
     expect(db.getAccount(accountId)?.profilePhotoRef).toBe(`${accountId}_profile.${ext}`);
+  });
+  it("rejects MIME/signature mismatches and truncated data", async () => {
+    const db = new Db({ dataDir: null });
+    const { cookie } = session(db);
+    for (const bytes of [Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.from([0xff, 0xd8, 0xff])]) {
+      const result = await uploadPhoto(db, cookie, dataUrl("image/png", bytes));
+      expect(result.status).toBe(400); expect(result.body.error).toBe("invalid_image");
+    }
+  });
+  it("rejects images over the 4096px edge limit", async () => {
+    const db = new Db({ dataDir: null }); const { cookie } = session(db);
+    const huge = Buffer.from(PNG_BYTES); huge.writeUInt32BE(4097, 16);
+    const result = await uploadPhoto(db, cookie, dataUrl("image/png", huge));
+    expect(result.status).toBe(400); expect(result.body.error).toBe("image_dimensions_too_large");
   });
   it("rejects unsupported MIME types", async () => {
     const db = new Db({ dataDir: null });
