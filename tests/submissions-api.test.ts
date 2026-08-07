@@ -9,6 +9,7 @@
  *  - public /api/content exposes ONLY approved content.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { apiHandler } from "../src/server/api";
 import { createMemoryStore, type Db } from "../src/server/store";
@@ -136,7 +137,7 @@ describe("group photo uploads persist into pending group submissions", () => {
   it("accepts both uploaded photo refs and keeps the group pending", async () => {
     const db = createMemoryStore();
     const { cookie } = verifiedUser(db, "group@example.com");
-    const photo = "data:image/png;base64,iVBORw0KGgo=";
+    const photo = `data:image/png;base64,${readFileSync(new URL("./fixtures/valid-512.png", import.meta.url)).toString("base64")}`;
     const refs: string[] = [];
     for (const body of [{ photo }, { photo }]) {
       const { res, fake } = makeRes();
