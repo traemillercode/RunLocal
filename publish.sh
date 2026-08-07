@@ -74,9 +74,17 @@ if [ -n "$UPLOAD_FIXTURE" ]; then
 else
   echo "⚠ No public upload fixture found under $REPO_ROOT/data/uploads/public; upload proxy check skipped"
 fi
-# Hash routes are client-side, but the document and splash bridges must be real.
-curl -sf http://localhost:3000/login | grep -Fq '/app#/login' || { echo 'login bridge missing' >&2; exit 1; }
-curl -sf http://localhost:3000/signup | grep -Fq '/app#/login?mode=signup' || { echo 'signup bridge missing' >&2; exit 1; }
+# Hash routes are client-side, but the SSR documents and route-specific
+# modulepreloads must prove that the public auth bridges are real. Do not pin
+# checks to hashed bundle names or the implementation detail of an href.
+LOGIN_HTML="$(curl -sf http://localhost:3000/login)"
+printf '%s' "$LOGIN_HTML" | grep -Fq 'auth-bridge' || { echo 'login bridge marker missing' >&2; exit 1; }
+printf '%s' "$LOGIN_HTML" | grep -Eq 'rel="modulepreload" href="/assets/login-[^"]+\.js"' || { echo 'login route modulepreload missing' >&2; exit 1; }
+printf '%s' "$LOGIN_HTML" | grep -Fq 'Log in to Run Local.' || { echo 'login route heading missing' >&2; exit 1; }
+SIGNUP_HTML="$(curl -sf http://localhost:3000/signup)"
+printf '%s' "$SIGNUP_HTML" | grep -Fq 'auth-bridge' || { echo 'signup bridge marker missing' >&2; exit 1; }
+printf '%s' "$SIGNUP_HTML" | grep -Eq 'rel="modulepreload" href="/assets/signup-[^"]+\.js"' || { echo 'signup route modulepreload missing' >&2; exit 1; }
+printf '%s' "$SIGNUP_HTML" | grep -Fq 'Join Run Local.' || { echo 'signup route heading missing' >&2; exit 1; }
 curl -sf http://localhost:3000/app/sw.js | grep -q 'runlocal-shell-' || { echo 'service worker path/marker verification failed' >&2; exit 1; }
 curl -sfI http://localhost:3000/app/sw.js | grep -qi 'content-type: text/javascript' || { echo 'service worker MIME verification failed' >&2; exit 1; }
 curl -sfI http://localhost:3000/app/manifest.webmanifest | grep -qi 'cache-control: no-cache' || { echo 'manifest cache verification failed' >&2; exit 1; }
