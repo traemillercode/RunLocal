@@ -137,6 +137,7 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new D
     phase: rec.status === "pending" ? rec.phase : null,
     badge: rec.status === "verified" ? "verified" : null,
     role: rec.role,
+    adminCityId: rec.role === "city_admin" ? rec.adminCityId : null,
     isOwner,
     suspended: isSuspended(rec, now),
     underReview: rec.underReview === true,

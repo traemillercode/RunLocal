@@ -73,6 +73,7 @@ import { decideSubmission,
   requireVerifiedSubmitter,
 } from "./submissions";
 import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
+import { repairApprovedSubmissions } from "./submissionBackfill";
 import {
   credentialType,
   evaluateTrustStatus,
@@ -1270,6 +1271,14 @@ async function handleAdmin(
   const ctx = { adminSessionId, userSessionId, reason: typeof reason === "string" ? reason : undefined, ip };
   const sendErr = (r: { ok: false; error: string; status: number; message?: string }) =>
     err(res, { status: r.status, error: r.error, message: r.message });
+  // Idempotent repair for legacy approved submissions; owner/key admin only.
+  if (method === "POST" && url.pathname === "/api/admin/city/submissions/backfill") {
+    const auth = authorizeAdmin(db, ctx, "admin.submission_approve", null, now);
+    if (!auth.ok) return sendErr(auth), true;
+    const result = repairApprovedSubmissions(db, now);
+    await db.persist();
+    return ok(res, result), true;
+  }
 
   if (method === "GET" && url.pathname === "/api/admin/cms/settings") { const a=authorizeAdmin(db,ctx,"admin.cms_settings",null,now); if(!a.ok)return sendErr(a),true; return ok(res,{settings:publicSettings(db),cities:db.listCities(),integrations:integrations(db)}),true; }
   if (method === "POST" && url.pathname === "/api/admin/cms/settings") { const body=await readJson(req) as Record<string,unknown>; const r=updateSettings(db,ctx,body as any,now); if(!r.ok)return sendErr(r),true; await db.persist(); return ok(res,r.data),true; }
