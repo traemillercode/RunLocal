@@ -3,6 +3,10 @@
 # splash/proxy which mounts the app at /app and its same-origin API at /api.
 set -euo pipefail
 cd "$(dirname "$0")"
+# Repo root, captured before any later `cd` (the site publish below changes the
+# working directory, which previously made relative fixture discovery silently
+# skip the real upload fixture and never exercise the /uploads proxy).
+REPO_ROOT="$(pwd)"
 
 echo "→ Building (typecheck + vite build)"
 BUILD_ID="$(git rev-parse --short HEAD)-$(date -u +%Y%m%d%H%M%S)"
@@ -47,14 +51,28 @@ APP_ASSET="$(sed -n 's/.*src="\(\/app\/assets\/[^" ]*\.js\)".*/\1/p' "$APP_HTML"
 curl -sf "http://localhost:3000$APP_ASSET" | grep -Fq "$BUILD_ID" || { echo "functional app bundle marker (build $BUILD_ID) missing at /app" >&2; exit 1; }
 curl -sf http://localhost:3000/api/health | grep -Fq '"ok":true' || { echo 'public API health check failed' >&2; exit 1; }
 # Verify the public upload proxy with a fixture when one is available. The
-# publish gate must not assume seeded data exists in every environment.
-UPLOAD_FIXTURE="$(find data/uploads/public -type f -print -quit 2>/dev/null || true)"
+# gate must not assume seeded data exists in every environment, but when a
+# fixture IS present it must really be tested: the earlier `cd` into the site
+# dir made a relative find silently skip the real fixture, so discovery
+# resolves the repo-relative path explicitly.
+UPLOAD_FIXTURE="$(find "$REPO_ROOT/data/uploads/public" -type f -print -quit 2>/dev/null || true)"
 if [ -n "$UPLOAD_FIXTURE" ]; then
-  UPLOAD_PATH="/uploads/public/${UPLOAD_FIXTURE#data/uploads/public/}"
-  curl -sfI "http://localhost:3000$UPLOAD_PATH" >/dev/null || { echo "public upload fixture failed: $UPLOAD_PATH" >&2; exit 1; }
-  echo "✓ Public upload proxy serves fixture $UPLOAD_PATH"
+  UPLOAD_PATH="/uploads/public/${UPLOAD_FIXTURE#$REPO_ROOT/data/uploads/public/}"
+  UPLOAD_HEADERS="$(curl -sfI "http://localhost:3000$UPLOAD_PATH")" || { echo "public upload fixture failed: $UPLOAD_PATH" >&2; exit 1; }
+  # A bare 200 is not proof: the splash fallback would happily return the
+  # coming-soon HTML for an unproxied path. Require the image content-type AND
+  # the exact on-disk bytes so a shell page can never satisfy the gate.
+  if ! printf '%s' "$UPLOAD_HEADERS" | grep -qi '^content-type: image/jpeg'; then
+    echo "public upload fixture returned a non-image response: $UPLOAD_PATH" >&2
+    exit 1
+  fi
+  if ! curl -sf "http://localhost:3000$UPLOAD_PATH" | cmp -s - "$UPLOAD_FIXTURE"; then
+    echo "public upload fixture bytes mismatch: $UPLOAD_PATH" >&2
+    exit 1
+  fi
+  echo "✓ Public upload proxy serves fixture $UPLOAD_PATH (image/jpeg, $(wc -c < "$UPLOAD_FIXTURE") bytes)"
 else
-  echo "✓ No public upload fixture available; upload proxy check skipped"
+  echo "⚠ No public upload fixture found under $REPO_ROOT/data/uploads/public; upload proxy check skipped"
 fi
 # Hash routes are client-side, but the document and splash bridges must be real.
 curl -sf http://localhost:3000/login | grep -Fq '/app#/login' || { echo 'login bridge missing' >&2; exit 1; }
