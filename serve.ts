@@ -24,7 +24,7 @@
 // admin selfie endpoint can read them.
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { join, normalize } from "node:path";
+import { extname, join, normalize } from "node:path";
 import { resolveStaticPath, staticHeaders } from "./src/server/static";
 import { Db } from "./src/server/store";
 import { apiHandler, pruneSessionsWith } from "./src/server/api";

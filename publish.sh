@@ -46,6 +46,16 @@ APP_ASSET="$(sed -n 's/.*src="\(\/app\/assets\/[^" ]*\.js\)".*/\1/p' "$APP_HTML"
 # stale bundle left over from an earlier build.
 curl -sf "http://localhost:3000$APP_ASSET" | grep -Fq "$BUILD_ID" || { echo "functional app bundle marker (build $BUILD_ID) missing at /app" >&2; exit 1; }
 curl -sf http://localhost:3000/api/health | grep -Fq '"ok":true' || { echo 'public API health check failed' >&2; exit 1; }
+# Verify the public upload proxy with a fixture when one is available. The
+# publish gate must not assume seeded data exists in every environment.
+UPLOAD_FIXTURE="$(find data/uploads/public -type f -print -quit 2>/dev/null || true)"
+if [ -n "$UPLOAD_FIXTURE" ]; then
+  UPLOAD_PATH="/uploads/public/${UPLOAD_FIXTURE#data/uploads/public/}"
+  curl -sfI "http://localhost:3000$UPLOAD_PATH" >/dev/null || { echo "public upload fixture failed: $UPLOAD_PATH" >&2; exit 1; }
+  echo "✓ Public upload proxy serves fixture $UPLOAD_PATH"
+else
+  echo "✓ No public upload fixture available; upload proxy check skipped"
+fi
 # Hash routes are client-side, but the document and splash bridges must be real.
 curl -sf http://localhost:3000/login | grep -Fq '/app#/login' || { echo 'login bridge missing' >&2; exit 1; }
 curl -sf http://localhost:3000/signup | grep -Fq '/app#/login?mode=signup' || { echo 'signup bridge missing' >&2; exit 1; }
