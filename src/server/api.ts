@@ -42,6 +42,7 @@ import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from ".
 import { isOwnerEmail } from "./owner";
 import { resolveOccurrence, defaultOccurrenceDate } from "./occurrences";
 import { publicGroups, publicGroup } from "./groups";
+import { currentWaiver, waiverStatus, createWaiverVersion, signWaiver, processWaiverExpiry } from "./waivers";
 import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
@@ -340,6 +341,22 @@ async function handleApi(
   // Approved submission groups use stable user-<submissionId> ids.
   const groupDetail = /^\/api\/groups\/([^/]+)$/.exec(url.pathname);
   if (method === "GET" && groupDetail) { const group = publicGroup(db, groupDetail[1]); if (!group) return err(res,{status:404,error:"not_found"}),true; return ok(res,{group}),true; }
+
+  // Group waiver endpoints: waiver text is public to the group directory, but signatures/status are private to the signed-in member.
+  const waiverPath = /^\/api\/groups\/([^/]+)\/waiver$/.exec(url.pathname);
+  if (waiverPath && method === "GET") {
+    const group = db.getGroup(waiverPath[1]); if (!group) return err(res,{status:404,error:"not_found"}),true;
+    const w = currentWaiver(db, group.id); return ok(res,{waiver:w ? {id:w.id,groupId:w.groupId,version:w.version,text:w.text,createdAt:w.createdAt} : null}),true;
+  }
+  if (waiverPath && method === "POST") {
+    const sess=requireSession(db,cookies); if(!sess)return err(res,{status:401,error:"sign_in_required"}),true;
+    const group=db.getGroup(waiverPath[1]); const actor=db.getAccount(sess.accountId); if(!group)return err(res,{status:404,error:"not_found"}),true;
+    const body=await readJson(req) as {text?:unknown}; const rec=createWaiverVersion(db,group,actor,typeof body.text==="string"?body.text:"",now);
+    if(!rec)return err(res,{status:403,error:"waiver_management_forbidden"}),true; await db.persist(); return ok(res,{waiver:rec}),true;
+  }
+  const signPath = /^\/api\/groups\/([^/]+)\/waiver\/sign$/.exec(url.pathname);
+  if(signPath && method === "POST") { const sess=requireSession(db,cookies); if(!sess)return err(res,{status:401,error:"sign_in_required"}),true; const group=db.getGroup(signPath[1]); const actor=db.getAccount(sess.accountId); if(!group)return err(res,{status:404,error:"not_found"}),true; const rec=signWaiver(db,group.id,actor,now); if(!rec)return err(res,{status:400,error:"waiver_unavailable"}),true; await db.persist(); return ok(res,{signature:{signedAt:rec.signedAt,expiresAt:rec.expiresAt,versionId:rec.waiverVersionId}}),true; }
+  if(method === "GET" && url.pathname === "/api/me/waivers") { const sess=requireSession(db,cookies); if(!sess)return err(res,{status:401,error:"sign_in_required"}),true; processWaiverExpiry(db,now); const rows=db.listMemberships(sess.accountId).filter(m=>m.status==="active").map(m=>({groupId:m.groupId,...waiverStatus(db,m.groupId,sess.accountId,now)})); return ok(res,{waivers:rows}),true; }
 
   if (method === "GET" && url.pathname === "/api/me/groups") {
     const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
