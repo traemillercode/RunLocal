@@ -95,9 +95,9 @@ export const ADMIN_COOKIE = "runlocal_admin";
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MAX_JSON_BODY = 6 * 1024 * 1024; // 6 MB (selfie uploads)
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4 MB decoded
-const MAX_IMAGE_EDGE = 4096;
 
-function validateUploadedImage(bytes: Buffer, ext: "jpg" | "png" | "webp", minEdge: number): string | null {
+function validateUploadedImage(bytes: Buffer, ext: string, minEdge: number): string | null {
+  if (ext !== "jpg" && ext !== "png" && ext !== "webp") return "invalid_image";
   return validateImageBytes(bytes, ext, minEdge, MAX_IMAGE_BYTES);
 }
 
