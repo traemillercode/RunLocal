@@ -473,6 +473,12 @@ export interface ModeratedPublicState {
   cityId: string;
   /** Registry ids ("kind:refId") of content hidden by moderation. */
   hidden: string[];
+  /**
+   * Registry ids archived by a super-admin. Archived content is also included
+   * in `hidden` so the public rendering excludes it — the distinction matters
+   * only for admins (archive has no restore path).
+   */
+  archived: string[];
   /** Highlight toggles per event/race registry id. */
   highlights: { id: string; kind: ContentKind; refId: string; featured: boolean; pinned: boolean }[];
   /** RRCA badge state per group id (drives the public label). */
@@ -485,10 +491,16 @@ export interface ModeratedPublicState {
  * the visibility/ordering facts the client needs to render honestly.
  */
 export function publicModerated(db: Db, cityId: string): ModeratedPublicState {
-  const hidden = db
-    .listContent()
-    .filter((c) => c.cityId === cityId && c.hidden)
-    .map((c) => c.id);
+  const hidden: string[] = [];
+  const archived: string[] = [];
+  for (const c of db.listContent()) {
+    if (c.cityId !== cityId) continue;
+    if (c.hidden) hidden.push(c.id);
+    if (c.archived) {
+      archived.push(c.id);
+      if (!hidden.includes(c.id)) hidden.push(c.id);
+    }
+  }
   const highlights = db
     .listContent()
     .filter((c) => c.cityId === cityId && (c.kind === "event" || c.kind === "race") && (c.featured || c.pinned))
@@ -497,5 +509,5 @@ export function publicModerated(db: Db, cityId: string): ModeratedPublicState {
     .listGroups()
     .filter((g) => g.cityId === cityId)
     .map((g) => ({ id: g.id, rrcaBadge: g.rrcaBadge }));
-  return { cityId, hidden, highlights, groups };
+  return { cityId, hidden, archived, highlights, groups };
 }

@@ -72,7 +72,10 @@ import { decideSubmission,
   citySubmissionQueue,
   cityDecideSubmission,
   requireVerifiedSubmitter,
+  editPendingSubmission,
+  removeSubmission,
 } from "./submissions";
+import { listAdminContent, editContentTitle, hideContent, restoreContent, archiveContent } from "./contentAdmin";
 import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
 import { repairApprovedSubmissions } from "./submissionBackfill";
 import {
@@ -1434,7 +1437,10 @@ async function handleAdmin(
   // (owner OR key-based admin; safe summaries only, audited with a reason).
   if (method === "GET" && url.pathname === "/api/admin/submissions") {
     const cityId = url.searchParams.get("city")?.trim() || null;
-    const result = submissionQueue(db, ctx, cityId, now);
+    const statusParam = url.searchParams.get("status");
+    const status = statusParam === "approved" || statusParam === "rejected" ? (statusParam as "approved" | "rejected") : "pending";
+    // Routine read: audited with the server-generated reason — no operator prompt.
+    const result = submissionQueue(db, ctx, cityId, status, now);
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, { results: result.data }), true;
@@ -1450,6 +1456,22 @@ async function handleAdmin(
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, { ok: true, submission: { id: result.data.id, status: result.data.status } }), true;
+  }
+  // PATCH /api/admin/submissions/:id — super-admin edit of a pending payload.
+  const submissionEdit = /^\/api\/admin\/submissions\/([a-f0-9]{32})\/?$/.exec(url.pathname);
+  if (submissionEdit && method === "PATCH") {
+    const result = editPendingSubmission(db, ctx, submissionEdit[1], (await readJson(req)) as Record<string, unknown>, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, submission: { id: result.data.id, status: result.data.status, title: result.data.payload.kind === "race" || result.data.payload.kind === "group" ? result.data.payload.name : result.data.payload.title } }), true;
+  }
+  // POST /api/admin/submissions/:id/remove — super-admin removal of a pending record.
+  const submissionRemove = /^\/api\/admin\/submissions\/([a-f0-9]{32})\/remove\/?$/.exec(url.pathname);
+  if (submissionRemove && method === "POST") {
+    const result = removeSubmission(db, ctx, submissionRemove[1], now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, removed: result.data.id }), true;
   }
 
   if (url.pathname === "/api/admin/events" && method === "GET") {
@@ -1478,6 +1500,36 @@ async function handleAdmin(
     return ok(res, result.data), true;
   }
 
+
+  // ---- super-admin content management (races / runs / groups / forum posts)
+  // GET /api/admin/content?city=&kind= — routine read of every content row
+  // (audited with the server-generated reason; no operator prompt).
+  if (method === "GET" && url.pathname === "/api/admin/content") {
+    const city = url.searchParams.get("city")?.trim() || null;
+    const kind = url.searchParams.get("kind") ?? null;
+    const k = kind === "race" || kind === "event" || kind === "post" || kind === "group" ? kind : null;
+    const result = listAdminContent(db, ctx, { cityId: city, kind: k }, now);
+    if (!result.ok) return sendErr(result), true;
+    return ok(res, { results: result.data }), true;
+  }
+  // PATCH /api/admin/content/:id — retitle content (propagates to submissions).
+  const contentEdit = /^\/api\/admin\/content\/([^/]+)$/.exec(url.pathname);
+  if (contentEdit && method === "PATCH") {
+    const body = (await readJson(req)) as { title?: unknown };
+    const result = editContentTitle(db, ctx, contentEdit[1], body.title, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, content: result.data }), true;
+  }
+  // POST /api/admin/content/:id/hide|restore|archive — visibility transitions.
+  const contentTransition = /^\/api\/admin\/content\/([^/]+)\/(hide|restore|archive)\/?$/.exec(url.pathname);
+  if (contentTransition && method === "POST") {
+    const [, id, action] = contentTransition;
+    const result = action === "hide" ? hideContent(db, ctx, id, now) : action === "restore" ? restoreContent(db, ctx, id, now) : archiveContent(db, ctx, id, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, content: result.data }), true;
+  }
 
   // POST /api/admin/moderate/flag/:flagId — dismiss | hide an open flag
   const flagMatch = /^\/api\/admin\/moderate\/flag\/([a-f0-9]{32})\/?$/.exec(url.pathname);

@@ -13,7 +13,7 @@ export function repairApprovedSubmissions(db: Db, now = new Date()): { repaired:
       const p = s.payload as RaceSubmissionPayload | EventSubmissionPayload;
       const contentId = `${s.kind}:${refId}`;
       if (!db.getContent(contentId)) {
-        db.upsertContent({ id: contentId, cityId: s.cityId, kind: s.kind, refId, title: s.kind === "race" ? (p as RaceSubmissionPayload).name : (p as EventSubmissionPayload).title, authorLabel: db.getAccount(s.submitterAccountId)?.name ?? null, authorAccountId: s.submitterAccountId, featured: false, pinned: false, hidden: false, hiddenAt: null });
+        db.upsertContent({ id: contentId, cityId: s.cityId, kind: s.kind, refId, title: s.kind === "race" ? (p as RaceSubmissionPayload).name : (p as EventSubmissionPayload).title, authorLabel: db.getAccount(s.submitterAccountId)?.name ?? null, authorAccountId: s.submitterAccountId, featured: false, pinned: false, hidden: false, hiddenAt: null, archived: false, archivedAt: null });
         changed = true;
       }
       if (s.kind === "event") {
