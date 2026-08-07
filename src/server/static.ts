@@ -12,6 +12,7 @@ export const STATIC_TYPES: Record<string, string> = {
   ".ico": "image/x-icon",
   ".woff2": "font/woff2",
   ".jpg": "image/jpeg",
+  ".webp": "image/webp",
 };
 
 /** Resolve a missing route to the SPA document, including extensionless OAuth callbacks. */

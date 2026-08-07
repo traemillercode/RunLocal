@@ -115,7 +115,7 @@ function ChangePasswordSettings({ account }: { account: PublicAccount }) {
 const PHOTO_MAX_BYTES = 4 * 1024 * 1024;
 const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-function ProfilePhotoSettings({ account, refresh }: { account: PublicAccount; refresh: () => Promise<void> }) {
+export function ProfilePhotoSettings({ account, refresh }: { account: PublicAccount; refresh: () => Promise<void> }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(account.profilePhotoUrl);
   const [busy, setBusy] = useState(false);
