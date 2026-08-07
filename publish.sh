@@ -24,9 +24,25 @@ cd /home/team/shared/site
 bun run publish
 
 echo "→ Verifying public app mount"
-curl -sfI http://localhost:3000/ | head -3
-curl -sfI http://localhost:3000/app | head -3
-curl -sf http://localhost:3000/app | grep -q 'Run Local' 
+# These checks deliberately inspect the published bytes, not only the HTTP status:
+# the marketing shell also has a /app route, so a 200 alone can silently publish
+# the coming-soon page instead of the functional HashRouter app.
+APP_HTML="$(mktemp)"
+trap 'rm -f "$APP_HTML"' EXIT
+curl -sf http://localhost:3000/app > "$APP_HTML"
+grep -Fq '<div id="root"></div>' "$APP_HTML" || { echo 'functional app document marker missing at /app' >&2; exit 1; }
+grep -Fq 'src="/app/assets/' "$APP_HTML" || { echo 'functional app bundle mount missing at /app' >&2; exit 1; }
+if grep -Fqi 'being prepared for this public home' "$APP_HTML"; then
+  echo 'coming-soon shell served at /app' >&2
+  exit 1
+fi
+APP_ASSET="$(sed -n 's/.*src="\(\/app\/assets\/[^" ]*\.js\)".*/\1/p' "$APP_HTML" | head -1)"
+[ -n "$APP_ASSET" ] || { echo 'functional app JavaScript asset not found' >&2; exit 1; }
+curl -sf "http://localhost:3000$APP_ASSET" | grep -Fq 'LoginPage' || { echo 'functional app JavaScript marker missing' >&2; exit 1; }
+curl -sf http://localhost:3000/api/health | grep -Fq '"ok":true' || { echo 'public API health check failed' >&2; exit 1; }
+# Hash routes are client-side, but the document and splash bridges must be real.
+curl -sf http://localhost:3000/login | grep -Fq '/app#/login' || { echo 'login bridge missing' >&2; exit 1; }
+curl -sf http://localhost:3000/signup | grep -Fq '/app#/login?mode=signup' || { echo 'signup bridge missing' >&2; exit 1; }
 curl -sf http://localhost:3000/app/sw.js | grep -q 'runlocal-shell-' || { echo 'service worker path/marker verification failed' >&2; exit 1; }
 curl -sfI http://localhost:3000/app/sw.js | grep -qi 'content-type: text/javascript' || { echo 'service worker MIME verification failed' >&2; exit 1; }
 curl -sfI http://localhost:3000/app/manifest.webmanifest | grep -qi 'cache-control: no-cache' || { echo 'manifest cache verification failed' >&2; exit 1; }
