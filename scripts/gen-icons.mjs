@@ -73,9 +73,10 @@ function capsuleDist(px, py, ax, ay, bx, by, r) {
   return len(dx, dy) - r;
 }
 
-const BRAND_TOP = [11, 43, 34]; // #0b2b22
-const BRAND_BOTTOM = [18, 84, 62]; // #12543e
-const VOLT = [200, 241, 105]; // #c8f169
+// Canonical Run Local orange brand; keep this aligned with public/favicon.svg.
+const BRAND_TOP = [255, 87, 65]; // #ff5741
+const BRAND_BOTTOM = [255, 154, 127]; // #ff9a7f
+const VOLT = [255, 255, 255]; // white accent
 const WHITE = [255, 255, 255];
 
 function drawIcon(size) {
