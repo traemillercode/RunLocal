@@ -53,6 +53,12 @@ describe("service worker registration (updateViaCache none)", () => {
     expect(main).toContain("import.meta.env.PROD && <ServiceWorkerUpdate />");
   });
 
+  it("inlines the per-build BUILD_ID as a string literal (publish verification relies on it)", () => {
+    const main = read("src/main.tsx");
+    expect(main).toContain("import.meta.env.VITE_BUILD_ID");
+    expect(main).toContain("dataset.buildId = import.meta.env.VITE_BUILD_ID");
+  });
+
   it("registers /app/sw.js with updateViaCache none", () => {
     const updater = read("src/components/ServiceWorkerUpdate.tsx");
     expect(updater).toContain('new URL("/app/", window.location.origin).pathname}sw.js');
@@ -116,6 +122,19 @@ describe("publish build verification", () => {
     expect(publish).toContain("curl -sfI http://localhost:3000/app/sw.js | grep -qi 'content-type: text/javascript'");
     expect(publish).toContain("curl -sfI http://localhost:3000/app/manifest.webmanifest | grep -qi 'cache-control: no-cache'");
     expect(publish).toContain("exit 1");
+  });
+
+  it("proves the served /app JS bundle is this build's functional app by BUILD_ID bytes", () => {
+    const publish = read("publish.sh");
+    // Component-name markers ('LoginPage') cannot survive esbuild minification,
+    // so they can never prove the functional app mounted. The guard must match
+    // the per-deployment BUILD_ID that main.tsx inlines via VITE_BUILD_ID — a
+    // string literal that survives minification, is unique per publish, and is
+    // absent from the coming-soon shell and from stale prior bundles.
+    expect(publish).not.toContain("grep -Fq 'LoginPage'");
+    expect(publish).toContain('grep -Fq "$BUILD_ID"');
+    expect(publish).toContain('curl -sf "http://localhost:3000$APP_ASSET"');
+    expect(publish).toContain("functional app bundle marker");
   });
 });
 
