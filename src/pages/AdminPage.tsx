@@ -104,6 +104,8 @@ export function AdminPage() {
   const [subError, setSubError] = useState<string | null>(null);
   const [subBusy, setSubBusy] = useState(false);
   const [subAction, setSubAction] = useState<string | null>(null);
+  const isCityAdmin = me?.status === "signed_in" && me.account.role === "city_admin";
+  const cityScope = me?.status === "signed_in" ? me.account.adminCityId : null;
   const loadSubmissions = async () => {
     setSubError(null);
     if (!subReason.trim() || subReason.trim().length < 5) {
@@ -111,7 +113,7 @@ export function AdminPage() {
       return;
     }
     setSubBusy(true);
-    const r = await api.adminGetSubmissions(null, subReason.trim());
+    const r = isCityAdmin ? await api.cityAdminGetSubmissions(subReason.trim()) : await api.adminGetSubmissions(null, subReason.trim());
     setSubBusy(false);
     if (r.ok) setSubRows(r.data.results);
     else setSubError(r.error.message ?? "Couldn't load the queue.");
@@ -123,7 +125,7 @@ export function AdminPage() {
       return;
     }
     setSubAction(id);
-    const r = await api.adminDecideSubmission(id, action, subReason.trim());
+    const r = isCityAdmin ? await api.cityAdminDecideSubmission(id, action, subReason.trim()) : await api.adminDecideSubmission(id, action, subReason.trim());
     setSubAction(null);
     if (r.ok) {
       setSubRows((rows) => (rows ? rows.filter((row) => row.id !== id) : rows));
@@ -580,13 +582,13 @@ export function AdminPage() {
 
       {/* Admin submission queue — owner OR key admin; audited with a reason */}
       <section id="submissions" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
-        <h2 className="text-[15px] font-bold text-slate-900">Submission queue</h2>
+        <h2 className="text-[15px] font-bold text-slate-900">{isCityAdmin ? "City submission queue" : "Submission queue"}</h2>
         <p className="mt-0.5 text-xs text-slate-500">
-          Community-submitted races, groups, and independent events awaiting review. Pending items are not public; approve publishes them (groups grant the submitter the Group
+          Community-submitted races, groups, and independent events awaiting review. {isCityAdmin ? `Your enforced city scope: ${cityScope ?? "unavailable"}.` : ""} Pending items are not public; approve publishes them (groups grant the submitter the Group
           Leader role), while reject requires a reason the submitter will see. Every action is audited with the reason above.
         </p>
         <div className="mt-3 space-y-3">
-          <textarea rows={2} placeholder="Reason for loading/deciding the queue (required, audited; rejection reason goes to the submitter)" value={subReason} onChange={(e) => setSubReason(e.target.value)} className={reasonCls} />
+          <textarea rows={2} placeholder={isCityAdmin ? "Reason for loading/deciding this city queue (required)" : "Reason for loading/deciding the queue (required, audited; rejection reason goes to the submitter)"} value={subReason} onChange={(e) => setSubReason(e.target.value)} className={reasonCls} />
           <PillButton variant="primary" className="w-full" disabled={subBusy} onClick={() => void loadSubmissions()}>
             <Icon name="search" className="h-4 w-4" /> {subBusy ? "Loading…" : "Load submission queue"}
           </PillButton>

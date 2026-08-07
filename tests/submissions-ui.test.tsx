@@ -112,7 +112,8 @@ const APPROVED_EVENT: PublicUserEvent = {
   title: "Thursday Hills",
   type: "recurring",
   date: null,
-  dayOfWeek: 3,
+  // Saturday remains upcoming under the deterministic current-week fixture.
+  dayOfWeek: 6,
   time: "6:00 PM",
   location: "Grindstone",
   distanceLabel: "3-5 mi",
@@ -240,8 +241,9 @@ describe("public pages render only approved community content (UI)", () => {
     expect(html).toContain("Downtown Runners");
     expect(html).toContain("A friendly community group.");
     expect(html).toContain("facebook.com/downtownrunners");
-    // Seed events are preserved.
-    expect(html).toContain(CITY.events[0].title);
+    // A deterministic upcoming seed event is preserved; the current-week view
+    // intentionally omits elapsed recurring slots.
+    expect(html).toContain("Saturday Long Run: MKT Trail");
     // Entry points for hosting a run / starting a group.
     expect(html).toContain("Host a run");
     expect(html).toContain("Start a group");
@@ -255,7 +257,9 @@ describe("public pages render only approved community content (UI)", () => {
         <EventsPage city={CITY} store={STORE} />
       </MemoryRouter>,
     );
-    expect(html).toContain(CITY.events[0].title);
+    // The Monday seed slot is elapsed for the deterministic test clock; an
+    // upcoming seed event remains visible in the current-week view.
+    expect(html).toContain("Saturday Long Run: MKT Trail");
     expect(html).not.toContain("Downtown Runners");
     expect(html).not.toContain("Thursday Hills");
   });

@@ -92,6 +92,8 @@ export interface PublicAccount {
   badge: "verified" | null;
   /** Assigned runner role (label only — never a power source). */
   role: AccountRecord["role"];
+  /** City Admin scope is display-only; authorization checks stay server-side. */
+  adminCityId?: string | null;
   /** Server-derived super-admin flag (from RUN_LOCAL_OWNER_EMAIL). */
   isOwner: boolean;
   /**
@@ -137,6 +139,7 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new D
     phase: rec.status === "pending" ? rec.phase : null,
     badge: rec.status === "verified" ? "verified" : null,
     role: rec.role,
+    adminCityId: rec.role === "city_admin" ? rec.adminCityId : null,
     isOwner,
     suspended: isSuspended(rec, now),
     underReview: rec.underReview === true,

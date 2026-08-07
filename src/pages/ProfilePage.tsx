@@ -30,12 +30,17 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
 /** The signed-in user's OWN submissions (server returns this account's records only). */
 export function MySubmissions({ signedIn }: { signedIn: boolean }) {
   const [rows, setRows] = useState<api.MySubmissionView[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!signedIn) return;
     let alive = true;
+    setLoading(true); setError(null);
     void api.getMySubmissions().then((r) => {
-      if (alive && r.ok) setRows(r.data.submissions);
-    });
+      if (!alive) return;
+      if (r.ok) setRows(r.data.submissions);
+      else setError(r.error.message);
+    }).catch(() => { if (alive) setError("Could not load submission status."); }).finally(() => { if (alive) setLoading(false); });
     return () => {
       alive = false;
     };
@@ -45,9 +50,11 @@ export function MySubmissions({ signedIn }: { signedIn: boolean }) {
     <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
       <h2 className="text-[15px] font-bold text-slate-900">My submissions</h2>
       <p className="mt-0.5 text-xs text-slate-500">Your race, group, and independent-run submissions — only you can see these.</p>
-      {rows === null ? (
+      {loading ? (
         <p className="mt-3 text-[13px] text-slate-400">Loading…</p>
-      ) : rows.length === 0 ? (
+      ) : error ? (
+        <div className="mt-3 rounded-xl bg-red-50 p-3 text-[13px] text-red-700"><p>{error}</p><button type="button" className="mt-2 font-semibold underline" onClick={() => { setRows(null); setError(null); setLoading(true); void api.getMySubmissions().then((r) => r.ok ? setRows(r.data.submissions) : setError(r.error.message)).finally(() => setLoading(false)); }}>Retry</button></div>
+      ) : !rows || rows.length === 0 ? (
         <p className="mt-3 text-[13px] text-slate-500">Nothing submitted yet. Submit a race, group, or independent run from the Races and Events pages.</p>
       ) : (
         <ul className="mt-3 space-y-2.5">

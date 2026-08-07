@@ -429,6 +429,14 @@ export function adminDecideSubmission(id: string, action: "approve" | "reject", 
   return adminRequest(`/api/admin/submissions/${id}/${action}`, reason, { method: "POST" });
 }
 
+/** City Admin queue: server derives and enforces the single-city scope. */
+export function cityAdminGetSubmissions(reason: string): Promise<ApiResult<{ results: SubmissionQueueRow[] }>> {
+  return adminRequest("/api/admin/city/submissions", reason);
+}
+export function cityAdminDecideSubmission(id: string, action: "approve" | "reject", reason: string): Promise<ApiResult<{ ok: true }>> {
+  return adminRequest(`/api/admin/city/submissions/${encodeURIComponent(id)}/${action}`, reason, { method: "POST" });
+}
+
 // -------------------------------------------------- public approved content
 export interface PublicUserRace {
   id: string; kind: "race"; name: string; date: string; distance: string; location: string;
