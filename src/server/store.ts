@@ -246,7 +246,7 @@ export class Db {
       for (const s of parsed.sessions ?? []) this.sessions.set(s.id, s);
       for (const c of parsed.codes ?? []) this.codes.set(c.accountId, c);
       // Pre-multi-city audit entries have no cityId — normalize to null.
-      this.audits = (parsed.audits ?? []).map((a) => ({ ...a, cityId: a.cityId ?? null }));
+      this.audits = (parsed.audits ?? []).map((a) => ({ ...a, cityId: a.cityId ?? null, owner: a.owner ?? null, change: a.change ?? null }));
       for (const r of parsed.content ?? []) this.content.set(r.id, r);
       for (const e of parsed.events ?? []) this.events.set(e.id, e);
       for (const g of parsed.groups ?? []) this.groups.set(g.id, g);
@@ -259,11 +259,11 @@ export class Db {
       for (const c of parsed.cities ?? []) this.cities.set(c.id, c);
       for (const i of parsed.invitations ?? []) this.invitations.set(i.id, i);
       for (const c of parsed.credentials ?? []) this.credentials.set(c.id, c);
-      for (const r of parsed.ratings ?? []) this.ratings.set(r.id, r);
+      for (const r of parsed.ratings ?? []) this.ratings.set(r.id, { ...r, deletedAt: r.deletedAt ?? null });
       for (const c of parsed.concerns ?? []) this.concerns.set(c.id, c);
       for (const a of parsed.appeals ?? []) this.appeals.set(a.id, a);
       for (const r of parsed.recognitions ?? []) this.recognitions.set(`${r.accountId}:${r.role}`, r);
-      for (const a of parsed.attendance ?? []) this.attendance.set(a.id, a);
+      for (const a of parsed.attendance ?? []) this.attendance.set(a.id, { ...a, deletedAt: a.deletedAt ?? null });
       for (const r of parsed.personalRuns ?? []) this.personalRuns.set(r.id, r);
       for (const p of parsed.matchingPreferences ?? []) this.matchingPreferences.set(p.accountId, p);
       for (const j of parsed.joinRequests ?? []) this.joinRequests.set(j.id, { ...j, requesterAccepted: j.requesterAccepted ?? false, recipientAccepted: j.recipientAccepted ?? false });
@@ -332,6 +332,10 @@ export class Db {
   updateNotification(id: string, accountId: string, patch: {readAt:string|null}) { const n=this.notifications.get(id); if(!n||n.accountId!==accountId)return undefined; n.readAt=patch.readAt; return n; }
   markAllNotificationsRead(accountId:string) { const at=this.now().toISOString(); for(const n of this.notifications.values()) if(n.accountId===accountId)n.readAt=at; }
   listDiscussions(occurrenceId: string) { return [...this.discussions.values()].filter(d => d.occurrenceId === occurrenceId && d.state === "visible").sort((a,b) => a.createdAt.localeCompare(b.createdAt)); }
+  /** All discussions for an event (any occurrence), soft-deleted included — cascade/audit tooling. */
+  listDiscussionsByEvent(eventId: string) { return [...this.discussions.values()].filter(d => d.eventId === eventId); }
+  /** Active (visible) discussions for an event, newest first — admin listing. */
+  listActiveDiscussions(eventId?: string, cityId?: string) { return [...this.discussions.values()].filter(d => d.state === "visible" && (!eventId || d.eventId === eventId) && (!cityId || d.cityId === cityId)).sort((a,b) => b.createdAt.localeCompare(a.createdAt)); }
   getDiscussion(id: string) { return this.discussions.get(id); }
   addDiscussion(d: import("./types").DiscussionRecord) { this.discussions.set(d.id, d); return d; }
   updateDiscussion(id: string, patch: Partial<import("./types").DiscussionRecord>) { const d=this.discussions.get(id); if (!d) return undefined; const n={...d,...patch,updatedAt:this.now().toISOString()}; this.discussions.set(id,n); return n; }
@@ -591,10 +595,10 @@ export class Db {
 
   // ------------------------------------------------------------------- audit
   appendAudit(
-    entry: Omit<AuditEntry, "id" | "at" | "cityId"> & { cityId?: string | null },
+    entry: Omit<AuditEntry, "id" | "at" | "cityId" | "owner" | "change"> & { cityId?: string | null; owner?: string | null; change?: string | null },
     now = new Date(),
   ): AuditEntry {
-    const rec: AuditEntry = { ...entry, cityId: entry.cityId ?? null, id: newId(), at: nowIso(now) };
+    const rec: AuditEntry = { ...entry, cityId: entry.cityId ?? null, owner: entry.owner ?? null, change: entry.change ?? null, id: newId(), at: nowIso(now) };
     this.audits.push(rec);
     return rec;
   }
@@ -715,9 +719,12 @@ export class Db {
   getCredential(id: string) { return this.credentials.get(id); }
   addCredential(c: import("./types").CredentialRecord) { this.credentials.set(c.id, c); return c; }
   updateCredential(id: string, patch: Partial<import("./types").CredentialRecord>) { const c=this.credentials.get(id); if (!c) return undefined; const n={...c,...patch}; this.credentials.set(id,n); return n; }
-  listRatings() { return [...this.ratings.values()]; }
+  listRatings() { return [...this.ratings.values()].filter((r) => !r.deletedAt); }
+  /** All ratings, soft-deleted included (cascade/audit tooling only). */
+  listAllRatings() { return [...this.ratings.values()]; }
   addRating(r: import("./types").RatingRecord) { this.ratings.set(r.id,r); return r; }
-  hasRating(reviewerId:string, revieweeId:string, eventId:string) { return [...this.ratings.values()].some(r=>r.reviewerId===reviewerId&&r.revieweeId===revieweeId&&r.eventId===eventId); }
+  updateRating(id: string, patch: Partial<import("./types").RatingRecord>) { const r=this.ratings.get(id); if(!r)return; const n={...r,...patch}; this.ratings.set(id,n); return n; }
+  hasRating(reviewerId:string, revieweeId:string, eventId:string) { return [...this.ratings.values()].some(r=>r.reviewerId===reviewerId&&r.revieweeId===revieweeId&&r.eventId===eventId&&!r.deletedAt); }
   listConcerns() { return [...this.concerns.values()]; }
   addConcern(c: import("./types").ConcernRecord) { this.concerns.set(c.id,c); return c; }
   updateConcern(id:string, patch: Partial<import("./types").ConcernRecord>) { const c=this.concerns.get(id); if(!c)return; const n={...c,...patch};this.concerns.set(id,n);return n; }
@@ -728,10 +735,14 @@ export class Db {
   listRecognitions() { return [...this.recognitions.values()]; }
   setRecognition(r: import("./types").RecognitionRecord) { this.recognitions.set(`${r.accountId}:${r.role}`,r);return r; }
   // ------------------------------------------------------- shared attendance
-  listAttendance(accountId?: string) { return [...this.attendance.values()].filter(a => !accountId || a.accountId === accountId); }
-  listAttendanceByEvent(eventId: string) { return [...this.attendance.values()].filter(a => a.eventId === eventId); }
-  hasAttendance(accountId: string, eventId: string) { return [...this.attendance.values()].some(a => a.accountId === accountId && a.eventId === eventId); }
+  /** Active (non-soft-deleted) attendance rows. */
+  listAttendance(accountId?: string) { return [...this.attendance.values()].filter(a => !a.deletedAt && (!accountId || a.accountId === accountId)); }
+  listAttendanceByEvent(eventId: string) { return [...this.attendance.values()].filter(a => a.eventId === eventId && !a.deletedAt); }
+  /** All attendance rows for an event, soft-deleted included (cascade tooling). */
+  listAllAttendanceByEvent(eventId: string) { return [...this.attendance.values()].filter(a => a.eventId === eventId); }
+  hasAttendance(accountId: string, eventId: string) { return [...this.attendance.values()].some(a => !a.deletedAt && a.accountId === accountId && a.eventId === eventId); }
   addAttendance(a: import("./types").AttendanceRecord) { this.attendance.set(a.id, a); return a; }
+  updateAttendance(id: string, patch: Partial<import("./types").AttendanceRecord>) { const a = this.attendance.get(id); if (!a) return undefined; const next = { ...a, ...patch }; this.attendance.set(id, next); return next; }
   removeAttendance(id: string) { this.attendance.delete(id); }
   listPersonalRuns(accountId?: string) { return [...this.personalRuns.values()].filter(r => !accountId || r.accountId === accountId); }
   getPersonalRun(id: string) { return this.personalRuns.get(id); }

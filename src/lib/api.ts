@@ -589,8 +589,40 @@ export function adminListContent(cityId: string | null, kind: AdminContentRow["k
 export function adminEditContentTitle(contentId: string, title: string, reason: string): Promise<ApiResult<{ ok: true; content: AdminContentRow }>> {
   return adminRequest(`/api/admin/content/${encodeURIComponent(contentId)}`, reason, { method: "PATCH", body: JSON.stringify({ title }) });
 }
-export function adminTransitionContent(contentId: string, action: "hide" | "restore" | "archive", reason: string): Promise<ApiResult<{ ok: true; content: AdminContentRow }>> {
+export function adminTransitionContent(contentId: string, action: "hide" | "restore" | "archive" | "delete", reason: string): Promise<ApiResult<{ ok: true; content: AdminContentRow }>> {
   return adminRequest(`/api/admin/content/${encodeURIComponent(contentId)}/${action}`, reason, { method: "POST" });
+}
+export interface AdminDiscussionRow {
+  id: string;
+  kind: "thread" | "comment";
+  parentId: string | null;
+  occurrenceId: string;
+  eventId: string;
+  cityId: string;
+  title: string | null;
+  body: string;
+  authorLabel: string | null;
+  authorEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+/** Routine read — audited with the server-generated reason, no operator prompt. */
+export function adminListDiscussions(cityId: string | null): Promise<ApiResult<{ results: AdminDiscussionRow[] }>> {
+  const params = new URLSearchParams();
+  if (cityId) params.set("city", cityId);
+  return adminRequest(`/api/admin/discussions${params.size ? `?${params.toString()}` : ""}`, "");
+}
+export function adminEditDiscussion(discussionId: string, patch: { body?: string; title?: string }, reason: string): Promise<ApiResult<{ ok: true; discussion: AdminDiscussionRow }>> {
+  return adminRequest(`/api/admin/discussion/${encodeURIComponent(discussionId)}`, reason, { method: "PATCH", body: JSON.stringify(patch) });
+}
+export function adminDeleteDiscussion(discussionId: string, reason: string): Promise<ApiResult<{ ok: true; deleted: true }>> {
+  return adminRequest(`/api/admin/discussion/${encodeURIComponent(discussionId)}`, reason, { method: "DELETE" });
+}
+export function adminSetAnnouncement(input: { text: string; link?: string }, reason: string): Promise<ApiResult<{ ok: true; announcement: { text: string; link?: string } | null }>> {
+  return adminRequest("/api/admin/announcement", reason, { method: "PATCH", body: JSON.stringify(input) });
+}
+export function adminClearAnnouncement(reason: string): Promise<ApiResult<{ ok: true; announcement: null }>> {
+  return adminRequest("/api/admin/announcement", reason, { method: "DELETE" });
 }
 export type ActivityProvider = "strava" | "garmin" | "coros" | "suunto";
 export type ShareMode = "auto" | "manual" | "private";

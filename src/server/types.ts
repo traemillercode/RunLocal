@@ -192,6 +192,12 @@ export type AdminAction =
   | "admin.content_edit"
   | "admin.content_hide"
   | "admin.content_archive"
+  | "admin.content_delete"
+  | "admin.announcement_edit"
+  | "admin.announcement_remove"
+  | "admin.discussion_list"
+  | "admin.discussion_edit"
+  | "admin.discussion_delete"
   | "admin.submission_edit"
   | "admin.submission_remove"
   | "cityadmin.dashboard"
@@ -228,6 +234,19 @@ export interface AuditEntry {
    * written before this field existed load as null.
    */
   cityId: string | null;
+  /**
+   * Owner identity of the affected content (content-owner account email, or
+   * the seeded author label when there is no account). Null for entries that
+   * don't concern user content.
+   */
+  owner: string | null;
+  /**
+   * Human-readable summary of what changed (e.g. `title: "A" -> "B"`,
+   * `archived + 2 RSVPs soft-deleted`). Null for entries without a change
+   * payload. Records a snapshot description only — the underlying rows are
+   * never hard-deleted so the full trail survives.
+   */
+  change: string | null;
 }
 
 export interface RunEventRecord {
@@ -345,7 +364,7 @@ export interface CredentialRecord {
 }
 export const ALLOWED_TRUST_TAGS = ["reliable", "welcoming", "safety-minded", "knowledgeable", "well-organized"] as const;
 export type TrustTag = typeof ALLOWED_TRUST_TAGS[number];
-export interface RatingRecord { id:string; reviewerId:string; revieweeId:string; eventId:string; positive:boolean; tags:TrustTag[]; createdAt:string; /** Required when positive === false — the reviewer's stated reason (admin-only, never public). */ reason:string|null; }
+export interface RatingRecord { id:string; reviewerId:string; revieweeId:string; eventId:string; positive:boolean; tags:TrustTag[]; createdAt:string; /** Required when positive === false — the reviewer's stated reason (admin-only, never public). */ reason:string|null; /** Soft-delete stamp set when the rated event is archived/removed by an admin. The row is preserved for the audit trail but excluded from active listings. */ deletedAt?: string|null; }
 export interface ConcernRecord { id:string; reporterId:string; subjectId:string; eventId:string|null; reason:string; status:"open"|"resolved"; createdAt:string; }
 export type SafetyReportStatus = "open" | "under_review" | "resolved" | "dismissed";
 export interface SafetyReportRecord { id:string; reporterId:string; subjectId:string; cityId:string; contextType:"join_request"|"event"|"personal_run"; contextId:string; reason:string; status:SafetyReportStatus; createdAt:string; updatedAt:string; resolvedAt:string|null; }
@@ -358,7 +377,7 @@ export interface RecognitionRecord { accountId:string; cityId:string; role:"coac
  * for ratings: a reviewer may rate a reviewee only for an event BOTH of them
  * attended (shared RSVP/host-attendance).
  */
-export interface AttendanceRecord { id:string; accountId:string; eventId:string; role:"rsvp"|"host"; createdAt:string; /** Concrete occurrence; absent on legacy event-level rows. */ occurrenceId?: string; runDate?: string; startsAt?: string; }
+export interface AttendanceRecord { id:string; accountId:string; eventId:string; role:"rsvp"|"host"; createdAt:string; /** Concrete occurrence; absent on legacy event-level rows. */ occurrenceId?: string; runDate?: string; startsAt?: string; /** Soft-delete stamp: set when an admin archives the event. The row is preserved (audit trail) but excluded from active RSVP/eligibility checks. */ deletedAt?: string|null; }
 
 export interface SiteSettings { title:string; wordmark:string; tagline:string; primary:string; accent:string; surface:string; strings:Record<string,string>; tags:Record<string,string[]>; providers:Record<string,boolean>; bottomNav:string[]; announcement:{text:string;link?:string}|null; logoRef:string|null; faviconRef:string|null; /**
    * Community-trust policy, configurable by a Global Admin. `underReviewThreshold`

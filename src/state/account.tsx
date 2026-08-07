@@ -50,6 +50,35 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  // Staleness guard: the server is the only authority on verification and
+  // admin state (sessions never cache it). If an owner approves / grants an
+  // admin role while the signed-in user's tab is open, this refetches /api/me
+  // when the tab regains focus so the user can post / administer immediately —
+  // no relogin required. Throttled so background tabs don't hammer the API.
+  useEffect(() => {
+    let last = 0;
+    let active = false;
+    const maybeRefresh = () => {
+      if (active) return;
+      const nowMs = Date.now();
+      if (nowMs - last < 10_000) return;
+      last = nowMs;
+      active = true;
+      void refresh().finally(() => {
+        active = false;
+      });
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") maybeRefresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [refresh]);
+
   const signOut = useCallback(async () => {
     await api.logout();
     setMe({ status: "guest" });
