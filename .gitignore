@@ -3,4 +3,7 @@ dist/
 .run/
 *.log
 .DS_Store
-data/
+data/*
+!data/uploads/
+data/uploads/private/
+!data/uploads/public/
