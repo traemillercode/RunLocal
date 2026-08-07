@@ -73,37 +73,52 @@ async function approveRace(db: Db, runnerCookie: string, keyCookie: string): Pro
 }
 
 describe("content management: permission boundaries", () => {
-  it("list requires a global admin session; owner and key admin pass, runner and city admin are denied", async () => {
+  it("list: guest and runner denied; owner, key admin, and in-city city admin pass; cross-city city admin is denied", async () => {
     const { db, keyCookie, ownerCookie, cityCookie, runnerCookie } = makeAdminDb();
     await approveRace(db, runnerCookie, keyCookie);
-    for (const cookie of [undefined, runnerCookie, cityCookie]) {
+    for (const cookie of [undefined, runnerCookie]) {
       const r = await call(db, "GET", "/api/admin/content?city=columbia-mo", { cookie });
       expect(r.status).toBe(401);
     }
-    for (const cookie of [keyCookie, ownerCookie]) {
+    for (const cookie of [keyCookie, ownerCookie, cityCookie]) {
       const r = await call(db, "GET", "/api/admin/content?city=columbia-mo", { cookie });
       expect(r.status).toBe(200);
       const rows = (JSON.parse(r.body) as { results: unknown[] }).results;
       expect(rows.length).toBeGreaterThan(0);
       expect(r.body).not.toContain("example.com");
     }
+    // City Admin pinned to own city: requesting a foreign city is denied.
+    const foreign = await call(db, "GET", "/api/admin/content?city=jefferson-city-mo", { cookie: cityCookie });
+    expect(foreign.status).toBe(403);
+    expect(JSON.parse(foreign.body).error).toBe("city_scope_denied");
   });
 
-  it("mutations require a reason and reject runners / city admins even with a reason", async () => {
+  it("mutations require a reason and reject runners; city admins may act inside their city, denied cross-city", async () => {
     const { db, keyCookie, runnerCookie, cityCookie } = makeAdminDb();
     const { contentId } = await approveRace(db, runnerCookie, keyCookie);
     // no reason
     const noReason = await call(db, "POST", `/api/admin/content/${contentId}/hide`, { cookie: keyCookie });
     expect(noReason.status).toBe(400);
     expect(JSON.parse(noReason.body).error).toBe("reason_required");
-    // runner + city admin with reason
-    for (const cookie of [runnerCookie, cityCookie]) {
-      const denied = await call(db, "POST", `/api/admin/content/${contentId}/hide`, { cookie, reason: "inappropriate" });
-      expect(denied.status).toBe(401);
-    }
-    const ok = await call(db, "POST", `/api/admin/content/${contentId}/hide`, { cookie: keyCookie, reason: "removing inappropriate content" });
+    // runner denied with reason
+    const runnerDenied = await call(db, "POST", `/api/admin/content/${contentId}/hide`, { cookie: runnerCookie, reason: "inappropriate" });
+    expect(runnerDenied.status).toBe(401);
+    // city admin (columbia-mo) may hide columbia-mo content with a reason
+    const cityOk = await call(db, "POST", `/api/admin/content/${contentId}/hide`, { cookie: cityCookie, reason: "removing inappropriate content" });
+    expect(cityOk.status).toBe(200);
+    expect(JSON.parse(cityOk.body).content.hidden).toBe(true);
+    const ok = await call(db, "POST", `/api/admin/content/${contentId}/restore`, { cookie: keyCookie, reason: "restore after review" });
     expect(ok.status).toBe(200);
-    expect(JSON.parse(ok.body).content.hidden).toBe(true);
+    // city admin cross-city (jefferson-city content id) is denied even with a reason
+    const sub = await call(db, "POST", "/api/submissions/race", {
+      body: { cityId: "jefferson-city-mo", name: "Capital 5K", distances: "5K", date: "2027-07-01", location: "Memorial Park", registrationUrl: "https://example.com/capital", description: "State capitol race." },
+      cookie: runnerCookie,
+    });
+    const jcId = (JSON.parse(sub.body) as { submission: { id: string } }).submission.id;
+    await call(db, "POST", `/api/admin/submissions/${jcId}/approve`, { cookie: keyCookie, reason: "approving race" });
+    const cross = await call(db, "POST", `/api/admin/content/race:user-${jcId}/hide`, { cookie: cityCookie, reason: "trying to hide another city" });
+    expect(cross.status).toBe(403);
+    expect(JSON.parse(cross.body).error).toBe("city_scope_denied");
   });
 });
 
@@ -189,9 +204,9 @@ describe("super-admin submission edit + remove", () => {
     const { db, keyCookie, runnerCookie } = makeAdminDb();
     const submit = await call(db, "POST", "/api/submissions/race", { body: RACE, cookie: runnerCookie });
     const id = (JSON.parse(submit.body) as { submission: { id: string } }).submission.id;
-    // city admin cannot edit
-    const cityDenied = await call(db, "PATCH", `/api/admin/submissions/${id}`, { body: { ...RACE, name: "Hacked" }, cookie: "runlocal_sid=missing", reason: "unauthorized attempt" });
-    expect(cityDenied.status).toBe(401);
+    // unauthenticated session cannot edit
+    const denied = await call(db, "PATCH", `/api/admin/submissions/${id}`, { body: { ...RACE, name: "Hacked" }, cookie: "runlocal_sid=missing", reason: "unauthorized attempt" });
+    expect(denied.status).toBe(401);
     // edit with invalid URL is rejected
     const bad = await call(db, "PATCH", `/api/admin/submissions/${id}`, { body: { ...RACE, registrationUrl: "not-a-url" }, cookie: keyCookie, reason: "fixing typo" });
     expect(bad.status).toBe(400);
