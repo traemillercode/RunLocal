@@ -75,7 +75,7 @@ import { decideSubmission,
   editPendingSubmission,
   removeSubmission,
 } from "./submissions";
-import { listAdminContent, editContentTitle, hideContent, restoreContent, archiveContent } from "./contentAdmin";
+import { listAdminContent, editContentTitle, hideContent, restoreContent, archiveContent, deleteContent, listAdminDiscussions, editDiscussion, deleteDiscussion, setAnnouncement, clearAnnouncement } from "./contentAdmin";
 import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
 import { repairApprovedSubmissions } from "./submissionBackfill";
 import {
@@ -1521,14 +1521,56 @@ async function handleAdmin(
     await db.persist();
     return ok(res, { ok: true, content: result.data }), true;
   }
-  // POST /api/admin/content/:id/hide|restore|archive — visibility transitions.
-  const contentTransition = /^\/api\/admin\/content\/([^/]+)\/(hide|restore|archive)\/?$/.exec(url.pathname);
+  // POST /api/admin/content/:id/hide|restore|archive|delete — visibility
+  // transitions. `delete` is the soft-delete (archive + dependent-content
+  // cascade: RSVPs/discussions/ratings/memberships are stamped, never purged).
+  const contentTransition = /^\/api\/admin\/content\/([^/]+)\/(hide|restore|archive|delete)\/?$/.exec(url.pathname);
   if (contentTransition && method === "POST") {
     const [, id, action] = contentTransition;
-    const result = action === "hide" ? hideContent(db, ctx, id, now) : action === "restore" ? restoreContent(db, ctx, id, now) : archiveContent(db, ctx, id, now);
+    const result = action === "hide" ? hideContent(db, ctx, id, now) : action === "restore" ? restoreContent(db, ctx, id, now) : action === "delete" ? deleteContent(db, ctx, id, now) : archiveContent(db, ctx, id, now);
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, { ok: true, content: result.data }), true;
+  }
+
+  // GET /api/admin/discussions?city= — routine read of active run-day
+  // discussion threads/comments (city-scoped for City Admins).
+  if (method === "GET" && url.pathname === "/api/admin/discussions") {
+    const city = url.searchParams.get("city")?.trim() || null;
+    const result = listAdminDiscussions(db, ctx, { cityId: city }, now);
+    if (!result.ok) return sendErr(result), true;
+    return ok(res, { results: result.data }), true;
+  }
+  // PATCH /api/admin/discussion/:id — admin edit of a discussion body/title.
+  const discussionEdit = /^\/api\/admin\/discussion\/([^/]+)$/.exec(url.pathname);
+  if (discussionEdit && method === "PATCH") {
+    const body = (await readJson(req)) as { body?: unknown; title?: unknown };
+    const result = editDiscussion(db, ctx, decodeURIComponent(discussionEdit[1]), body, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, discussion: result.data }), true;
+  }
+  // DELETE /api/admin/discussion/:id — admin soft-delete (row preserved).
+  if (discussionEdit && method === "DELETE") {
+    const result = deleteDiscussion(db, ctx, decodeURIComponent(discussionEdit[1]), now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, ...result.data }), true;
+  }
+  // PATCH /api/admin/announcement — Global Admin sets the site announcement.
+  if (method === "PATCH" && url.pathname === "/api/admin/announcement") {
+    const body = (await readJson(req)) as { text?: unknown; link?: unknown };
+    const result = setAnnouncement(db, ctx, body, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, ...result.data }), true;
+  }
+  // DELETE /api/admin/announcement — Global Admin clears the announcement.
+  if (method === "DELETE" && url.pathname === "/api/admin/announcement") {
+    const result = clearAnnouncement(db, ctx, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { ok: true, ...result.data }), true;
   }
 
   // POST /api/admin/moderate/flag/:flagId — dismiss | hide an open flag

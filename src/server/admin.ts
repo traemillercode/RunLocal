@@ -223,6 +223,17 @@ export interface ScopedOptions {
    * city-admin callers this is forced to their scope.
    */
   auditCity?: string | null;
+  /**
+   * Owner identity of the affected content, recorded on the audit entry
+   * (content-owner account email, or a seeded author label when no account).
+   */
+  owner?: string | null;
+  /**
+   * Human-readable change summary recorded on the audit entry (e.g.
+   * `title: "A" -> "B"`, `soft-deleted + 2 RSVPs cascaded`). The underlying
+   * rows are never hard-deleted, so this is a snapshot description only.
+   */
+  change?: string | null;
 }
 
 /**
@@ -247,14 +258,14 @@ export function authorizeScoped(
       return { ok: false, status: 503, error: "admin_unconfigured" };
     }
     const admin = adminEmail();
-    db.appendAudit({ admin, action, reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId, ip: ctx.ip, cityId: opts.auditCity ?? null }, now);
+    db.appendAudit({ admin, action, reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId, ip: ctx.ip, cityId: opts.auditCity ?? null, owner: opts.owner ?? null, change: opts.change ?? null }, now);
     return { ok: true, data: { scope: { kind: "global", cityId: null }, admin, accountId: null } };
   }
   // 2) Owner signed-in session → global.
   const owner = ownerSessionAccount(db, ctx);
   if (owner) {
     const admin = ownerEmail();
-    db.appendAudit({ admin, action, reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId, ip: ctx.ip, cityId: opts.auditCity ?? null }, now);
+    db.appendAudit({ admin, action, reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId, ip: ctx.ip, cityId: opts.auditCity ?? null, owner: opts.owner ?? null, change: opts.change ?? null }, now);
     return { ok: true, data: { scope: { kind: "global", cityId: null }, admin, accountId: owner.id } };
   }
   // 3) City Admin signed-in session → exactly one city.
@@ -266,7 +277,7 @@ export function authorizeScoped(
       return { ok: false, status: 403, error: "city_scope_denied", message: "Your admin access is scoped to one city only." };
     }
     const admin = user.email;
-    db.appendAudit({ admin, action, reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId, ip: ctx.ip, cityId: opts.auditCity ?? scopeCity }, now);
+    db.appendAudit({ admin, action, reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId, ip: ctx.ip, cityId: opts.auditCity ?? scopeCity, owner: opts.owner ?? null, change: opts.change ?? null }, now);
     return { ok: true, data: { scope: { kind: "city", cityId: scopeCity }, admin, accountId: user.id } };
   }
   return { ok: false, status: 401, error: "unauthorized" };
@@ -349,6 +360,15 @@ export function assignCityAdmin(
     role: "city_admin",
     adminCityId: cityId,
     rolePriorAdmin: roleBefore === "city_admin" ? null : roleBefore,
+    // A Global Admin grant is explicit trust, but it never bypasses the
+    // verification funnel: an account that has completed email + selfie and
+    // is awaiting manual review is approved by this grant (the grant IS the
+    // review decision). An account that has NOT completed the funnel stays
+    // pending — the role takes effect once they verify like everyone else,
+    // preserving the identity gate.
+    ...(rec.status !== "verified" && rec.phase === "pending_review" && rec.selfieRef
+      ? { status: "verified" as const, verifiedAt: now.toISOString() }
+      : {}),
     lastActivityAt: now.toISOString(),
   })!;
   const entry = db.listAudit(500).find((a) => a.action === "admin.city_admin_assign" && a.targetId === rec.id);

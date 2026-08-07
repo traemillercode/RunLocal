@@ -630,10 +630,12 @@ export function AdminPage() {
         )}
       </section>
 
+      {/* Admin content management — Global Admin (any city) or City Admin
+          (server-enforced own city only) */}
+      {authed && <ContentManagementSection cityScope={cityScope} />}
       {/* Owner-only dashboard: moderation, RRCA, featured/pinned */}
       {isOwner ? (
         <>
-          {!isCityAdmin && authed && <ContentManagementSection />}
           <section id="dashboard" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <div className="flex items-start justify-between gap-2">
             <div>
