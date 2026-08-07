@@ -38,7 +38,13 @@ if grep -Fqi 'being prepared for this public home' "$APP_HTML"; then
 fi
 APP_ASSET="$(sed -n 's/.*src="\(\/app\/assets\/[^" ]*\.js\)".*/\1/p' "$APP_HTML" | head -1)"
 [ -n "$APP_ASSET" ] || { echo 'functional app JavaScript asset not found' >&2; exit 1; }
-curl -sf "http://localhost:3000$APP_ASSET" | grep -Fq 'LoginPage' || { echo 'functional app JavaScript marker missing' >&2; exit 1; }
+# The bundle is minified, so no component-name string (e.g. 'LoginPage') can
+# prove the app mounted — esbuild mangles identifiers away. Instead verify the
+# served bundle carries THIS build's BUILD_ID: main.tsx inlines
+# import.meta.env.VITE_BUILD_ID as a string literal, which survives minification,
+# is unique per publish, and cannot appear in the coming-soon shell or in a
+# stale bundle left over from an earlier build.
+curl -sf "http://localhost:3000$APP_ASSET" | grep -Fq "$BUILD_ID" || { echo "functional app bundle marker (build $BUILD_ID) missing at /app" >&2; exit 1; }
 curl -sf http://localhost:3000/api/health | grep -Fq '"ok":true' || { echo 'public API health check failed' >&2; exit 1; }
 # Hash routes are client-side, but the document and splash bridges must be real.
 curl -sf http://localhost:3000/login | grep -Fq '/app#/login' || { echo 'login bridge missing' >&2; exit 1; }
