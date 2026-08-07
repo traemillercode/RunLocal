@@ -108,6 +108,7 @@ export function Popover({ open, onClose, title, align = "right", children }: Pop
 
 const PATHS: Record<string, ReactNode> = {
   close: <path d="M6 6l12 12M18 6L6 18" />,
+  logout: <><path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4" /><path d="M14 8l4 4-4 4M18 12H9" /></>,
   chevronDown: <path d="M6 9l6 6 6-6" />,
   chevronRight: <path d="M9 6l6 6-6 6" />,
   pin: (
