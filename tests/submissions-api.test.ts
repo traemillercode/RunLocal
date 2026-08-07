@@ -190,7 +190,7 @@ describe("GET /api/my/submissions", () => {
 });
 
 describe("admin submission queue + decisions over HTTP", () => {
-  it("queue requires an admin session and a reason", async () => {
+  it("queue requires an admin session; routine loads need no reason, decisions still do", async () => {
     const db = createMemoryStore();
     const { cookie } = verifiedUser(db);
     await apiHandler(makeReq("POST", "/api/submissions/race", { body: RACE_BODY, cookie }), makeRes().res, db);
@@ -198,20 +198,23 @@ describe("admin submission queue + decisions over HTTP", () => {
     const { res, fake } = makeRes();
     await apiHandler(makeReq("GET", "/api/admin/submissions", { reason: "review" }), res, db);
     expect(fake.status).toBe(401);
-    // admin session but no reason
+    // admin session WITHOUT a reason is a routine read: audited, not blocked
     const adminSession = db.createSession("__admin__", "198.51.100.23");
     const { res: res2, fake: fake2 } = makeRes();
     await apiHandler(makeReq("GET", "/api/admin/submissions", { cookie: `runlocal_admin=${adminSession.id}` }), res2, db);
-    expect(fake2.status).toBe(400);
-    expect(JSON.parse(fake2.body).error).toBe("reason_required");
-    // with reason → safe summaries
-    const { res: res3, fake: fake3 } = makeRes();
-    await apiHandler(makeReq("GET", "/api/admin/submissions", { cookie: `runlocal_admin=${adminSession.id}`, reason: "queue review" }), res3, db);
-    expect(fake3.status).toBe(200);
-    const rows = (JSON.parse(fake3.body) as { results: { title: string; submitterName: string }[] }).results;
+    expect(fake2.status).toBe(200);
+    const rows = (JSON.parse(fake2.body) as { results: { title: string; submitterName: string }[] }).results;
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ title: "River 5K", submitterName: "Runner" });
-    expect(fake3.body).not.toContain("example.com");
+    expect(fake2.body).not.toContain("example.com");
+    // the routine read is still audited with the server-generated reason
+    expect(db.listAudit(10).some((a) => a.action === "admin.submission_list")).toBe(true);
+    // but a decision without a reason is still rejected
+    const id = rows[0]!.id ?? rows[0].id;
+    const { res: res3, fake: fake3 } = makeRes();
+    await apiHandler(makeReq("POST", `/api/admin/submissions/${id}/approve`, { cookie: `runlocal_admin=${adminSession.id}` }), res3, db);
+    expect(fake3.status).toBe(400);
+    expect(JSON.parse(fake3.body).error).toBe("reason_required");
   });
 
   it("reject without a reason header is rejected", async () => {

@@ -163,7 +163,7 @@ function addFlag(db: Db, cityId: string, contentId: string): FlagRecord {
   );
 }
 function addContent(db: Db, cityId: string, id: string): ContentRecord {
-  const rec: ContentRecord = { id, cityId, kind: "event", refId: id, title: `Content ${id}`, authorLabel: null, authorAccountId: null, featured: false, pinned: false, hidden: true, hiddenAt: T0.toISOString() };
+  const rec: ContentRecord = { id, cityId, kind: "event", refId: id, title: `Content ${id}`, authorLabel: null, authorAccountId: null, featured: false, pinned: false, hidden: true, hiddenAt: T0.toISOString(), archived: false, archivedAt: null };
   db.upsertContent(rec);
   return rec;
 }

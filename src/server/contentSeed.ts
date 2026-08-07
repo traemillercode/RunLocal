@@ -29,6 +29,8 @@ export function seedContentRegistry(db: Db, cities = CITIES): void {
         rrcaBadge: g.groupType === "rrca-chartered",
         rrcaNote: null,
         rrcaNoteUpdatedAt: null,
+        archived: false,
+        archivedAt: null,
       };
       db.upsertGroup(rec);
     }
@@ -46,6 +48,8 @@ export function seedContentRegistry(db: Db, cities = CITIES): void {
         pinned: false,
         hidden: false,
         hiddenAt: null,
+        archived: false,
+        archivedAt: null,
       };
       db.upsertContent(rec);
     }
@@ -63,6 +67,8 @@ export function seedContentRegistry(db: Db, cities = CITIES): void {
         pinned: false,
         hidden: false,
         hiddenAt: null,
+        archived: false,
+        archivedAt: null,
       };
       db.upsertContent(rec);
     }
@@ -80,6 +86,8 @@ export function seedContentRegistry(db: Db, cities = CITIES): void {
         pinned: false,
         hidden: false,
         hiddenAt: null,
+        archived: false,
+        archivedAt: null,
       };
       db.upsertContent(rec);
     }

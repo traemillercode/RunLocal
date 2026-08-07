@@ -71,7 +71,7 @@ function cookieFrom(f: FakeRes): string {
 const KEY = "test-admin-key-123";
 const EV = "event:ev1";
 function seedEvent(db: Db): void {
-  db.upsertContent({ id: EV, cityId: "columbia-mo", kind: "event", refId: "ev1", title: "Test Run", authorLabel: null, authorAccountId: null, featured: false, pinned: false, hidden: false, hiddenAt: null });
+  db.upsertContent({ id: EV, cityId: "columbia-mo", kind: "event", refId: "ev1", title: "Test Run", authorLabel: null, authorAccountId: null, featured: false, pinned: false, hidden: false, hiddenAt: null, archived: false, archivedAt: null });
 }
 async function signup(db: Db, email: string, name = "Runner"): Promise<{ id: string; cookie: string }> {
   const f = await post(db, "/api/accounts", { name, username: email.split("@")[0] + Math.random().toString(36).slice(2, 8), email, birthdate: "1998-05-05", cityId: "columbia-mo" });

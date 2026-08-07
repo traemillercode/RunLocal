@@ -420,16 +420,24 @@ export interface SubmissionQueueRow {
   summary: string;
 }
 
-export function adminGetSubmissions(cityId: string | null, reason: string): Promise<ApiResult<{ results: SubmissionQueueRow[] }>> {
-  const q = cityId ? `?city=${encodeURIComponent(cityId)}` : "";
+export function adminGetSubmissions(cityId: string | null, reason: string, status?: "pending" | "approved" | "rejected"): Promise<ApiResult<{ results: SubmissionQueueRow[] }>> {
+  const params = new URLSearchParams();
+  if (cityId) params.set("city", cityId);
+  if (status && status !== "pending") params.set("status", status);
+  const q = params.size ? `?${params.toString()}` : "";
   return adminRequest(`/api/admin/submissions${q}`, reason);
 }
-
 export function adminDecideSubmission(id: string, action: "approve" | "reject", reason: string): Promise<ApiResult<{ ok: true }>> {
   return adminRequest(`/api/admin/submissions/${id}/${action}`, reason, { method: "POST" });
 }
-
-/** City Admin queue: server derives and enforces the single-city scope. */
+/** Super-admin edit of a pending submission payload (reason-required, audited). */
+export function adminEditSubmission(id: string, input: Record<string, unknown>, reason: string): Promise<ApiResult<{ ok: true; submission: { id: string; status: string; title: string } }>> {
+  return adminRequest(`/api/admin/submissions/${id}`, reason, { method: "PATCH", body: JSON.stringify(input) });
+}
+/** Super-admin removal of a pending submission (reason-required, audited). */
+export function adminRemoveSubmission(id: string, reason: string): Promise<ApiResult<{ ok: true; removed: string }>> {
+  return adminRequest(`/api/admin/submissions/${id}/remove`, reason, { method: "POST" });
+}
 export function cityAdminGetSubmissions(reason: string): Promise<ApiResult<{ results: SubmissionQueueRow[] }>> {
   return adminRequest("/api/admin/city/submissions", reason);
 }
@@ -555,6 +563,35 @@ export function adminSetHighlight(contentId: string, patch: { featured?: boolean
   return adminRequest(`/api/admin/content/${contentId}/highlight`, reason, { method: "POST", body: JSON.stringify(patch) });
 }
 
+// ---------------------------------------------- super-admin content management
+export interface AdminContentRow {
+  id: string;
+  kind: "event" | "race" | "post" | "group";
+  refId: string;
+  cityId: string;
+  title: string;
+  authorLabel: string | null;
+  source: "seed" | "submission";
+  submissionId: string | null;
+  hidden: boolean;
+  archived: boolean;
+  featured: boolean;
+  pinned: boolean;
+  eventStatus: string | null;
+}
+/** Routine read — audited with the server-generated reason, no operator prompt. */
+export function adminListContent(cityId: string | null, kind: AdminContentRow["kind"] | null): Promise<ApiResult<{ results: AdminContentRow[] }>> {
+  const params = new URLSearchParams();
+  if (cityId) params.set("city", cityId);
+  if (kind) params.set("kind", kind);
+  return adminRequest(`/api/admin/content${params.size ? `?${params.toString()}` : ""}`, "");
+}
+export function adminEditContentTitle(contentId: string, title: string, reason: string): Promise<ApiResult<{ ok: true; content: AdminContentRow }>> {
+  return adminRequest(`/api/admin/content/${encodeURIComponent(contentId)}`, reason, { method: "PATCH", body: JSON.stringify({ title }) });
+}
+export function adminTransitionContent(contentId: string, action: "hide" | "restore" | "archive", reason: string): Promise<ApiResult<{ ok: true; content: AdminContentRow }>> {
+  return adminRequest(`/api/admin/content/${encodeURIComponent(contentId)}/${action}`, reason, { method: "POST" });
+}
 export type ActivityProvider = "strava" | "garmin" | "coros" | "suunto";
 export type ShareMode = "auto" | "manual" | "private";
 export interface PublicActivityCard { id: string; type: string; distanceMeters: number; durationSeconds: number; provider: ActivityProvider; attribution: string; sharedAt: string; }

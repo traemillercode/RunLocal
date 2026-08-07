@@ -294,17 +294,17 @@ describe("admin submission queue", () => {
     const sub = submitRace(db, rec.id, RACE_INPUT, T0);
     if (!sub.ok) throw new Error("submit failed");
     // no admin session
-    const noAuth = submissionQueue(db, adminCtx(null, undefined, "review"), "columbia-mo", T0);
+    const noAuth = submissionQueue(db, adminCtx(null, undefined, "review"), "columbia-mo", "pending", T0);
     expect(noAuth.ok).toBe(false);
     if (!noAuth.ok) expect(noAuth.error).toBe("unauthorized");
     // authenticated but no reason
     const { adminLogin } = await import("../src/server/admin");
     const login = adminLogin(db, KEY, "198.51.100.7", T0);
     if (!login.ok) throw new Error("login failed");
-    const noReason = submissionQueue(db, asKeyAdminSafe(login.data.sessionId), "columbia-mo", T0);
-    expect(noReason.ok).toBe(false);
-    if (!noReason.ok) expect(noReason.error).toBe("reason_required");
-    const okRes = submissionQueue(db, asKeyAdminSafe(login.data.sessionId, "queue review"), "columbia-mo", T0);
+    // Loading the queue is a routine read — audited, no operator reason needed.
+    const noReason = submissionQueue(db, asKeyAdminSafe(login.data.sessionId), "columbia-mo", "pending", T0);
+    expect(noReason.ok).toBe(true);
+    const okRes = submissionQueue(db, asKeyAdminSafe(login.data.sessionId, "queue review"), "columbia-mo", "pending", T0);
     expect(okRes.ok).toBe(true);
     if (okRes.ok) {
       expect(okRes.data).toHaveLength(1);
@@ -325,11 +325,11 @@ describe("admin submission queue", () => {
     // owner
     const owner = db.createAccount({ name: "Owner", email: "traemiller.email@gmail.com" });
     const ownerSession = db.createSession(owner.id, "198.51.100.7", T0);
-    expect(submissionQueue(db, adminCtx(null, ownerSession.id, "review"), null, T0).ok).toBe(true);
+    expect(submissionQueue(db, adminCtx(null, ownerSession.id, "review"), null, "pending", T0).ok).toBe(true);
     // verified runner (user session, not owner/admin) is unauthorized
     const runner = verified(db, "v@x.com");
     const runnerSession = db.createSession(runner.id, "198.51.100.7", T0);
-    const denied = submissionQueue(db, adminCtx(null, runnerSession.id, "I'm a runner"), null, T0);
+    const denied = submissionQueue(db, adminCtx(null, runnerSession.id, "I'm a runner"), null, "pending", T0);
     expect(denied.ok).toBe(false);
     if (!denied.ok) expect(denied.error).toBe("unauthorized");
   });

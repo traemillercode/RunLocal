@@ -24,7 +24,7 @@ import { newId } from "./store";
 import type { Db } from "./store";
 import { isSuspended } from "./store";
 import type { AdminCtx, AdminResult } from "./admin";
-import { authorizeAdmin, authorizeScoped } from "./admin";
+import { authorizeAdmin, authorizeScoped, routineAdminCtx } from "./admin";
 import { REASON_MAX, REASON_MIN } from "./admin";
 import { cityAcceptsSubmissions, cityNotOpenError, cityStatus } from "./cms";
 import { trustRestrictions } from "./trust";
@@ -36,6 +36,7 @@ import type {
   SubmissionKind,
   SubmissionPayload,
   SubmissionRecord,
+  SubmissionStatus,
 } from "./types";
 
 export const SUBMISSION_REASON_MIN = REASON_MIN;
@@ -170,6 +171,13 @@ export function submitRace(db: Db, accountId: string, input: RaceSubmitInput, no
   if (!auth.ok) return auth;
   const city = resolveCity(db, auth.data, input.cityId);
   if (!city.ok) return city;
+  const payload = racePayloadFrom(input);
+  if (!payload.ok) return payload;
+  return { ok: true, data: db.appendSubmission(newSubmission("race", city.data, accountId, payload.data, now)) };
+}
+
+/** Server-side validation of a race submission payload (shared with admin edit). */
+export function racePayloadFrom(input: RaceSubmitInput): AdminResult<RaceSubmissionPayload> {
   const name = sliceTrim(input.name, MAX_NAME);
   if (!name) return { ok: false, status: 400, error: "invalid_name", message: "Race name is required." };
   const distances = sliceTrim(input.distances, MAX_DISTANCE);
@@ -184,7 +192,7 @@ export function submitRace(db: Db, accountId: string, input: RaceSubmitInput, no
   }
   const description = sliceTrim(input.description, MAX_DESCRIPTION);
   const payload: RaceSubmissionPayload = { kind: "race", name, distances, date, location, registrationUrl, description };
-  return { ok: true, data: db.appendSubmission(newSubmission("race", city.data, accountId, payload, now)) };
+  return { ok: true, data: payload };
 }
 
 // ------------------------------------------------------------------ group
@@ -226,6 +234,13 @@ export function submitGroup(db: Db, accountId: string, input: GroupSubmitInput, 
   }
   const city = resolveCity(db, auth.data, input.cityId);
   if (!city.ok) return city;
+  const payload = groupPayloadFrom(input, city.data);
+  if (!payload.ok) return payload;
+  return { ok: true, data: db.appendSubmission(newSubmission("group", city.data, accountId, payload.data, now)) };
+}
+
+/** Server-side validation of a group submission payload (shared with admin edit). */
+export function groupPayloadFrom(input: GroupSubmitInput, cityId: string): AdminResult<GroupSubmissionPayload> {
   const name = sliceTrim(input.name, MAX_NAME);
   if (!name) return { ok: false, status: 400, error: "invalid_name", message: "Group name is required." };
   const description = sliceTrim(input.description, MAX_DESCRIPTION);
@@ -250,7 +265,7 @@ export function submitGroup(db: Db, accountId: string, input: GroupSubmitInput, 
     kind: "group",
     name,
     description,
-    cityId: city.data,
+    cityId,
     groupType,
     groupmeUrl: groupme.url,
     facebookUrl: facebook.url,
@@ -260,7 +275,7 @@ export function submitGroup(db: Db, accountId: string, input: GroupSubmitInput, 
     logoPhotoRef,
     membershipMode,
   };
-  return { ok: true, data: db.appendSubmission(newSubmission("group", city.data, accountId, payload, now)) };
+  return { ok: true, data: payload };
 }
 
 // ------------------------------------------------------------------ event
@@ -308,6 +323,13 @@ export function submitEvent(db: Db, accountId: string, input: EventSubmitInput, 
   }
   const city = resolveCity(db, auth.data, input.cityId);
   if (!city.ok) return city;
+  const payload = eventPayloadFrom(input);
+  if (!payload.ok) return payload;
+  return { ok: true, data: db.appendSubmission(newSubmission("event", city.data, accountId, payload.data, now)) };
+}
+
+/** Server-side validation of an independent-event payload (shared with admin edit). */
+export function eventPayloadFrom(input: EventSubmitInput): AdminResult<EventSubmissionPayload> {
   const type = input.type === "one_time" ? "one_time" : input.type === "recurring" ? "recurring" : null;
   if (!type) return { ok: false, status: 400, error: "invalid_type", message: "Event type must be one_time or recurring." };
   const title = sliceTrim(input.title, MAX_TITLE);
@@ -349,7 +371,7 @@ export function submitEvent(db: Db, accountId: string, input: EventSubmitInput, 
     externalUrl: ext.url,
     description,
   };
-  return { ok: true, data: db.appendSubmission(newSubmission("event", city.data, accountId, payload, now)) };
+  return { ok: true, data: payload };
 }
 
 // ------------------------------------------------------------- my submissions
@@ -397,39 +419,44 @@ export interface SubmissionQueueRow {
 }
 
 /**
- * Admin-only pending-submission queue (owner OR key-based admin; audited with
- * a required reason). Safe summaries: title, kind, submitter display name,
- * and a short payload summary. No email, phone, IP, or other user's data.
- * Global admins may filter by city or see the all-city queue.
+ * Admin-only submission list (owner OR key-based admin). Routine reads do NOT
+ * prompt for an operator reason — they are audited with the server-generated
+ * routine reason. `status` filters the queue: "pending" (default, the review
+ * queue), "approved", or "rejected" — the full submission history for the
+ * city (or all cities for global admins). Safe summaries: title, kind,
+ * submitter display name, and a short payload summary. No email, phone, IP,
+ * or other user's data.
  */
 export function submissionQueue(
   db: Db,
   ctx: AdminCtx,
   cityId: string | null,
+  status: SubmissionStatus = "pending",
   now = new Date(),
 ): AdminResult<SubmissionQueueRow[]> {
-  const auth = authorizeAdmin(db, ctx, "admin.submission_list", null, now);
+  const auth = authorizeAdmin(db, routineAdminCtx(ctx), "admin.submission_list", null, now);
   if (!auth.ok) return auth;
-  return submissionQueueRows(db, cityId);
+  return submissionQueueRows(db, cityId, status);
 }
 
 /**
- * City Admin variant of the pending queue — the scope city is enforced
+ * City Admin variant of the submission list — the scope city is enforced
  * server-side (the client cannot widen it), so a City Admin can NEVER see the
- * all-city queue or another city's submissions.
+ * all-city queue or another city's submissions. Loads are routine (no
+ * operator-entered reason); approve/reject still require one.
  */
 export function citySubmissionQueue(db: Db, ctx: AdminCtx, now = new Date()): AdminResult<SubmissionQueueRow[]> {
-  const auth = authorizeScoped(db, ctx, "cityadmin.submission_list", null, now);
+  const auth = authorizeScoped(db, routineAdminCtx(ctx), "cityadmin.submission_list", null, now);
   if (!auth.ok) return auth;
   const cityId = auth.data.scope.kind === "city" ? auth.data.scope.cityId : null;
   if (cityId === null) return { ok: false, status: 403, error: "city_scope_denied" };
-  return submissionQueueRows(db, cityId);
+  return submissionQueueRows(db, cityId, "pending");
 }
 
-function submissionQueueRows(db: Db, cityId: string | null): AdminResult<SubmissionQueueRow[]> {
+function submissionQueueRows(db: Db, cityId: string | null, status: SubmissionStatus): AdminResult<SubmissionQueueRow[]> {
   const rows = db
     .listSubmissions()
-    .filter((s) => s.status === "pending" && (!cityId || s.cityId === cityId))
+    .filter((s) => s.status === status && (!cityId || s.cityId === cityId))
     .sort((a, b) => a.submittedAt.localeCompare(b.submittedAt))
     .map((s) => {
       const submitter = db.getAccount(s.submitterAccountId);
@@ -553,6 +580,8 @@ function decideSubmissionCore(
       pinned: false,
       hidden: false,
       hiddenAt: null,
+      archived: false,
+      archivedAt: null,
     });
     if (rec.kind === "event") {
       const eventPayload = payload as EventSubmissionPayload;
@@ -620,6 +649,79 @@ function decideSubmissionCore(
   return { ok: true, data: updated };
 }
 
+// ----------------------------------------------- super-admin submission ops
+// The queue approve/reject lifecycle above is shared with City Admins (scoped
+// to their city). The two operations below are SUPER-ADMIN only: a Global
+// Admin (owner OR key admin) may correct a pending submission's payload before
+// it is decided, and may remove a pending submission from the queue entirely
+// (e.g. obvious spam that should not be routed through the rejection flow).
+// City Admins and runners are denied server-side.
+
+export type SubmissionEditInput = RaceSubmitInput | GroupSubmitInput | EventSubmitInput;
+
+/**
+ * Super-admin edit of a PENDING submission's payload. The record kind stays
+ * fixed (a race stays a race), but every field is re-validated with the same
+ * server-side rules as the original submit, so an admin can fix a typo, a
+ * wrong date, or a bad link before approving. Audited, reason-required,
+ * Global Admin only.
+ */
+export function editPendingSubmission(
+  db: Db,
+  ctx: AdminCtx,
+  submissionId: string,
+  input: SubmissionEditInput,
+  now = new Date(),
+): AdminResult<SubmissionRecord> {
+  const rec = db.getSubmission(submissionId);
+  if (!rec) return { ok: false, status: 404, error: "not_found" };
+  const auth = authorizeScoped(db, ctx, "admin.submission_edit", submissionId, now, { globalOnly: true, auditCity: rec.cityId });
+  if (!auth.ok) return auth;
+  if (rec.status !== "pending") {
+    return { ok: false, status: 409, error: "already_decided", message: "Only pending submissions can be edited — this one was already decided." };
+  }
+  let next: SubmissionPayload;
+  if (rec.kind === "race") {
+    const p = racePayloadFrom(input);
+    if (!p.ok) return p;
+    next = p.data;
+  } else if (rec.kind === "group") {
+    const p = groupPayloadFrom(input, rec.cityId);
+    if (!p.ok) return p;
+    next = p.data;
+  } else {
+    const p = eventPayloadFrom(input);
+    if (!p.ok) return p;
+    next = p.data;
+  }
+  const updated = db.updateSubmission(submissionId, { payload: next })!;
+  return { ok: true, data: updated };
+}
+
+/**
+ * Super-admin removal of a PENDING submission from the queue. Hard-removes the
+ * record (no public artifact exists yet) and is audited with the admin's
+ * reason. Approved submissions cannot be removed here — they have public
+ * artifacts and are managed through the content hide/archive surface. Audited,
+ * reason-required, Global Admin only.
+ */
+export function removeSubmission(
+  db: Db,
+  ctx: AdminCtx,
+  submissionId: string,
+  now = new Date(),
+): AdminResult<{ id: string }> {
+  const rec = db.getSubmission(submissionId);
+  if (!rec) return { ok: false, status: 404, error: "not_found" };
+  const auth = authorizeScoped(db, ctx, "admin.submission_remove", submissionId, now, { globalOnly: true, auditCity: rec.cityId });
+  if (!auth.ok) return auth;
+  if (rec.status !== "pending") {
+    return { ok: false, status: 409, error: "already_decided", message: "Only pending submissions can be removed — decided records stay for the audit trail." };
+  }
+  db.removeSubmission(submissionId);
+  return { ok: true, data: { id: submissionId } };
+}
+
 // ------------------------------------------------------------- public view
 export interface PublicUserRace {
   id: string;
@@ -685,7 +787,12 @@ export function publicApprovedContent(db: Db, cityId: string): PublicApprovedCon
     if (s.cityId !== cityId || s.status !== "approved") continue;
     if (s.kind === "race" || s.kind === "event") {
       const content = db.getContent(`${s.kind}:${s.publicRefId ?? `user-${s.id}`}`);
-      if (content?.hidden) continue; // owner-hidden content never renders publicly
+      // Owner-hidden OR owner-archived content never renders publicly.
+      if (content?.hidden || content?.archived) continue;
+    } else {
+      // Groups render from the public directory rules: published + not archived.
+      const group = db.getGroup(s.publicRefId ?? `user-${s.id}`);
+      if (!group || (group.status ?? "published") !== "published" || group.archived) continue;
     }
     const host = db.getAccount(s.submitterAccountId)?.name ?? "Runner";
     if (s.kind === "race") {

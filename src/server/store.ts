@@ -698,6 +698,9 @@ export class Db {
     this.submissions.set(id, next);
     return next;
   }
+  removeSubmission(id: string): boolean {
+    return this.submissions.delete(id);
+  }
 
   // ------------------------------------------------------------- activities
   listActivities(accountId?: string) { return [...this.activities.values()].filter(a => !accountId || a.accountId === accountId); }

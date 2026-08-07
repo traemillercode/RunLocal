@@ -19,6 +19,7 @@ import { Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
 import type { AdminRecordView, AdminSearchRow, AuditEntryView, DashboardView, PendingQueueRow } from "../lib/api";
 import { CITIES } from "../data/cities";
+import { ContentManagementSection } from "../components/ContentManagementSection";
 import { useAccount } from "../state/account";
 
 const inputCls =
@@ -101,19 +102,19 @@ export function AdminPage() {
   const [suspendDays, setSuspendDays] = useState<Record<string, string>>({});
   const [subRows, setSubRows] = useState<api.SubmissionQueueRow[] | null>(null);
   const [subReason, setSubReason] = useState("");
+  const [subStatus, setSubStatus] = useState<"pending" | "approved" | "rejected">("pending");
   const [subError, setSubError] = useState<string | null>(null);
   const [subBusy, setSubBusy] = useState(false);
   const [subAction, setSubAction] = useState<string | null>(null);
   const isCityAdmin = me?.status === "signed_in" && me.account.role === "city_admin";
   const cityScope = me?.status === "signed_in" ? me.account.adminCityId : null;
+  // Loading the queue is a routine read: audited server-side with the
+  // generated reason — the operator is NOT prompted. Only decisions
+  // (approve/reject) require the explicit reason below.
   const loadSubmissions = async () => {
     setSubError(null);
-    if (!subReason.trim() || subReason.trim().length < 5) {
-      setSubError("Enter a reason (min 5 characters) to load the submission queue.");
-      return;
-    }
     setSubBusy(true);
-    const r = isCityAdmin ? await api.cityAdminGetSubmissions(subReason.trim()) : await api.adminGetSubmissions(null, subReason.trim());
+    const r = isCityAdmin ? await api.cityAdminGetSubmissions("") : await api.adminGetSubmissions(null, "", subStatus);
     setSubBusy(false);
     if (r.ok) setSubRows(r.data.results);
     else setSubError(r.error.message ?? "Couldn't load the queue.");
@@ -588,10 +589,17 @@ export function AdminPage() {
           Leader role), while reject requires a reason the submitter will see. Every action is audited with the reason above.
         </p>
         <div className="mt-3 space-y-3">
-          <textarea rows={2} placeholder={isCityAdmin ? "Reason for loading/deciding this city queue (required)" : "Reason for loading/deciding the queue (required, audited; rejection reason goes to the submitter)"} value={subReason} onChange={(e) => setSubReason(e.target.value)} className={reasonCls} />
+          <textarea rows={2} placeholder={isCityAdmin ? "Reason for deciding this city queue — rejection reason goes to the submitter (min 5 characters)" : "Reason for approve/reject — the rejection reason goes to the submitter (min 5 characters); loading needs no reason"} value={subReason} onChange={(e) => setSubReason(e.target.value)} className={reasonCls} />
           <PillButton variant="primary" className="w-full" disabled={subBusy} onClick={() => void loadSubmissions()}>
             <Icon name="search" className="h-4 w-4" /> {subBusy ? "Loading…" : "Load submission queue"}
           </PillButton>
+          {!isCityAdmin && (
+            <select aria-label="Queue status" value={subStatus} onChange={(e) => setSubStatus(e.target.value as "pending" | "approved" | "rejected")} className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm">
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          )}
           {subError ? <Err msg={subError} /> : null}
         </div>
         {subRows !== null && (
@@ -624,7 +632,8 @@ export function AdminPage() {
 
       {/* Owner-only dashboard: moderation, RRCA, featured/pinned */}
       {isOwner ? (
-        <section id="dashboard" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+        {!isCityAdmin && authed && <ContentManagementSection />}
+      <section id="dashboard" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <div className="flex items-start justify-between gap-2">
             <div>
               <h2 className="text-[15px] font-bold text-slate-900">City dashboard</h2>

@@ -188,6 +188,12 @@ export type AdminAction =
   | "admin.event_hide"
   | "admin.event_unhide"
   | "admin.event_archive"
+  | "admin.content_list"
+  | "admin.content_edit"
+  | "admin.content_hide"
+  | "admin.content_archive"
+  | "admin.submission_edit"
+  | "admin.submission_remove"
   | "cityadmin.dashboard"
   | "cityadmin.submission_list"
   | "cityadmin.submission_approve"
@@ -421,6 +427,14 @@ export interface ContentRecord {
   /** Hidden by an owner moderation action; excluded from public rendering. */
   hidden: boolean;
   hiddenAt: string | null;
+  /**
+   * Archived by a super-admin (owner or key admin): removed from public
+   * rendering permanently (unlike hidden, there is no restore-to-visible path
+   * — only the audit trail remains). Records are never hard-deleted so the
+   * moderation trail survives.
+   */
+  archived: boolean;
+  archivedAt: string | null;
 }
 
 export type GroupStatus = "pending_approval" | "published" | "suspended";
@@ -431,6 +445,13 @@ export interface GroupModRecord {
   coverPhotoRef?: string|null; logoPhotoRef?: string|null; ownerId?: string; leaderIds?: string[]; membershipMode?: MembershipMode; status?: GroupStatus;
   rrcaBadge: boolean; rrcaNote: string | null; rrcaNoteUpdatedAt: string | null;
   rejectionReason?: string|null;
+  /**
+   * Archived by a super-admin: removed from the public directory permanently
+   * (the record and its audit trail remain). Group "hide" uses the existing
+   * `status: "suspended"` transition; archive is a stronger, terminal state.
+   */
+  archived?: boolean;
+  archivedAt?: string | null;
 }
 
 export type GroupMembershipStatus = "pending" | "active" | "declined" | "revoked" | "left";
