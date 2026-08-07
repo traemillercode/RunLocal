@@ -50,7 +50,8 @@ export interface PublicAccount {
   /** Assigned runner role — a label only, never a power source. */
   role: "runner" | "group_leader" | "city_admin";
   /** City Admin's server-enforced scope, when applicable. */
-  adminCityId: string | null;
+  /** City Admin scope exposed for rendering only; authorization remains server-side. */
+  adminCityId?: string | null;
   /**
    * Super-admin flag, computed SERVER-side (account email vs
    * RUN_LOCAL_OWNER_EMAIL). The client renders this boolean and can never

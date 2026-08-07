@@ -112,7 +112,8 @@ const APPROVED_EVENT: PublicUserEvent = {
   title: "Thursday Hills",
   type: "recurring",
   date: null,
-  dayOfWeek: 3,
+  // Saturday remains upcoming under the deterministic current-week fixture.
+  dayOfWeek: 6,
   time: "6:00 PM",
   location: "Grindstone",
   distanceLabel: "3-5 mi",

@@ -92,6 +92,8 @@ export interface PublicAccount {
   badge: "verified" | null;
   /** Assigned runner role (label only — never a power source). */
   role: AccountRecord["role"];
+  /** City Admin scope is display-only; authorization checks stay server-side. */
+  adminCityId?: string | null;
   /** Server-derived super-admin flag (from RUN_LOCAL_OWNER_EMAIL). */
   isOwner: boolean;
   /**
