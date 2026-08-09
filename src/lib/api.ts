@@ -692,7 +692,30 @@ export function getRecognitions(cityId: string): Promise<ApiResult<{ recognition
   return request(`/api/recognitions?city=${encodeURIComponent(cityId)}`);
 }
 
-export interface MyRunView { id: string; eventId: string; occurrenceId?: string | null; cityId: string; title: string; date: string; time: string; location: string; groupId: string; rsvpedAt: string; }
+/** One row of the runner's own private My Runs list. `kind` distinguishes an
+ * RSVP'd event occurrence from a solo (personal) run. `kept`/`checkedIn` drive
+ * past visibility: a past row is shown only when the runner checked in to that
+ * occurrence or explicitly kept it ("Keep on My Runs"). */
+export interface MyRunView {
+  id: string;
+  kind: "rsvp" | "solo";
+  eventId: string;
+  occurrenceId?: string | null;
+  cityId: string;
+  title: string;
+  date: string;
+  time: string;
+  location: string;
+  groupId: string;
+  rsvpedAt: string;
+  runDate?: string | null;
+  startsAt?: string | null;
+  distanceLabel?: string | null;
+  upcoming?: boolean;
+  past?: boolean;
+  kept: boolean;
+  checkedIn: boolean;
+}
 export const PERSONAL_RUN_CONSENT_VERSION = "2026-08-04.v1";
 export interface PersonalRun { id:string; accountId:string; cityId:string; title:string; startsAt:string; locationLabel:string|null; distanceLabel:string|null; notes:string|null; visibility:"private"; consentVersion:string; consentedAt:string; createdAt:string; updatedAt:string; deletedAt:string|null; }
 export function getPersonalRuns(): Promise<ApiResult<{runs: PersonalRun[]}>> { return request("/api/personal-runs"); }
@@ -700,6 +723,8 @@ export function createPersonalRun(input: Omit<PersonalRun, "id"|"accountId"|"vis
 export function updatePersonalRun(id:string, input: Partial<Pick<PersonalRun,"cityId"|"title"|"startsAt"|"locationLabel"|"distanceLabel"|"notes">> & {consent:true}): Promise<ApiResult<{run:PersonalRun}>> { return request(`/api/personal-runs/${encodeURIComponent(id)}`, {method:"PATCH", body:JSON.stringify({...input, consentVersion: PERSONAL_RUN_CONSENT_VERSION})}); }
 export function deletePersonalRun(id:string): Promise<ApiResult<{deleted:boolean}>> { return request(`/api/personal-runs/${encodeURIComponent(id)}`, {method:"DELETE"}); }
 export function getMyRuns(): Promise<ApiResult<{ runs: MyRunView[] }>> { return request("/api/my/runs"); }
+/** Opt-in "Keep on My Runs" toggle — persists server-side on the exact row. */
+export function keepMyRun(runId: string, kept: boolean): Promise<ApiResult<{ kept: boolean }>> { return request("/api/my/runs/keep", { method: "POST", body: JSON.stringify({ runId, kept }) }); }
 
 /** Server-side RSVP — the shared-attendance basis for rating eligibility. */
 export function rsvpEvent(eventId: string, rsvp: boolean = true, runDate?: string, runId?: string): Promise<ApiResult<{ rsvped: boolean }>> {

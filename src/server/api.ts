@@ -60,6 +60,7 @@ import {
 } from "./checkins";
 import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
+import { listMyRuns, setMyRunKept } from "./myRuns";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import { validateImageBytes } from "./image-validation";
 import {
@@ -1007,18 +1008,27 @@ async function handleApi(
     return ok(res, { submissions: mySubmissions(db, sess.accountId) }), true;
   }
 
-  // ---- private My Runs (occurrence-aware RSVP attendance) -----------------
+  // ---- private My Runs (RSVP attendance + solo runs; server-authoritative) -
+  // Past visibility rule (exact): a past row is returned ONLY when the runner
+  // checked in to that occurrence or explicitly kept it ("Keep on My Runs").
+  // Kept history is indefinite; upcoming rows behave exactly as before.
   if (method === "GET" && url.pathname === "/api/my/runs") {
     const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const rec = db.getAccount(sess.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
     if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
-    const runs = (db.listAttendance(sess.accountId).filter(a => a.role === "rsvp").flatMap((a): any => {
-      if (!a.occurrenceId || !a.runDate) return [{ id:a.id, eventId:a.eventId.replace(/^event:/,""), occurrenceId:null, runDate:a.createdAt.slice(0,10), startsAt:null, cityId:rec.cityId, title:"Past run RSVP", date:a.createdAt.slice(0,10), time:"Time unavailable", location:"Location unavailable", groupId:"", rsvpedAt:a.createdAt, upcoming:false, past:true }];
-      const occ = resolveOccurrence(db, a.eventId, a.runDate); if (!occ || !occ.event) return [];
-      const ev=occ.event; const upcoming = new Date(occ.startsAt).getTime() >= now.getTime();
-      return [{ id:a.id, eventId:occ.eventId.replace(/^event:/,""), occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt, cityId:ev.cityId, title:ev.title, date:occ.runDate, time:ev.time, location:ev.location, groupId:ev.groupId, rsvpedAt:a.createdAt, upcoming, past:!upcoming }];
-    }) as Array<{ id:string; eventId:string; occurrenceId:string|null; runDate:string; startsAt:string|null; cityId:string|null; title:string; date:string; time:string; location:string; groupId:string; rsvpedAt:string; upcoming:boolean; past:boolean }>).sort((a,b) => (a.startsAt ?? `${a.runDate}T00:00:00Z`).localeCompare(b.startsAt ?? `${b.runDate}T00:00:00Z`) || a.eventId.localeCompare(b.eventId) || a.id.localeCompare(b.id));
-    return ok(res, { runs }), true;
+    return ok(res, { runs: listMyRuns(db, sess.accountId, rec.cityId ?? "", now) }), true;
+  }
+  // ---- keep on My Runs (opt-in indefinite history; caller-scoped) ----------
+  if (method === "POST" && url.pathname === "/api/my/runs/keep") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(sess.accountId); if (!rec || rec.deletedAt || rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const b = await readJson(req) as Record<string, unknown>;
+    const runId = typeof b.runId === "string" ? b.runId : "";
+    if (!runId) return err(res, { status: 400, error: "invalid_run" }), true;
+    const result = setMyRunKept(db, sess.accountId, runId, b.kept === true, now);
+    if (!result) return err(res, { status: 404, error: "not_found" }), true;
+    await db.persist();
+    return ok(res, result), true;
   }
   // ---- submit a race ------------------------------------------------------
   if (method === "POST" && url.pathname === "/api/submissions/race") {
