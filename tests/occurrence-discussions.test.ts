@@ -57,4 +57,39 @@ describe("occurrence discussion request handler", () => {
     expect((await call(fresh.db, "GET", path(f.event.id, freshOcc), undefined, fresh.cookie)).body.discussion.some((d: {id:string}) => d.id === id)).toBe(false);
   });
   it.each(["hidden", "archived"]) ("rejects %s events", async (state) => { const f = setup(); f.db.setEvent({ ...f.event, ...(state === "hidden" ? { hidden: true } : { archivedAt: "now" }) }); expect((await call(f.db, "GET", path(f.event.id, f.occurrence), undefined, f.cookie)).status).toBe(404); });
+
+  it("grants discussion access to RSVPs created through the real RSVP API and revokes it after removal", async () => {
+    const db = createMemoryStore({ now: () => new Date("2026-08-03T12:00:00.000Z") }); materializeSeedEvents(db, CITIES);
+    const event = db.listEvents()[0]!; const date = "2026-08-03";
+    const ref = event.seedRefId ?? event.id;
+    const account = db.createAccount({ name: "Runner", email: "runner@example.com", cityId: event.cityId });
+    account.status = "verified";
+    const sid = db.createSession(account.id, "test");
+    const cookie = `${SESSION_COOKIE}=${sid.id}`;
+    // Real RSVP through the API stores canonical `event:<id>` attendance, which
+    // the discussion gate must treat as participation (regression: it used to
+    // compare prefixed vs bare event ids and denied legitimate RSVPs).
+    const rsvp = await call(db, "POST", "/api/events/rsvp", { eventId: ref, runDate: date }, cookie);
+    expect(rsvp.status).toBe(200);
+    const occurrence = `event:${event.id}:${date}`;
+    const p = path(ref, occurrence);
+    expect((await call(db, "GET", p, undefined, cookie)).status).toBe(200);
+    expect((await call(db, "POST", p, { title: "Thread", body: "hello" }, cookie)).status).toBe(200);
+    // A verified runner of the same city with NO RSVP is denied.
+    const stranger = db.createAccount({ name: "Stranger", email: "s@example.com", cityId: event.cityId });
+    stranger.status = "verified";
+    const ssid = db.createSession(stranger.id, "test");
+    const strangerCookie = `${SESSION_COOKIE}=${ssid.id}`;
+    expect((await call(db, "GET", p, undefined, strangerCookie)).status).toBe(403);
+    // An RSVP to a SIBLING occurrence (same event, next week) grants access
+    // only to that sibling, never to this occurrence.
+    const sibling = await call(db, "POST", "/api/events/rsvp", { eventId: ref, runDate: "2026-08-10" }, strangerCookie);
+    expect(sibling.status).toBe(200);
+    expect((await call(db, "GET", p, undefined, strangerCookie)).status).toBe(403);
+    // Removing the RSVP revokes discussion access for that occurrence.
+    const rm = await call(db, "POST", "/api/events/rsvp", { eventId: ref, runDate: date, rsvp: false }, cookie);
+    expect(rm.status).toBe(200);
+    expect((await call(db, "GET", p, undefined, cookie)).status).toBe(403);
+    expect((await call(db, "POST", p, { title: "x", body: "y" }, cookie)).status).toBe(403);
+  });
 });

@@ -702,8 +702,8 @@ export function deletePersonalRun(id:string): Promise<ApiResult<{deleted:boolean
 export function getMyRuns(): Promise<ApiResult<{ runs: MyRunView[] }>> { return request("/api/my/runs"); }
 
 /** Server-side RSVP — the shared-attendance basis for rating eligibility. */
-export function rsvpEvent(eventId: string, rsvp: boolean = true, runDate?: string): Promise<ApiResult<{ rsvped: boolean }>> {
-  return request("/api/events/rsvp", { method: "POST", body: JSON.stringify({ eventId, rsvp, ...(runDate ? { runDate } : {}) }) });
+export function rsvpEvent(eventId: string, rsvp: boolean = true, runDate?: string, runId?: string): Promise<ApiResult<{ rsvped: boolean }>> {
+  return request("/api/events/rsvp", { method: "POST", body: JSON.stringify({ eventId, rsvp, ...(runDate ? { runDate } : {}), ...(runId ? { runId } : {}) }) });
 }
 export interface DiscussionView { id:string; kind:"thread"|"comment"; parentId:string|null; occurrenceId:string; eventId:string; cityId:string; title:string|null; body:string; authorId:string; createdAt:string; updatedAt:string; }
 export function getOccurrenceDiscussion(eventId:string, occurrenceId:string): Promise<ApiResult<{discussion:DiscussionView[]}>> { return request(`/api/events/${encodeURIComponent(eventId)}/occurrences/${encodeURIComponent(occurrenceId)}/discussion`); }
