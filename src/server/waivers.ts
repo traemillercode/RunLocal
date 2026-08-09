@@ -15,6 +15,7 @@ export function canManageWaiver(group:GroupModRecord, actor:AccountRecord|undefi
  if(!actor || actor.status!=="verified") return false;
  if(actor.email.toLowerCase()===(process.env.RUN_LOCAL_OWNER_EMAIL??"").toLowerCase()) return true;
  if(actor.role==="city_admin" && actor.adminCityId===group.cityId) return true;
+ if (actor.cityId !== group.cityId) return false;
  return group.ownerId===actor.id || (group.leaderIds??[]).includes(actor.id);
 }
 export function createWaiverVersion(db:Db, group:GroupModRecord, actor:AccountRecord|undefined, text:string, now=new Date()): GroupWaiverVersion|null {
