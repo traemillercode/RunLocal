@@ -163,7 +163,7 @@ export function DiscussionPanel({ eventId, occurrenceId, eligible, unavailable=f
 
 export function EventDetailPage({ city }: { city: City; store: AppStore }) {
   const toast = useToast();
-  const { role } = useAccount();
+  const { role, me } = useAccount();
   const { hidden, highlights, groupBadges } = useModerated();
   const { events: userEvents } = usePublicContent();
   const { eventId } = useParams();
@@ -173,6 +173,7 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
   const [gateOpen, setGateOpen] = useState(false);
   const [myRuns, setMyRuns] = useState<api.MyRunView[]>([]);
   const [canonicalEvents, setCanonicalEvents] = useState<api.CanonicalEvent[]>([]);
+  const [group, setGroup] = useState<api.PublicUserGroup | null>(null);
   const canRsvp = canDo(role, "rsvp");
   useEffect(() => {
     if (!canRsvp) { setMyRuns([]); return; }
@@ -202,6 +203,17 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
   }, [city, hidden, userEvents, canonicalEvents]);
 
   const event = events.find((e) => e.id === eventId) ?? null;
+  // Leader tools: the roster link shows only when the signed-in verified
+  // account owns or leads the event's group. The server re-checks
+  // authorization on every roster call — this is discoverability only.
+  const eventGroupId = event?.groupId ?? "";
+  useEffect(() => {
+    if (!eventGroupId) { setGroup(null); return; }
+    let alive = true;
+    void api.getPublicGroup(eventGroupId).then((r) => { if (alive && r.ok) setGroup(r.data.group); });
+    return () => { alive = false; };
+  }, [eventGroupId]);
+  const isLeader = role === "verified" && !!group && me?.status === "signed_in" && (group.ownerId === me.account.id || (group.leaders ?? []).some((l) => l.id === me.account.id));
 
   if (!event) {
     return (
@@ -256,6 +268,18 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
         pinned={hl?.pinned}
         groupBadge={groupBadges.get(event.groupId)}
       />
+      {isLeader && eventGroupId ? (
+        <Link
+          to={`/groups/${encodeURIComponent(eventGroupId)}/roster?eventId=${encodeURIComponent(event.id)}&occurrenceId=${encodeURIComponent(`event:${event.id}:${event.date.toISOString().slice(0, 10)}`)}`}
+          className="mt-6 flex items-center justify-between rounded-2xl bg-[#14171C] p-4 text-white shadow-sm"
+        >
+          <span>
+            <span className="block font-extrabold">Check-in roster</span>
+            <span className="block text-xs text-white/70">RSVPs, check-ins, and the new-runner QR for this run</span>
+          </span>
+          <Icon name="chevronRight" className="h-5 w-5 text-[#FF5741]" />
+        </Link>
+      ) : null}
       <DiscussionPanel eventId={event.id} occurrenceId={discussionOccurrenceId ?? `event:${event.id}:${event.date.toISOString().slice(0,10)}`} eligible={canRsvp && !!discussionOccurrenceId && myRuns.some((run) => run.eventId === event.id && run.occurrenceId === discussionOccurrenceId)} unavailable={!!discussionOccurrenceId && !myRuns.some((run) => run.eventId === event.id && run.occurrenceId === discussionOccurrenceId)} />
       </div>
       <aside className="desktop-detail-panel" aria-label="Run details summary">

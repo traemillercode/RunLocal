@@ -3,7 +3,7 @@ import type { Db } from "./store";
 /** Public group DTO: deliberately contains no account email, phone, moderation notes, or private membership data. */
 export function publicGroups(db: Db, cityId: string) {
   return db.listGroups().filter(g => g.cityId === cityId && (g.status ?? "published") === "published" && !(g.archived ?? false)).map(g => ({
-    id:g.id, cityId:g.cityId, name:g.name, groupType:g.groupType, description:g.description,
+    id:g.id, ownerId:g.ownerId, cityId:g.cityId, name:g.name, groupType:g.groupType, description:g.description,
     coverPhotoUrl:g.coverPhotoRef ? `/uploads/public/${g.coverPhotoRef}` : null,
     logoPhotoUrl:g.logoPhotoRef ? `/uploads/public/${g.logoPhotoRef}` : null,
     websiteUrl:g.websiteUrl, groupmeUrl:g.groupmeUrl, facebookUrl:g.facebookUrl, instagramUrl:g.instagramUrl,
