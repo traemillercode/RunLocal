@@ -192,6 +192,8 @@ export class Db {
   private discussionRate = new Map<string, number[]>();
   private waivers = new Map<string, import("./waivers").GroupWaiverVersion>();
   private waiverSignatures = new Map<string, import("./waivers").GroupWaiverSignature>();
+  private checkins = new Map<string, import("./checkins").EventCheckInRecord>();
+  private checkinQrSessions = new Map<string, import("./checkins").CheckInQrSession>();
   /**
    * Private upload bytes (credential proofs) kept in memory so in-memory/test
    * stores can serve them back; file-backed stores mirror the bytes to disk
@@ -281,6 +283,8 @@ export class Db {
       }
       for (const w of parsed.waivers ?? []) this.waivers.set(w.id, w);
       for (const s of parsed.waiverSignatures ?? []) this.waiverSignatures.set(s.id, s);
+      for (const c of parsed.checkins ?? []) this.checkins.set(c.id, c);
+      for (const q of parsed.checkinQrSessions ?? []) this.checkinQrSessions.set(q.id, q);
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -324,6 +328,8 @@ export class Db {
       discussionRate: Object.fromEntries(this.discussionRate.entries()),
       waivers: [...this.waivers.values()],
       waiverSignatures: [...this.waiverSignatures.values()],
+      checkins: [...this.checkins.values()],
+      checkinQrSessions: [...this.checkinQrSessions.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -648,6 +654,14 @@ export class Db {
   getWaiverSignature(groupId:string, waiverVersionId:string, signerId:string) { return [...this.waiverSignatures.values()].find(s=>s.groupId===groupId&&s.waiverVersionId===waiverVersionId&&s.signerId===signerId); }
   addWaiverSignature(s: import("./waivers").GroupWaiverSignature) { this.waiverSignatures.set(s.id,s); return s; }
   updateWaiverSignature(id:string, patch: Partial<import("./waivers").GroupWaiverSignature>) { const s=this.waiverSignatures.get(id); if(!s)return; const next={...s,...patch}; this.waiverSignatures.set(id,next); return next; }
+  // ------------------------------------------------- organizer check-ins
+  listCheckins(occurrenceId?: string, accountId?: string) { return [...this.checkins.values()].filter(c => (!occurrenceId || c.occurrenceId === occurrenceId) && (!accountId || c.accountId === accountId)); }
+  getCheckin(occurrenceId: string, accountId: string) { return [...this.checkins.values()].find(c => c.occurrenceId === occurrenceId && c.accountId === accountId); }
+  addCheckin(c: import("./checkins").EventCheckInRecord) { this.checkins.set(c.id, c); return c; }
+  removeCheckin(id: string) { this.checkins.delete(id); }
+  listQrSessions(occurrenceId?: string) { return [...this.checkinQrSessions.values()].filter(q => !occurrenceId || q.occurrenceId === occurrenceId); }
+  addQrSession(q: import("./checkins").CheckInQrSession) { this.checkinQrSessions.set(q.id, q); return q; }
+  updateQrSession(id: string, patch: Partial<import("./checkins").CheckInQrSession>) { const q = this.checkinQrSessions.get(id); if (!q) return; const next = { ...q, ...patch }; this.checkinQrSessions.set(id, next); return next; }
   listGroups(): GroupModRecord[] {
     return [...this.groups.values()];
   }

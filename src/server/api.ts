@@ -43,6 +43,21 @@ import { isOwnerEmail } from "./owner";
 import { resolveOccurrence, defaultOccurrenceDate } from "./occurrences";
 import { publicGroups, publicGroup } from "./groups";
 import { currentWaiver, waiverStatus, createWaiverVersion, signWaiver, processWaiverExpiry } from "./waivers";
+import {
+  canManageCheckins,
+  resolveManagedOccurrence,
+  rosterRows,
+  leaderCheckin,
+  leaderUndoCheckin,
+  createQrSession,
+  findSessionByToken,
+  validSessionOccurrence,
+  joinViaSession,
+  checkinViaSession,
+  sessionPublicDto,
+  sessionMeDto,
+  signViaSession,
+} from "./checkins";
 import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
@@ -357,6 +372,96 @@ async function handleApi(
   const signPath = /^\/api\/groups\/([^/]+)\/waiver\/sign$/.exec(url.pathname);
   if(signPath && method === "POST") { const sess=requireSession(db,cookies); if(!sess)return err(res,{status:401,error:"sign_in_required"}),true; const group=db.getGroup(signPath[1]); const actor=db.getAccount(sess.accountId); if(!group)return err(res,{status:404,error:"not_found"}),true; const rec=signWaiver(db,group.id,actor,now); if(!rec)return err(res,{status:400,error:"waiver_unavailable"}),true; await db.persist(); return ok(res,{signature:{signedAt:rec.signedAt,expiresAt:rec.expiresAt,versionId:rec.waiverVersionId}}),true; }
   if(method === "GET" && url.pathname === "/api/me/waivers") { const sess=requireSession(db,cookies); if(!sess)return err(res,{status:401,error:"sign_in_required"}),true; const expired=processWaiverExpiry(db,now); if(expired) await db.persist(); const rows=db.listMemberships(sess.accountId).filter(m=>m.status==="active").map(m=>({groupId:m.groupId,...waiverStatus(db,m.groupId,sess.accountId,now)})); return ok(res,{waivers:rows}),true; }
+  // ---- organizer check-in: leader roster, check-in records, QR sessions -----
+  // Privacy contract: the roster is private to the group's verified leaders
+  // (owner / listed leaders / city admin / platform owner, same city). Rows
+  // carry public profile identity (name, username) + RSVP / check-in / waiver
+  // facts only — never email, phone, or home city. Waiver state is a warning
+  // on the roster and in the mobile flow; it never blocks check-in. QR
+  // sessions are occurrence-bound, expiring, revocable, and hash-only stored
+  // (the raw token is returned exactly once at creation).
+  const checkinPath = /^\/api\/groups\/([^/]+)\/events\/([^/]+)\/occurrences\/([^/]+)\/(roster|checkin|checkin\/undo|qr)$/.exec(url.pathname);
+  if (checkinPath && (method === "GET" || method === "POST")) {
+    const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const actor = db.getAccount(sess.accountId); if (!actor || actor.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const group = db.getGroup(decodeURIComponent(checkinPath[1]));
+    if (!group) return err(res, { status: 404, error: "not_found" }), true;
+    if (!canManageCheckins(group, actor)) return err(res, { status: 403, error: "forbidden" }), true;
+    const eventId = decodeURIComponent(checkinPath[2]);
+    const occurrenceId = decodeURIComponent(checkinPath[3]);
+    const scope = resolveManagedOccurrence(db, group, eventId, occurrenceId);
+    if (!scope) return err(res, { status: 404, error: "checkin_unavailable" }), true;
+    const action = checkinPath[4];
+    if (action === "roster" && method === "GET") {
+      const expired = processWaiverExpiry(db, now); if (expired) await db.persist();
+      return ok(res, {
+        event: { id: scope.event.id, title: scope.event.title, runDate: scope.occ.runDate, startsAt: scope.occ.startsAt, time: scope.event.time, location: scope.event.location, groupId: group.id, groupName: group.name, cityId: group.cityId },
+        occurrenceId,
+        roster: rosterRows(db, scope.occ, now),
+      }), true;
+    }
+    if (action === "checkin" && method === "POST") {
+      const body = await readJson(req) as Record<string, unknown>;
+      const targetId = typeof body.accountId === "string" ? body.accountId : "";
+      if (!targetId) return err(res, { status: 400, error: "account_required" }), true;
+      const result = leaderCheckin(db, group, scope.occ, actor, targetId, now);
+      if ("error" in result) return err(res, { status: result.error === "not_on_roster" ? 400 : 404, error: result.error }), true;
+      await db.persist();
+      return ok(res, { checkin: { id: result.record.id, accountId: result.record.accountId, checkedInAt: result.record.checkedInAt, checkedInBy: result.record.checkedInBy, source: result.record.source } }), true;
+    }
+    if (action === "checkin/undo" && method === "POST") {
+      const body = await readJson(req) as Record<string, unknown>;
+      const targetId = typeof body.accountId === "string" ? body.accountId : "";
+      if (!targetId) return err(res, { status: 400, error: "account_required" }), true;
+      const removed = leaderUndoCheckin(db, scope.occ, targetId);
+      await db.persist();
+      return ok(res, { removed }), true;
+    }
+    if (action === "qr" && method === "POST") {
+      const created = createQrSession(db, group, scope.occ, actor, now);
+      await db.persist();
+      // The raw token is returned exactly once; only its HMAC hash is stored.
+      return ok(res, { session: created }), true;
+    }
+    return err(res, { status: 404, error: "not_found" }), true;
+  }
+  // ---- mobile QR flow: guest-safe peek + self-service join/sign/check-in ---
+  // The token grants ONLY the caller's own actions on the bound occurrence:
+  // RSVP (join), signing the group's current waiver, and checking themselves
+  // in. It never exposes the roster and never grants leader powers. The
+  // occurrence is taken from the session record — never from the request — so
+  // a token can never check anyone in for a different event or date.
+  const sessionPath = /^\/api\/checkin\/session\/([^/]+)(?:\/(join|sign|checkin))?$/.exec(url.pathname);
+  if (sessionPath) {
+    const token = decodeURIComponent(sessionPath[1]);
+    const action = sessionPath[2] ?? null;
+    const found = findSessionByToken(db, token, now);
+    if (!found) return err(res, { status: 404, error: "checkin_session_not_found" }), true;
+    if (!found.valid) return err(res, { status: 410, error: "checkin_session_expired", message: "This check-in link has expired or been revoked. Ask the organizer for a new one." }), true;
+    const scope = validSessionOccurrence(db, found.session);
+    if (!scope) return err(res, { status: 410, error: "checkin_session_expired", message: "This check-in link is no longer valid for this run." }), true;
+    const sess = requireSession(db, cookies);
+    const runner = sess ? db.getAccount(sess.accountId) : undefined;
+    if (action === null && method === "GET") {
+      const expired = processWaiverExpiry(db, now); if (expired) await db.persist();
+      return ok(res, { ...sessionPublicDto(db, found.session, scope.occ, scope.event), me: sessionMeDto(db, found.session, runner?.id, now) }), true;
+    }
+    if (!runner || runner.deletedAt || runner.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    if (action === "join" && method === "POST") { joinViaSession(db, found.session, runner, now); await db.persist(); return ok(res, { rsvped: true }), true; }
+    if (action === "sign" && method === "POST") {
+      const signature = signViaSession(db, found.session, runner, now);
+      if (!signature) return err(res, { status: 400, error: "waiver_unavailable" }), true;
+      await db.persist();
+      return ok(res, { signature: { signedAt: signature.signedAt, expiresAt: signature.expiresAt, versionId: signature.waiverVersionId } }), true;
+    }
+    if (action === "checkin" && method === "POST") {
+      const result = checkinViaSession(db, found.session, runner, now);
+      await db.persist();
+      return ok(res, { checkin: { id: result.record.id, checkedInAt: result.record.checkedInAt, duplicate: result.duplicate } }), true;
+    }
+    return err(res, { status: 404, error: "not_found" }), true;
+  }
+
 
   if (method === "GET" && url.pathname === "/api/me/groups") {
     const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;

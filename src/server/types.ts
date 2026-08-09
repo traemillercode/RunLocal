@@ -311,6 +311,10 @@ export interface PersistedDb {
   discussionRate?: Record<string, number[]>;
   waivers?: import("./waivers").GroupWaiverVersion[];
   waiverSignatures?: import("./waivers").GroupWaiverSignature[];
+  /** Organizer check-in records (per event occurrence, per runner). */
+  checkins?: import("./checkins").EventCheckInRecord[];
+  /** New-runner QR sessions (token hashes only — raw tokens are never stored). */
+  checkinQrSessions?: import("./checkins").CheckInQrSession[];
 }
 
 export interface DiscussionRecord {
