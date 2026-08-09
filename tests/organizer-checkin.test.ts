@@ -40,7 +40,7 @@ describe("organizer check-in", () => {
     expect(canManageCheckins(own, leader)).toBe(true);
     const stranger = account(db, "stranger", "columbia-mo");
     expect(canManageCheckins(own, stranger)).toBe(false);
-    const pending = db.updateAccount(leader.id, { status: "pending_review" })!;
+    const pending = db.updateAccount(leader.id, { status: "pending" })!;
     expect(canManageCheckins(own, pending)).toBe(false);
   });
 
