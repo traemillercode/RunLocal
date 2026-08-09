@@ -794,3 +794,9 @@ export interface MyGroupMembership { id:string; groupId:string; cityId:string; g
 export function getMyGroups(): Promise<ApiResult<{memberships:MyGroupMembership[]}>> { return request("/api/me/groups"); }
 export function requestGroupMembership(groupId:string): Promise<ApiResult<{membership:MyGroupMembership}>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership`, {method:"POST",body:"{}"}); }
 export function updateGroupMembership(groupId:string, action:"leave"|"approve"|"decline"|"remove", accountId?:string): Promise<ApiResult<{membership:MyGroupMembership}>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership/${action}`, {method:"POST",body:JSON.stringify(accountId?{accountId}:{})}); }
+
+export type WaiverStatus = {groupId:string;status:"not_required"|"unsigned"|"signed"|"expired";version:number|null;expiresAt:string|null};
+export const getMyWaivers = () => request<{waivers:WaiverStatus[]}>("/api/me/waivers");
+export const getGroupWaiver = (groupId:string) => request<{waiver:{id:string;groupId:string;version:number;text:string;createdAt:string}|null}>(`/api/groups/${encodeURIComponent(groupId)}/waiver`);
+export const createGroupWaiver = (groupId:string,text:string) => request<{waiver:unknown}>(`/api/groups/${encodeURIComponent(groupId)}/waiver`,{method:"POST",body:JSON.stringify({text})});
+export const signGroupWaiver = (groupId:string) => request<{signature:{signedAt:string;expiresAt:string;versionId:string}}>(`/api/groups/${encodeURIComponent(groupId)}/waiver/sign`,{method:"POST"});

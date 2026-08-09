@@ -190,6 +190,8 @@ export class Db {
   private notifications = new Map<string, import("./types").NotificationRecord>();
   private discussions = new Map<string, import("./types").DiscussionRecord>();
   private discussionRate = new Map<string, number[]>();
+  private waivers = new Map<string, import("./waivers").GroupWaiverVersion>();
+  private waiverSignatures = new Map<string, import("./waivers").GroupWaiverSignature>();
   /**
    * Private upload bytes (credential proofs) kept in memory so in-memory/test
    * stores can serve them back; file-backed stores mirror the bytes to disk
@@ -277,6 +279,8 @@ export class Db {
       for (const [accountId, timestamps] of Object.entries(parsed.joinRequestRate ?? {})) {
         this.joinRequestRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
       }
+      for (const w of parsed.waivers ?? []) this.waivers.set(w.id, w);
+      for (const s of parsed.waiverSignatures ?? []) this.waiverSignatures.set(s.id, s);
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -318,6 +322,8 @@ export class Db {
       notifications: [...this.notifications.values()],
       discussions: [...this.discussions.values()],
       discussionRate: Object.fromEntries(this.discussionRate.entries()),
+      waivers: [...this.waivers.values()],
+      waiverSignatures: [...this.waiverSignatures.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -636,6 +642,12 @@ export class Db {
     this.content.set(rec.id, next);
     return next;
   }
+  listWaivers(groupId?: string) { return [...this.waivers.values()].filter(w => !groupId || w.groupId===groupId); }
+  addWaiver(w: import("./waivers").GroupWaiverVersion) { this.waivers.set(w.id,w); return w; }
+  listWaiverSignatures(groupId?: string) { return [...this.waiverSignatures.values()].filter(s => !groupId || s.groupId===groupId); }
+  getWaiverSignature(groupId:string, waiverVersionId:string, signerId:string) { return [...this.waiverSignatures.values()].find(s=>s.groupId===groupId&&s.waiverVersionId===waiverVersionId&&s.signerId===signerId); }
+  addWaiverSignature(s: import("./waivers").GroupWaiverSignature) { this.waiverSignatures.set(s.id,s); return s; }
+  updateWaiverSignature(id:string, patch: Partial<import("./waivers").GroupWaiverSignature>) { const s=this.waiverSignatures.get(id); if(!s)return; const next={...s,...patch}; this.waiverSignatures.set(id,next); return next; }
   listGroups(): GroupModRecord[] {
     return [...this.groups.values()];
   }
