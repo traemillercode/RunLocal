@@ -40,7 +40,7 @@ import {
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
-import { resolveOccurrence, defaultOccurrenceDate } from "./occurrences";
+import { resolveOccurrence, defaultOccurrenceDate, sameEventId } from "./occurrences";
 import { publicGroups, publicGroup } from "./groups";
 import { currentWaiver, waiverStatus, createWaiverVersion, signWaiver, processWaiverExpiry } from "./waivers";
 import {
@@ -1252,7 +1252,7 @@ async function handleApi(
     // Discussion reads are private to verified participants; this is not a public forum.
     const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const account = db.getAccount(sess.accountId);
-    const attendance = account && db.listAttendance(account.id).some(a => (a.role === "rsvp" || a.role === "host") && a.eventId === event.id && a.occurrenceId === occurrenceId);
+    const attendance = account && db.listAttendance(account.id).some(a => (a.role === "rsvp" || a.role === "host") && sameEventId(a.eventId, event.id) && a.occurrenceId === occurrenceId);
     if (!account || account.deletedAt || account.status !== "verified" || !attendance || account.cityId !== event.cityId) return err(res, { status: 403, error: "participant_required" }), true;
     if (method === "GET") return ok(res, { discussion: db.listDiscussions(occurrenceId).map(publicDto) }), true;
     if (account.suspended && (!account.suspendedUntil || new Date(account.suspendedUntil) > now)) return err(res, { status: 403, error: "suspended" }), true;
@@ -1285,12 +1285,37 @@ async function handleApi(
     const rawId = requestedId.replace(/^event:/, "");
     const known = db.listEvents().find(e => e.id === requestedId || e.id === rawId || e.seedRefId === rawId);
     const date = typeof b.runDate === "string" ? b.runDate : (known ? defaultOccurrenceDate(known, now) : "");
+    const want = b.rsvp !== false;
+    if (want) {
+      const occ = resolveOccurrence(db, requestedId, date);
+      if (!occ) return err(res, { status: 400, error: "invalid_occurrence", message: "That date is not a scheduled occurrence of this event." }), true;
+      // Idempotent: a second RSVP for the same occurrence is a no-op (one row).
+      const mine = db.listAttendance(s.accountId).filter(a => a.role === "rsvp" && sameEventId(a.eventId, occ.eventId) && a.occurrenceId === occ.occurrenceId);
+      if (!mine.length) { db.addAttendance({ id: crypto.randomUUID().replace(/-/g,""), accountId:s.accountId, eventId:occ.eventId, role:"rsvp", createdAt:now.toISOString(), occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt }); await db.persist(); }
+      return ok(res, { rsvped: true, occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt }), true;
+    }
+    // Removal is occurrence-exact and owner-scoped: it touches only the
+    // caller's own rsvp attendance row(s) for this exact occurrence — never
+    // host rows, never other accounts, never sibling occurrences.
+    const runId = typeof b.runId === "string" && b.runId ? b.runId : "";
+    if (runId) {
+      // Precise row removal by the attendance id the My Runs list exposes.
+      // This also covers legacy attendance rows whose stored date is not a
+      // resolvable occurrence (the date-based path would reject them); the row
+      // itself is the authority and identity always comes from the session.
+      const row = db.listAttendance(s.accountId).find(a => a.id === runId && a.role === "rsvp");
+      if (!row) return ok(res, { rsvped: false }), true; // idempotent: already gone
+      const refs = [known?.id, known?.seedRefId, requestedId].filter((x): x is string => !!x);
+      if (requestedId && !refs.some(ref => sameEventId(row.eventId, ref))) return err(res, { status: 400, error: "invalid_run", message: "That RSVP does not belong to this run." }), true;
+      db.removeAttendance(row.id); await db.persist();
+      return ok(res, { rsvped: false, occurrenceId: row.occurrenceId ?? null, runDate: row.runDate ?? null, startsAt: row.startsAt ?? null }), true;
+    }
     const occ = resolveOccurrence(db, requestedId, date);
     if (!occ) return err(res, { status: 400, error: "invalid_occurrence", message: "That date is not a scheduled occurrence of this event." }), true;
-    const want = b.rsvp !== false; const mine = db.listAttendance(s.accountId).filter(a => a.role === "rsvp" && a.eventId === occ.eventId && a.occurrenceId === occ.occurrenceId);
-    if (want) { if (!mine.length) { db.addAttendance({ id: crypto.randomUUID().replace(/-/g,""), accountId:s.accountId, eventId:occ.eventId, role:"rsvp", createdAt:now.toISOString(), occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt }); await db.persist(); } }
-    else { for (const a of mine) db.removeAttendance(a.id); if (mine.length) await db.persist(); }
-    return ok(res, { rsvped: want, occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt }), true;
+    const mine = db.listAttendance(s.accountId).filter(a => a.role === "rsvp" && sameEventId(a.eventId, occ.eventId) && a.occurrenceId === occ.occurrenceId);
+    for (const a of mine) db.removeAttendance(a.id);
+    if (mine.length) await db.persist();
+    return ok(res, { rsvped: false, occurrenceId: occ.occurrenceId, runDate: occ.runDate, startsAt: occ.startsAt }), true;
   }
   // ---- ratings (server-eligible: shared RSVP/host attendance only) --------
   if (url.pathname === "/api/ratings" && method === "POST") {

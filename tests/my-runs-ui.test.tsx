@@ -19,6 +19,26 @@ describe("My Runs SSR UI", () => {
 
   it("renders the signed-in loading state without exposing public-sharing language", () => { auth({ status: "signed_in", account }); getMyRunsMock.mockReturnValue(new Promise(() => {})); const html = render(); expect(html).toContain("Loading your RSVPs"); expect(html).toContain("My Runs"); expect(html).toContain("Private"); expect(html).not.toContain("Share"); });
   it("keeps empty, error, upcoming ordering, and remove-RSVP copy in the SSR page contract", async () => { const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/pages/MyRunsPage.tsx", import.meta.url), "utf8")); expect(source).toContain("No RSVPs yet"); expect(source).toContain("We couldn’t load your runs."); expect(source).toContain("Upcoming"); expect(source).toContain("Remove RSVP for"); expect(source).toContain("Only you can see it."); expect(source).toContain("runs.map"); });
+  it("locks the explicit write-feedback contract: success toast, in-flight label, and inline remove errors", async () => {
+    const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/pages/MyRunsPage.tsx", import.meta.url), "utf8"));
+    expect(source).toContain('RSVP removed for "'); // success toast
+    expect(source).toContain("Removing…"); // in-flight label
+    expect(source).toContain("Couldn't remove this RSVP"); // remove-error fallback
+    expect(source).toContain('role="alert"'); // inline error is announced, not a page-level load error
+    expect(source).toContain("runId"); // removal targets the exact attendance row
+    expect(source).toContain("rsvpEvent(run.eventId, false, run.date, run.id)");
+  });
+  it("renders the remove button disabled with in-flight copy while removing", async () => {
+    const { RunCard } = await import("../src/pages/MyRunsPage");
+    const base = { cityId: "columbia-mo", time: "8:00 AM", location: "Downtown", groupId: "g1", rsvpedAt: "2026-01-01T00:00:00Z", id: "up", eventId: "event-up", title: "Upcoming run", date: "2099-01-01", occurrenceId: "occ-1" };
+    const removing = renderToStaticMarkup(<MemoryRouter><RunCard run={base} onRemove={() => {}} upcoming removing /></MemoryRouter>);
+    expect(removing).toContain("Removing…");
+    expect(removing).toContain("disabled");
+    expect(removing).not.toContain(">Remove</button>");
+    const idle = renderToStaticMarkup(<MemoryRouter><RunCard run={base} onRemove={() => {}} upcoming /></MemoryRouter>);
+    expect(idle).toContain(">Remove</button>");
+    expect(idle).not.toContain("disabled");
+  });
   it("shows My Runs in primary navigation with the dedicated route", () => { const html = renderToStaticMarkup(<MemoryRouter><BottomNav /></MemoryRouter>); expect(html).toContain('href="/my-runs"'); expect(html).toContain("My Runs"); });
   it("renders only one desktop My Runs navigation entry", async () => {
     const { DesktopSidebar } = await import("../src/components/DesktopSidebar");

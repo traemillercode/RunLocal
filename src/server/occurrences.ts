@@ -28,3 +28,13 @@ export function defaultOccurrenceDate(event: RunEventRecord, now: Date): string 
   const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
   const current = (d.getUTCDay()+6)%7; const delta = (event.dayOfWeek-current+7)%7; d.setUTCDate(d.getUTCDate()+delta); return d.toISOString().slice(0,10);
 }
+/**
+ * Compare two event identifiers ignoring the canonical `event:` prefix.
+ * Attendance rows created via the RSVP API store the canonical prefixed id
+ * (`event:<id>`), while event records, seed refs, and legacy rows may use the
+ * bare form (`<id>` or a seed ref). Occurrence identity is preserved: this is
+ * only a prefix normalization, never a date/occurrence change.
+ */
+export function sameEventId(a: string, b: string): boolean {
+  return a.replace(/^event:/, "") === b.replace(/^event:/, "");
+}
