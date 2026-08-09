@@ -17,3 +17,28 @@ export function orderMyRuns(runs: MyRunView[], now = Date.now()): { upcoming: My
 export function formatRunDate(date: string): string {
   return new Date(`${date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 }
+
+/** `YYYY-MM` month key for a `YYYY-MM-DD` run date (UTC, timezone-safe). */
+export function monthKey(date: string): string {
+  return date.slice(0, 7);
+}
+
+/** Human month label for a `YYYY-MM` key, e.g. "August 2026" (UTC). */
+export function monthLabel(key: string): string {
+  return new Date(`${key}-01T12:00:00Z`).toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+/** Group past runs by month, newest month first; runs within a month are
+ * ordered newest first (the past list is already reverse-chronological). */
+export function groupRunsByMonth(runs: MyRunView[]): Array<{ key: string; label: string; runs: MyRunView[] }> {
+  const groups = new Map<string, MyRunView[]>();
+  for (const run of runs) {
+    const key = monthKey(run.date);
+    const bucket = groups.get(key) ?? [];
+    bucket.push(run);
+    groups.set(key, bucket);
+  }
+  return [...groups.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([key, bucket]) => ({ key, label: monthLabel(key), runs: bucket }));
+}

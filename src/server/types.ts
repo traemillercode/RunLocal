@@ -357,6 +357,8 @@ export interface PersonalRunRecord {
   locationLabel: string | null; distanceLabel: string | null; notes: string | null;
   visibility: "private"; consentVersion: string; consentedAt: string;
   createdAt: string; updatedAt: string; deletedAt: string | null;
+  /** Opt-in "Keep on My Runs": a past solo run stays visible in My Runs forever. */
+  kept?: boolean;
 }
 
 export type CredentialType = "coach_certification" | "first_aid_cpr";
@@ -383,7 +385,7 @@ export interface RecognitionRecord { accountId:string; cityId:string; role:"coac
  * for ratings: a reviewer may rate a reviewee only for an event BOTH of them
  * attended (shared RSVP/host-attendance).
  */
-export interface AttendanceRecord { id:string; accountId:string; eventId:string; role:"rsvp"|"host"; createdAt:string; /** Concrete occurrence; absent on legacy event-level rows. */ occurrenceId?: string; runDate?: string; startsAt?: string; /** Soft-delete stamp: set when an admin archives the event. The row is preserved (audit trail) but excluded from active RSVP/eligibility checks. */ deletedAt?: string|null; }
+export interface AttendanceRecord { id:string; accountId:string; eventId:string; role:"rsvp"|"host"; createdAt:string; /** Concrete occurrence; absent on legacy event-level rows. */ occurrenceId?: string; runDate?: string; startsAt?: string; /** Soft-delete stamp: set when an admin archives the event. The row is preserved (audit trail) but excluded from active RSVP/eligibility checks. */ deletedAt?: string|null; /** Opt-in "Keep on My Runs": a past occurrence stays visible in My Runs forever (indefinite kept history). */ kept?: boolean; }
 
 export interface SiteSettings { title:string; wordmark:string; tagline:string; primary:string; accent:string; surface:string; strings:Record<string,string>; tags:Record<string,string[]>; providers:Record<string,boolean>; bottomNav:string[]; announcement:{text:string;link?:string}|null; logoRef:string|null; faviconRef:string|null; /**
    * Community-trust policy, configurable by a Global Admin. `underReviewThreshold`
