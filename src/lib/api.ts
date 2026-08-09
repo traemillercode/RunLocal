@@ -452,7 +452,7 @@ export interface PublicUserRace {
   registrationNote: string; description: string;
 }
 export interface PublicUserGroup {
-  id: string; kind: "group"; name: string; groupType: "rrca-chartered" | "community"; description: string;
+  id: string; ownerId?: string; kind: "group"; name: string; groupType: "rrca-chartered" | "community"; description: string;
   groupmeUrl: string | null; facebookUrl: string | null; instagramUrl: string | null; websiteUrl: string | null; coverPhotoUrl?: string; logoPhotoUrl?: string; membershipMode?: "open" | "request"; rrcaVerified?: boolean; leaders?: {id:string;name:string}[];
 }
 export interface PublicUserEvent {
@@ -800,3 +800,44 @@ export const getMyWaivers = () => request<{waivers:WaiverStatus[]}>("/api/me/wai
 export const getGroupWaiver = (groupId:string) => request<{waiver:{id:string;groupId:string;version:number;text:string;createdAt:string}|null}>(`/api/groups/${encodeURIComponent(groupId)}/waiver`);
 export const createGroupWaiver = (groupId:string,text:string) => request<{waiver:unknown}>(`/api/groups/${encodeURIComponent(groupId)}/waiver`,{method:"POST",body:JSON.stringify({text})});
 export const signGroupWaiver = (groupId:string) => request<{signature:{signedAt:string;expiresAt:string;versionId:string}}>(`/api/groups/${encodeURIComponent(groupId)}/waiver/sign`,{method:"POST"});
+
+// ------------------------------------------------------------ organizer check-in
+// Privacy contract (server-enforced): the roster is private to the group's
+// verified leaders; rows carry only public identity + RSVP/check-in/waiver
+// facts. QR sessions are occurrence-bound, expiring, and hash-only stored —
+// the raw token is returned once and grants only the caller's own actions.
+export type WaiverState = { status: "not_required" | "unsigned" | "signed" | "expired"; version: number | null; expiresAt: string | null };
+export interface RosterRow {
+  accountId: string;
+  name: string;
+  username: string | null;
+  rsvpedAt: string;
+  checkedIn: boolean;
+  checkedInAt: string | null;
+  checkedInBy: string | null;
+  waiver: WaiverState;
+}
+export interface RosterView {
+  event: { id: string; title: string; runDate: string; startsAt: string; time: string; location: string; groupId: string; groupName: string; cityId: string };
+  occurrenceId: string;
+  roster: RosterRow[];
+}
+export function rosterUrl(groupId: string, eventId: string, occurrenceId: string): string {
+  return `/api/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/occurrences/${encodeURIComponent(occurrenceId)}`;
+}
+export const getRoster = (groupId: string, eventId: string, occurrenceId: string) => request<RosterView>(`${rosterUrl(groupId, eventId, occurrenceId)}/roster`);
+export const leaderCheckin = (groupId: string, eventId: string, occurrenceId: string, accountId: string) => request<{ checkin: { id: string; accountId: string; checkedInAt: string; checkedInBy: string; source: string } }>(`${rosterUrl(groupId, eventId, occurrenceId)}/checkin`, { method: "POST", body: JSON.stringify({ accountId }) });
+export const leaderUndoCheckin = (groupId: string, eventId: string, occurrenceId: string, accountId: string) => request<{ removed: boolean }>(`${rosterUrl(groupId, eventId, occurrenceId)}/checkin/undo`, { method: "POST", body: JSON.stringify({ accountId }) });
+export interface QrSessionView { id: string; eventId: string; occurrenceId: string; runDate: string; groupId: string; expiresAt: string; token: string; }
+export const createQrSession = (groupId: string, eventId: string, occurrenceId: string) => request<{ session: QrSessionView }>(`${rosterUrl(groupId, eventId, occurrenceId)}/qr`, { method: "POST" });
+export interface CheckinSessionView {
+  session: {
+    eventId: string; occurrenceId: string; runDate: string; groupId: string; cityId: string; expiresAt: string;
+    event: { title: string; time: string; location: string; distanceLabel: string; startsAt: string; groupName: string };
+  };
+  me: { rsvped: boolean; checkedIn: boolean; checkedInAt: string | null; waiver: WaiverState } | null;
+}
+export const getCheckinSession = (token: string) => request<CheckinSessionView>(`/api/checkin/session/${encodeURIComponent(token)}`);
+export const joinCheckinSession = (token: string) => request<{ rsvped: boolean }>(`/api/checkin/session/${encodeURIComponent(token)}/join`, { method: "POST" });
+export const signCheckinWaiver = (token: string) => request<{ signature: { signedAt: string; expiresAt: string; versionId: string } }>(`/api/checkin/session/${encodeURIComponent(token)}/sign`, { method: "POST" });
+export const checkinViaSession = (token: string) => request<{ checkin: { id: string; checkedInAt: string; duplicate: boolean } }>(`/api/checkin/session/${encodeURIComponent(token)}/checkin`, { method: "POST" });
