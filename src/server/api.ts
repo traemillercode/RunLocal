@@ -61,6 +61,7 @@ import {
 import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
 import { listMyRuns, setMyRunKept } from "./myRuns";
+import { buildMyRunsIcs } from "./ical";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import { validateImageBytes } from "./image-validation";
 import {
@@ -154,6 +155,15 @@ function err(res: ServerResponse, e: ApiError): true {
 
 function ok(res: ServerResponse, body: unknown): void {
   json(res, 200, body);
+}
+/** Private iCalendar download (auth handled by the route; never cached). */
+function ical(res: ServerResponse, body: string): void {
+  res.writeHead(200, {
+    "content-type": "text/calendar; charset=utf-8",
+    "content-disposition": 'attachment; filename="run-local-my-runs.ics"',
+    "cache-control": "no-store",
+  });
+  res.end(body);
 }
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
@@ -1017,6 +1027,17 @@ async function handleApi(
     const rec = db.getAccount(sess.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
     if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
     return ok(res, { runs: listMyRuns(db, sess.accountId, rec.cityId ?? "", now) }), true;
+  }
+  // ---- private ICS export of upcoming My Runs (caller's rows only) ---------
+  // Same auth contract as /api/my/runs; only UPCOMING rows (never past, even
+  // when kept/checked in) leave as a floating-local-time iCalendar download.
+  if (method === "GET" && url.pathname === "/api/my/runs/ical") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(sess.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const rows = listMyRuns(db, sess.accountId, rec.cityId ?? "", now);
+    const runs = rows.filter((r) => r.upcoming).map((r) => ({ id: r.id, kind: r.kind, title: r.title, startsAt: r.startsAt, location: r.location }));
+    return ical(res, buildMyRunsIcs(runs, now)), true;
   }
   // ---- keep on My Runs (opt-in indefinite history; caller-scoped) ----------
   if (method === "POST" && url.pathname === "/api/my/runs/keep") {
