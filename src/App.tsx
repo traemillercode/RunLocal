@@ -31,6 +31,7 @@ import { GroupsPage } from "./pages/GroupsPage";
 import { MarketingPage } from "./pages/MarketingPage";
 import { GroupDetailPage } from "./pages/GroupDetailPage";
 import { MyGroupsPage } from "./pages/MyGroupsPage";
+import { GroupManagePage } from "./pages/GroupManagePage";
 import { RosterPage } from "./pages/RosterPage";
 import { CheckinPage } from "./pages/CheckinPage";
 import { parseAuthCallback } from "./lib/recovery";
@@ -88,6 +89,7 @@ function Shell() {
             <Route path="/groups" element={<GroupsPage city={city} />} />
             <Route path="/my-groups" element={<MyGroupsPage />} />
             <Route path="/groups/:groupId" element={<GroupRoute />} />
+            <Route path="/groups/:groupId/manage" element={<GroupManagePage id={location.pathname.split("/").at(-2) ?? ""} />} />
             <Route path="/groups/:groupId/roster" element={<RosterPage />} />
             <Route path="/checkin" element={<CheckinPage />} />
             <Route path="/races" element={<RacesPage city={city} />} />

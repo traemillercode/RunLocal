@@ -36,12 +36,12 @@ describe("organizer check-in", () => {
     const leader = account(db, "leader", "columbia-mo");
     const foreignGroup = group("foreign", "springfield-mo", leader.id);
     const own = group("own", "columbia-mo", leader.id);
-    expect(canManageCheckins(foreignGroup, leader)).toBe(false);
-    expect(canManageCheckins(own, leader)).toBe(true);
+    expect(canManageCheckins(db, foreignGroup, leader)).toBe(false);
+    expect(canManageCheckins(db, own, leader)).toBe(true);
     const stranger = account(db, "stranger", "columbia-mo");
-    expect(canManageCheckins(own, stranger)).toBe(false);
+    expect(canManageCheckins(db, own, stranger)).toBe(false);
     const pending = db.updateAccount(leader.id, { status: "pending" })!;
-    expect(canManageCheckins(own, pending)).toBe(false);
+    expect(canManageCheckins(db, own, pending)).toBe(false);
   });
 
   it("rejects cross-event/cross-group/cross-city occurrence resolution", () => {
