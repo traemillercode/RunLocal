@@ -1,6 +1,7 @@
 import type { AccountRecord, GroupModRecord } from "./types";
 import type { Db } from "./store";
 import { newId } from "./store";
+import { canManageGroupOps } from "./roles";
 
 export const WAIVER_TERM_MS = 365 * 24 * 60 * 60 * 1000;
 export interface GroupWaiverVersion { id:string; groupId:string; version:number; text:string; createdAt:string; createdBy:string; }
@@ -11,15 +12,11 @@ export function waiverStatus(db:Db, groupId:string, accountId:string, now=new Da
  const s=db.getWaiverSignature(groupId,w.id,accountId); if(!s) return {status:"unsigned" as const,version:w.version,expiresAt:null};
  return {status:new Date(s.expiresAt)>now && !s.expiredAt?"signed" as const:"expired" as const,version:w.version,expiresAt:s.expiresAt};
 }
-export function canManageWaiver(group:GroupModRecord, actor:AccountRecord|undefined) {
- if(!actor || actor.status!=="verified") return false;
- if(actor.email.toLowerCase()===(process.env.RUN_LOCAL_OWNER_EMAIL??"").toLowerCase()) return true;
- if(actor.role==="city_admin" && actor.adminCityId===group.cityId) return true;
- if (actor.cityId !== group.cityId) return false;
- return group.ownerId===actor.id || (group.leaderIds??[]).includes(actor.id);
+export function canManageWaiver(db: Db, group: GroupModRecord, actor: AccountRecord | undefined) {
+  return canManageGroupOps(db, group, actor);
 }
-export function createWaiverVersion(db:Db, group:GroupModRecord, actor:AccountRecord|undefined, text:string, now=new Date()): GroupWaiverVersion|null {
- if(!canManageWaiver(group,actor) || !text.trim() || text.trim().length>20000) return null;
+export function createWaiverVersion(db: Db, group: GroupModRecord, actor: AccountRecord | undefined, text: string, now = new Date()): GroupWaiverVersion|null {
+ if(!canManageWaiver(db, group, actor) || !text.trim() || text.trim().length>20000) return null;
  const previous=currentWaiver(db,group.id); const rec={id:newId(),groupId:group.id,version:(previous?.version??0)+1,text:text.trim(),createdAt:now.toISOString(),createdBy:actor!.id}; db.addWaiver(rec); return rec;
 }
 export function signWaiver(db:Db, groupId:string, signer:AccountRecord|undefined, now=new Date()): GroupWaiverSignature|null {

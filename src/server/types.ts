@@ -215,7 +215,11 @@ export type AdminAction =
   | "group.membership_approve"
   | "group.membership_decline"
   | "group.membership_leave"
-  | "group.membership_remove";
+  | "group.membership_remove"
+  | "group.leader_assign"
+  | "group.leader_remove"
+  | "group.ownership_transfer"
+  | "group.profile_edit";
 
 export interface AuditEntry {
   id: string;

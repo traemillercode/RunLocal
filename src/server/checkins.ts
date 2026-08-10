@@ -36,7 +36,7 @@ import { hashCode, newId } from "./store";
 import type { AccountRecord, GroupModRecord, RunEventRecord } from "./types";
 import { resolveOccurrence, type EventOccurrence } from "./occurrences";
 import { signWaiver, waiverStatus } from "./waivers";
-import { isOwnerEmail } from "./owner";
+import { canManageGroupOps } from "./roles";
 
 /** How long a new-runner QR session stays valid (4 hours — a run-day window). */
 export const CHECKIN_QR_TTL_MS = 4 * 60 * 60 * 1000;
@@ -81,12 +81,8 @@ export interface CheckInQrSession {
 }
 
 /** Leader permission: verified + owner/city-admin/group-leader, same city. */
-export function canManageCheckins(group: GroupModRecord | undefined, actor: AccountRecord | undefined): boolean {
-  if (!group || !actor || actor.status !== "verified" || actor.deletedAt) return false;
-  if (isOwnerEmail(actor.email)) return true;
-  if (actor.role === "city_admin" && actor.adminCityId === group.cityId) return true;
-  if (actor.cityId !== group.cityId) return false;
-  return group.ownerId === actor.id || (group.leaderIds ?? []).includes(actor.id);
+export function canManageCheckins(db: Db, group: GroupModRecord | undefined, actor: AccountRecord | undefined): boolean {
+  return canManageGroupOps(db, group, actor);
 }
 
 /**

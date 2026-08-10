@@ -819,6 +819,35 @@ export interface MyGroupMembership { id:string; groupId:string; cityId:string; g
 export function getMyGroups(): Promise<ApiResult<{memberships:MyGroupMembership[]}>> { return request("/api/me/groups"); }
 export function requestGroupMembership(groupId:string): Promise<ApiResult<{membership:MyGroupMembership}>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership`, {method:"POST",body:"{}"}); }
 export function updateGroupMembership(groupId:string, action:"leave"|"approve"|"decline"|"remove", accountId?:string): Promise<ApiResult<{membership:MyGroupMembership}>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership/${action}`, {method:"POST",body:JSON.stringify(accountId?{accountId}:{})}); }
+/** Leader identity shown to group managers — public fields only. */
+export interface LeaderIdentity { id: string; name: string; username: string | null; profilePhotoUrl: string | null; }
+/** One group the signed-in account leads (owner or leader). */
+export interface LedGroupRow {
+  groupId: string; groupName: string; cityId: string; ownerId: string | null;
+  role: "owner" | "leader"; pendingCount: number;
+  canManageLeaders: boolean; leaders: LeaderIdentity[];
+}
+/** Pending membership request visible in the leader queue. */
+export interface PendingRequestRow {
+  membershipId: string; groupId: string; accountId: string; name: string;
+  username: string | null; profilePhotoUrl: string | null; requestedAt: string;
+}
+export function getMyLedGroups(): Promise<ApiResult<{ groups: LedGroupRow[] }>> { return request("/api/me/leader/groups"); }
+export function getLeaderQueue(): Promise<ApiResult<{ pending: PendingRequestRow[] }>> { return request("/api/me/leader/queue"); }
+export function assignGroupLeader(groupId: string, email: string, reason: string): Promise<ApiResult<{ leaders: LeaderIdentity[]; ownerId: string | null }>> {
+  return request(`/api/groups/${encodeURIComponent(groupId)}/leaders`, { method: "POST", body: JSON.stringify({ email, reason }) });
+}
+export function removeGroupLeader(groupId: string, accountId: string, reason: string): Promise<ApiResult<{ leaders: LeaderIdentity[]; ownerId: string | null }>> {
+  return request(`/api/groups/${encodeURIComponent(groupId)}/leaders/${encodeURIComponent(accountId)}`, { method: "DELETE", body: JSON.stringify({ reason }) });
+}
+export function transferGroupOwnership(groupId: string, accountId: string, reason: string): Promise<ApiResult<{ leaders: LeaderIdentity[]; ownerId: string | null }>> {
+  return request(`/api/groups/${encodeURIComponent(groupId)}/ownership`, { method: "POST", body: JSON.stringify({ accountId, reason }) });
+}
+export interface GroupProfilePatch { description?: string; websiteUrl?: string | null; groupmeUrl?: string | null; facebookUrl?: string | null; instagramUrl?: string | null; membershipMode?: "open" | "request"; }
+export function updateGroupProfile(groupId: string, patch: GroupProfilePatch, reason: string): Promise<ApiResult<{ leaders: LeaderIdentity[]; ownerId: string | null }>> {
+  return request(`/api/groups/${encodeURIComponent(groupId)}/profile`, { method: "PATCH", body: JSON.stringify({ ...patch, reason }) });
+}
+
 
 export type WaiverStatus = {groupId:string;status:"not_required"|"unsigned"|"signed"|"expired";version:number|null;expiresAt:string|null};
 export const getMyWaivers = () => request<{waivers:WaiverStatus[]}>("/api/me/waivers");

@@ -16,7 +16,7 @@ describe("group waivers", () => {
     const db = createMemoryStore();
     const leader = account(db, "leader", "columbia-mo");
     const foreign = group("foreign", "springfield-mo", leader.id);
-    expect(canManageWaiver(foreign, leader)).toBe(false);
+    expect(canManageWaiver(db, foreign, leader)).toBe(false);
     expect(createWaiverVersion(db, foreign, leader, "terms")).toBeNull();
     const own = group("own", "columbia-mo", leader.id);
     expect(createWaiverVersion(db, own, leader, "terms")?.version).toBe(1);

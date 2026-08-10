@@ -59,6 +59,7 @@ import {
   signViaSession,
 } from "./checkins";
 import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
+import { listLedGroups, leaderQueue, assignGroupLeader, removeGroupLeader, transferGroupOwnership, editGroupProfile, notifyLeadersOfMembershipRequest, type GroupProfilePatch } from "./leadership";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
 import { listMyRuns, setMyRunKept } from "./myRuns";
 import { buildMyRunsIcs } from "./ical";
@@ -397,7 +398,7 @@ async function handleApi(
     const actor = db.getAccount(sess.accountId); if (!actor || actor.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
     const group = db.getGroup(decodeURIComponent(checkinPath[1]));
     if (!group) return err(res, { status: 404, error: "not_found" }), true;
-    if (!canManageCheckins(group, actor)) return err(res, { status: 403, error: "forbidden" }), true;
+    if (!canManageCheckins(db, group, actor)) return err(res, { status: 403, error: "forbidden" }), true;
     const eventId = decodeURIComponent(checkinPath[2]);
     const occurrenceId = decodeURIComponent(checkinPath[3]);
     const scope = resolveManagedOccurrence(db, group, eventId, occurrenceId);
@@ -488,6 +489,7 @@ async function handleApi(
     if (current && (current.status === "pending" || current.status === "active")) return ok(res,{membership:membershipDto(db,current)}),true;
     const status = group.membershipMode === "open" ? "active" : "pending";
     const membership = createMembership(db, group.id, account.id, status, now)!;
+    if (status === "pending") notifyLeadersOfMembershipRequest(db, group, account.id, now);
     db.appendAudit({admin:account.email, action:"group.membership_request", reason:"Member membership request", targetId:group.id, ip, cityId:group.cityId}); await db.persist();
     return ok(res,{membership:membershipDto(db,membership)}),true;
   }
@@ -498,7 +500,7 @@ async function handleApi(
     const body = await readJson(req) as Record<string,unknown>; const account = db.getAccount(sess.accountId);
     const targetId = typeof body.accountId === "string" ? body.accountId : sess.accountId;
     const membership = db.getMembership(group.id,targetId); if (!membership) return err(res,{status:404,error:"membership_not_found"}),true;
-    const leader = canAdministerMembership(group, account ?? undefined, db.getAccount(targetId), membership);
+    const leader = canAdministerMembership(db, group, account ?? undefined, db.getAccount(targetId), membership);
     if (membershipAction[2] === "leave" && targetId === sess.accountId) { membership.status="left"; }
     else if (!leader && !isOwnerEmail(account?.email ?? "")) return err(res,{status:403,error:"forbidden"}),true;
     else membership.status = membershipAction[2] === "approve" ? "active" : membershipAction[2] === "decline" ? "declined" : "revoked";
@@ -506,6 +508,75 @@ async function handleApi(
     db.updateMembership(membership.id,membership); db.appendAudit({admin:account?.email ?? "unknown",action:(membershipAction[2] === "leave" ? "group.membership_leave" : membershipAction[2] === "approve" ? "group.membership_approve" : membershipAction[2] === "decline" ? "group.membership_decline" : "group.membership_remove") as import("./types").AdminAction,reason:"Membership lifecycle action",targetId:group.id,ip,cityId:group.cityId}); await db.persist();
     return ok(res,{membership:membershipDto(db,membership)}),true;
   }
+
+  // ==================== Group leadership & leader queue ====================
+  // Ownership acts (assign/remove leaders, transfer) require the group owner,
+  // the City Admin of the group's city, or the Global Admin. Profile edits
+  // additionally allow plain leaders of the group. Every mutation is
+  // reason-required and audited. Responses carry public identity only.
+
+  if (method === "GET" && url.pathname === "/api/me/leader/groups") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const actor = db.getAccount(sess.accountId); if (!actor || actor.deletedAt) return err(res,{status:401,error:"sign_in_required"}),true;
+    return ok(res,{groups:listLedGroups(db,actor)}),true;
+  }
+  if (method === "GET" && url.pathname === "/api/me/leader/queue") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const actor = db.getAccount(sess.accountId); if (!actor || actor.deletedAt) return err(res,{status:401,error:"sign_in_required"}),true;
+    return ok(res,{pending:leaderQueue(db,actor)}),true;
+  }
+  const leaderAssign = /^\/api\/groups\/([^/]+)\/leaders$/.exec(url.pathname);
+  if (leaderAssign && method === "POST") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const actor = db.getAccount(sess.accountId); if (!actor || actor.deletedAt) return err(res,{status:401,error:"sign_in_required"}),true;
+    const group = db.getGroup(decodeURIComponent(leaderAssign[1])); if (!group) return err(res,{status:404,error:"not_found"}),true;
+    const body = await readJson(req) as Record<string,unknown>;
+    const result = assignGroupLeader(db, actor, group, typeof body.email === "string" ? body.email : "", typeof body.reason === "string" ? body.reason : "", now);
+    if (!result.ok) return err(res,{status:result.status,error:result.error,message:result.message}),true;
+    await db.persist();
+    return ok(res,{leaders:result.data.leaders,ownerId:result.data.ownerId}),true;
+  }
+  const leaderRemove = /^\/api\/groups\/([^/]+)\/leaders\/([^/]+)$/.exec(url.pathname);
+  if (leaderRemove && method === "DELETE") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const actor = db.getAccount(sess.accountId); if (!actor || actor.deletedAt) return err(res,{status:401,error:"sign_in_required"}),true;
+    const group = db.getGroup(decodeURIComponent(leaderRemove[1])); if (!group) return err(res,{status:404,error:"not_found"}),true;
+    const body = await readJson(req) as Record<string,unknown>;
+    const result = removeGroupLeader(db, actor, group, decodeURIComponent(leaderRemove[2]), typeof body.reason === "string" ? body.reason : "", now);
+    if (!result.ok) return err(res,{status:result.status,error:result.error,message:result.message}),true;
+    await db.persist();
+    return ok(res,{leaders:result.data.leaders,ownerId:result.data.ownerId}),true;
+  }
+  const ownershipPath = /^\/api\/groups\/([^/]+)\/ownership$/.exec(url.pathname);
+  if (ownershipPath && method === "POST") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const actor = db.getAccount(sess.accountId); if (!actor || actor.deletedAt) return err(res,{status:401,error:"sign_in_required"}),true;
+    const group = db.getGroup(decodeURIComponent(ownershipPath[1])); if (!group) return err(res,{status:404,error:"not_found"}),true;
+    const body = await readJson(req) as Record<string,unknown>;
+    const result = transferGroupOwnership(db, actor, group, typeof body.accountId === "string" ? body.accountId : "", typeof body.reason === "string" ? body.reason : "", now);
+    if (!result.ok) return err(res,{status:result.status,error:result.error,message:result.message}),true;
+    await db.persist();
+    return ok(res,{leaders:result.data.leaders,ownerId:result.data.ownerId}),true;
+  }
+  const profilePath = /^\/api\/groups\/([^/]+)\/profile$/.exec(url.pathname);
+  if (profilePath && method === "PATCH") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const actor = db.getAccount(sess.accountId); if (!actor || actor.deletedAt) return err(res,{status:401,error:"sign_in_required"}),true;
+    const group = db.getGroup(decodeURIComponent(profilePath[1])); if (!group) return err(res,{status:404,error:"not_found"}),true;
+    const body = await readJson(req) as Record<string,unknown>;
+    const patch: GroupProfilePatch = {};
+    if (body.description !== undefined) patch.description = String(body.description);
+    if (body.websiteUrl !== undefined) patch.websiteUrl = body.websiteUrl === null ? null : String(body.websiteUrl);
+    if (body.groupmeUrl !== undefined) patch.groupmeUrl = body.groupmeUrl === null ? null : String(body.groupmeUrl);
+    if (body.facebookUrl !== undefined) patch.facebookUrl = body.facebookUrl === null ? null : String(body.facebookUrl);
+    if (body.instagramUrl !== undefined) patch.instagramUrl = body.instagramUrl === null ? null : String(body.instagramUrl);
+    if (body.membershipMode !== undefined) patch.membershipMode = body.membershipMode === "request" ? "request" : body.membershipMode === "open" ? "open" : undefined;
+    const result = editGroupProfile(db, actor, group, patch, typeof body.reason === "string" ? body.reason : "", now);
+    if (!result.ok) return err(res,{status:result.status,error:result.error,message:result.message}),true;
+    await db.persist();
+    return ok(res,{leaders:result.data.leaders,ownerId:result.data.ownerId}),true;
+  }
+
 
   if (method === "GET" && url.pathname === "/api/content") {
     const cityId = url.searchParams.get("city") ?? "";
