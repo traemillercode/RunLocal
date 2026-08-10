@@ -50,18 +50,21 @@ describe("My Runs SSR UI", () => {
     expect((html.match(/>My Runs</g) ?? []).length).toBe(1);
   });
 
-  it("keeps upcoming agenda cards linked while past cards remain historical", async () => {
-    const { Agenda } = await import("../src/pages/MyRunsPage");
-    const html = renderToStaticMarkup(<MemoryRouter><Agenda upcoming={[rsvpRun({ id: "up", title: "Upcoming run", date: "2099-01-01", upcoming: true, past: false })]} past={[rsvpRun({ id: "past", title: "Past run", date: "2020-01-01" })]} onRemove={() => {}} /></MemoryRouter>);
+  it("renders only upcoming runs in the calendar grid; past runs never appear", async () => {
+    const { CalendarGrid } = await import("../src/pages/MyRunsPage");
+    const now = new Date("2026-08-09T12:00:00Z");
+    const html = renderToStaticMarkup(<MemoryRouter><CalendarGrid upcoming={[rsvpRun({ id: "up", title: "Upcoming run", date: "2026-08-10", occurrenceId: "occ-up", upcoming: true, past: false }), rsvpRun({ id: "past", title: "Past run", date: "2026-08-02", upcoming: false, past: true, checkedIn: true, kept: true })]} onRemove={() => {}} now={now} /></MemoryRouter>);
     expect(html).toContain('href="/events/mon-social"');
-    expect(html).not.toContain('href="/events/event-past"');
-    expect(html).toContain("This RSVP is preserved in your history");
+    expect(html).toContain("Upcoming run");
+    expect(html).not.toContain("Past run");
+    expect(html).not.toContain("This RSVP is preserved in your history");
   });
 
-  it("renders event details and run-day discussion as separate links", async () => {
-    const { Agenda } = await import("../src/pages/MyRunsPage");
-    const run = rsvpRun({ id: "up", title: "Upcoming run", date: "2099-01-01", occurrenceId: "occ-1", upcoming: true, past: false });
-    const html = renderToStaticMarkup(<MemoryRouter><Agenda upcoming={[run]} past={[]} onRemove={() => {}} /></MemoryRouter>);
+  it("renders event details and run-day discussion as separate links in the calendar day panel", async () => {
+    const { CalendarGrid } = await import("../src/pages/MyRunsPage");
+    const now = new Date("2026-08-09T12:00:00Z");
+    const run = rsvpRun({ id: "up", title: "Upcoming run", date: "2026-08-10", occurrenceId: "occ-1", upcoming: true, past: false });
+    const html = renderToStaticMarkup(<MemoryRouter><CalendarGrid upcoming={[run]} onRemove={() => {}} now={now} /></MemoryRouter>);
     expect(html).toMatch(/<a[^>]*href="\/events\/mon-social"/);
     expect(html).toMatch(/<a[^>]*href="\/events\/mon-social\?discussion=occ-1"/);
     expect(html).toMatch(/<\/a><a[^>]*href="\/events\/mon-social\?discussion=occ-1"/);
@@ -144,21 +147,31 @@ describe("My Runs SSR UI", () => {
     expect(groups[0].label).toContain("2026");
   });
 
-  it("marks today's agenda day with aria-current and a Today state", async () => {
-    const { Agenda } = await import("../src/pages/MyRunsPage");
+  it("marks today's calendar day with aria-current, a Today state, and an auto-selected day panel", async () => {
+    const { CalendarGrid } = await import("../src/pages/MyRunsPage");
     const now = new Date("2026-08-09T12:00:00Z");
-    const html = renderToStaticMarkup(<MemoryRouter><Agenda upcoming={[rsvpRun({ id: "today", title: "Today run", date: "2026-08-09", upcoming: true, past: false }), rsvpRun({ id: "other", title: "Later run", date: "2026-08-16", upcoming: true, past: false })]} past={[]} onRemove={() => {}} now={now} /></MemoryRouter>);
+    const html = renderToStaticMarkup(<MemoryRouter><CalendarGrid upcoming={[rsvpRun({ id: "today", title: "Today run", date: "2026-08-09", upcoming: true, past: false }), rsvpRun({ id: "other", title: "Later run", date: "2026-08-16", upcoming: true, past: false })]} onRemove={() => {}} now={now} /></MemoryRouter>);
     expect(html).toContain('aria-current="date"');
     expect(html).toContain("Today");
-    // Only today's section carries the state; the later day is untouched.
-    const start = html.indexOf('aria-current="date"');
-    const end = html.indexOf('agenda-2026-08-16');
-    const todaySection = html.slice(start, end);
-    expect(todaySection).toContain("Today run");
-    expect(todaySection).not.toContain("Later run");
-    expect(html).not.toMatch(/aria-current="date"[^>]*>[^<]*<[^>]*>Later run/);
+    // Only today's day cell carries the state — no other day is marked.
+    expect((html.match(/aria-current="date"/g) ?? []).length).toBe(1);
+    const todayCell = html.match(/<button[^>]*aria-current="date"[^>]*>/)?.[0] ?? "";
+    expect(todayCell).toMatch(/, 1 run"/); // today has exactly one run in its aria-label
+    expect(html).toContain('class="sr-only">Today'); // sr-only Today state inside the day cell
+    // The day panel auto-selects today: today's run card is shown, the later day is not.
+    expect(html).toContain("Today run");
+    expect(html).not.toContain("Later run");
   });
 
+  it("locks the calendar-view wiring: the grid gets only upcoming runs, plus the private ICS export link", async () => {
+    const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/pages/MyRunsPage.tsx", import.meta.url), "utf8"));
+    const gridUsage = source.match(/<CalendarGrid[^>]*>/)?.[0] ?? "";
+    expect(gridUsage).toContain("upcoming={sections.upcoming}");
+    expect(gridUsage).not.toContain("past"); // past history never enters the grid
+    expect(source).toContain('href="/api/my/runs/ical"');
+    expect(source).toContain('download="run-local-my-runs.ics"');
+    expect(source).toContain("Upcoming runs only");
+  });
   it("locks the keep-toggle wiring contract: server call, optimistic label, and error fallback", async () => {
     const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/pages/MyRunsPage.tsx", import.meta.url), "utf8"));
     expect(source).toContain("keepMyRun(run.id, next)");
