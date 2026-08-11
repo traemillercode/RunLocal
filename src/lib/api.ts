@@ -767,7 +767,14 @@ export function getPersonalRuns(): Promise<ApiResult<{runs: PersonalRun[]}>> { r
 export function createPersonalRun(input: Omit<PersonalRun, "id"|"accountId"|"visibility"|"consentVersion"|"consentedAt"|"createdAt"|"updatedAt"|"deletedAt"> & {consent:true}): Promise<ApiResult<{run:PersonalRun}>> { return request("/api/personal-runs", {method:"POST", body:JSON.stringify({...input, consentVersion: PERSONAL_RUN_CONSENT_VERSION})}); }
 export function updatePersonalRun(id:string, input: Partial<Pick<PersonalRun,"cityId"|"title"|"startsAt"|"locationLabel"|"distanceLabel"|"notes">> & {consent:true}): Promise<ApiResult<{run:PersonalRun}>> { return request(`/api/personal-runs/${encodeURIComponent(id)}`, {method:"PATCH", body:JSON.stringify({...input, consentVersion: PERSONAL_RUN_CONSENT_VERSION})}); }
 export function deletePersonalRun(id:string): Promise<ApiResult<{deleted:boolean}>> { return request(`/api/personal-runs/${encodeURIComponent(id)}`, {method:"DELETE"}); }
-export function getMyRuns(): Promise<ApiResult<{ runs: MyRunView[] }>> { return request("/api/my/runs"); }
+/**
+ * The runner's own private My Runs list. `tzOffsetMinutes` is the browser's
+ * `getTimezoneOffset()`: run start times are stored as UTC-encoded wall-clock
+ * labels, so the server restores the real local instant to decide upcoming/past
+ * exactly like the feed does — an occurrence dated the 11th stays upcoming
+ * until its displayed local time, not the UTC-encoded label.
+ */
+export function getMyRuns(tzOffsetMinutes: number = new Date().getTimezoneOffset()): Promise<ApiResult<{ runs: MyRunView[] }>> { return request(`/api/my/runs?tzOffsetMinutes=${tzOffsetMinutes}`); }
 /** Opt-in "Keep on My Runs" toggle — persists server-side on the exact row. */
 export function keepMyRun(runId: string, kept: boolean): Promise<ApiResult<{ kept: boolean }>> { return request("/api/my/runs/keep", { method: "POST", body: JSON.stringify({ runId, kept }) }); }
 

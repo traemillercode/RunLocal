@@ -13,7 +13,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Chip, Icon } from "../components/ui";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import * as api from "../lib/api";
-import { dayLabel, monthDayLabel, resolveWeekEvents, bareEventId, occurrenceIdFor, type DatedRunEvent } from "../lib/dates";
+import { dayLabel, monthDayLabel, resolveWeekEvents, bareEventId, occurrenceIdFor, localDateLabel, type DatedRunEvent } from "../lib/dates";
 import { isOccurrenceRsvped } from "../lib/myRuns";
 import { canDo } from "../lib/accounts";
 import type { AppStore } from "../lib/store";
@@ -295,9 +295,11 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
   // Canonical occurrence for this run: `event:<id>:<YYYY-MM-DD>`. When the
   // page is opened from My Runs with ?discussion=<occurrenceId>, that exact
   // occurrence wins (it is already authoritative); otherwise the resolved
-  // date of the weekly model is used. occurrenceIdFor never double-prefixes a
-  // canonical `event:<id>`.
-  const occurrenceId = discussionOccurrenceId ?? occurrenceIdFor(event.id, event.date.toISOString().slice(0, 10));
+  // date of the weekly model is used (local wall-clock label — never the
+  // UTC-shifted ISO date, so a run dated the 11th stays the 11th for runners
+  // east of UTC too). occurrenceIdFor never double-prefixes a canonical
+  // `event:<id>`.
+  const occurrenceId = discussionOccurrenceId ?? occurrenceIdFor(event.id, localDateLabel(event.date));
   const onRsvp = () => {
     if (!canRsvp) {
       setGateOpen(true);
@@ -341,7 +343,7 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
       />
       {isLeader && eventGroupId ? (
         <Link
-          to={`/groups/${encodeURIComponent(eventGroupId)}/roster?eventId=${encodeURIComponent(event.id)}&occurrenceId=${encodeURIComponent(`event:${event.id}:${event.date.toISOString().slice(0, 10)}`)}`}
+          to={`/groups/${encodeURIComponent(eventGroupId)}/roster?eventId=${encodeURIComponent(event.id)}&occurrenceId=${encodeURIComponent(`event:${event.id}:${localDateLabel(event.date)}`)}`}
           className="mt-6 flex items-center justify-between rounded-2xl bg-[#14171C] p-4 text-white shadow-sm"
         >
           <span>
