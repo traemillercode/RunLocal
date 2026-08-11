@@ -1,38 +1,46 @@
 /**
- * Public city forum — server-persisted user posts.
+ * Public city forum — server-persisted user posts and replies.
  *
  * Seed posts live in the client's city data (src/data/cities.ts) and are the
  * ONE source of truth for sample content; this module owns ONLY user-created
- * posts, which are stored in the Db (persisted to db.json) and rendered merged
- * with the seed posts in the Forum UI.
+ * posts and replies, which are stored in the Db (persisted to db.json) and
+ * rendered merged with the seed posts in the Forum UI.
  *
  * Authorization contract (server-authoritative, never client-decided):
- *  - POST requires a signed-in VERIFIED account (rejected/pending/guest denied
- *    with explicit errors), no active suspension, and a known home city.
+ *  - POST (posts AND replies) requires a signed-in VERIFIED account
+ *    (rejected/pending/guest denied with explicit errors), no active
+ *    suspension, and a known home city.
  *  - The post's city is the author's home city — a verified member posts into
- *    their own community. The client can never pick another city.
- *  - Public reads are city-scoped and exclude soft-deleted posts and posts
- *    hidden/archived in the moderation registry (`post:<id>` content rows), so
- *    the existing admin moderation paths apply unchanged.
+ *    their own community. The client can never pick another city, and replies
+ *    may only target posts in the author's home city (cross-city access is
+ *    denied, never silently redirected).
+ *  - Public reads are city-scoped and exclude soft-deleted posts/replies and
+ *    posts hidden/archived in the moderation registry (`post:<id>` content
+ *    rows), so the existing admin moderation paths apply unchanged. A hidden
+ *    or archived post hides its replies too — both from reads and from new
+ *    replies.
  *  - The public payload carries only the author's public display name — never
  *    email, phone, or other account data.
  *
- * Replies/threading are NOT part of this slice: the seed model only carries a
- * numeric reply count, and there is no persisted reply tree yet. The UI keeps
- * the Reply affordance honestly gated ("replies are not open yet") until a
- * dedicated reply slice lands.
+ * Replies attach to a post id that may name either a user-created post
+ * (`ForumPostRecord`) or a seed post from the client's city data; the post id
+ * is the single key, and the sample reply counts on seed posts stay in the
+ * seed while persisted replies add to them (GET /api/forum returns the
+ * persisted counts per post via `replyCounts`).
  */
 import type { Db } from "./store";
 import { newId } from "./store";
 import type { AccountRecord } from "./types";
-import type { ForumPostRecord } from "./types";
+import type { ForumPostRecord, ForumReplyRecord } from "./types";
 import { isSuspended } from "./store";
 import { cityExists } from "./cms";
 import type { ForumSection } from "../types";
+import { CITIES } from "../data/cities";
 
 export const FORUM_SECTIONS = ["announcements", "community", "qa"] as const;
 const MAX_TITLE = 120;
 const MAX_BODY = 2000;
+const MAX_REPLY = 1000;
 
 export interface PublicForumPost {
   id: string;
@@ -47,6 +55,14 @@ export interface PublicForumPost {
   pinned: boolean;
 }
 
+export interface PublicForumReply {
+  id: string;
+  postId: string;
+  body: string;
+  author: string;
+  createdAt: string;
+}
+
 /** Compact "Aug 4" style label for the post list (same year) or "Aug 4, 2025". */
 export function forumDateLabel(iso: string, now = new Date()): string {
   const d = new Date(iso);
@@ -59,6 +75,9 @@ export function forumDateLabel(iso: string, now = new Date()): string {
 /**
  * Public forum posts for a city: user-created posts only (seed posts are
  * rendered from the client's city data). Visible + not moderation-hidden.
+ * `replies` is the persisted visible reply count for the post (seed posts'
+ * sample counts stay in the seed; GET /api/forum also returns `replyCounts`
+ * so the client can add persisted replies to seed counts).
  */
 export function publicForumPosts(db: Db, cityId: string): PublicForumPost[] {
   return db
@@ -79,8 +98,123 @@ export function publicForumPosts(db: Db, cityId: string): PublicForumPost[] {
         author: author?.name ?? "Runner",
         authorNote: null,
         createdAt: forumDateLabel(f.createdAt, db.now()),
-        replies: 0,
+        replies: visibleReplyCount(db, f.id),
         pinned: false,
+      };
+    });
+}
+
+/**
+ * Count of persisted, visible replies for a post (seed or user-created).
+ * Replies to moderation-hidden/archived posts never count — the post is not
+ * publicly rendered either, so the count can never leak hidden content.
+ */
+export function visibleReplyCount(db: Db, postId: string): number {
+  if (postModerated(db, postId)) return 0;
+  return db.listForumReplies(postId).filter((r) => r.state === "visible").length;
+}
+
+/**
+ * Persisted visible reply counts per post id for a whole city, including seed
+ * posts. Used by GET /api/forum so the client can show sample-count + real
+ * replies on seed posts and the real count on user posts.
+ */
+export function forumReplyCounts(db: Db, cityId: string): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const post of allCityPostIds(db, cityId)) counts[post] = visibleReplyCount(db, post);
+  return counts;
+}
+
+interface ResolvedPost {
+  id: string;
+  cityId: string;
+  section: ForumSection;
+  title: string;
+  authorLabel: string;
+}
+
+/** Post ids that exist in a city: user-created records + seed posts. */
+function allCityPostIds(db: Db, cityId: string): string[] {
+  const ids = new Set(db.listForumPosts(cityId).map((f) => f.id));
+  const city = CITIES.find((c) => c.id === cityId);
+  for (const p of city?.forum ?? []) ids.add(p.id);
+  return [...ids];
+}
+
+/** Resolve a post in a specific city (user record or seed post). */
+function resolvePostInCity(db: Db, cityId: string, postId: string): ResolvedPost | null {
+  const user = db.getForumPost(postId);
+  if (user && user.state === "visible" && user.cityId === cityId) {
+    return {
+      id: user.id,
+      cityId,
+      section: user.section,
+      title: user.title,
+      authorLabel: db.getAccount(user.authorAccountId)?.name ?? "Runner",
+    };
+  }
+  const city = CITIES.find((c) => c.id === cityId);
+  const seed = city?.forum.find((p) => p.id === postId);
+  if (seed) {
+    return { id: seed.id, cityId, section: seed.section, title: seed.title, authorLabel: seed.author };
+  }
+  return null;
+}
+
+/** Resolve a post anywhere (all cities) — used only for cross-city denial. */
+function resolvePostAnywhere(db: Db, postId: string): ResolvedPost | null {
+  for (const c of CITIES) {
+    const found = resolvePostInCity(db, c.id, postId);
+    if (found) return found;
+  }
+  const user = db.getForumPost(postId);
+  if (user && user.state === "visible") {
+    return {
+      id: user.id,
+      cityId: user.cityId,
+      section: user.section,
+      title: user.title,
+      authorLabel: db.getAccount(user.authorAccountId)?.name ?? "Runner",
+    };
+  }
+  return null;
+}
+
+function postModerated(db: Db, postId: string): boolean {
+  const mod = db.getContent(`post:${postId}`);
+  return Boolean(mod?.hidden || mod?.archived);
+}
+
+/**
+ * Public, moderation-aware post handle for reads: the post must exist in the
+ * given city and must not be hidden/archived. Returns null for unknown posts,
+ * posts in another city, and moderated posts (404 — never leak hidden posts).
+ */
+export function forumPostPublic(db: Db, cityId: string, postId: string): ResolvedPost | null {
+  const post = resolvePostInCity(db, cityId, postId);
+  if (!post || postModerated(db, postId)) return null;
+  return post;
+}
+
+/**
+ * Public replies for a post: visible replies only, oldest first (conversation
+ * order). Replies inherit the parent post's moderation visibility — a hidden
+ * or archived post returns no replies (the caller 404s on the post first).
+ */
+export function publicForumReplies(db: Db, postId: string, now = new Date()): PublicForumReply[] {
+  if (postModerated(db, postId)) return [];
+  return db
+    .listForumReplies(postId)
+    .filter((r) => r.state === "visible")
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map((r) => {
+      const author = db.getAccount(r.authorAccountId);
+      return {
+        id: r.id,
+        postId: r.postId,
+        body: r.body,
+        author: author?.name ?? "Runner",
+        createdAt: forumDateLabel(r.createdAt, now),
       };
     });
 }
@@ -182,6 +316,100 @@ export function createForumPost(
         pinned: false,
       },
       record: post,
+    },
+  };
+}
+
+export type ForumReplyCreateResult =
+  | { ok: true; data: { reply: PublicForumReply; record: ForumReplyRecord } }
+  | { ok: false; status: number; error: string; message?: string };
+
+/**
+ * Create a user reply to a forum post. Same verified-only authorization as
+ * posting, plus:
+ *  - the target post must exist and be visible (user post or seed post);
+ *  - the post must live in the author's home city — replies to posts in other
+ *    cities are denied with an explicit cross-city error, never redirected;
+ *  - a moderation-hidden or archived post is unavailable for new replies;
+ *  - the body is validated (1..MAX_REPLY) and replies share the posting
+ *    rate limit. The reply is persisted and the parent post's public reply
+ *    count reflects it immediately.
+ */
+export function createForumReply(
+  db: Db,
+  accountId: string,
+  input: { postId?: unknown; body?: unknown },
+  now = new Date(),
+): ForumReplyCreateResult {
+  const rec: AccountRecord | undefined = db.getAccount(accountId);
+  if (!rec || rec.deletedAt) return { ok: false, status: 401, error: "sign_in_required" };
+  if (rec.status !== "verified") {
+    return {
+      ok: false,
+      status: 403,
+      error: "verification_required",
+      message: "Only verified runners can reply — finish verification first.",
+    };
+  }
+  if (isSuspended(rec, now)) {
+    return { ok: false, status: 403, error: "suspended", message: "Your account is suspended and can't reply right now." };
+  }
+  const cityId = rec.cityId ?? "";
+  if (!cityId || !cityExists(db, cityId)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "city_required",
+      message: "Choose your home city before replying — Run Local is city-scoped.",
+    };
+  }
+  const postId = typeof input.postId === "string" ? input.postId.trim() : "";
+  if (!postId) return { ok: false, status: 400, error: "invalid_post" };
+  const target = resolvePostAnywhere(db, postId);
+  if (!target) {
+    return { ok: false, status: 404, error: "post_not_found", message: "That post isn't available." };
+  }
+  if (target.cityId !== cityId) {
+    return {
+      ok: false,
+      status: 403,
+      error: "cross_city_denied",
+      message: "Replies stay within your home city's forum — switch cities to reply there.",
+    };
+  }
+  if (postModerated(db, postId)) {
+    return { ok: false, status: 403, error: "post_unavailable", message: "This post is no longer available for replies." };
+  }
+  const body = typeof input.body === "string" ? input.body.trim() : "";
+  if (!body || body.length > MAX_REPLY) {
+    return { ok: false, status: 400, error: "invalid_body", message: `Write a reply (1-${MAX_REPLY} characters).` };
+  }
+  if (!db.consumeDiscussionRate(accountId, now.getTime())) {
+    return { ok: false, status: 429, error: "rate_limited", message: "You've replied a lot recently — try again in a bit." };
+  }
+  const reply: ForumReplyRecord = {
+    id: newId(),
+    postId,
+    cityId,
+    authorAccountId: accountId,
+    body: body.slice(0, MAX_REPLY),
+    state: "visible",
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+  };
+  db.addForumReply(reply);
+  const author = db.getAccount(accountId);
+  return {
+    ok: true,
+    data: {
+      reply: {
+        id: reply.id,
+        postId: reply.postId,
+        body: reply.body,
+        author: author?.name ?? "Runner",
+        createdAt: forumDateLabel(reply.createdAt, now),
+      },
+      record: reply,
     },
   };
 }
