@@ -5,6 +5,11 @@
  * start). Rejected users are a DISTINCT state: denied copy with their private
  * rejection reason and NO "continue verification" action — never presented as
  * pending.
+ *
+ * VERIFIED members are not locked out of anything, so they must never fall
+ * through to the guest ("Create account") copy. Defensive branch: if a
+ * verified user ever lands here, show honest "not open yet" copy instead —
+ * never a sign-up/verification gate.
  */
 import { useNavigate } from "react-router-dom";
 import type { AccountRole } from "../lib/accounts";
@@ -29,8 +34,16 @@ export function VerifiedGateSheet({
   rejectionReason?: string | null;
 }) {
   const navigate = useNavigate();
+  const subtitle =
+    role === "rejected"
+      ? "Your profile stays read-only"
+      : role === "pending"
+        ? "Pending profiles are read-only"
+        : role === "verified"
+          ? "Coming soon for verified members"
+          : "Read-only until you're verified";
   return (
-    <Sheet open={open} onClose={onClose} title="Verified runners only" subtitle="Pending profiles are read-only">
+    <Sheet open={open} onClose={onClose} title="Verified runners only" subtitle={subtitle}>
       <div className="space-y-4">
         {role === "rejected" ? (
           <p className="flex items-start gap-2 rounded-xl bg-red-50 p-3.5 text-[13px] leading-relaxed text-red-800">
@@ -53,6 +66,14 @@ export function VerifiedGateSheet({
               limited to verified runners.
             </span>
           </p>
+        ) : role === "verified" ? (
+          <p className="flex items-start gap-2 rounded-xl bg-emerald-50 p-3.5 text-[13px] leading-relaxed text-emerald-900">
+            <Icon name="check" className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              <span className="font-semibold">You are verified.</span> {actionLabel} is not available yet — it launches
+              soon for verified members, so no action is needed.
+            </span>
+          </p>
         ) : (
           <p className="flex items-start gap-2 rounded-xl bg-amber-50 p-3.5 text-[13px] leading-relaxed text-amber-900">
             <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0" />
@@ -70,6 +91,10 @@ export function VerifiedGateSheet({
         ) : role === "pending" ? (
           <PillButton variant="secondary" className="w-full" onClick={() => { onClose(); navigate("/verify"); }}>
             <Icon name="chevronRight" className="h-4 w-4 rotate-180" /> Continue verification
+          </PillButton>
+        ) : role === "verified" ? (
+          <PillButton variant="secondary" className="w-full" onClick={onClose}>
+            <Icon name="check" className="h-4 w-4" /> Got it
           </PillButton>
         ) : (
           <PillButton variant="secondary" className="w-full" onClick={() => { onClose(); navigate("/login?mode=signup"); }}>
