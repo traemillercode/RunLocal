@@ -146,7 +146,7 @@ export function ForumPage({ city }: { city: City }) {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Forum</h1>
           <p className="mt-0.5 text-sm font-medium text-slate-500">
-            {city.name}, {city.state} · browse freely, posting needs verification
+            {city.name}, {city.state} · browse freely — posting opens to verified members
           </p>
         </div>
         <PillButton variant="secondary" onClick={() => setCreateOpen(true)} className="min-h-11 px-4">
@@ -223,7 +223,7 @@ export function ForumPage({ city }: { city: City }) {
         <div className="space-y-4">
           <p className="flex items-start gap-2 rounded-xl bg-amber-50 p-3.5 text-[13px] leading-relaxed text-amber-900">
             <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0" />
-            Posting is limited to verified runners and the form itself launches in a later phase — finish verification first so you're ready when it does.
+            Posting opens to verified runners soon. Finish verification now so you're ready when it goes live.
           </p>
           <div>
             <span className="mb-1.5 block text-sm font-semibold text-slate-700">Section</span>
@@ -249,7 +249,7 @@ export function ForumPage({ city }: { city: City }) {
             <input
               type="text"
               disabled
-              placeholder="Coming with verification"
+              placeholder="Requires a verified profile"
               className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[16px] text-slate-400 outline-none"
             />
           </label>
@@ -258,7 +258,7 @@ export function ForumPage({ city }: { city: City }) {
             <textarea
               disabled
               rows={3}
-              placeholder="Coming with verification"
+              placeholder="Requires a verified profile"
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[16px] text-slate-400 outline-none"
             />
           </label>
@@ -272,7 +272,7 @@ export function ForumPage({ city }: { city: City }) {
           >
             <Icon name="shield" className="h-4 w-4" /> {role === "pending" ? "Continue verification" : "Get verified"}
           </PillButton>
-          <p className="text-center text-xs text-slate-400">Preview build — this form is disabled on purpose.</p>
+          <p className="text-center text-xs text-slate-400">This form is disabled — posting opens to verified runners soon.</p>
         </div>
       </Sheet>
 

@@ -2,7 +2,7 @@
 
 Mobile-first, installable web app for city-scoped running communities. **Launch city: Columbia, MO.**
 
-This is the **MVP + identity/safety layer**: core browsing and navigation, plus an explicit Guest → Pending Verification → Verified account model with email-first verification and live-selfie review, an admin-only safety tool (audited), and a 3-year retention purge. See `docs/VERIFICATION.md` for the full contract and env vars.
+This is the **current build**: core browsing and navigation, an explicit Guest → Pending Verification → Verified account model with email-first verification and live-selfie review, server-backed RSVPs and My Runs, group memberships, community submissions with moderation, an audited admin safety tool, and a 3-year retention purge. See `docs/VERIFICATION.md` for the full contract and env vars.
 
 ## What's here
 
@@ -16,11 +16,11 @@ This is the **MVP + identity/safety layer**: core browsing and navigation, plus 
 
 Explicitly **not** included (per plan): training plans, pace calculators, nutrition, direct messaging, follower graphs, algorithmic feeds, and unverified official/RRCA claims. Group types render only the two allowed labels: **"RRCA-Chartered Club"** (admin-assigned in the seed data) and **"Community Run Group"**.
 
-> **Truthfulness note:** all events/races/posts are locally seeded *sample* content, not a live community feed. External links point at real organizers' sites where they exist. Email verification (Supabase Auth email verification) and selfie review are implemented; no biometric match or automated approval is claimed. See `docs/VERIFICATION.md` for env vars and the Supabase dashboard setup.
+> **Truthfulness note:** seed listings are *sample* content; approved community submissions and private account data are served from the local server (`src/server`). External links point at real organizers' sites where they exist. Email verification (Supabase Auth email verification) and selfie review are implemented; no biometric match or automated approval is claimed. See `docs/VERIFICATION.md` for env vars and the Supabase dashboard setup.
 
 ## Stack
 
-Vite + React 19 + TypeScript + Tailwind CSS v4 + react-router (hash routing). Zero backend — local seeded data behind a city-first model. Unit tests with Vitest.
+Vite + React 19 + TypeScript + Tailwind CSS v4 + react-router (hash routing). Local Node server (`src/server`) with SQLite persistence and Supabase Auth, serving the SPA plus a same-origin API; city-first data model. Unit tests with Vitest.
 
 ## Data model (city-first)
 
@@ -86,6 +86,6 @@ public/                   # manifest, service worker, icons
 serve.ts / publish.sh     # static hosting for the team's public port 3000
 ```
 
-## Roadmap (later phases — not in this MVP)
+## Roadmap (not shipped yet)
 
-Runner sign-in, verified badges, RSVP syncing, event/race submission and admin workflows, organizer dashboards, more cities.
+ICS export for private My Runs, deeper calendar views, operational roles and notifications, profile photos and trust flags, and more launch cities.

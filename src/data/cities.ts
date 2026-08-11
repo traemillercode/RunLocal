@@ -2,7 +2,7 @@ import type { City, ForumPost, Race, RunEvent, RunGroup } from "../types";
 
 // ---------------------------------------------------------------------------
 // Seed data for the Columbia, MO launch city.
-// NOTE: this is illustrative, locally-seeded MVP content — not a live
+// NOTE: this is illustrative locally-seeded content — not a live
 // community feed. External links point at the real organizers' sites where
 // they exist; dates/distances are sample data. Group type labels are
 // admin-assigned in this dataset (see types.ts).
@@ -158,7 +158,7 @@ const COLUMBIA_FORUM: ForumPost[] = [
     id: "p1",
     section: "announcements",
     title: "Welcome to Run Local — Columbia is live!",
-    body: "Columbia, MO is our launch city. Browse this week's group runs, check out the races tab, and join the conversation. Heads-up: this is a preview build — the data you see is sample seed content, and verification & posting launch in a later phase.",
+    body: "Columbia, MO is our launch city. Browse this week's group runs, check out the races tab, and join the conversation. Heads-up: some listings are sample seed content. Verification is live — verified members can RSVP, join groups, and submit listings for review.",
     author: "Run Local Team",
     authorNote: "Official",
     createdAt: "Aug 1",
