@@ -164,7 +164,7 @@ describe("admin authorization", () => {
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error).toBe("reason_required");
     }
-    const acceptedReject = adminSetStatus(db, ctx(login.data.sessionId, "identity review complete"), rejected.id, "rejected", T0);
+    const acceptedReject = adminSetStatus(db, ctx(login.data.sessionId, "identity review complete"), rejected.id, "rejected", T0, "runner", "Identity documents could not be verified");
     expect(acceptedReject.ok).toBe(true);
     const acceptedApprove = adminSetStatus(db, ctx(login.data.sessionId, "identity confirmed by staff"), approved.id, "verified", T0);
     expect(acceptedApprove.ok).toBe(true);
