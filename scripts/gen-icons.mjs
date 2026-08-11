@@ -1,13 +1,17 @@
-// Generates Run Local PNG icons (192, 180, 512) with zero dependencies:
-// a rounded-square brand tile with a white runner glyph, rendered to RGBA
-// and encoded as PNG using node:zlib (IDAT) and a hand-rolled CRC32.
+// Generates the Run Local PNG icons (512, 192, 180) with zero dependencies:
+// a flat orange rounded-square brand tile with the canonical dark swoosh mark,
+// matching public/favicon.svg (and the public site's brand-mark.svg) exactly.
+// Rendered to RGBA and encoded as PNG using node:zlib (IDAT) + hand-rolled CRC32.
+//
+// Run directly (node scripts/gen-icons.mjs) to regenerate public/icons/.
+// Exported renderIcon/drawIcon/writeIcons let tests verify the committed
+// assets stay byte-identical to this canonical generator.
 import { deflateSync } from "node:zlib";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const outDir = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "icons");
-mkdirSync(outDir, { recursive: true });
+const defaultOutDir = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "icons");
 
 // ---------- PNG encoding ----------
 const CRC_TABLE = (() => {
@@ -51,7 +55,7 @@ function encodePng(width, height, rgba) {
   return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
 }
 
-// ---------- Drawing helpers (normalized 0..1 coordinates) ----------
+// ---------- Drawing helpers (normalized -0.5..0.5 coordinates) ----------
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const len = (x, y) => Math.sqrt(x * x + y * y);
 
@@ -73,17 +77,26 @@ function capsuleDist(px, py, ax, ay, bx, by, r) {
   return len(dx, dy) - r;
 }
 
-// Canonical Run Local orange brand; keep this aligned with public/favicon.svg.
-const BRAND_TOP = [255, 87, 65]; // #ff5741
-const BRAND_BOTTOM = [255, 154, 127]; // #ff9a7f
-const VOLT = [255, 255, 255]; // white accent
-const WHITE = [255, 255, 255];
+// Canonical Run Local brand — keep this aligned with public/favicon.svg and
+// the public site's brand-mark.svg: a flat orange (#ff5741) rounded tile with
+// the dark (#14171c) double-stroke swoosh.
+const BRAND = [255, 87, 65]; // #ff5741
+const MARK = [20, 23, 28]; // #14171c
 
-function drawIcon(size) {
+// favicon.svg geometry, normalized to the icon's -0.5..0.5 space:
+//   <rect width="64" height="64" rx="13" fill="#FF5741"/>
+//   <path d="M13 32.5 36 19m-18 29 31-18" stroke="#14171C" stroke-width="8"/>
+// Each endpoint is v/64 - 0.5; the capsule radius is stroke-width / 2.
+const MARK_SEGMENTS = [
+  { ax: 13 / 64 - 0.5, ay: 32.5 / 64 - 0.5, bx: 36 / 64 - 0.5, by: 19 / 64 - 0.5, r: 8 / 64 / 2 },
+  { ax: 18 / 64 - 0.5, ay: 48 / 64 - 0.5, bx: 49 / 64 - 0.5, by: 30 / 64 - 0.5, r: 8 / 64 / 2 },
+];
+
+/** Render the canonical mark to an RGBA buffer of the given square size. */
+export function renderIcon(size) {
   const buf = Buffer.alloc(size * size * 4);
   const half = size / 2;
-  const corner = 0.2 * size; // rounded-corner radius
-  const pad = 0.06 * size; // glyph margin inside the tile
+  const corner = (13 / 64) * size; // favicon rounded-corner radius (rx=13 on 64)
 
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
@@ -97,41 +110,21 @@ function drawIcon(size) {
       let r = 0, g = 0, b = 0, a = 0;
 
       if (tile <= 0) {
-        const t = clamp((ny + 0.5) / 1, 0, 1);
-        r = BRAND_TOP[0] + (BRAND_BOTTOM[0] - BRAND_TOP[0]) * t;
-        g = BRAND_TOP[1] + (BRAND_BOTTOM[1] - BRAND_TOP[1]) * t;
-        b = BRAND_TOP[2] + (BRAND_BOTTOM[2] - BRAND_TOP[2]) * t;
+        r = BRAND[0];
+        g = BRAND[1];
+        b = BRAND[2];
         a = 255;
 
-        // glyph (head + running pose strokes), in normalized tile units
-        const gx = nx, gy = ny;
         let d = Infinity;
-        // head
-        d = Math.min(d, len(gx - 0.40, gy - 0.30) - 0.085);
-        // torso
-        d = Math.min(d, capsuleDist(gx, gy, 0.40, 0.40, 0.51, 0.62, 0.075));
-        // back leg (extended back)
-        d = Math.min(d, capsuleDist(gx, gy, 0.51, 0.62, 0.36, 0.80, 0.07));
-        // front leg (bent forward)
-        d = Math.min(d, capsuleDist(gx, gy, 0.51, 0.62, 0.66, 0.78, 0.07));
-        // arm (forward swing)
-        d = Math.min(d, capsuleDist(gx, gy, 0.44, 0.42, 0.68, 0.34, 0.06));
-
-        if (d <= 0) {
-          // AA edge
-          const aa = clamp(-d / (2 / size), 0, 1);
-          r = r + (WHITE[0] - r) * aa;
-          g = g + (WHITE[1] - g) * aa;
-          b = b + (WHITE[2] - b) * aa;
+        for (const seg of MARK_SEGMENTS) {
+          d = Math.min(d, capsuleDist(nx, ny, seg.ax, seg.ay, seg.bx, seg.by, seg.r));
         }
-
-        // volt accent dot (upper right)
-        const dot = len(gx - 0.72, gy - 0.24) - 0.045;
-        if (dot <= 0) {
-          const aa = clamp(-dot / (2 / size), 0, 1);
-          r = r + (VOLT[0] - r) * aa;
-          g = g + (VOLT[1] - g) * aa;
-          b = b + (VOLT[2] - b) * aa;
+        if (d <= 0) {
+          // AA edge: blend toward the dark mark color.
+          const aa = clamp(-d / (2 / size), 0, 1);
+          r += (MARK[0] - r) * aa;
+          g += (MARK[1] - g) * aa;
+          b += (MARK[2] - b) * aa;
         }
       }
 
@@ -141,16 +134,28 @@ function drawIcon(size) {
       buf[i + 3] = a;
     }
   }
-  return encodePng(size, size, buf);
+  return buf;
 }
 
-const targets = [
+/** Render the canonical mark and encode it as a PNG Buffer. */
+export function drawIcon(size) {
+  return encodePng(size, size, renderIcon(size));
+}
+
+const TARGETS = [
   [512, "icon-512.png"],
   [192, "icon-192.png"],
   [180, "icon-180.png"], // apple-touch-icon
 ];
 
-for (const [size, name] of targets) {
-  writeFileSync(join(outDir, name), drawIcon(size));
-  console.log(`wrote public/icons/${name}`);
+/** Write all PNG icons (512/192/180) into outDir (default: public/icons). */
+export function writeIcons(outDir = defaultOutDir) {
+  mkdirSync(outDir, { recursive: true });
+  for (const [size, name] of TARGETS) {
+    writeFileSync(join(outDir, name), drawIcon(size));
+    console.log(`wrote ${join(outDir, name)}`);
+  }
 }
+
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) writeIcons();
