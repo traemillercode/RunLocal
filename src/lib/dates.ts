@@ -37,6 +37,25 @@ export interface DatedRunEvent extends RunEvent {
 }
 
 /**
+ * Canonical event-id normalization (client twin of the server's `sameEventId`):
+ * attendance rows created via the RSVP API store the canonical prefixed id
+ * (`event:<id>`), while event records, seed refs, and the weekly feed may use
+ * the bare form (`<id>` or a seed ref). All comparisons between the two MUST
+ * go through this helper so an RSVP'd canonical run is never mistaken for an
+ * un-RSVP'd one after a reload or tab switch. Occurrence identity is
+ * unaffected — this is prefix normalization only, never a date/occurrence change.
+ */
+export function bareEventId(id: string): string {
+  return id.replace(/^event:/, "");
+}
+
+/** Canonical occurrence id for a resolved event: `event:<id>:<YYYY-MM-DD>`. */
+export function occurrenceIdFor(eventId: string, runDate: string): string {
+  const canonical = eventId.startsWith("event:") ? eventId : `event:${eventId}`;
+  return `${canonical}:${runDate}`;
+}
+
+/**
  * Canonical registry record shape consumed by mergeWeekEventSources. Matches
  * the public subset of api.CanonicalEvent returned by /api/events.
  */

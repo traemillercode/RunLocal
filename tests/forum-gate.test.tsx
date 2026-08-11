@@ -145,11 +145,13 @@ describe("VerifiedGateSheet — guest/pending/rejected gating preserved", () => 
 });
 
 describe("ForumCreateSheetBody — New button content per role", () => {
-  it("verified sees honest not-open-yet copy and no verification CTA", () => {
+  it("verified gets the LIVE posting form — section picker, title, details, post button", () => {
     const html = renderToStaticMarkup(<ForumCreateSheetBody role="verified" onClose={() => {}} onOpenGate={() => {}} />);
-    expect(html).toContain("Posting and replying are not open yet");
-    expect(html).toContain("Got it");
-    expect(html).toContain("Coming soon");
+    expect(html).toContain("Posting is live for verified members");
+    expect(html).toContain("Post to forum");
+    expect(html).toContain("Section");
+    expect(html).toContain("this about?");
+    expect(html).toContain("Share route details");
     expect(html).not.toContain("Get verified");
     expect(html).not.toContain("Finish verification now");
     expect(html).not.toContain("Requires a verified profile");
@@ -178,7 +180,7 @@ describe("ForumCreateSheetBody — New button content per role", () => {
 });
 
 describe("ForumPage — verified users never see the verification gate", () => {
-  it("verified: honest not-open-yet copy, no Create account / gate copy anywhere", () => {
+  it("verified: live-posting copy, no Create account / gate copy anywhere", () => {
     auth(account(), "verified");
     selectedCity();
     const html = renderToStaticMarkup(
@@ -187,7 +189,8 @@ describe("ForumPage — verified users never see the verification gate", () => {
       </MemoryRouter>,
     );
     expect(html).toContain("Everyone can browse.");
-    expect(html).toContain("Posting and replying are not open yet");
+    expect(html).toContain("posting is open to verified members");
+    expect(html).toContain("Replies are coming soon");
     expect(html).not.toContain("Create account");
     expect(html).not.toContain("Get verified");
     expect(html).not.toContain("Continue verification");
@@ -204,6 +207,6 @@ describe("ForumPage — verified users never see the verification gate", () => {
       </MemoryRouter>,
     );
     expect(html).toContain("guests, pending, and denied profiles stay read-only");
-    expect(html).toContain("Posting and replying are not open yet");
+    expect(html).toContain("Posting is open to verified runner profiles");
   });
 });

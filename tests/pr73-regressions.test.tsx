@@ -3,7 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { occurrenceHasStarted, resolveWeekEvents } from "../src/lib/dates";
 import { isPastCalendarDate } from "../src/lib/activityDates";
-import { DiscussionPanel } from "../src/pages/EventDetailPage";
+import { DiscussionPanel, discussionViewStatus } from "../src/pages/EventDetailPage";
 import type { RunEvent } from "../src/types";
 
 vi.mock("../src/state/account", () => ({ useAccount: () => ({ me: null, role: "verified" }) }));
@@ -49,24 +49,27 @@ describe("PR #73 feed and occurrence regressions", () => {
     });
   });
 
-  it("consumes an exact discussion occurrence and makes a mismatched occurrence unavailable", () => {
-    const exact = renderToStaticMarkup(
+  it("keeps exact-occurrence discussion access server-authoritative", () => {
+    // A verified member who is NOT a participant of the exact occurrence sees
+    // only the informational box — no form, no thread UI, no content.
+    const notParticipant = renderToStaticMarkup(
       <MemoryRouter>
-        <DiscussionPanel eventId="canonical-run" occurrenceId="event:canonical-run:2026-08-03" eligible unavailable={false} />
+        <DiscussionPanel eventId="canonical-run" occurrenceId="event:canonical-run:2026-08-10" canView={false} />
       </MemoryRouter>,
     );
-    expect(exact).toContain("Run-day discussion");
-    expect(exact).toContain("Post thread");
-    expect(exact).toContain("Write a thread");
-    expect(exact).not.toContain("hidden, archived, or no longer available");
+    expect(notParticipant).toContain("Run-day discussion");
+    expect(notParticipant).toContain("Discussion is available to verified runners who RSVP for this occurrence.");
+    expect(notParticipant).not.toContain("Post thread");
+    expect(notParticipant).not.toContain("Write a thread");
+    expect(notParticipant).not.toContain("hidden, archived, or no longer available");
+  });
 
-    const mismatch = renderToStaticMarkup(
-      <MemoryRouter>
-        <DiscussionPanel eventId="canonical-run" occurrenceId="event:canonical-run:2026-08-10" eligible={false} unavailable />
-      </MemoryRouter>,
-    );
-    expect(mismatch).toContain("This discussion is unavailable because the run is hidden, archived, or no longer available.");
-    expect(mismatch).not.toContain("Post thread");
-    expect(mismatch).not.toContain("Write a thread");
+  it("maps server discussion results to panel states (200 opens, 403 denies, 404 unavailable, other = error)", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = (payload: any) => payload;
+    expect(discussionViewStatus(result({ ok: true, data: { discussion: [] } }))).toBe("open");
+    expect(discussionViewStatus(result({ ok: false, error: { status: 403, code: "participant_required", message: "" } }))).toBe("denied");
+    expect(discussionViewStatus(result({ ok: false, error: { status: 404, code: "discussion_unavailable", message: "" } }))).toBe("missing");
+    expect(discussionViewStatus(result({ ok: false, error: { status: 500, code: "internal", message: "" } }))).toBe("error");
   });
 });

@@ -1,4 +1,26 @@
 import type { MyRunView } from "./api";
+import { bareEventId } from "./dates";
+
+/**
+ * The set of event ids the caller has RSVP'd to (any occurrence), normalized
+ * to the bare (prefix-stripped) form so the weekly feed can compare against
+ * seed ids, canonical ids, and community ref ids uniformly. This is what keeps
+ * "Add to My Runs" state authoritative across tab switches and reloads: the
+ * server is the source of truth, and the id comparison can no longer miss a
+ * canonical `event:<id>` row after a refetch.
+ */
+export function rsvpedEventIds(runs: MyRunView[]): Set<string> {
+  return new Set(runs.map((run) => bareEventId(run.eventId)));
+}
+
+/**
+ * Whether the caller has RSVP'd the EXACT occurrence of an event. Ids are
+ * compared in normalized (bare) form; the occurrence id is compared verbatim
+ * (`event:<id>:<YYYY-MM-DD>`) so a sibling occurrence never counts.
+ */
+export function isOccurrenceRsvped(runs: MyRunView[], eventId: string, occurrenceId: string): boolean {
+  return runs.some((run) => run.occurrenceId !== undefined && run.occurrenceId !== null && bareEventId(run.eventId) === bareEventId(eventId) && run.occurrenceId === occurrenceId);
+}
 
 export function runStartMs(run: Pick<MyRunView, "date" | "time">): number {
   const match = run.time.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);

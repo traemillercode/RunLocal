@@ -44,7 +44,38 @@ function addSoloRun(db: Db, accountId: string, title: string, startsAt: string, 
 
 describe("private My Runs API", () => {
   it("denies guests and pending/unverified callers", async () => { const db = seeded(createMemoryStore()); expect((await call(db, "GET", "/api/my/runs")).status).toBe(401); expect((await call(db, "POST", "/api/my/runs/keep", undefined, { runId: "x", kept: true })).status).toBe(401); const pending = db.createAccount({ name: "p", email: "p@example.com", cityId: "columbia-mo" }); const s = db.createSession(pending.id, "127.0.0.1"); const out = await call(db, "GET", "/api/my/runs", `runlocal_sid=${s.id}`); expect(out.status).toBe(403); expect(payload(out).error).toBe("verified_runner_required"); expect((await call(db, "POST", "/api/my/runs/keep", `runlocal_sid=${s.id}`, { runId: "x", kept: true })).status).toBe(403); });
-  it("isolates accounts and ignores accountId/query manipulation", async () => { const db = seeded(createMemoryStore()); const one = await verified(db, "one@example.com"); const two = await verified(db, "two@example.com"); await call(db, "POST", "/api/events/rsvp", one.cookie, { eventId: "mon-social", runDate: upcomingMonday }); const out = await call(db, "GET", "/api/my/runs?accountId=" + two.account.id, two.cookie); expect(out.status).toBe(200); expect(payload(out).runs).toEqual([]); expect(JSON.stringify(payload(await call(db, "GET", "/api/my/runs", one.cookie)))).not.toContain(two.account.id); });
+  it("surfaces DISPLAY-space ids from the RSVP API and My Runs so feed/detail state survives tab switches", async () => {
+    const db = seeded(createMemoryStore());
+    const me = await verified(db, "me@example.com");
+    // RSVP with the SEED (bare) id — exactly what the weekly feed passes.
+    const rsvp = await call(db, "POST", "/api/events/rsvp", me.cookie, { eventId: "mon-social", runDate: upcomingMonday });
+    expect(rsvp.status).toBe(200);
+    const body = JSON.parse(rsvp.body) as { rsvped: boolean; occurrenceId: string; runDate: string };
+    expect(body.rsvped).toBe(true);
+    // Seed events surface the SEED id (the feed renders "mon-social"), NOT the
+    // server's canonical hex id — the client can compare verbatim after any
+    // reload or tab switch.
+    expect(body.occurrenceId).toBe(`event:mon-social:${upcomingMonday}`);
+    expect(body.runDate).toBe(upcomingMonday);
+    // My Runs returns the same display-space event id + exact occurrenceId.
+    const runs = payload(await call(db, "GET", "/api/my/runs", me.cookie)).runs ?? [];
+    const mine = runs.find((r) => r.eventId === "mon-social")!;
+    expect(mine).toBeTruthy();
+    expect(mine.occurrenceId).toBe(`event:mon-social:${upcomingMonday}`);
+    expect(mine.date).toBe(upcomingMonday);
+    // The discussion endpoint accepts the display-space occurrence id and the
+    // RSVP'd runner can read the occurrence discussion (exact occurrence only).
+    const event = db.listEvents().find((e) => e.seedRefId === "mon-social")!;
+    const discussion = await call(db, "GET", `/api/events/mon-social/occurrences/${encodeURIComponent(`event:mon-social:${upcomingMonday}`)}/discussion`, me.cookie);
+    expect(discussion.status).toBe(200);
+    // A sibling occurrence of the same event is NOT accessible (exact-occurrence privacy).
+    const sibling = await call(db, "GET", `/api/events/mon-social/occurrences/${encodeURIComponent(`event:mon-social:${addDays(upcomingMonday, 7)}`)}/discussion`, me.cookie);
+    expect(sibling.status).toBe(403);
+    // The canonical hex spelling still works too.
+    const canonical = await call(db, "GET", `/api/events/${event.id}/occurrences/${encodeURIComponent(`event:${event.id}:${upcomingMonday}`)}/discussion`, me.cookie);
+    expect(canonical.status).toBe(200);
+  });
+it("isolates accounts and ignores accountId/query manipulation", async () => { const db = seeded(createMemoryStore()); const one = await verified(db, "one@example.com"); const two = await verified(db, "two@example.com"); await call(db, "POST", "/api/events/rsvp", one.cookie, { eventId: "mon-social", runDate: upcomingMonday }); const out = await call(db, "GET", "/api/my/runs?accountId=" + two.account.id, two.cookie); expect(out.status).toBe(200); expect(payload(out).runs).toEqual([]); expect(JSON.stringify(payload(await call(db, "GET", "/api/my/runs", one.cookie)))).not.toContain(two.account.id); });
   it("supports duplicate/idempotent RSVP, persistence roundtrip, and caller-only removal", async () => { const dir = await mkdtemp(join(tmpdir(), "runlocal-my-runs-")); try { const db = await seededDisk(dir); const one = await verified(db, "one@example.com"); const other = await verified(db, "other@example.com"); const first = await call(db, "POST", "/api/events/rsvp", one.cookie, { eventId: "mon-social" }); const second = await call(db, "POST", "/api/events/rsvp", one.cookie, { eventId: "event:mon-social" }); expect(first.status).toBe(200); expect(second.status).toBe(200); expect(db.listAttendance(one.account.id).filter((a) => a.role === "rsvp")).toHaveLength(1); db.addAttendance({ id: "host-record", accountId: one.account.id, eventId: "event:mon-social", role: "host", createdAt: new Date().toISOString() }); db.addAttendance({ id: "other-rsvp", accountId: other.account.id, eventId: "event:mon-social", role: "rsvp", createdAt: new Date().toISOString() }); await db.persist(); const loaded = await seededDisk(dir); expect(loaded.listAttendance(one.account.id)).toHaveLength(2); const removed = await call(loaded, "POST", "/api/events/rsvp", one.cookie, { eventId: "mon-social", rsvp: false }); expect(removed.status).toBe(200); expect(loaded.listAttendance(one.account.id).map((a) => a.role)).toEqual(["host"]); expect(loaded.listAttendance(other.account.id)).toHaveLength(1); const runs = payload(await call(loaded, "GET", "/api/my/runs", one.cookie)).runs ?? []; expect(runs).toEqual([]); } finally { await rm(dir, { recursive: true, force: true }); } });
 
   it("removes exactly one occurrence, preserving sibling occurrences and host rows", async () => {
@@ -53,14 +84,13 @@ describe("private My Runs API", () => {
     // Two consecutive Mondays: the first is guaranteed past, the second upcoming.
     expect((await call(db, "POST", "/api/events/rsvp", me.cookie, { eventId: "mon-social", runDate: pastMonday })).status).toBe(200);
     expect((await call(db, "POST", "/api/events/rsvp", me.cookie, { eventId: "mon-social", runDate: upcomingMonday })).status).toBe(200);
-    const event = db.listEvents().find((e) => e.seedRefId === "mon-social")!;
     // The past occurrence would be hidden by the past-visibility rule; keep it
     // so the removal contract can assert on both occurrences.
     const pastRow = db.listAttendance(me.account.id).find((a) => a.runDate === pastMonday)!;
     expect((await call(db, "POST", "/api/my/runs/keep", me.cookie, { runId: pastRow.id, kept: true })).status).toBe(200);
     const before = payload(await call(db, "GET", "/api/my/runs", me.cookie)).runs ?? [];
     expect(before).toHaveLength(2);
-    expect(before.map((r) => r.occurrenceId).sort()).toEqual([`event:${event.id}:${pastMonday}`, `event:${event.id}:${upcomingMonday}`].sort());
+    expect(before.map((r) => r.occurrenceId).sort()).toEqual([`event:mon-social:${pastMonday}`, `event:mon-social:${upcomingMonday}`].sort());
     const first = before.find((r) => r.date === pastMonday)!;
     const removed = await call(db, "POST", "/api/events/rsvp", me.cookie, { eventId: first.eventId, runDate: pastMonday, rsvp: false, runId: first.id });
     expect(removed.status).toBe(200);
@@ -71,7 +101,7 @@ describe("private My Runs API", () => {
     const after = payload(await call(db, "GET", "/api/my/runs", me.cookie)).runs ?? [];
     expect(after).toHaveLength(1);
     expect(after[0].date).toBe(upcomingMonday);
-    expect(after[0].occurrenceId).toBe(`event:${event.id}:${upcomingMonday}`);
+    expect(after[0].occurrenceId).toBe(`event:mon-social:${upcomingMonday}`);
     // date-based removal of the remaining occurrence leaves zero RSVPs
     const last = await call(db, "POST", "/api/events/rsvp", me.cookie, { eventId: "mon-social", runDate: upcomingMonday, rsvp: false });
     expect(last.status).toBe(200);

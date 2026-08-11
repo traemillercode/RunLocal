@@ -340,6 +340,8 @@ export interface PersistedDb {
   notifications?: NotificationRecord[];
   discussions?: DiscussionRecord[];
   discussionRate?: Record<string, number[]>;
+  /** User-created forum posts (public city forum) — persisted server-side. */
+  forumPosts?: ForumPostRecord[];
   waivers?: import("./waivers").GroupWaiverVersion[];
   waiverSignatures?: import("./waivers").GroupWaiverSignature[];
   /** Organizer check-in records (per event occurrence, per runner). */
@@ -353,6 +355,26 @@ export interface DiscussionRecord {
   occurrenceId: string; eventId: string; cityId: string; authorId: string;
   title: string | null; body: string; state: "visible" | "hidden" | "deleted";
   createdAt: string; updatedAt: string;
+}
+/**
+ * A user-created forum post (public city forum). Distinct from the seed posts
+ * that live in the client's city data: these records are server-persisted so
+ * verified members can actually post, and they render merged with the seed
+ * posts in the Forum UI. Author identity on the public payload is the author's
+ * public display name only — never email, phone, or other account data.
+ * Moderation integrates with the content registry (`post:<id>` rows), so the
+ * existing admin hide/archive paths apply.
+ */
+export interface ForumPostRecord {
+  id: string;
+  cityId: string;
+  section: "announcements" | "community" | "qa";
+  title: string;
+  body: string;
+  authorAccountId: string;
+  state: "visible" | "deleted";
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const NOTIFICATION_CATEGORIES = ["run_reminders", "community_updates", "account_alerts"] as const;

@@ -7,17 +7,20 @@ import { useAccount } from "../state/account";
 import { getActivityFeed, type PublicActivityCard } from "../lib/api";
 import { useModerated } from "../state/moderated";
 import { canDo, type AccountRole } from "../lib/accounts";
+import * as api from "../lib/api";
 import { FORUM_SECTIONS, type City, type ForumPost, type ForumSection, type QaSort } from "../types";
 
 /**
- * Reply-button intent. Verified members are past the verification gate, so they
- * get honest "not open yet" feedback and NO gate sheet; guests, pending, and
- * rejected users keep the verified-profile gate (rejected shows denial +
- * private reason inside the sheet). Pure so SSR tests can pin the behavior.
+ * Reply-button intent. Verified members are past the verification gate and may
+ * post NEW threads, but replies (comments on a post) are not implemented in
+ * this slice — they get honest "not open yet" feedback and NO gate sheet;
+ * guests, pending, and rejected users keep the verified-profile gate (rejected
+ * shows denial + private reason inside the sheet). Pure so SSR tests can pin
+ * the behavior.
  */
 export function replyIntent(role: AccountRole, title: string): { toast: string; opensGate: boolean } {
   if (canDo(role, "post")) {
-    return { toast: "Replies are not open yet — they launch soon for verified members.", opensGate: false };
+    return { toast: "Replies are not open yet — posting is live now.", opensGate: false };
   }
   return { toast: `Replies need a verified profile — "${title}"`, opensGate: true };
 }
@@ -61,48 +64,114 @@ export function ForumSectionTabs({ section, onSelect }: { section: ForumSection;
   );
 }
 
+export interface ForumPostDraft {
+  section: ForumSection;
+  title: string;
+  body: string;
+}
+
 /**
- * "New post" sheet body — presentational (no hooks) so SSR tests can render the
- * real markup per role. Verified members see honest "not open yet" copy (the
- * form is not live) instead of verification-gate copy; guests/pending/rejected
- * keep the gate CTA that routes through VerifiedGateSheet.
+ * "New post" sheet body — presentational (hooks only for the verified form's
+ * own field state) so SSR tests can render the real markup per role. Verified
+ * members get the LIVE posting form (submitted via `onSubmit`); guests,
+ * pending, and rejected users keep the gate CTA that routes through
+ * VerifiedGateSheet.
  */
 export function ForumCreateSheetBody({
   role,
-  onClose,
   onOpenGate,
+  onSubmit,
+  submitting = false,
+  postError = null,
 }: {
   role: AccountRole;
   onClose: () => void;
   onOpenGate: () => void;
+  onSubmit?: (draft: ForumPostDraft) => void;
+  submitting?: boolean;
+  postError?: string | null;
 }) {
   const verified = role === "verified";
+  const [section, setSection] = useState<ForumSection>("community");
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
   const cta: { label: string; icon: string; onClick: () => void } = verified
-    ? { label: "Got it", icon: "check", onClick: onClose }
+    ? { label: "Post to forum", icon: "check", onClick: () => onSubmit?.({ section, title, body }) }
     : role === "rejected"
       ? { label: "View my verification status", icon: "shield", onClick: onOpenGate }
       : role === "pending"
         ? { label: "Continue verification", icon: "chevronRight", onClick: onOpenGate }
         : { label: "Get verified", icon: "shield", onClick: onOpenGate };
+  if (!verified) {
+    return (
+      <div className="space-y-4">
+        <p className="flex items-start gap-2 rounded-xl bg-amber-50 p-3.5 text-[13px] leading-relaxed text-amber-900">
+          <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0" />
+          Posting is open to verified runners. Finish verification now so you can join the conversation.
+        </p>
+        <div>
+          <span className="mb-1.5 block text-sm font-semibold text-slate-700">Section</span>
+          <div className="grid grid-cols-3 gap-1.5">
+            {FORUM_SECTIONS.map((s) => {
+              const meta = SECTION_META[s.id];
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  disabled
+                  className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl text-[12px] font-semibold opacity-60 ${meta.badge}`}
+                >
+                  <Icon name={meta.icon} className="h-4 w-4" />
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-700">Title</span>
+          <input
+            type="text"
+            disabled
+            placeholder="Requires a verified profile"
+            className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[16px] text-slate-400 outline-none"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-700">Details</span>
+          <textarea
+            disabled
+            rows={3}
+            placeholder="Requires a verified profile"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[16px] text-slate-400 outline-none"
+          />
+        </label>
+        <PillButton variant="primary" className="w-full" onClick={cta.onClick}>
+          <Icon name={cta.icon} className="h-4 w-4" /> {cta.label}
+        </PillButton>
+        <p className="text-center text-xs text-slate-400">Posting is open to verified runner profiles.</p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-4">
-      <p className={`flex items-start gap-2 rounded-xl p-3.5 text-[13px] leading-relaxed ${verified ? "bg-emerald-50 text-emerald-900" : "bg-amber-50 text-amber-900"}`}>
-        <Icon name={verified ? "check" : "lock"} className="mt-0.5 h-4 w-4 shrink-0" />
-        {verified
-          ? "Posting and replying are not open yet — they launch soon for verified members."
-          : "Posting opens to verified runners soon. Finish verification now so you're ready when it goes live."}
+      <p className="flex items-start gap-2 rounded-xl bg-emerald-50 p-3.5 text-[13px] leading-relaxed text-emerald-900">
+        <Icon name="check" className="mt-0.5 h-4 w-4 shrink-0" />
+        Posting is live for verified members. Replies (comments on a post) are not open yet.
       </p>
       <div>
         <span className="mb-1.5 block text-sm font-semibold text-slate-700">Section</span>
         <div className="grid grid-cols-3 gap-1.5">
           {FORUM_SECTIONS.map((s) => {
             const meta = SECTION_META[s.id];
+            const active = section === s.id;
             return (
               <button
                 key={s.id}
                 type="button"
-                disabled
-                className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl text-[12px] font-semibold opacity-60 ${meta.badge}`}
+                aria-pressed={active}
+                onClick={() => setSection(s.id)}
+                className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl text-[12px] font-semibold ${active ? `${meta.active} shadow-sm` : `${meta.badge} opacity-80`}`}
               >
                 <Icon name={meta.icon} className="h-4 w-4" />
                 {s.label}
@@ -115,28 +184,29 @@ export function ForumCreateSheetBody({
         <span className="mb-1.5 block text-sm font-semibold text-slate-700">Title</span>
         <input
           type="text"
-          disabled
-          placeholder={verified ? "Coming soon" : "Requires a verified profile"}
-          className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[16px] text-slate-400 outline-none"
+          value={title}
+          maxLength={120}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="What's this about?"
+          className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
         />
       </label>
       <label className="block">
         <span className="mb-1.5 block text-sm font-semibold text-slate-700">Details</span>
         <textarea
-          disabled
-          rows={3}
-          placeholder={verified ? "Coming soon" : "Requires a verified profile"}
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[16px] text-slate-400 outline-none"
+          value={body}
+          rows={4}
+          maxLength={2000}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Share route details, questions, or local running news…"
+          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
         />
       </label>
-      <PillButton variant="primary" className="w-full" onClick={cta.onClick}>
-        <Icon name={cta.icon} className="h-4 w-4" /> {cta.label}
+      {postError ? <p role="alert" className="rounded-xl bg-rose-50 p-3 text-[13px] font-semibold text-rose-800">{postError}</p> : null}
+      <PillButton variant="primary" className="w-full" disabled={submitting} onClick={cta.onClick}>
+        <Icon name={cta.icon} className="h-4 w-4" /> {submitting ? "Posting…" : cta.label}
       </PillButton>
-      <p className="text-center text-xs text-slate-400">
-        {verified
-          ? "This form is disabled — posting and replying are not open yet."
-          : "This form is disabled — posting opens to verified runners soon."}
-      </p>
+      <p className="text-center text-xs text-slate-400">Your post appears in the selected section for your city.</p>
     </div>
   );
 }
@@ -210,11 +280,31 @@ export function ForumPage({ city }: { city: City }) {
   const [qaSort, setQaSort] = useState<QaSort>("newest");
   const [gateOpen, setGateOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [serverPosts, setServerPosts] = useState<api.ForumPostView[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
+  const loadForum = () => { void api.getForumPosts(city.id).then((r) => { if (r.ok) setServerPosts(r.data.posts); }); };
+  useEffect(() => { loadForum(); }, [city.id]);
 
   const posts = useMemo(() => {
-    // Owner-hidden posts are excluded from public rendering.
+    // Owner-hidden posts are excluded from public rendering (seed + user posts
+    // share the `post:<id>` moderation registry; the server also filters).
     const visible = city.forum.filter((p) => !hidden.has(`post:${p.id}`));
-    let list = visible.filter((p) => p.section === section);
+    const userPosts: ForumPost[] = serverPosts
+      .filter((p) => !hidden.has(`post:${p.id}`))
+      .map((p) => ({
+        id: p.id,
+        section: p.section,
+        title: p.title,
+        body: p.body,
+        author: p.author,
+        authorNote: p.authorNote ?? undefined,
+        createdAt: p.createdAt,
+        answered: false,
+        pinned: p.pinned,
+        replies: p.replies,
+      }));
+    let list = [...visible, ...userPosts].filter((p) => p.section === section);
     if (section === "qa") {
       const sorted = [...list];
       if (qaSort === "newest") sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -223,7 +313,7 @@ export function ForumPage({ city }: { city: City }) {
       return sorted;
     }
     return [...list].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
-  }, [city.forum, hidden, section, qaSort]);
+  }, [city.forum, hidden, section, qaSort, serverPosts]);
 
   const [activityCards, setActivityCards] = useState<PublicActivityCard[]>([]);
   useEffect(() => { let live = true; void getActivityFeed(city.id).then((r) => { if (live && r.ok) setActivityCards(r.data.cards); }); return () => { live = false; }; }, [city.id]);
@@ -231,6 +321,26 @@ export function ForumPage({ city }: { city: City }) {
     const intent = replyIntent(role, title);
     toast(intent.toast, "info");
     if (intent.opensGate) setGateOpen(true);
+  };
+
+  const onSubmitPost = (draft: { section: ForumSection; title: string; body: string }) => {
+    if (submitting) return;
+    const title = draft.title.trim();
+    const body = draft.body.trim();
+    if (!title || !body) { setPostError("Add a title and some details before posting."); return; }
+    setSubmitting(true);
+    setPostError(null);
+    void api.createForumPost({ section: draft.section, title, body }).then((r) => {
+      setSubmitting(false);
+      if (r.ok) {
+        setCreateOpen(false);
+        setSection(draft.section);
+        loadForum();
+        toast("Your post is live.", "success");
+      } else {
+        setPostError(r.error.message ?? "Couldn't post — try again.");
+      }
+    });
   };
 
   return (
@@ -241,7 +351,7 @@ export function ForumPage({ city }: { city: City }) {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Forum</h1>
           <p className="mt-0.5 text-sm font-medium text-slate-500">
-            {city.name}, {city.state} · browse freely — posting opens to verified members
+            {city.name}, {city.state} · browse freely — posting is open to verified members
           </p>
         </div>
         <PillButton variant="secondary" onClick={() => setCreateOpen(true)} className="min-h-11 px-4">
@@ -303,18 +413,17 @@ export function ForumPage({ city }: { city: City }) {
           <Icon name="shield" className="h-5 w-5" />
         </span>
         <p className="text-[13px] leading-relaxed text-slate-600">
-          <span className="font-semibold text-slate-800">Everyone can browse.</span> Posting and replying are not open
-          yet — they will be limited to verified runner profiles when they launch, so guests, pending, and denied
-          profiles stay read-only.
+          <span className="font-semibold text-slate-800">Everyone can browse.</span> Posting is open to verified runner
+          profiles; guests, pending, and denied profiles stay read-only. Replies are coming soon.
         </p>
       </div>
 
-      {/* New post — create-sheet affordance, gated */}
+      {/* New post — create-sheet affordance, live form for verified members */}
       <Sheet
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         title="Start a conversation"
-        subtitle={role === "verified" ? "Coming soon for verified members" : "Posting requires a verified runner profile"}
+        subtitle={role === "verified" ? "Post to the forum" : "Posting requires a verified runner profile"}
       >
         <ForumCreateSheetBody
           role={role}
@@ -323,6 +432,9 @@ export function ForumPage({ city }: { city: City }) {
             setCreateOpen(false);
             setGateOpen(true);
           }}
+          onSubmit={onSubmitPost}
+          submitting={submitting}
+          postError={postError}
         />
       </Sheet>
 
@@ -330,7 +442,7 @@ export function ForumPage({ city }: { city: City }) {
       <aside className="desktop-forum-context" aria-label="Forum guidance">
         <p className="text-[11px] font-extrabold uppercase tracking-[.12em] text-[#FF5741]">Community guidelines</p>
         <h2 className="mt-2 text-lg font-extrabold tracking-tight text-slate-900">A useful local forum</h2>
-        <p className="mt-2 text-[13px] leading-relaxed text-slate-600">Browse announcements, community notes, and runner questions. Posting and replying are not open yet — when they launch they will require a verified profile.</p>
+        <p className="mt-2 text-[13px] leading-relaxed text-slate-600">Browse announcements, community notes, and runner questions. Posting is open to verified members; replies are coming soon.</p>
         <div className="mt-4 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-500"><strong className="text-slate-700">Keep it local.</strong> Share route details and event context that help fellow runners.</div>
       </aside>
       </div>
