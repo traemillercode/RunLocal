@@ -115,6 +115,12 @@ export interface PublicAccount {
    * members. The client can render it but never set it.
    */
   trustedMember: boolean;
+  /**
+   * Applicant-facing rejection reason — PRIVATE to the account itself: it is
+   * only ever populated in the account's own `/api/me` payload (and admin
+   * views). Never shipped in any other member's projection of this account.
+   */
+  rejectionReason?: string | null;
   profilePhotoUrl: string | null;
 }
 
@@ -151,6 +157,7 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new D
     suspended: isSuspended(rec, now),
     underReview: rec.underReview === true,
     trustedMember: rec.trustedMember === true,
+    rejectionReason: rec.status === "rejected" ? rec.rejectionReason : null,
     profilePhotoUrl: rec.profilePhotoRef ? `/uploads/public/${rec.profilePhotoRef}` : null,
   };
 }
@@ -258,6 +265,10 @@ export class Db {
         // ever fabricated here: only the audited admin endpoints set it.
         a.trustedMember = a.trustedMember === true;
         a.trustedMemberAt = a.trustedMemberAt ?? null;
+        // Same for the account rejection reason: accounts persisted before it
+        // existed lack the field — treat as `null` (never rejected with a
+        // stored reason). Only the audited admin reject path sets it.
+        a.rejectionReason = a.rejectionReason ?? null;
         this.accounts.set(a.id, a);
       }
       for (const s of parsed.sessions ?? []) this.sessions.set(s.id, s);
@@ -424,6 +435,7 @@ export class Db {
       lastActivityAt: nowIso(this.now()),
       loginIps: [],
       verifiedAt: null,
+      rejectionReason: null,
       deletedAt: null,
       purgeAt: null,
       purgedAt: null,

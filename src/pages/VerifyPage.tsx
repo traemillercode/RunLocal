@@ -86,6 +86,33 @@ export function VerifyPage() {
     }
   };
 
+  // Rejected — denied state, never shown as pending. The account stays
+  // read-only and the applicant sees their PRIVATE rejection reason here.
+  if (me?.status === "signed_in" && me.account.status === "rejected") {
+    return (
+      <div className="mx-auto w-full max-w-md px-4 pb-32 pt-6">
+        <div className="rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-red-100">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-[10px] bg-red-100 text-red-600">
+            <Icon name="close" className="h-7 w-7" />
+          </span>
+          <h1 className="mt-3 text-xl font-extrabold text-slate-900">Verification denied</h1>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600">
+            Your identity check was not approved, so your profile is read-only — you can browse, but can't RSVP,
+            post, or submit.
+          </p>
+          {me.account.rejectionReason ? (
+            <div className="mt-4 rounded-xl bg-red-50 p-3.5 text-left text-[13px] leading-relaxed text-red-800">
+              <span className="font-semibold">Why:</span> {me.account.rejectionReason}
+            </div>
+          ) : null}
+          <PillButton variant="primary" className="mt-4 w-full" onClick={() => navigate("/profile")}>
+            Back to my profile
+          </PillButton>
+        </div>
+      </div>
+    );
+  }
+
   // Already verified?
   if (me?.status === "signed_in" && me.account.status === "verified") {
     return (

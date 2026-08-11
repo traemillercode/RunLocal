@@ -232,7 +232,10 @@ export function AdminTrustSection() {
       setBusyId(null);
       return;
     }
-    const r = await api.adminDecideCredential(id, action, reason.trim());
+    // The per-row note is the applicant-facing decision reason (stored as the
+    // credential's decisionReason); the shared audit reason stays separate in
+    // the audited header. Never conflate the two.
+    const r = await api.adminDecideCredential(id, action, reason.trim(), note);
     setBusyId(null);
     if (r.ok) await load();
     else setError(r.error.message ?? "Couldn't save the decision.");
