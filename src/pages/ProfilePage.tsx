@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
+import { TrustedBadge } from "../components/TrustedBadge";
 import { Chip, Icon, PillButton } from "../components/ui";
 import type { City } from "../types";
 import { resolveWeekEvents } from "../lib/dates";
@@ -140,6 +141,7 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
                   <Icon name="users" className="h-3 w-3" /> Guest
                 </Chip>
               )}
+              {signedIn?.trustedMember ? <TrustedBadge size="sm" /> : null}
               {signedIn && signedIn.role === "group_leader" ? (
                 <Chip tone="outline">
                   <Icon name="flag" className="h-3 w-3" /> {roleLabel(signedIn.role)}

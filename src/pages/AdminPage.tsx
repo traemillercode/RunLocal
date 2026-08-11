@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GlobalAdminSection } from "../components/GlobalAdminSection";
 import { AdminTrustSection } from "../components/AdminTrustSection";
+import { TrustedMembersSection } from "../components/TrustedMembersSection";
 import { EventCmsSection } from "../components/EventCmsSection";
 import { Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
@@ -903,6 +904,8 @@ export function AdminPage() {
       <GlobalAdminSection />
       {/* Global Admin — community trust & credentials (audited) */}
       <AdminTrustSection />
+      {/* Trusted Member (manual trust / blue-check) - Global or scoped City Admin */}
+      <TrustedMembersSection isCityAdmin={isCityAdmin} />
 
       {/* Search */}
       <section id="lookup" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
@@ -938,6 +941,7 @@ export function AdminPage() {
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${r.status === "verified" ? "bg-emerald-100 text-emerald-800" : r.status === "rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
                       {r.status}{r.status === "pending" && r.phase ? ` · ${r.phase}` : ""}
                     </span>
+                    {r.trustedMember ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700">Trusted</span> : null}
                     <Icon name="chevronRight" className="h-4 w-4 text-slate-300" />
                   </span>
                 </button>
@@ -966,6 +970,7 @@ export function AdminPage() {
             <Row k="Last activity" v={fmt(record.lastActivityAt)} sensitive />
             <Row k="Signup" v={fmt(record.signupAt)} />
             <Row k="Verified" v={fmt(record.verifiedAt)} />
+            <Row k="Trusted member" v={record.trustedMember ? "Yes - manually granted" : "No"} />
             <Row k="Deleted" v={fmt(record.deletedAt)} sensitive />
             <Row k="Retention" v={`${record.retentionYears}y${record.purgeAt ? ` · purge by ${fmt(record.purgeAt)}` : ""}`} sensitive />
             <li className="flex items-start gap-2">

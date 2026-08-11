@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
+import { TrustedBadge } from "../components/TrustedBadge";
 import { Chip, Icon, PillButton } from "../components/ui";
 import { CITIES } from "../data/cities";
 import { phaseLabel, roleLabel, type PublicAccount } from "../lib/accounts";
@@ -305,6 +306,7 @@ export function SettingsPage() {
               <span className="text-[14px] font-medium text-slate-700">Status</span>
               <span className="flex flex-wrap items-center justify-end gap-1.5">
                 {verified ? <VerifiedBadge size="sm" /> : <Chip tone="amber">{phaseLabel(account.phase)}</Chip>}
+                {account.trustedMember ? <TrustedBadge size="sm" /> : null}
                 {isOwner ? <Chip tone="brand">Super Admin</Chip> : <Chip tone="outline">{roleLabel(account.role)}</Chip>}
               </span>
             </li>

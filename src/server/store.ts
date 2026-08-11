@@ -108,6 +108,13 @@ export interface PublicAccount {
    * and comment, but hosting and coach/club posting are restricted.
    */
   underReview: boolean;
+  /**
+   * Trusted Member (manual trust / blue-check) state — server-authoritative,
+   * display-only for the client. Distinct from the identity `badge`: granted
+   * only by Global/City Admins through audited endpoints to identity-verified
+   * members. The client can render it but never set it.
+   */
+  trustedMember: boolean;
   profilePhotoUrl: string | null;
 }
 
@@ -143,6 +150,7 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new D
     isOwner,
     suspended: isSuspended(rec, now),
     underReview: rec.underReview === true,
+    trustedMember: rec.trustedMember === true,
     profilePhotoUrl: rec.profilePhotoRef ? `/uploads/public/${rec.profilePhotoRef}` : null,
   };
 }
@@ -245,6 +253,11 @@ export class Db {
         // it existed lack the fields — treat as not under review.
         a.underReview = a.underReview === true;
         a.underReviewAt = a.underReviewAt ?? null;
+        // Same for the Trusted Member (manual trust) state: accounts persisted
+        // before it existed lack the fields — treat as not trusted. Nothing is
+        // ever fabricated here: only the audited admin endpoints set it.
+        a.trustedMember = a.trustedMember === true;
+        a.trustedMemberAt = a.trustedMemberAt ?? null;
         this.accounts.set(a.id, a);
       }
       for (const s of parsed.sessions ?? []) this.sessions.set(s.id, s);
@@ -420,6 +433,8 @@ export class Db {
       suspensionReason: null,
       underReview: false,
       underReviewAt: null,
+      trustedMember: false,
+      trustedMemberAt: null,
     };
     this.accounts.set(rec.id, rec);
     return rec;

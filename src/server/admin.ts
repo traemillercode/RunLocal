@@ -424,6 +424,8 @@ export interface AdminSearchRow {
   phoneLast4: string | null;
   createdAt: string;
   verifiedAt: string | null;
+  /** Trusted Member (manual trust / blue-check) state — display-only here. */
+  trustedMember: boolean;
 }
 
 function searchRow(rec: AccountRecord): AdminSearchRow {
@@ -438,6 +440,7 @@ function searchRow(rec: AccountRecord): AdminSearchRow {
     phoneLast4: digits.length >= 4 ? digits.slice(-4) : null,
     createdAt: rec.signupAt,
     verifiedAt: rec.verifiedAt,
+    trustedMember: rec.trustedMember === true,
   };
 }
 
@@ -535,6 +538,7 @@ export function adminGetRecord(
       phoneLast4: digits.length >= 4 ? digits.slice(-4) : null,
       createdAt: rec.signupAt,
       verifiedAt: rec.verifiedAt,
+      trustedMember: rec.trustedMember === true,
       phone: rec.phone,
       phoneVerifiedAt: rec.phoneVerifiedAt,
       selfieRef: rec.selfieRef,
@@ -643,6 +647,7 @@ export function adminExportRows(
         phoneLast4: digits.length >= 4 ? digits.slice(-4) : null,
         createdAt: rec.signupAt,
         verifiedAt: rec.verifiedAt,
+        trustedMember: rec.trustedMember === true,
         phone: rec.phone,
         phoneVerifiedAt: rec.phoneVerifiedAt,
         selfieRef: rec.selfieRef,
