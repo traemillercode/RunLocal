@@ -305,11 +305,22 @@ export function SettingsPage() {
             <li className="flex items-center justify-between gap-3 px-5 py-3.5">
               <span className="text-[14px] font-medium text-slate-700">Status</span>
               <span className="flex flex-wrap items-center justify-end gap-1.5">
-                {verified ? <VerifiedBadge size="sm" /> : <Chip tone="amber">{phaseLabel(account.phase)}</Chip>}
+                {verified ? <VerifiedBadge size="sm" /> : account.status === "rejected" ? <Chip tone="red">Denied</Chip> : <Chip tone="amber">{phaseLabel(account.phase)}</Chip>}
                 {account.trustedMember ? <TrustedBadge size="sm" /> : null}
                 {isOwner ? <Chip tone="brand">Super Admin</Chip> : <Chip tone="outline">{roleLabel(account.role)}</Chip>}
               </span>
             </li>
+            {account.status === "rejected" ? (
+              <li className="bg-red-50/70 px-5 py-3">
+                <p className="text-[12px] leading-relaxed text-red-800">
+                  <span className="font-semibold">Verification denied.</span> Your profile is read-only — no RSVPs,
+                  posts, or submissions.
+                  {account.rejectionReason ? (
+                    <span className="mt-0.5 block"><span className="font-semibold">Why:</span> {account.rejectionReason}</span>
+                  ) : null}
+                </p>
+              </li>
+            ) : null}
             <li>
               <button
                 type="button"
@@ -318,7 +329,7 @@ export function SettingsPage() {
               >
                 <span className="text-[14px] font-medium text-slate-700">Verification</span>
                 <span className="flex items-center gap-1 text-[14px] font-semibold text-[#14171C]">
-                  {verified ? "View status" : "Continue"} <Icon name="chevronRight" className="h-4 w-4 text-slate-300" />
+                  {verified || account.status === "rejected" ? "View status" : "Continue"} <Icon name="chevronRight" className="h-4 w-4 text-slate-300" />
                 </span>
               </button>
             </li>

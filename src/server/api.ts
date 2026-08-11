@@ -1989,7 +1989,19 @@ async function handleAdmin(
     }
     // Role to assign on approval (owner/operator picks in the control center).
     const role = url.searchParams.get("role") === "group_leader" ? "group_leader" : "runner";
-    const result = adminSetStatus(db, ctx, id, action === "approve" ? "verified" : "rejected", now, role);
+    // Rejection stores an explicit applicant-facing reason (separate from the
+    // audit reason header): required, persisted on the account, shown only to
+    // the applicant themselves.
+    let rejectionReason: string | null = null;
+    if (action === "reject") {
+      const b = (await readJson(req).catch(() => null)) as Record<string, unknown> | null;
+      const raw = typeof b?.reason === "string" ? b.reason.trim() : "";
+      if (raw.length < 5) {
+        return err(res, { status: 400, error: "reason_required", message: "A rejection reason (min 5 characters) is required — it is shown to the applicant." }), true;
+      }
+      rejectionReason = raw.slice(0, 500);
+    }
+    const result = adminSetStatus(db, ctx, id, action === "approve" ? "verified" : "rejected", now, role, rejectionReason);
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, { ok: true, account: toPublicAccount(result.data, isOwnerEmail(result.data.email)) }), true;

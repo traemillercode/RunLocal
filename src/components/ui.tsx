@@ -263,12 +263,13 @@ export function Icon({ name, className = "h-5 w-5" }: { name: string; className?
   );
 }
 
-export function Chip({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "brand" | "volt" | "amber" | "sky" | "emerald" | "outline" }) {
+export function Chip({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "brand" | "volt" | "amber" | "sky" | "emerald" | "red" | "outline" }) {
   const tones: Record<string, string> = {
     neutral: "bg-slate-100 text-slate-600",
     brand: "bg-[#14171C] text-[#FF5741]",
     volt: "bg-[#FF5741] text-[#14171C]",
     amber: "bg-amber-100 text-amber-800",
+    red: "bg-red-100 text-red-700",
     sky: "bg-sky-100 text-sky-800",
     emerald: "bg-emerald-100 text-emerald-800",
     outline: "bg-white text-slate-600 ring-1 ring-slate-200",

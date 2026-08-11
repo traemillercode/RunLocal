@@ -41,14 +41,17 @@ export function profileMenuEntries(me: Me | null): { entries: MenuEntry[]; signe
   }
   const account = me.account;
   const verified = account.status === "verified";
+  const rejected = account.status === "rejected";
   const statusLabel = verified
     ? `Verified · ${roleLabel(account.role)}`
-    : `Pending · ${phaseLabel(account.phase)}`;
+    : rejected
+      ? "Denied · Verification not approved"
+      : `Pending · ${phaseLabel(account.phase)}`;
   const entries: MenuEntry[] = [
     {
       key: "status",
-      label: verified ? "My verification status" : "Verification & account status",
-      icon: verified ? "shield" : "clock",
+      label: verified ? "My verification status" : rejected ? "Verification status" : "Verification & account status",
+      icon: verified ? "shield" : rejected ? "close" : "clock",
       hint: statusLabel,
       to: "/verify",
     },

@@ -65,7 +65,7 @@ function RaceCard({ race, featured = false, pinned = false }: { race: Race; feat
 export function RacesPage({ city }: { city: City }) {
   const { hidden, highlights } = useModerated();
   const { races: userRaces } = usePublicContent();
-  const { role } = useAccount();
+  const { role, me } = useAccount();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
 
@@ -159,7 +159,7 @@ export function RacesPage({ city }: { city: City }) {
     </div>
 
     <RaceSubmissionSheet open={sheetOpen} onClose={() => setSheetOpen(false)} cityId={city.id} />
-    <VerifiedGateSheet open={gateOpen} onClose={() => setGateOpen(false)} role={role} actionLabel="Submitting races" pendingLabel="Your profile is still in review." />
+    <VerifiedGateSheet open={gateOpen} onClose={() => setGateOpen(false)} role={role} actionLabel="Submitting races" pendingLabel="Your profile is still in review." rejectionReason={me?.status === "signed_in" ? me.account.rejectionReason ?? null : null} />
     </>
   );
 }

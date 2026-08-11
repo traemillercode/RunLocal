@@ -326,6 +326,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
         role={role}
         actionLabel="submitting runs"
         pendingLabel="Your profile is still in review."
+        rejectionReason={me?.status === "signed_in" ? me.account.rejectionReason ?? null : null}
       />
     </div>
   );

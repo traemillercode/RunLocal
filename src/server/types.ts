@@ -95,6 +95,14 @@ export interface AccountRecord {
   /** Rolling login IP history, pruned to the last 90 days. */
   loginIps: { ip: string; at: string }[];
   verifiedAt: string | null;
+  /**
+   * The explicit reason an admin recorded when rejecting this account's
+   * verification application (or revoking a previously verified status).
+   * Required on rejection; cleared on a fresh approval. Applicant-facing but
+   * PRIVATE — surfaced only in the account's own `/api/me` payload and admin
+   * views, never in other members' projections of this account.
+   */
+  rejectionReason: string | null;
   /** Set when the user deletes their account (tombstone). */
   deletedAt: string | null;
   /** When the retention purge will scrub/remove this record. */

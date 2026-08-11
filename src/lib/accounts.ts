@@ -6,12 +6,12 @@
  * Verification records are never shipped to the client — the only public
  * artifact is the boolean-ish `badge: "verified"` on the public account.
  */
-export type AccountRole = "guest" | "pending" | "verified";
+export type AccountRole = "guest" | "pending" | "rejected" | "verified";
 
 /** Actions a verified runner may take; everyone else is read-only. */
 export type GatedAction = "rsvp" | "comment" | "post" | "submit";
 
-export const ROLE_RANK: Record<AccountRole, number> = { guest: 0, pending: 1, verified: 2 };
+export const ROLE_RANK: Record<AccountRole, number> = { guest: 0, pending: 1, rejected: 1, verified: 2 };
 
 export const MIN_ROLE: Record<GatedAction, AccountRole> = {
   rsvp: "verified",
@@ -76,6 +76,12 @@ export interface PublicAccount {
    * members. The client can render it but can never set it.
    */
   trustedMember?: boolean;
+  /**
+   * Applicant-facing verification rejection reason — PRIVATE to the account
+   * itself (only present in the owner's own `/api/me` payload, never in other
+   * members' projections). `null` when not rejected.
+   */
+  rejectionReason?: string | null;
   profilePhotoUrl: string | null;
 }
 
@@ -91,7 +97,12 @@ export type Me = MeGuest | MeSignedIn;
 
 export function roleOf(me: Me): AccountRole {
   if (me.status !== "signed_in") return "guest";
-  return me.account.status === "verified" ? "verified" : "pending";
+  // Rejected accounts are their own read-only role — they must NEVER render
+  // (or be treated) as pending. Gating rank equals pending (read-only); only
+  // the UI copy and actions differ.
+  if (me.account.status === "verified") return "verified";
+  if (me.account.status === "rejected") return "rejected";
+  return "pending";
 }
 
 export function isVerified(me: Me): boolean {

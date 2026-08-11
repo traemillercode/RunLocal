@@ -19,7 +19,7 @@ interface AccountContextValue {
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
   deleteMyAccount: () => Promise<api.ApiResult<{ status: string }>>;
-  role: "guest" | "pending" | "verified";
+  role: "guest" | "pending" | "rejected" | "verified";
 }
 
 const AccountContext = createContext<AccountContextValue>({

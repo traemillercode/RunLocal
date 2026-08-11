@@ -76,6 +76,10 @@ export function AccountMenuContent({
                 <>
                   <span className="font-semibold text-emerald-700">Verified</span> · {roleLabel(account.role)}
                 </>
+              ) : account.status === "rejected" ? (
+                <>
+                  <span className="font-semibold text-red-600">Denied</span> · Verification not approved
+                </>
               ) : (
                 <>
                   <span className="font-semibold text-amber-700">Pending</span> · {phaseLabel(account.phase)}
@@ -91,6 +95,16 @@ export function AccountMenuContent({
         <p className="mb-3 rounded-xl bg-amber-50 p-3 text-[12px] leading-relaxed text-amber-900">
           <span className="font-semibold">Read-only account.</span> No RSVPs, posts, or submissions until your
           email + selfie verification is approved.
+        </p>
+      ) : account && account.status === "rejected" ? (
+        <p className="mb-3 rounded-xl bg-red-50 p-3 text-[12px] leading-relaxed text-red-800">
+          <span className="font-semibold">Verification denied.</span> Your profile is read-only — no RSVPs, posts,
+          or submissions.
+          {account.rejectionReason ? (
+            <span className="mt-1 block">
+              <span className="font-semibold">Why:</span> {account.rejectionReason}
+            </span>
+          ) : null}
         </p>
       ) : null}
 
@@ -147,7 +161,11 @@ export function AccountMenuButton() {
         ) : (
           <span className="relative grid h-10 w-10 place-items-center rounded-full text-[13px] font-extrabold">
             {account ? initials(account.name) : <Icon name="users" className="h-5 w-5" />}
-            {account && !verified ? (
+            {account && account.status === "rejected" ? (
+              <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full bg-red-500 ring-2 ring-[#14171C]">
+                <Icon name="close" className="h-2.5 w-2.5 text-white" />
+              </span>
+            ) : account && !verified ? (
               <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full bg-amber-400 ring-2 ring-[#14171C]">
                 <Icon name="clock" className="h-2.5 w-2.5 text-[#14171C]" />
               </span>

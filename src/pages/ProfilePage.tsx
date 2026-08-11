@@ -132,6 +132,10 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {verified ? (
                 <VerifiedBadge />
+              ) : signedIn && signedIn.status === "rejected" ? (
+                <Chip tone="red">
+                  <Icon name="close" className="h-3 w-3" /> Denied
+                </Chip>
               ) : signedIn ? (
                 <Chip tone="amber">
                   <Icon name="clock" className="h-3 w-3" /> Pending verification
@@ -156,11 +160,23 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
           </div>
         </div>
         {signedIn && !verified ? (
-          <div className="border-t border-white/10 bg-white/5 px-5 py-3">
-            <p className="flex items-start gap-2 text-[12px] leading-relaxed text-white/70">
-              <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0 text-[#FF5741]" />
-              Pending Verification profiles are read-only: no RSVPs, posts, or submissions until your identity is
-              approved. Only a Verified badge is ever shown publicly.
+          <div className={`border-t px-5 py-3 ${signedIn.status === "rejected" ? "border-white/10 bg-red-500/10" : "border-white/10 bg-white/5"}`}>
+            <p className={`flex items-start gap-2 text-[12px] leading-relaxed ${signedIn.status === "rejected" ? "text-red-200" : "text-white/70"}`}>
+              <Icon name={signedIn.status === "rejected" ? "close" : "lock"} className="mt-0.5 h-4 w-4 shrink-0 text-[#FF5741]" />
+              {signedIn.status === "rejected" ? (
+                <span>
+                  <span className="font-semibold">Verification denied.</span> Your profile is read-only — no RSVPs,
+                  posts, or submissions.
+                  {signedIn.rejectionReason ? (
+                    <span className="mt-1 block"><span className="font-semibold">Why:</span> {signedIn.rejectionReason}</span>
+                  ) : null}
+                </span>
+              ) : (
+                <span>
+                  Pending Verification profiles are read-only: no RSVPs, posts, or submissions until your identity is
+                  approved. Only a Verified badge is ever shown publicly.
+                </span>
+              )}
             </p>
           </div>
         ) : null}
@@ -220,8 +236,24 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
         </section>
       ) : null}
 
-      {/* Pending resume */}
-      {signedIn && !verified ? (
+      {/* Rejected — denied card (never shown as pending) */}
+      {signedIn && signedIn.status === "rejected" ? (
+        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-red-100">
+          <h2 className="text-[15px] font-bold text-slate-900">Verification denied</h2>
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
+            Your identity check was not approved, so your profile is read-only — you can browse, but can't RSVP,
+            post, or submit.
+          </p>
+          {signedIn.rejectionReason ? (
+            <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-[12px] leading-relaxed text-red-700">
+              <span className="font-semibold">Why:</span> {signedIn.rejectionReason}
+            </p>
+          ) : null}
+          <PillButton variant="ghost" onClick={() => navigate("/verify")} className="mt-3.5 w-full">
+            <Icon name="shield" className="h-4 w-4" /> View verification status
+          </PillButton>
+        </section>
+      ) : signedIn && !verified ? (
         <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <h2 className="text-[15px] font-bold text-slate-900">Finish verification</h2>
           <p className="mt-1 text-[13px] text-slate-500">{phaseLabel(signedIn.phase)}</p>

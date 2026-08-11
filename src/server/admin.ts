@@ -513,6 +513,8 @@ export interface AdminRecordView extends AdminSearchRow {
   purgedAt: string | null;
   retentionYears: number;
   canViewSelfie: boolean;
+  /** The applicant-facing reason stored at rejection (admin-set, admin-viewable). */
+  rejectionReason: string | null;
 }
 
 export function adminGetRecord(
@@ -552,6 +554,7 @@ export function adminGetRecord(
       purgedAt: rec.purgedAt,
       retentionYears: rec.retentionYears,
       canViewSelfie: Boolean(rec.selfieRef && rec.selfieRef.endsWith(".jpg")),
+      rejectionReason: rec.rejectionReason ?? null,
     },
   };
 }
@@ -579,6 +582,7 @@ export function adminSetStatus(
   status: "verified" | "rejected",
   now = new Date(),
   role: AccountRole = "runner",
+  rejectionReason: string | null = null,
 ): AdminResult<AccountRecord> {
   const auth = authorizeAdmin(db, ctx, status === "verified" ? "admin.approve" : "admin.reject", id, now);
   if (!auth.ok) return auth;
@@ -595,10 +599,20 @@ export function adminSetStatus(
     }
     if (role !== "runner" && role !== "group_leader") role = "runner";
   }
+  if (status === "rejected" && !rejectionReason) {
+    return { ok: false, status: 400, error: "reason_required", message: "A rejection reason (min 5 characters) is required — it is shown to the applicant." };
+  }
   const updated = db.updateAccount(id, {
     status,
-    verifiedAt: status === "verified" ? now.toISOString() : rec.verifiedAt,
+    verifiedAt: status === "verified" ? now.toISOString() : null,
     role: status === "verified" ? role : rec.role,
+    // Rejection is a revocation of any current verified/badge presentation:
+    // the account must never keep a Verified or Trusted presentation it no
+    // longer has. Audit history (authorizeAdmin above) preserves the full
+    // trail; only the current-state fields are cleared here.
+    trustedMember: status === "rejected" ? false : rec.trustedMember,
+    trustedMemberAt: status === "rejected" ? null : rec.trustedMemberAt,
+    rejectionReason: status === "rejected" ? rejectionReason : null,
     lastActivityAt: now.toISOString(),
   })!;
   void db.persist();
@@ -661,6 +675,7 @@ export function adminExportRows(
         purgedAt: rec.purgedAt,
         retentionYears: rec.retentionYears,
         canViewSelfie: Boolean(rec.selfieRef && rec.selfieRef.endsWith(".jpg")),
+        rejectionReason: rec.rejectionReason ?? null,
       } satisfies AdminRecordView;
     });
   return { ok: true, data: { rows } };

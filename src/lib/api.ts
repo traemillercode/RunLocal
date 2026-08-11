@@ -260,6 +260,8 @@ export interface AdminRecordView extends AdminSearchRow {
   purgedAt: string | null;
   retentionYears: number;
   canViewSelfie: boolean;
+  /** Applicant-facing rejection reason stored at rejection (admin view). */
+  rejectionReason: string | null;
 }
 
 export interface AuditEntryView {
@@ -297,7 +299,12 @@ export function adminGetRecord(id: string, reason: string): Promise<ApiResult<{ 
 }
 
 export function adminSetStatus(id: string, action: "approve" | "reject", reason: string, role: "runner" | "group_leader" = "runner"): Promise<ApiResult<{ ok: true }>> {
-  return adminRequest(`/api/admin/records/${id}/${action}?role=${role}`, reason, { method: "POST" });
+  // On reject the reason is ALSO the applicant-facing rejection reason stored
+  // on the account (audit header + body reason). Approve needs no body.
+  return adminRequest(`/api/admin/records/${id}/${action}?role=${role}`, reason, {
+    method: "POST",
+    ...(action === "reject" ? { body: JSON.stringify({ reason }) } : {}),
+  });
 }
 
 /** Owner-only read: fetch the pending-users queue. Read access is authorized
@@ -778,8 +785,10 @@ export interface AdminCredentialRow {
 export function adminGetCredentials(reason: string): Promise<ApiResult<{ credentials: AdminCredentialRow[] }>> {
   return adminRequest("/api/admin/credentials", reason);
 }
-export function adminDecideCredential(id: string, action: "approve" | "reject", reason: string): Promise<ApiResult<{ credential: { id: string; status: string } }>> {
-  return adminRequest(`/api/admin/credentials/${id}/${action}`, reason, { method: "POST", body: JSON.stringify({ reason }) });
+export function adminDecideCredential(id: string, action: "approve" | "reject", auditReason: string, decisionReason: string): Promise<ApiResult<{ credential: { id: string; status: string } }>> {
+  // auditReason goes in the audited header; decisionReason is the per-row
+  // note the applicant sees (credential.decisionReason) — kept separate.
+  return adminRequest(`/api/admin/credentials/${id}/${action}`, auditReason, { method: "POST", body: JSON.stringify({ reason: decisionReason }) });
 }
 /** Audited admin-only proof URL (proof bytes never enter any JSON payload). */
 export function adminCredentialProofUrl(id: string): string {

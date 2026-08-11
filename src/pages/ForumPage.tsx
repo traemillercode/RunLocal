@@ -110,7 +110,7 @@ function PostCard({
 
 export function ForumPage({ city }: { city: City }) {
   const toast = useToast();
-  const { role } = useAccount();
+  const { role, me } = useAccount();
   const { hidden } = useModerated();
   const [section, setSection] = useState<ForumSection>("announcements");
   const [qaSort, setQaSort] = useState<QaSort>("newest");
@@ -290,6 +290,7 @@ export function ForumPage({ city }: { city: City }) {
         role={role}
         actionLabel="posting and replying"
         pendingLabel="Your profile is still in review."
+        rejectionReason={me?.status === "signed_in" ? me.account.rejectionReason ?? null : null}
       />
     </div>
   );

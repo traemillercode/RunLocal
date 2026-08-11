@@ -183,7 +183,7 @@ describe("pending-user admin actions", () => {
   it("reject works without the verification state requirement and is audited", () => {
     const db = createMemoryStore();
     const rec = db.createAccount({ name: "B", email: "b@x.com" });
-    const r = adminSetStatus(db, ownerCtx(db, "duplicate account"), rec.id, "rejected", T0);
+    const r = adminSetStatus(db, ownerCtx(db, "duplicate account"), rec.id, "rejected", T0, "runner", "Duplicate account — please use your existing profile");
     expect(r.ok).toBe(true);
     expect(db.getAccount(rec.id)!.status).toBe("rejected");
     expect(db.listAudit(10).some((a) => a.action === "admin.reject" && a.targetId === rec.id)).toBe(true);
