@@ -29,6 +29,21 @@ export function isoTimeLabel(iso: string): string {
   return `${h}:${String(d.getUTCMinutes()).padStart(2, "0")} ${suffix}`;
 }
 
+/**
+ * Display-space occurrence id for the public API. Seed events (which the
+ * weekly feed renders under their seed ref, e.g. `mon-social`) surface
+ * `event:<seedRefId>:<YYYY-MM-DD>` so My Runs links, discussion links, and
+ * RSVP responses all match the ids runners see in the feed — the client never
+ * has to guess between a seed ref and the server's canonical hex id. Everything
+ * else keeps its canonical `event:<id>:<YYYY-MM-DD>` form. The internal
+ * attendance rows are untouched (always canonical); this is a presentation
+ * mapping only, applied at the API boundary.
+ */
+export function publicOccurrenceId(event: { seedRefId: string | null }, eventId: string, runDate: string): string {
+  const canonical = event.seedRefId ? `event:${event.seedRefId}` : eventId.startsWith("event:") ? eventId : `event:${eventId}`;
+  return `${canonical}:${runDate}`;
+}
+
 export interface MyRunRow {
   id: string;
   kind: "rsvp" | "solo";
@@ -57,8 +72,10 @@ export function listMyRuns(db: Db, accountId: string, cityId: string, now = new 
     // Legacy event-level rows (pre-occurrence): no concrete occurrence. They are
     // historical only — visible exclusively when the runner kept them.
     if (!a.occurrenceId || !a.runDate) {
+      const legacyBare = a.eventId.replace(/^event:/, "");
+      const legacyEvent = db.listEvents().find((e) => e.id === legacyBare || e.seedRefId === legacyBare);
       rows.push({
-        id: a.id, kind: "rsvp", eventId: a.eventId.replace(/^event:/, ""), occurrenceId: null,
+        id: a.id, kind: "rsvp", eventId: legacyEvent?.seedRefId ?? legacyBare, occurrenceId: null,
         runDate: a.createdAt.slice(0, 10), startsAt: null, cityId,
         title: "Past run RSVP", date: a.createdAt.slice(0, 10), time: "Time unavailable",
         location: "Location unavailable", groupId: "", rsvpedAt: a.createdAt,
@@ -70,8 +87,15 @@ export function listMyRuns(db: Db, accountId: string, cityId: string, now = new 
     if (!occ || !occ.event) continue;
     const ev = occ.event;
     const upcoming = Date.parse(occ.startsAt) >= nowMs;
+    // Display-space ids: seed events surface their seed ref (what the weekly
+    // feed renders), so My Runs links and the feed/detail RSVP state agree
+    // after any reload or tab switch. The occurrence stays exact — one row
+    // per concrete `event:<seedRef>:<YYYY-MM-DD>` (or canonical form for
+    // community/admin runs); a sibling occurrence never counts.
+    const displayEventId = ev.seedRefId ?? occ.eventId.replace(/^event:/, "");
+    const displayOccurrenceId = ev.seedRefId ? `event:${ev.seedRefId}:${occ.runDate}` : occ.occurrenceId;
     rows.push({
-      id: a.id, kind: "rsvp", eventId: occ.eventId.replace(/^event:/, ""), occurrenceId: occ.occurrenceId,
+      id: a.id, kind: "rsvp", eventId: displayEventId, occurrenceId: displayOccurrenceId,
       runDate: occ.runDate, startsAt: occ.startsAt, cityId: ev.cityId, title: ev.title,
       date: occ.runDate, time: ev.time, location: ev.location, groupId: ev.groupId,
       rsvpedAt: a.createdAt, distanceLabel: ev.distanceLabel ?? null, upcoming, past: !upcoming,

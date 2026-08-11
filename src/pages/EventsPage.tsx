@@ -5,7 +5,8 @@ import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { GroupSubmissionSheet, IndependentEventSheet } from "../components/SubmissionSheets";
 import { Chip, Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
-import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS, occurrenceHasStarted, mergeWeekEventSources } from "../lib/dates";
+import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS, occurrenceHasStarted, mergeWeekEventSources, bareEventId } from "../lib/dates";
+import { rsvpedEventIds } from "../lib/myRuns";
 import { filterOneTimeEvents } from "../lib/activityDates";
 import { Link } from "react-router-dom";
 import { canDo, roleLabel } from "../lib/accounts";
@@ -39,7 +40,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
   const canRsvp = canDo(role, "rsvp");
   useEffect(() => {
     if (!canRsvp) { setMyRunIds(new Set()); return; }
-    void api.getMyRuns().then((r) => { if (r.ok) setMyRunIds(new Set(r.data.runs.map((run) => run.eventId))); });
+    void api.getMyRuns().then((r) => { if (r.ok) setMyRunIds(rsvpedEventIds(r.data.runs)); });
   }, [canRsvp]);
   const isGroupLeader = me?.status === "signed_in" && me.account.role === "group_leader";
 
@@ -116,14 +117,15 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
       setGateOpen(true);
       return;
     }
-    const nowRsvped = !myRunIds.has(eventId);
+    const key = bareEventId(eventId);
+    const nowRsvped = !myRunIds.has(key);
     // Server-side RSVP: shared-attendance record (rating eligibility basis).
     void api.rsvpEvent(eventId, nowRsvped).then((r) => {
       if (!r.ok) {
         toast(r.error.message ?? "Couldn't save your RSVP. Try again.", "info");
         return;
       }
-      setMyRunIds((ids) => { const next = new Set(ids); if (nowRsvped) next.add(eventId); else next.delete(eventId); return next; });
+      setMyRunIds((ids) => { const next = new Set(ids); if (nowRsvped) next.add(key); else next.delete(key); return next; });
       toast(nowRsvped ? `You're in for "${title}"!` : `RSVP removed for "${title}".`, nowRsvped ? "success" : "neutral");
     });
   };
@@ -227,7 +229,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
                       <EventCard
                         event={e}
                         city={city}
-                        rsvped={myRunIds.has(e.id)}
+                        rsvped={myRunIds.has(bareEventId(e.id))}
                         canRsvp={canRsvp}
                         onRsvp={() => onRsvp(e.id, e.title)}
                         featured={hl?.featured}

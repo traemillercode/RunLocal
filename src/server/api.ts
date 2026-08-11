@@ -61,7 +61,7 @@ import {
 import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
 import { listLedGroups, leaderQueue, assignGroupLeader, removeGroupLeader, transferGroupOwnership, editGroupProfile, notifyLeadersOfMembershipRequest, type GroupProfilePatch } from "./leadership";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
-import { listMyRuns, setMyRunKept } from "./myRuns";
+import { listMyRuns, setMyRunKept, publicOccurrenceId } from "./myRuns";
 import { buildMyRunsIcs } from "./ical";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import { validateImageBytes } from "./image-validation";
@@ -119,6 +119,7 @@ import {
   listTrustedMembers,
   revokeTrustedMember,
 } from "./verification";
+import { publicForumPosts, createForumPost } from "./forum";
 
 export const SESSION_COOKIE = "runlocal_sid";
 export const ADMIN_COOKIE = "runlocal_admin";
@@ -594,6 +595,28 @@ async function handleApi(
       return err(res, { status: 400, error: "invalid_city" }), true;
     }
     return ok(res, publicApprovedContent(db, cityId)), true;
+  }
+
+  // ---- public forum (user-created posts; seed posts render from city data) --
+  // GET is a public city-scoped read of USER-created posts only (seed posts
+  // stay in the client's city seed). POST is verified-only and server-
+  // authoritative: the post lands in the author's home city, and rejected /
+  // pending / guest accounts are denied with explicit errors.
+  if (method === "GET" && url.pathname === "/api/forum") {
+    const cityId = url.searchParams.get("city") ?? "";
+    if (!cityId || !cityExists(db, cityId)) {
+      return err(res, { status: 400, error: "invalid_city" }), true;
+    }
+    return ok(res, { cityId, posts: publicForumPosts(db, cityId) }), true;
+  }
+  if (method === "POST" && url.pathname === "/api/forum") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { section?: unknown; title?: unknown; body?: unknown };
+    const result = createForumPost(db, sess.accountId, body, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { post: result.data.post }), true;
   }
 
   // ---- activity integrations (provider-neutral public shapes) -------------
@@ -1357,31 +1380,37 @@ async function handleApi(
     const runDate = separator > 0 ? occurrenceId.slice(separator + 1) : "";
     const occ = event && (event.id === occurrenceEventId || event.id === occurrenceEventId.replace(/^event:/, "") || event.seedRefId === occurrenceEventId.replace(/^event:/, ""))
       ? resolveOccurrence(db, event.id, runDate) : null;
-    if (!event || !occ || occ.occurrenceId !== occurrenceId || event.status !== "published" || event.hidden || event.archivedAt) return err(res, { status: 404, error: "discussion_unavailable" }), true;
+    // The client may send the canonical occurrence id OR the display-space
+    // form seed events surface (`event:<seedRefId>:<date>`, as returned by
+    // My Runs / the RSVP API). Resolve to the CANONICAL id before any
+    // attendance/record check: stored rows are always canonical, so a
+    // display spelling never widens or narrows exact-occurrence access.
+    const requestedCanonical = occ && (occ.occurrenceId === occurrenceId || (occ.event?.seedRefId && occurrenceId === `event:${occ.event.seedRefId}:${runDate}`)) ? occ.occurrenceId : "";
+    if (!event || !occ || !requestedCanonical || event.status !== "published" || event.hidden || event.archivedAt) return err(res, { status: 404, error: "discussion_unavailable" }), true;
     const publicDto = (d: import("./types").DiscussionRecord) => ({ id:d.id, kind:d.kind, parentId:d.parentId, occurrenceId:d.occurrenceId, eventId:d.eventId, cityId:d.cityId, title:d.title, body:d.body, authorId:d.authorId, createdAt:d.createdAt, updatedAt:d.updatedAt });
     // Discussion reads are private to verified participants; this is not a public forum.
     const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const account = db.getAccount(sess.accountId);
-    const attendance = account && db.listAttendance(account.id).some(a => (a.role === "rsvp" || a.role === "host") && sameEventId(a.eventId, event.id) && a.occurrenceId === occurrenceId);
+    const attendance = account && db.listAttendance(account.id).some(a => (a.role === "rsvp" || a.role === "host") && sameEventId(a.eventId, event.id) && a.occurrenceId === requestedCanonical);
     if (!account || account.deletedAt || account.status !== "verified" || !attendance || account.cityId !== event.cityId) return err(res, { status: 403, error: "participant_required" }), true;
-    if (method === "GET") return ok(res, { discussion: db.listDiscussions(occurrenceId).map(publicDto) }), true;
+    if (method === "GET") return ok(res, { discussion: db.listDiscussions(requestedCanonical).map(publicDto) }), true;
     if (account.suspended && (!account.suspendedUntil || new Date(account.suspendedUntil) > now)) return err(res, { status: 403, error: "suspended" }), true;
     if (!db.consumeDiscussionRate(account.id, now.getTime())) return err(res, { status: 429, error: "rate_limited" }), true;
     if (method === "DELETE") {
       const target = db.getDiscussion(decodeURIComponent(discussionPath[3] ?? ""));
-      if (!target || target.authorId !== account.id || target.occurrenceId !== occurrenceId || target.state === "deleted") return err(res, { status: 404, error: "not_found" }), true;
+      if (!target || target.authorId !== account.id || target.occurrenceId !== requestedCanonical || target.state === "deleted") return err(res, { status: 404, error: "not_found" }), true;
       db.updateDiscussion(target.id, { state: "deleted", body: "", title: null }); await db.persist(); return ok(res, { deleted: true }), true;
     }
     const b = await readJson(req) as Record<string, unknown>;
     const body = typeof b.body === "string" ? b.body.trim() : "";
     const title = typeof b.title === "string" ? b.title.trim() : null;
     const parentId = typeof b.parentId === "string" ? b.parentId : null;
-    if (!body || body.length > 1000 || (title !== null && (!title || title.length > 120)) || (parentId && (!db.getDiscussion(parentId) || db.getDiscussion(parentId)?.occurrenceId !== occurrenceId))) return err(res, { status: 400, error: "invalid_discussion" }), true;
+    if (!body || body.length > 1000 || (title !== null && (!title || title.length > 120)) || (parentId && (!db.getDiscussion(parentId) || db.getDiscussion(parentId)?.occurrenceId !== requestedCanonical))) return err(res, { status: 400, error: "invalid_discussion" }), true;
     const kind = parentId ? "comment" : "thread";
     if (kind === "thread" && title === null) return err(res, { status: 400, error: "title_required" }), true;
-    const record: import("./types").DiscussionRecord = { id:newId(), kind, parentId, occurrenceId, eventId:event.id, cityId:event.cityId, authorId:account.id, title:title ? title.slice(0,120) : null, body:body.slice(0,1000), state:"visible", createdAt:now.toISOString(), updatedAt:now.toISOString() };
+    const record: import("./types").DiscussionRecord = { id:newId(), kind, parentId, occurrenceId:requestedCanonical, eventId:event.id, cityId:event.cityId, authorId:account.id, title:title ? title.slice(0,120) : null, body:body.slice(0,1000), state:"visible", createdAt:now.toISOString(), updatedAt:now.toISOString() };
     db.addDiscussion(record);
-    const recipients = new Set(db.listDiscussions(occurrenceId).filter(d => d.authorId !== account.id && !db.isBlocked(account.id,d.authorId)).map(d => d.authorId));
+    const recipients = new Set(db.listDiscussions(requestedCanonical).filter(d => d.authorId !== account.id && !db.isBlocked(account.id,d.authorId)).map(d => d.authorId));
     if (parentId) { const parent=db.getDiscussion(parentId); if(parent && parent.authorId !== account.id && !db.isBlocked(account.id,parent.authorId)) recipients.add(parent.authorId); }
     for (const recipient of recipients) if (db.getNotificationPreferences(recipient).community_updates) db.addNotification({id:newId(),accountId:recipient,category:"community_updates",title:"New run-day discussion activity",body:"Someone added to a run you joined.",createdAt:now.toISOString(),readAt:null});
     await db.persist(); return ok(res, { discussion: publicDto(record) }), true;
@@ -1402,7 +1431,9 @@ async function handleApi(
       // Idempotent: a second RSVP for the same occurrence is a no-op (one row).
       const mine = db.listAttendance(s.accountId).filter(a => a.role === "rsvp" && sameEventId(a.eventId, occ.eventId) && a.occurrenceId === occ.occurrenceId);
       if (!mine.length) { db.addAttendance({ id: crypto.randomUUID().replace(/-/g,""), accountId:s.accountId, eventId:occ.eventId, role:"rsvp", createdAt:now.toISOString(), occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt }); await db.persist(); }
-      return ok(res, { rsvped: true, occurrenceId:occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt }), true;
+      // Occurrence id surfaces in DISPLAY space (seed events expose the seed
+      // ref) so the client's local state matches what My Runs / the feed show.
+      return ok(res, { rsvped: true, occurrenceId: occ.event ? publicOccurrenceId(occ.event, occ.eventId, occ.runDate) : occ.occurrenceId, runDate:occ.runDate, startsAt:occ.startsAt }), true;
     }
     // Removal is occurrence-exact and owner-scoped: it touches only the
     // caller's own rsvp attendance row(s) for this exact occurrence — never
@@ -1418,14 +1449,15 @@ async function handleApi(
       const refs = [known?.id, known?.seedRefId, requestedId].filter((x): x is string => !!x);
       if (requestedId && !refs.some(ref => sameEventId(row.eventId, ref))) return err(res, { status: 400, error: "invalid_run", message: "That RSVP does not belong to this run." }), true;
       db.removeAttendance(row.id); await db.persist();
-      return ok(res, { rsvped: false, occurrenceId: row.occurrenceId ?? null, runDate: row.runDate ?? null, startsAt: row.startsAt ?? null }), true;
+      const rowEvent = row.occurrenceId && row.runDate ? db.listEvents().find((e) => e.id === row.eventId || e.seedRefId === row.eventId.replace(/^event:/, "")) : undefined;
+      return ok(res, { rsvped: false, occurrenceId: row.occurrenceId && row.runDate ? (rowEvent ? publicOccurrenceId(rowEvent, row.eventId, row.runDate) : row.occurrenceId) : (row.occurrenceId ?? null), runDate: row.runDate ?? null, startsAt: row.startsAt ?? null }), true;
     }
     const occ = resolveOccurrence(db, requestedId, date);
     if (!occ) return err(res, { status: 400, error: "invalid_occurrence", message: "That date is not a scheduled occurrence of this event." }), true;
     const mine = db.listAttendance(s.accountId).filter(a => a.role === "rsvp" && sameEventId(a.eventId, occ.eventId) && a.occurrenceId === occ.occurrenceId);
     for (const a of mine) db.removeAttendance(a.id);
     if (mine.length) await db.persist();
-    return ok(res, { rsvped: false, occurrenceId: occ.occurrenceId, runDate: occ.runDate, startsAt: occ.startsAt }), true;
+    return ok(res, { rsvped: false, occurrenceId: occ.event ? publicOccurrenceId(occ.event, occ.eventId, occ.runDate) : occ.occurrenceId, runDate: occ.runDate, startsAt: occ.startsAt }), true;
   }
   // ---- ratings (server-eligible: shared RSVP/host attendance only) --------
   if (url.pathname === "/api/ratings" && method === "POST") {

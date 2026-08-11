@@ -454,6 +454,26 @@ export function cityAdminDecideSubmission(id: string, action: "approve" | "rejec
   return adminRequest(`/api/admin/city/submissions/${encodeURIComponent(id)}/${action}`, reason, { method: "POST" });
 }
 
+// ------------------------------------------------------- public forum posts
+/** A user-created forum post as served by /api/forum (server-persisted). */
+export interface ForumPostView {
+  id: string;
+  section: import("../types").ForumSection;
+  title: string;
+  body: string;
+  author: string;
+  authorNote: string | null;
+  createdAt: string;
+  replies: number;
+  pinned: boolean;
+}
+export function getForumPosts(cityId: string): Promise<ApiResult<{ cityId: string; posts: ForumPostView[] }>> {
+  return request(`/api/forum?city=${encodeURIComponent(cityId)}`);
+}
+export function createForumPost(input: { section: import("../types").ForumSection; title: string; body: string }): Promise<ApiResult<{ post: ForumPostView }>> {
+  return request("/api/forum", { method: "POST", body: JSON.stringify(input) });
+}
+
 // -------------------------------------------------- public approved content
 export interface PublicUserRace {
   id: string; kind: "race"; name: string; date: string; distance: string; location: string;
@@ -736,7 +756,7 @@ export function getMyRuns(): Promise<ApiResult<{ runs: MyRunView[] }>> { return 
 export function keepMyRun(runId: string, kept: boolean): Promise<ApiResult<{ kept: boolean }>> { return request("/api/my/runs/keep", { method: "POST", body: JSON.stringify({ runId, kept }) }); }
 
 /** Server-side RSVP — the shared-attendance basis for rating eligibility. */
-export function rsvpEvent(eventId: string, rsvp: boolean = true, runDate?: string, runId?: string): Promise<ApiResult<{ rsvped: boolean }>> {
+export function rsvpEvent(eventId: string, rsvp: boolean = true, runDate?: string, runId?: string): Promise<ApiResult<{ rsvped: boolean; occurrenceId?: string | null; runDate?: string | null; startsAt?: string | null }>> {
   return request("/api/events/rsvp", { method: "POST", body: JSON.stringify({ eventId, rsvp, ...(runDate ? { runDate } : {}), ...(runId ? { runId } : {}) }) });
 }
 export interface DiscussionView { id:string; kind:"thread"|"comment"; parentId:string|null; occurrenceId:string; eventId:string; cityId:string; title:string|null; body:string; authorId:string; createdAt:string; updatedAt:string; }

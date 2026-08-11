@@ -205,6 +205,7 @@ export class Db {
   private notifications = new Map<string, import("./types").NotificationRecord>();
   private discussions = new Map<string, import("./types").DiscussionRecord>();
   private discussionRate = new Map<string, number[]>();
+  private forumPosts = new Map<string, import("./types").ForumPostRecord>();
   private waivers = new Map<string, import("./waivers").GroupWaiverVersion>();
   private waiverSignatures = new Map<string, import("./waivers").GroupWaiverSignature>();
   private checkins = new Map<string, import("./checkins").EventCheckInRecord>();
@@ -301,6 +302,7 @@ export class Db {
       for (const n of parsed.notifications ?? []) this.notifications.set(n.id, n);
       for (const d of parsed.discussions ?? []) this.discussions.set(d.id, d);
       for (const [accountId, timestamps] of Object.entries(parsed.discussionRate ?? {})) this.discussionRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
+      for (const f of parsed.forumPosts ?? []) this.forumPosts.set(f.id, f);
       for (const [accountId, timestamps] of Object.entries(parsed.safetyReportRate ?? {})) this.safetyReportRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
       for (const [accountId, timestamps] of Object.entries(parsed.joinRequestRate ?? {})) {
         this.joinRequestRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
@@ -350,6 +352,7 @@ export class Db {
       notifications: [...this.notifications.values()],
       discussions: [...this.discussions.values()],
       discussionRate: Object.fromEntries(this.discussionRate.entries()),
+      forumPosts: [...this.forumPosts.values()],
       waivers: [...this.waivers.values()],
       waiverSignatures: [...this.waiverSignatures.values()],
       checkins: [...this.checkins.values()],
@@ -376,6 +379,12 @@ export class Db {
   addDiscussion(d: import("./types").DiscussionRecord) { this.discussions.set(d.id, d); return d; }
   updateDiscussion(id: string, patch: Partial<import("./types").DiscussionRecord>) { const d=this.discussions.get(id); if (!d) return undefined; const n={...d,...patch,updatedAt:this.now().toISOString()}; this.discussions.set(id,n); return n; }
   consumeDiscussionRate(accountId:string, nowMs:number, limit=10, windowMs=60*60*1000) { const current=(this.discussionRate.get(accountId)??[]).filter(t=>nowMs-t<windowMs); if(current.length>=limit){this.discussionRate.set(accountId,current);return false;} current.push(nowMs);this.discussionRate.set(accountId,current);return true; }
+  // --------------------------------------------------------------- forum posts
+  /** All user-created forum posts (visible and soft-deleted) for a city. */
+  listForumPosts(cityId?: string) { return [...this.forumPosts.values()].filter(f => !cityId || f.cityId === cityId); }
+  getForumPost(id: string) { return this.forumPosts.get(id); }
+  addForumPost(f: import("./types").ForumPostRecord) { this.forumPosts.set(f.id, f); return f; }
+  updateForumPost(id: string, patch: Partial<import("./types").ForumPostRecord>) { const f = this.forumPosts.get(id); if (!f) return undefined; const n = { ...f, ...patch, updatedAt: this.now().toISOString() }; this.forumPosts.set(id, n); return n; }
   // ---------------------------------------------------------------- accounts
   listAccounts(): AccountRecord[] {
     return [...this.accounts.values()];
