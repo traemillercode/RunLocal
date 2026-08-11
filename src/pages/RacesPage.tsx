@@ -138,7 +138,7 @@ export function RacesPage({ city }: { city: City }) {
         </p>
       ) : null}
       <p className="mt-4 text-center text-[11px] leading-relaxed text-slate-400">
-        Sample seed listings for the MVP plus approved community submissions — always confirm details on the organizer's site.
+        Sample seed listings plus approved community submissions — always confirm details on the organizer's site.
       </p>
       </div>
       <aside className="desktop-races-rail" aria-label="Race listings guidance">

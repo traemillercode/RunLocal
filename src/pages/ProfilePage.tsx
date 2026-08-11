@@ -285,19 +285,14 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
                 ))}
               </ul>
             )}
-            <p className="mt-2.5 text-[11px] text-slate-400">RSVPs are client-side in this preview — server sync arrives later.</p>
+            <p className="mt-2.5 text-[11px] text-slate-400">RSVPs are saved to your account — your full private list lives in My Runs.</p>
           </div>
           <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
             <h2 className="text-[15px] font-bold text-slate-900">My groups</h2>
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
-              {city.groups.slice(0, 3).map((g) => (
-                <Chip key={g.id} tone="outline">
-                  {g.name}
-                </Chip>
-              ))}
-              <Chip tone="neutral">+ 2 more</Chip>
-            </div>
-            <p className="mt-2.5 text-[11px] text-slate-400">Sample — group membership joins launch later.</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-slate-600">Only groups you've actually joined or requested to join appear here.</p>
+            <PillButton variant="secondary" onClick={() => navigate("/my-groups")} className="mt-3.5 w-full">
+              <Icon name="chevronRight" className="h-4 w-4 rotate-180" /> View my groups
+            </PillButton>
           </div>
         </section>
       ) : null}
