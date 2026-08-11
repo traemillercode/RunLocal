@@ -821,11 +821,13 @@ export function requestGroupMembership(groupId:string): Promise<ApiResult<{membe
 export function updateGroupMembership(groupId:string, action:"leave"|"approve"|"decline"|"remove", accountId?:string): Promise<ApiResult<{membership:MyGroupMembership}>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership/${action}`, {method:"POST",body:JSON.stringify(accountId?{accountId}:{})}); }
 /** Leader identity shown to group managers — public fields only. */
 export interface LeaderIdentity { id: string; name: string; username: string | null; profilePhotoUrl: string | null; }
-/** One group the signed-in account leads (owner or leader). */
+/** One group the signed-in account manages (owner/leader, or in-scope admin). */
 export interface LedGroupRow {
   groupId: string; groupName: string; cityId: string; ownerId: string | null;
-  role: "owner" | "leader"; pendingCount: number;
+  role: "owner" | "leader" | "city_admin" | "global_admin"; pendingCount: number;
   canManageLeaders: boolean; leaders: LeaderIdentity[];
+  /** Public profile fields the manage form initializes from (server truth). */
+  description: string; membershipMode: "open" | "request";
 }
 /** Pending membership request visible in the leader queue. */
 export interface PendingRequestRow {

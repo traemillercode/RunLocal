@@ -12,9 +12,10 @@
  *    like the existing admin handlers. Rows are never hard-deleted.
  *
  * Privacy contract: these handlers return PUBLIC identity only (name,
- * username, profile photo). No email, phone, home city, roster, or discussion
- * data is exposed. Leaders of a group never gain visibility into other
- * groups' data, and city admins never see data outside their scope city.
+ * username, profile photo) plus public group profile fields. No email,
+ * phone, home city, roster, or discussion data is exposed. Leaders of a
+ * group never gain visibility into other groups' data, and city admins
+ * never see data outside their scope city.
  */
 import type { AccountRecord, AdminAction, GroupModRecord } from "./types";
 import type { Db } from "./store";
@@ -23,7 +24,8 @@ import { validReason, REASON_MAX, type AdminResult } from "./admin";
 import {
   canManageGroupLeadership,
   canManageGroupOps,
-  groupsLedBy,
+  groupsManagedBy,
+  isCityAdminForGroup,
   isEligibleLeader,
   isGlobalAdmin,
   leaderAccounts,
@@ -31,18 +33,26 @@ import {
   type LeaderIdentity,
 } from "./roles";
 
-/** Public-safe summary of one group the actor leads. */
+/**
+ * Public-safe summary of one group the actor may manage (owner/leader, or a
+ * City/Global Admin in scope). Contains only public group profile fields and
+ * public leader identities — no email, phone, home city, roster, or
+ * occurrence data.
+ */
 export interface LedGroupRow {
   groupId: string;
   groupName: string;
   cityId: string;
   ownerId: string | null;
-  /** "owner" | "leader" — the actor's role on this group. */
-  role: "owner" | "leader";
+  /** The actor's authority on this group. */
+  role: "owner" | "leader" | "city_admin" | "global_admin";
   pendingCount: number;
   /** True when the actor may run ownership acts (owner/admin) on this group. */
   canManageLeaders: boolean;
   leaders: LeaderIdentity[];
+  /** Public profile fields the manage form initializes from (server truth). */
+  description: string;
+  membershipMode: "open" | "request";
 }
 
 /** Pending membership request row — public identity only, no email/phone. */
@@ -55,13 +65,22 @@ export interface PendingRequestRow {
   profilePhotoUrl: string | null;
   requestedAt: string;
 }
-
-/** Groups the actor leads, with their pending-request queues (leader queue). */
+/**
+ * Groups the actor may manage, with their pending-request queues (leader
+ * queue). Admins in scope get every eligible group even when they are not
+ * listed as a leader — the server still enforces every mutation boundary.
+ */
 export function listLedGroups(db: Db, actor: AccountRecord | null | undefined): LedGroupRow[] {
-  const groups = groupsLedBy(db, actor);
+  const groups = groupsManagedBy(db, actor);
   if (groups.length === 0) return [];
   return groups.map((g) => {
-    const role: "owner" | "leader" = g.ownerId === actor!.id ? "owner" : "leader";
+    const role: LedGroupRow["role"] = isGlobalAdmin(actor)
+      ? "global_admin"
+      : isCityAdminForGroup(actor, g)
+        ? "city_admin"
+        : g.ownerId === actor!.id
+          ? "owner"
+          : "leader";
     return {
       groupId: g.id,
       groupName: g.name,
@@ -71,18 +90,21 @@ export function listLedGroups(db: Db, actor: AccountRecord | null | undefined): 
       pendingCount: db.listMemberships().filter((m) => m.groupId === g.id && m.status === "pending").length,
       canManageLeaders: canManageGroupLeadership(db, g, actor),
       leaders: leaderIdentities(db, g),
+      description: g.description ?? "",
+      membershipMode: g.membershipMode ?? "request",
     };
   });
 }
 
 /**
- * Flatten the leader queue for one actor across all groups they lead:
+ * Flatten the leader queue for one actor across all groups they manage
+ * (their own led groups, plus every in-scope group for City/Global Admins):
  * pending membership requests only, public identity only.
  */
 export function leaderQueue(db: Db, actor: AccountRecord | null | undefined): PendingRequestRow[] {
-  const led = groupsLedBy(db, actor);
-  if (led.length === 0) return [];
-  const groupIds = new Set(led.map((g) => g.id));
+  const managed = groupsManagedBy(db, actor);
+  if (managed.length === 0) return [];
+  const groupIds = new Set(managed.map((g) => g.id));
   return db
     .listMemberships()
     .filter((m) => groupIds.has(m.groupId) && m.status === "pending")
@@ -274,8 +296,10 @@ export function editGroupProfile(
   const apply: Partial<GroupModRecord> = {};
   if (patch.description !== undefined) {
     if (typeof patch.description !== "string" || patch.description.length > MAX_DESC) return { ok: false, status: 400, error: "invalid_description" };
-    if ((group.description ?? "") !== patch.description) change.push("description updated");
-    apply.description = patch.description;
+    if ((group.description ?? "") !== patch.description) {
+      change.push("description updated");
+      apply.description = patch.description;
+    }
   }
   for (const urlKey of ["websiteUrl", "groupmeUrl", "facebookUrl", "instagramUrl"] as const) {
     const v = patch[urlKey];
@@ -284,14 +308,20 @@ export function editGroupProfile(
       return { ok: false, status: 400, error: "invalid_url", message: "Links must be http(s) URLs." };
     }
     const clean = v === null ? null : v.trim();
-    if ((group[urlKey] ?? null) !== clean) change.push(`${urlKey} updated`);
-    apply[urlKey] = clean;
+    if ((group[urlKey] ?? null) !== clean) {
+      change.push(`${urlKey} updated`);
+      apply[urlKey] = clean;
+    }
   }
   if (patch.membershipMode !== undefined) {
     if (patch.membershipMode !== "open" && patch.membershipMode !== "request") return { ok: false, status: 400, error: "invalid_membership_mode" };
-    if ((group.membershipMode ?? "open") !== patch.membershipMode) change.push(`membershipMode: ${group.membershipMode ?? "open"} -> ${patch.membershipMode}`);
-    apply.membershipMode = patch.membershipMode;
+    if ((group.membershipMode ?? "open") !== patch.membershipMode) {
+      change.push(`membershipMode: ${group.membershipMode ?? "open"} -> ${patch.membershipMode}`);
+      apply.membershipMode = patch.membershipMode;
+    }
   }
+  // No-op guard: an unchanged profile PATCH must not write or audit anything,
+  // so a client bug can never create phantom writes or audit noise.
   if (Object.keys(apply).length === 0) {
     return { ok: true, data: { group, leaders: leaderIdentities(db, group), ownerId: group.ownerId ?? null } };
   }

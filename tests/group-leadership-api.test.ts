@@ -32,8 +32,8 @@ function account(db: Db, email: string, cityId = "columbia-mo", patch: Partial<A
   const s = db.createSession(a.id, "127.0.0.1");
   return { id: a.id, cookie: `runlocal_sid=${s.id}`, email: a.email };
 }
-function group(db: Db, id: string, ownerId?: string, leaderIds: string[] = [], membershipMode: "open" | "request" = "request"): GroupModRecord {
-  const rec: GroupModRecord = { id, cityId: "columbia-mo", name: id, ownerId, leaderIds, membershipMode, rrcaBadge: false, rrcaNote: null, rrcaNoteUpdatedAt: null };
+function group(db: Db, id: string, ownerId?: string, leaderIds: string[] = [], membershipMode: "open" | "request" = "request", cityId = "columbia-mo"): GroupModRecord {
+  const rec: GroupModRecord = { id, cityId, name: id, ownerId, leaderIds, membershipMode, rrcaBadge: false, rrcaNote: null, rrcaNoteUpdatedAt: null };
   db.upsertGroup(rec);
   return rec;
 }
@@ -300,5 +300,145 @@ describe("membership-request notification semantics", () => {
     db.setNotificationPreferences(owner.id, { run_reminders: false, community_updates: true, account_alerts: false });
     await call(db, "POST", "/api/groups/open-g/membership", joiner.cookie);
     expect(db.listNotifications(owner.id)).toHaveLength(0);
+  });
+});
+
+describe("manage surface — led-groups rows carry server profile truth", () => {
+  it("rows include the group's description and membership mode so the manage form initializes from the row", async () => {
+    const db = createMemoryStore();
+    const owner = account(db, "owner@example.com");
+    group(db, "g1", owner.id);
+    db.updateGroup("g1", { description: "Weekly social runs", membershipMode: "open" });
+    const led = await call(db, "GET", "/api/me/leader/groups", owner.cookie);
+    expect(led.status).toBe(200);
+    expect(led.body.groups[0]).toMatchObject({ groupId: "g1", description: "Weekly social runs", membershipMode: "open" });
+  });
+  it("seeded/legacy groups without a stored mode surface the effective request default", async () => {
+    const db = createMemoryStore();
+    const owner = account(db, "owner@example.com");
+    group(db, "legacy", owner.id); // no membershipMode / description stored
+    const led = await call(db, "GET", "/api/me/leader/groups", owner.cookie);
+    expect(led.body.groups[0]).toMatchObject({ membershipMode: "request", description: "" });
+  });
+});
+
+describe("admin manage reach — authorized admins can reach eligible groups in the UI", () => {
+  it("the Global Admin sees every non-archived group across cities as global_admin", async () => {
+    const db = createMemoryStore();
+    const owner = account(db, DEFAULT_OWNER_EMAIL, "columbia-mo"); // owner email => Global Admin
+    group(db, "columbia-g", undefined, [], "request", "columbia-mo");
+    group(db, "stl-g", undefined, [], "open", "stl-mo");
+    group(db, "kc-g", undefined, [], "request", "kc-mo");
+    db.updateGroup("stl-g", { archived: true, archivedAt: new Date().toISOString() });
+    const led = await call(db, "GET", "/api/me/leader/groups", owner.cookie);
+    expect(led.status).toBe(200);
+    const ids = led.body.groups.map((g: { groupId: string }) => g.groupId);
+    expect(ids).toContain("columbia-g");
+    expect(ids).toContain("kc-g");
+    expect(ids).not.toContain("stl-g"); // archived stays out
+    expect(led.body.groups.every((g: { role: string }) => g.role === "global_admin")).toBe(true);
+    expect(led.body.groups.every((g: { canManageLeaders: boolean }) => g.canManageLeaders)).toBe(true);
+  });
+  it("a City Admin sees every group in their scoped city — led or not — and never another city's groups", async () => {
+    const db = createMemoryStore();
+    const ca = account(db, "ca@example.com", "columbia-mo", { role: "city_admin", adminCityId: "columbia-mo" });
+    const otherOwner = account(db, "other@example.com");
+    group(db, "mine", otherOwner.id);
+    group(db, "not-led", undefined, [], "open"); // ca is not a leader of this one
+    group(db, "stl-g", undefined, [], "request", "stl-mo");
+    const led = await call(db, "GET", "/api/me/leader/groups", ca.cookie);
+    expect(led.status).toBe(200);
+    const ids = led.body.groups.map((g: { groupId: string }) => g.groupId);
+    expect(ids).toEqual(expect.arrayContaining(["mine", "not-led"]));
+    expect(ids).not.toContain("stl-g");
+    expect(led.body.groups.every((g: { role: string }) => g.role === "city_admin")).toBe(true);
+    expect(led.body.groups.every((g: { canManageLeaders: boolean }) => g.canManageLeaders)).toBe(true);
+  });
+  it("a plain verified runner sees only groups they lead — no admin reach", async () => {
+    const db = createMemoryStore();
+    const runner = account(db, "runner@example.com");
+    const otherOwner = account(db, "other@example.com");
+    group(db, "theirs", otherOwner.id);
+    group(db, "theirs-2", undefined, [], "open", "stl-mo");
+    const led = await call(db, "GET", "/api/me/leader/groups", runner.cookie);
+    expect(led.body.groups).toHaveLength(0);
+    expect((await call(db, "GET", "/api/me/leader/queue", runner.cookie)).body.pending).toHaveLength(0);
+  });
+});
+
+describe("admin manage reach — leader queue", () => {
+  it("a City Admin sees pending requests for every group in their city (led or not); a cross-city admin sees only their own city", async () => {
+    const db = createMemoryStore();
+    const ca = account(db, "ca@example.com", "columbia-mo", { role: "city_admin", adminCityId: "columbia-mo" });
+    const otherCa = account(db, "stl-ca@example.com", "stl-mo", { role: "city_admin", adminCityId: "stl-mo" });
+    const requester = account(db, "requester@example.com"); // columbia-mo
+    const stlRequester = account(db, "stl-requester@example.com", "stl-mo");
+    db.updateAccount(requester.id, { name: "Columbia Person" });
+    db.updateAccount(stlRequester.id, { name: "Stl Person" });
+    group(db, "mine"); // seeded — no owner/leaders
+    group(db, "stl-g", undefined, [], "request", "stl-mo");
+    await call(db, "POST", "/api/groups/mine/membership", requester.cookie);
+    await call(db, "POST", "/api/groups/stl-g/membership", stlRequester.cookie);
+    const queue = await call(db, "GET", "/api/me/leader/queue", ca.cookie);
+    expect(queue.body.pending).toHaveLength(1);
+    expect(queue.body.pending[0].groupId).toBe("mine");
+    const otherQueue = await call(db, "GET", "/api/me/leader/queue", otherCa.cookie);
+    expect(otherQueue.body.pending.map((p: { groupId: string }) => p.groupId)).toEqual(["stl-g"]);
+    // public identity only — never the requester's email or phone
+    const json = JSON.stringify(queue.body);
+    expect(json).not.toContain(requester.email);
+    expect(json).not.toContain("phone");
+  });
+  it("the Global Admin sees pending requests across cities", async () => {
+    const db = createMemoryStore();
+    const owner = account(db, DEFAULT_OWNER_EMAIL, "columbia-mo");
+    const requester = account(db, "requester@example.com");
+    const stlRequester = account(db, "stl-requester@example.com", "stl-mo");
+    db.updateAccount(requester.id, { name: "Public Person" });
+    db.updateAccount(stlRequester.id, { name: "Stl Person" });
+    group(db, "g-a", undefined, [], "request", "columbia-mo");
+    group(db, "g-b", undefined, [], "request", "stl-mo");
+    await call(db, "POST", "/api/groups/g-a/membership", requester.cookie);
+    await call(db, "POST", "/api/groups/g-b/membership", stlRequester.cookie);
+    const queue = await call(db, "GET", "/api/me/leader/queue", owner.cookie);
+    expect(queue.body.pending).toHaveLength(2);
+    expect(queue.body.pending.map((p: { groupId: string }) => p.groupId).sort()).toEqual(["g-a", "g-b"]);
+    expect(JSON.stringify(queue.body)).not.toContain(requester.email);
+  });
+});
+
+describe("partial profile edits preserve untouched fields", () => {
+  it("PATCH with only the description leaves membership mode and links untouched", async () => {
+    const db = createMemoryStore();
+    const owner = account(db, "owner@example.com");
+    group(db, "g1", owner.id);
+    db.updateGroup("g1", { description: "Old desc", membershipMode: "open", websiteUrl: "https://example.com" });
+    const r = await call(db, "PATCH", "/api/groups/g1/profile", owner.cookie, { description: "New desc", reason: REASON });
+    expect(r.status).toBe(200);
+    const g = db.getGroup("g1")!;
+    expect(g.description).toBe("New desc");
+    expect(g.membershipMode).toBe("open"); // untouched
+    expect(g.websiteUrl).toBe("https://example.com"); // untouched
+    expect(auditActions(db, "group.profile_edit")).toHaveLength(1);
+  });
+  it("PATCH with only membership mode leaves the description untouched", async () => {
+    const db = createMemoryStore();
+    const owner = account(db, "owner@example.com");
+    group(db, "g1", owner.id);
+    db.updateGroup("g1", { description: "Keep me", membershipMode: "open" });
+    const r = await call(db, "PATCH", "/api/groups/g1/profile", owner.cookie, { membershipMode: "request", reason: REASON });
+    expect(r.status).toBe(200);
+    expect(db.getGroup("g1")!.description).toBe("Keep me");
+    expect(db.getGroup("g1")!.membershipMode).toBe("request");
+  });
+  it("a no-op PATCH (no changed fields) writes nothing and records no audit", async () => {
+    const db = createMemoryStore();
+    const owner = account(db, "owner@example.com");
+    group(db, "g1", owner.id);
+    db.updateGroup("g1", { description: "Same", membershipMode: "request" });
+    const r = await call(db, "PATCH", "/api/groups/g1/profile", owner.cookie, { description: "Same", membershipMode: "request", reason: REASON });
+    expect(r.status).toBe(200);
+    expect(db.getGroup("g1")!.description).toBe("Same");
+    expect(auditActions(db, "group.profile_edit")).toHaveLength(0);
   });
 });
