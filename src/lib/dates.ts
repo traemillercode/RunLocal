@@ -152,6 +152,20 @@ export function monthDayLabel(date: Date): string {
   return `${MONTHS[date.getMonth()]} ${date.getDate()}`;
 }
 
+/**
+ * Local wall-clock `YYYY-MM-DD` label for a resolved occurrence date — the same
+ * run-date labels the app displays and the server resolves. Unlike
+ * `date.toISOString().slice(0, 10)` this never shifts the label into the
+ * previous UTC day: for a runner east of UTC a Tuesday run dated the 11th must
+ * stay "2026-08-11", or the server rejects the RSVP with
+ * "not a scheduled occurrence" (and a month-boundary date like Sep 1 must not
+ * become Aug 31).
+ */
+export function localDateLabel(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 /** Parse "yyyy-mm-dd" → "Sat, Oct 4". */
 export function formatRaceDate(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);

@@ -71,7 +71,7 @@ describe("My Runs CalendarGrid SSR", () => {
     expect(html).toContain('aria-label="Previous month"');
     expect(html).toContain('aria-label="Next month"');
     expect(html).toContain('aria-live="polite"');
-    expect(html).toContain('href="/api/my/runs/ical"');
+    expect(html).toContain('href="/api/my/runs/ical?tzOffsetMinutes=');
     expect(html).toContain('download="run-local-my-runs.ics"');
     expect(html).toContain("Export .ics");
     // 33 buttons: 2 month nav + 31 in-month day buttons (fillers are spans).

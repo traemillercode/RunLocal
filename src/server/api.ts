@@ -61,7 +61,7 @@ import {
 import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
 import { listLedGroups, leaderQueue, assignGroupLeader, removeGroupLeader, transferGroupOwnership, editGroupProfile, notifyLeadersOfMembershipRequest, type GroupProfilePatch } from "./leadership";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
-import { listMyRuns, setMyRunKept, publicOccurrenceId } from "./myRuns";
+import { listMyRuns, setMyRunKept, publicOccurrenceId, parseTzOffsetMinutes } from "./myRuns";
 import { buildMyRunsIcs } from "./ical";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import { validateImageBytes } from "./image-validation";
@@ -1154,7 +1154,10 @@ async function handleApi(
     const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const rec = db.getAccount(sess.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
     if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
-    return ok(res, { runs: listMyRuns(db, sess.accountId, rec.cityId ?? "", now) }), true;
+    // Caller's browser offset (minutes) frames upcoming/past like the feed's
+    // client-side check; absent/invalid values behave exactly as before (UTC).
+    const tzOffset = parseTzOffsetMinutes(url.searchParams.get("tzOffsetMinutes"));
+    return ok(res, { runs: listMyRuns(db, sess.accountId, rec.cityId ?? "", now, tzOffset) }), true;
   }
   // ---- private ICS export of upcoming My Runs (caller's rows only) ---------
   // Same auth contract as /api/my/runs; only UPCOMING rows (never past, even
@@ -1163,7 +1166,7 @@ async function handleApi(
     const sess = requireSession(db, cookies); if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const rec = db.getAccount(sess.accountId); if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
     if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
-    const rows = listMyRuns(db, sess.accountId, rec.cityId ?? "", now);
+    const rows = listMyRuns(db, sess.accountId, rec.cityId ?? "", now, parseTzOffsetMinutes(url.searchParams.get("tzOffsetMinutes")));
     const runs = rows.filter((r) => r.upcoming).map((r) => ({ id: r.id, kind: r.kind, title: r.title, startsAt: r.startsAt, location: r.location }));
     return ical(res, buildMyRunsIcs(runs, now)), true;
   }

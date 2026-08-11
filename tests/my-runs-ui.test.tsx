@@ -168,7 +168,9 @@ describe("My Runs SSR UI", () => {
     const gridUsage = source.match(/<CalendarGrid[^>]*>/)?.[0] ?? "";
     expect(gridUsage).toContain("upcoming={sections.upcoming}");
     expect(gridUsage).not.toContain("past"); // past history never enters the grid
-    expect(source).toContain('href="/api/my/runs/ical"');
+    // The private ICS export link carries the caller's browser offset so the
+    // export's upcoming set matches the list view (see my-runs-eleventh tests).
+    expect(source).toContain('href={`/api/my/runs/ical?tzOffsetMinutes=${new Date().getTimezoneOffset()}`}');
     expect(source).toContain('download="run-local-my-runs.ics"');
     expect(source).toContain("Upcoming runs only");
   });

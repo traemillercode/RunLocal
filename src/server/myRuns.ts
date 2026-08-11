@@ -65,7 +65,21 @@ export interface MyRunRow {
   checkedIn: boolean;
 }
 
-export function listMyRuns(db: Db, accountId: string, cityId: string, now = new Date()): MyRunRow[] {
+/**
+ * The browser's `getTimezoneOffset()` minutes for the caller, clamped to the
+ * real-world range (±14 hours) and never NaN — 0 when absent/invalid. Run start
+ * times are stored as UTC-encoded wall-clock labels (see ical.ts), so the
+ * caller's offset is what restores a label like "6:00 PM" to the real instant
+ * a runner sees; without it, an occurrence dated today is classified past from
+ * the UTC-encoded time instead of the local time the feed displays.
+ */
+export function parseTzOffsetMinutes(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(-840, Math.min(840, Math.round(n)));
+}
+
+export function listMyRuns(db: Db, accountId: string, cityId: string, now = new Date(), tzOffsetMinutes = 0): MyRunRow[] {
   const nowMs = now.getTime();
   const rows: MyRunRow[] = [];
   for (const a of db.listAttendance(accountId).filter((x) => x.role === "rsvp")) {
@@ -86,7 +100,17 @@ export function listMyRuns(db: Db, accountId: string, cityId: string, now = new 
     const occ = resolveOccurrence(db, a.eventId, a.runDate);
     if (!occ || !occ.event) continue;
     const ev = occ.event;
-    const upcoming = Date.parse(occ.startsAt) >= nowMs;
+    // Upcoming/past uses the caller's local frame, matching the feed's
+    // client-side "has this run started" check and the My Runs client ordering.
+    // `startsAt` is a wall-clock label encoded in a UTC field ("6:00 PM" for
+    // Columbia is stored as 18:00Z but means 6:00 PM local): the caller's
+    // browser offset restores the real instant. Without this, a run dated the
+    // 11th that the feed still shows as upcoming (before 6:00 PM local) was
+    // classified PAST at 18:00Z and vanished from My Runs immediately after an
+    // otherwise-successful same-day RSVP — the owner's "Add to My Runs fails
+    // for the run dated the 11th" report. Solo runs store real instants and
+    // are compared directly below; legacy rows stay historical.
+    const upcoming = Date.parse(occ.startsAt) + tzOffsetMinutes * 60_000 >= nowMs;
     // Display-space ids: seed events surface their seed ref (what the weekly
     // feed renders), so My Runs links and the feed/detail RSVP state agree
     // after any reload or tab switch. The occurrence stays exact — one row
