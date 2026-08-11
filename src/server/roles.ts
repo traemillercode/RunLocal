@@ -104,6 +104,24 @@ export function groupsLedBy(db: Db, actor: AccountRecord | null | undefined): Gr
     .filter((g) => g.ownerId === actor.id || (g.leaderIds ?? []).includes(actor.id))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
+/**
+ * Groups the account may MANAGE (the manage surface / leader queue): for a
+ * plain verified runner this is exactly the groups they lead; a City Admin
+ * may manage every non-archived group in their scoped city (even ones they
+ * do not lead); the Global Admin may manage every non-archived group in any
+ * city. Cross-city and plain-runner boundaries are preserved — a City Admin
+ * never sees another city's groups, and a plain runner never sees a group
+ * they do not lead.
+ */
+export function groupsManagedBy(db: Db, actor: AccountRecord | null | undefined): GroupModRecord[] {
+  if (!actor || actor.deletedAt || actor.status !== "verified") return [];
+  const all = db.listGroups().filter((g) => !(g.archived ?? false));
+  if (isGlobalAdmin(actor)) return all.sort((a, b) => a.name.localeCompare(b.name));
+  if (actor.role === "city_admin" && typeof actor.adminCityId === "string") {
+    return all.filter((g) => g.cityId === actor.adminCityId).sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return groupsLedBy(db, actor);
+}
 
 /**
  * All leader account ids for a group (owner + leaders, deduped), resolved to
