@@ -58,7 +58,7 @@ describe("rejected-account UI semantics", () => {
   it("VerifiedGateSheet renders the private reason and NO continue-verification action for rejected", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <VerifiedGateSheet open role="rejected" actionLabel="RSVP to runs" pendingLabel="still in review" rejectionReason={REJECT_REASON} />
+        <VerifiedGateSheet open onClose={() => {}} role="rejected" actionLabel="RSVP to runs" pendingLabel="still in review" rejectionReason={REJECT_REASON} />
       </MemoryRouter>,
     );
     expect(html).toContain("Verification denied");
@@ -71,7 +71,7 @@ describe("rejected-account UI semantics", () => {
   it("VerifiedGateSheet pending path is untouched (no denial copy, continue action present)", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <VerifiedGateSheet open role="pending" actionLabel="RSVP to runs" pendingLabel="Your profile is still in review." />
+        <VerifiedGateSheet open onClose={() => {}} role="pending" actionLabel="RSVP to runs" pendingLabel="Your profile is still in review." />
       </MemoryRouter>,
     );
     expect(html).toContain("Continue verification");
@@ -79,7 +79,7 @@ describe("rejected-account UI semantics", () => {
   });
 
   it("AccountMenu shows denied status with the private reason for rejected accounts", () => {
-    const html = renderToStaticMarkup(<AccountMenuContent me={rejectedMe} onClose={() => {}} onNavigate={() => {}} />);
+    const html = renderToStaticMarkup(<AccountMenuContent me={rejectedMe} backendAvailable onNavigate={() => {}} onLogout={() => {}} />);
     expect(html).toContain("Denied");
     expect(html).toContain(REJECT_REASON);
     expect(html).not.toContain("Pending");

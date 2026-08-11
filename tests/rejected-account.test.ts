@@ -12,8 +12,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { apiHandler } from "../src/server/api";
 import { createMemoryStore, type Db, toPublicAccount } from "../src/server/store";
 import { DEFAULT_OWNER_EMAIL, OWNER_EMAIL_VAR } from "../src/server/owner";
-import { ADMIN_COOKIE, SESSION_COOKIE } from "../src/server/api";
-import { ADMIN_KEY_VAR, ADMIN_EMAIL_VAR, adminLogin } from "../src/server/admin";
+import { SESSION_COOKIE } from "../src/server/api";
+import { ADMIN_KEY_VAR, ADMIN_EMAIL_VAR } from "../src/server/admin";
 import type { AccountRecord, CredentialRecord } from "../src/server/types";
 
 const KEY = "test-admin-key-123";
@@ -51,11 +51,6 @@ function pendingApplicant(db: Db, email: string): { id: string; cookie: string }
   db.updateAccount(a.id, { status: "pending", phase: "pending_review", selfieRef: "selfies/x.jpg" });
   const s = db.createSession(a.id, "127.0.0.1");
   return { id: a.id, cookie: `${SESSION_COOKIE}=${s.id}` };
-}
-function keyAdminCookie(db: Db): string {
-  const login = adminLogin(db, KEY, "127.0.0.1");
-  if (!login.ok) throw new Error("key login failed");
-  return `${ADMIN_COOKIE}=${login.data.sessionId}`;
 }
 const audit = (db: Db, action: string) => db.listAudit(100).filter((a) => a.action === action);
 
