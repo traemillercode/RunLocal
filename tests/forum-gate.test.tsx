@@ -16,7 +16,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { VerifiedGateSheet } from "../src/components/VerifiedGateSheet";
-import { ForumCreateSheetBody, ForumPage, replyIntent } from "../src/pages/ForumPage";
+import { ForumCreateSheetBody, ForumPage, ForumThread, replyIntent } from "../src/pages/ForumPage";
 import { CITIES } from "../src/data/cities";
 import type { AccountRole, Me, PublicAccount } from "../src/lib/accounts";
 
@@ -69,14 +69,13 @@ function selectedCity() {
 }
 
 describe("replyIntent — Reply button behavior", () => {
-  it("verified members never open the gate and get honest not-open-yet feedback", () => {
+  it("verified members open the live thread — no toast, no gate", () => {
     const intent = replyIntent("verified", "Trail crew Monday");
     expect(intent.opensGate).toBe(false);
-    expect(intent.toast).toContain("not open yet");
-    expect(intent.toast).not.toContain("verified profile");
+    expect(intent.toast).toBeNull();
   });
 
-  it("guests, pending, and rejected users keep the verified-profile gate", () => {
+  it("guests, pending, and rejected users keep the verified-profile gate with honest copy", () => {
     for (const role of ["guest", "pending", "rejected"] as const) {
       const intent = replyIntent(role, "Trail crew Monday");
       expect(intent.opensGate).toBe(true);
@@ -147,7 +146,7 @@ describe("VerifiedGateSheet — guest/pending/rejected gating preserved", () => 
 describe("ForumCreateSheetBody — New button content per role", () => {
   it("verified gets the LIVE posting form — section picker, title, details, post button", () => {
     const html = renderToStaticMarkup(<ForumCreateSheetBody role="verified" onClose={() => {}} onOpenGate={() => {}} />);
-    expect(html).toContain("Posting is live for verified members");
+    expect(html).toContain("Posting and replying are live for verified members");
     expect(html).toContain("Post to forum");
     expect(html).toContain("Section");
     expect(html).toContain("this about?");
@@ -180,7 +179,7 @@ describe("ForumCreateSheetBody — New button content per role", () => {
 });
 
 describe("ForumPage — verified users never see the verification gate", () => {
-  it("verified: live-posting copy, no Create account / gate copy anywhere", () => {
+  it("verified: live-posting + replying copy, no Create account / gate copy anywhere", () => {
     auth(account(), "verified");
     selectedCity();
     const html = renderToStaticMarkup(
@@ -189,13 +188,14 @@ describe("ForumPage — verified users never see the verification gate", () => {
       </MemoryRouter>,
     );
     expect(html).toContain("Everyone can browse.");
-    expect(html).toContain("posting is open to verified members");
-    expect(html).toContain("Replies are coming soon");
+    expect(html).toContain("posting and replying are open to verified members");
+    expect(html).toContain("Posting and replying are open to verified runner profiles");
     expect(html).not.toContain("Create account");
     expect(html).not.toContain("Get verified");
     expect(html).not.toContain("Continue verification");
     expect(html).not.toContain("requires a verified runner profile");
     expect(html).not.toContain("Verification denied");
+    expect(html).not.toContain("Replies are coming soon");
   });
 
   it("guest: read-only forum copy remains on the page", () => {
@@ -207,6 +207,48 @@ describe("ForumPage — verified users never see the verification gate", () => {
       </MemoryRouter>,
     );
     expect(html).toContain("guests, pending, and denied profiles stay read-only");
-    expect(html).toContain("Posting is open to verified runner profiles");
+    expect(html).toContain("Posting and replying are open to verified runner profiles");
+  });
+});
+
+describe("ForumThread — inline replies per role", () => {
+  const replies = [
+    { id: "r1", postId: "p1", body: "I am in — see you at 6!", author: "Jordan Lee", createdAt: "Aug 3" },
+    { id: "r2", postId: "p1", body: "Bring a headlamp.", author: "Sam Rivera", createdAt: "Aug 3" },
+  ];
+  it("verified gets the live composer AND the existing replies", () => {
+    const html = renderToStaticMarkup(
+      <ForumThread role="verified" replies={replies} draft="" onDraftChange={() => {}} onSubmit={() => {}} />,
+    );
+    expect(html).toContain("Jordan Lee");
+    expect(html).toContain("Sam Rivera");
+    expect(html).toContain("I am in — see you at 6!");
+    expect(html).toContain("Reply as yourself");
+    expect(html).toContain("Add a reply for your city");
+    expect(html).toContain("> Reply</button>");
+    expect(html).not.toContain("Replies are open to verified runner profiles");
+    expect(html).not.toContain("No replies yet");
+  });
+
+  it("empty thread shows honest empty state for verified users", () => {
+    const html = renderToStaticMarkup(
+      <ForumThread role="verified" replies={[]} draft="" onDraftChange={() => {}} onSubmit={() => {}} />,
+    );
+    expect(html).toContain("No replies yet.");
+    expect(html).toContain("Reply as yourself");
+  });
+
+  it("guests / pending / rejected get read-only copy and NEVER the composer", () => {
+    for (const role of ["guest", "pending", "rejected"] as const) {
+      const html = renderToStaticMarkup(
+        <ForumThread role={role} replies={replies} draft="" onDraftChange={() => {}} onSubmit={() => {}} />,
+      );
+      expect(html).toContain("Replies are open to verified runner profiles");
+      expect(html).toContain("Jordan Lee"); // replies are publicly readable
+      expect(html).not.toContain("Reply as yourself");
+      expect(html).not.toContain("Add a reply for your city's forum");
+      expect(html).not.toContain("Create account");
+      expect(html).not.toContain("Verification denied");
+    }
   });
 });

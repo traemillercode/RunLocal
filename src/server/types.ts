@@ -342,6 +342,8 @@ export interface PersistedDb {
   discussionRate?: Record<string, number[]>;
   /** User-created forum posts (public city forum) — persisted server-side. */
   forumPosts?: ForumPostRecord[];
+  /** User-created replies to forum posts (public city forum) — persisted server-side. */
+  forumReplies?: ForumReplyRecord[];
   waivers?: import("./waivers").GroupWaiverVersion[];
   waiverSignatures?: import("./waivers").GroupWaiverSignature[];
   /** Organizer check-in records (per event occurrence, per runner). */
@@ -372,6 +374,27 @@ export interface ForumPostRecord {
   title: string;
   body: string;
   authorAccountId: string;
+  state: "visible" | "deleted";
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A user-created reply to a forum post (public city forum). Replies hang off a
+ * post id that may name either a user-created post (`ForumPostRecord`) or a
+ * seed post from the client's city data — the post id is the single key, and
+ * moderation visibility is inherited from the parent post's content-registry
+ * row (`post:<id>`), so hiding/archiving a post hides its replies too. The
+ * public payload carries the author's public display name only — never email,
+ * phone, or other account data.
+ */
+export interface ForumReplyRecord {
+  id: string;
+  /** Id of the parent post — a user-created post id or a seed post id. */
+  postId: string;
+  cityId: string;
+  authorAccountId: string;
+  body: string;
   state: "visible" | "deleted";
   createdAt: string;
   updatedAt: string;

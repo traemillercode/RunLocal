@@ -206,6 +206,7 @@ export class Db {
   private discussions = new Map<string, import("./types").DiscussionRecord>();
   private discussionRate = new Map<string, number[]>();
   private forumPosts = new Map<string, import("./types").ForumPostRecord>();
+  private forumReplies = new Map<string, import("./types").ForumReplyRecord>();
   private waivers = new Map<string, import("./waivers").GroupWaiverVersion>();
   private waiverSignatures = new Map<string, import("./waivers").GroupWaiverSignature>();
   private checkins = new Map<string, import("./checkins").EventCheckInRecord>();
@@ -303,6 +304,7 @@ export class Db {
       for (const d of parsed.discussions ?? []) this.discussions.set(d.id, d);
       for (const [accountId, timestamps] of Object.entries(parsed.discussionRate ?? {})) this.discussionRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
       for (const f of parsed.forumPosts ?? []) this.forumPosts.set(f.id, f);
+      for (const r of parsed.forumReplies ?? []) this.forumReplies.set(r.id, r);
       for (const [accountId, timestamps] of Object.entries(parsed.safetyReportRate ?? {})) this.safetyReportRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
       for (const [accountId, timestamps] of Object.entries(parsed.joinRequestRate ?? {})) {
         this.joinRequestRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
@@ -353,6 +355,7 @@ export class Db {
       discussions: [...this.discussions.values()],
       discussionRate: Object.fromEntries(this.discussionRate.entries()),
       forumPosts: [...this.forumPosts.values()],
+      forumReplies: [...this.forumReplies.values()],
       waivers: [...this.waivers.values()],
       waiverSignatures: [...this.waiverSignatures.values()],
       checkins: [...this.checkins.values()],
@@ -385,6 +388,10 @@ export class Db {
   getForumPost(id: string) { return this.forumPosts.get(id); }
   addForumPost(f: import("./types").ForumPostRecord) { this.forumPosts.set(f.id, f); return f; }
   updateForumPost(id: string, patch: Partial<import("./types").ForumPostRecord>) { const f = this.forumPosts.get(id); if (!f) return undefined; const n = { ...f, ...patch, updatedAt: this.now().toISOString() }; this.forumPosts.set(id, n); return n; }
+  listForumReplies(postId?: string) { return [...this.forumReplies.values()].filter(r => !postId || r.postId === postId); }
+  getForumReply(id: string) { return this.forumReplies.get(id); }
+  addForumReply(r: import("./types").ForumReplyRecord) { this.forumReplies.set(r.id, r); return r; }
+  updateForumReply(id: string, patch: Partial<import("./types").ForumReplyRecord>) { const r = this.forumReplies.get(id); if (!r) return undefined; const n = { ...r, ...patch, updatedAt: this.now().toISOString() }; this.forumReplies.set(id, n); return n; }
   // ---------------------------------------------------------------- accounts
   listAccounts(): AccountRecord[] {
     return [...this.accounts.values()];

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { HomeCityBanner } from "../components/HomeCityBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { Chip, Icon, PillButton, Sheet } from "../components/ui";
@@ -11,16 +11,16 @@ import * as api from "../lib/api";
 import { FORUM_SECTIONS, type City, type ForumPost, type ForumSection, type QaSort } from "../types";
 
 /**
- * Reply-button intent. Verified members are past the verification gate and may
- * post NEW threads, but replies (comments on a post) are not implemented in
- * this slice — they get honest "not open yet" feedback and NO gate sheet;
- * guests, pending, and rejected users keep the verified-profile gate (rejected
- * shows denial + private reason inside the sheet). Pure so SSR tests can pin
- * the behavior.
+ * Reply-button intent. Verified members are past the verification gate: they
+ * may post NEW threads AND reply (the thread with a live composer opens
+ * inline — no toast, no gate). Guests, pending, and rejected users keep the
+ * honest verified-profile gate (rejected shows denial + private reason inside
+ * the sheet). Pure so SSR tests can pin the behavior.
  */
-export function replyIntent(role: AccountRole, title: string): { toast: string; opensGate: boolean } {
+export function replyIntent(role: AccountRole, title: string): { toast: string | null; opensGate: boolean } {
   if (canDo(role, "post")) {
-    return { toast: "Replies are not open yet — posting is live now.", opensGate: false };
+    // Verified: the live thread + composer opens instead of a toast.
+    return { toast: null, opensGate: false };
   }
   return { toast: `Replies need a verified profile — "${title}"`, opensGate: true };
 }
@@ -157,7 +157,7 @@ export function ForumCreateSheetBody({
     <div className="space-y-4">
       <p className="flex items-start gap-2 rounded-xl bg-emerald-50 p-3.5 text-[13px] leading-relaxed text-emerald-900">
         <Icon name="check" className="mt-0.5 h-4 w-4 shrink-0" />
-        Posting is live for verified members. Replies (comments on a post) are not open yet.
+        Posting and replying are live for verified members.
       </p>
       <div>
         <span className="mb-1.5 block text-sm font-semibold text-slate-700">Section</span>
@@ -211,14 +211,105 @@ export function ForumCreateSheetBody({
   );
 }
 
+/**
+ * Inline reply thread for one post — presentational (no data hooks) so SSR
+ * tests can render the real markup per role. Verified members get the live
+ * composer (submitted via `onSubmit`); guests / pending / rejected users see
+ * the existing replies plus honest read-only copy — the verified-profile gate
+ * with denial copy is driven by the page's Reply-button flow (replyIntent).
+ */
+export function ForumThread({
+  role,
+  replies,
+  onDraftChange,
+  draft,
+  onSubmit,
+  submitting = false,
+  replyError = null,
+  loading = false,
+}: {
+  role: AccountRole;
+  replies: api.ForumReplyView[];
+  onDraftChange: (value: string) => void;
+  draft: string;
+  onSubmit: () => void;
+  submitting?: boolean;
+  replyError?: string | null;
+  loading?: boolean;
+}) {
+  const verified = role === "verified";
+  return (
+    <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3" data-testid={`thread-${""}`} aria-label="Replies">
+      {loading ? (
+        <p className="text-xs font-medium text-slate-400">Loading replies…</p>
+      ) : replies.length === 0 ? (
+        <p className="text-xs font-medium text-slate-400">No replies yet.</p>
+      ) : (
+        <ul className="space-y-3">
+          {replies.map((r) => (
+            <li key={r.id} className="flex gap-2.5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">
+                {r.author
+                  .split(/\s+/)
+                  .map((w) => w[0])
+                  .slice(0, 2)
+                  .join("")
+                  .toUpperCase()}
+              </span>
+              <div className="min-w-0 flex-1 rounded-xl bg-white p-3 ring-1 ring-slate-200/70">
+                <p className="text-xs font-semibold text-slate-700">
+                  {r.author} <span className="font-normal text-slate-400">· {r.createdAt}</span>
+                </p>
+                <p className="mt-0.5 whitespace-pre-wrap text-[13px] leading-relaxed text-slate-700">{r.body}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {verified ? (
+        <div className="mt-3">
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-slate-500">Reply as yourself</span>
+            <textarea
+              value={draft}
+              maxLength={1000}
+              rows={2}
+              onChange={(e) => onDraftChange(e.target.value)}
+              placeholder="Add a reply for your city's forum…"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
+            />
+          </label>
+          {replyError ? <p role="alert" className="mt-2 rounded-lg bg-rose-50 p-2.5 text-[12px] font-semibold text-rose-800">{replyError}</p> : null}
+          <div className="mt-2 flex justify-end">
+            <PillButton variant="primary" className="min-h-10 px-4 text-[13px]" disabled={submitting} onClick={onSubmit}>
+              <Icon name="chat" className="h-3.5 w-3.5" /> {submitting ? "Posting…" : "Reply"}
+            </PillButton>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-3 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-[12px] leading-relaxed text-amber-900">
+          <Icon name="lock" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Replies are open to verified runner profiles — you can read them, and joining in only takes a few minutes.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PostCard({
   post,
   section,
   onReply,
+  replyExpanded = false,
+  thread = null,
+  verified,
 }: {
   post: ForumPost;
   section: ForumSection;
   onReply: () => void;
+  replyExpanded?: boolean;
+  thread?: ReactNode;
+  verified: boolean;
 }) {
   const initials = post.author
     .split(/\s+/)
@@ -263,11 +354,15 @@ function PostCard({
         <button
           type="button"
           onClick={onReply}
-          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-slate-100 px-4 text-[13px] font-semibold text-slate-700 active:bg-slate-200"
+          aria-expanded={replyExpanded}
+          className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold active:bg-slate-200 ${
+            replyExpanded ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-700"
+          }`}
         >
-          <Icon name="lock" className="h-3.5 w-3.5" /> Reply
+          <Icon name={verified ? "chat" : "lock"} className="h-3.5 w-3.5" /> Reply
         </button>
       </div>
+      {replyExpanded ? thread : null}
     </article>
   );
 }
@@ -281,15 +376,46 @@ export function ForumPage({ city }: { city: City }) {
   const [gateOpen, setGateOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [serverPosts, setServerPosts] = useState<api.ForumPostView[]>([]);
+  const [replyCounts, setReplyCounts] = useState<Record<string, number>>({});
   const [submitting, setSubmitting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
-  const loadForum = () => { void api.getForumPosts(city.id).then((r) => { if (r.ok) setServerPosts(r.data.posts); }); };
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  const [repliesByPost, setRepliesByPost] = useState<Record<string, api.ForumReplyView[]>>({});
+  const [threadLoading, setThreadLoading] = useState<string | null>(null);
+  const [replyDraft, setReplyDraft] = useState("");
+  const [replySubmitting, setReplySubmitting] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const loadForum = () => {
+    void api.getForumPosts(city.id).then((r) => {
+      if (r.ok) {
+        setServerPosts(r.data.posts);
+        setReplyCounts((prev) => ({ ...prev, ...r.data.replyCounts }));
+      }
+    });
+  };
   useEffect(() => { loadForum(); }, [city.id]);
+
+  const openThread = (postId: string) => {
+    setOpenThreadId(postId);
+    setReplyDraft("");
+    setReplyError(null);
+    if (!repliesByPost[postId]) {
+      setThreadLoading(postId);
+      void api.getForumReplies(city.id, postId).then((r) => {
+        setThreadLoading(null);
+        if (r.ok) setRepliesByPost((prev) => ({ ...prev, [postId]: r.data.replies }));
+      });
+    }
+  };
 
   const posts = useMemo(() => {
     // Owner-hidden posts are excluded from public rendering (seed + user posts
     // share the `post:<id>` moderation registry; the server also filters).
-    const visible = city.forum.filter((p) => !hidden.has(`post:${p.id}`));
+    // Seed posts keep their sample reply counts and add persisted replies;
+    // user posts carry the server-computed persisted count already.
+    const visible = city.forum
+      .filter((p) => !hidden.has(`post:${p.id}`))
+      .map((p) => ({ ...p, replies: p.replies + (replyCounts[p.id] ?? 0) }));
     const userPosts: ForumPost[] = serverPosts
       .filter((p) => !hidden.has(`post:${p.id}`))
       .map((p) => ({
@@ -313,14 +439,40 @@ export function ForumPage({ city }: { city: City }) {
       return sorted;
     }
     return [...list].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
-  }, [city.forum, hidden, section, qaSort, serverPosts]);
+  }, [city.forum, hidden, section, qaSort, serverPosts, replyCounts]);
 
   const [activityCards, setActivityCards] = useState<PublicActivityCard[]>([]);
   useEffect(() => { let live = true; void getActivityFeed(city.id).then((r) => { if (live && r.ok) setActivityCards(r.data.cards); }); return () => { live = false; }; }, [city.id]);
-  const onReply = (title: string) => {
+  const onReply = (postId: string, title: string) => {
     const intent = replyIntent(role, title);
-    toast(intent.toast, "info");
-    if (intent.opensGate) setGateOpen(true);
+    if (intent.opensGate) {
+      if (intent.toast) toast(intent.toast, "info");
+      setGateOpen(true);
+      return;
+    }
+    // Verified: toggle the inline thread + live composer.
+    setOpenThreadId((cur) => (cur === postId ? null : postId));
+    if (openThreadId !== postId) openThread(postId);
+    else setReplyDraft("");
+  };
+
+  const onSubmitReply = (postId: string) => {
+    if (replySubmitting) return;
+    const body = replyDraft.trim();
+    if (!body) { setReplyError("Write a reply before posting."); return; }
+    setReplySubmitting(true);
+    setReplyError(null);
+    void api.createForumReply({ postId, body }).then((r) => {
+      setReplySubmitting(false);
+      if (r.ok) {
+        setRepliesByPost((prev) => ({ ...prev, [postId]: [...(prev[postId] ?? []), r.data.reply] }));
+        setReplyCounts((prev) => ({ ...prev, [postId]: (prev[postId] ?? 0) + 1 }));
+        setReplyDraft("");
+        toast("Your reply is live.", "success");
+      } else {
+        setReplyError(r.error.message ?? "Couldn't reply — try again.");
+      }
+    });
   };
 
   const onSubmitPost = (draft: { section: ForumSection; title: string; body: string }) => {
@@ -351,7 +503,7 @@ export function ForumPage({ city }: { city: City }) {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Forum</h1>
           <p className="mt-0.5 text-sm font-medium text-slate-500">
-            {city.name}, {city.state} · browse freely — posting is open to verified members
+            {city.name}, {city.state} · browse freely — posting and replying are open to verified members
           </p>
         </div>
         <PillButton variant="secondary" onClick={() => setCreateOpen(true)} className="min-h-11 px-4">
@@ -401,11 +553,34 @@ export function ForumPage({ city }: { city: City }) {
       ) : null}
 
       <ul className="mt-4 space-y-3">
-        {posts.map((p) => (
-          <li key={p.id}>
-            <PostCard post={p} section={section} onReply={() => onReply(p.title)} />
-          </li>
-        ))}
+        {posts.map((p) => {
+          const expanded = openThreadId === p.id;
+          return (
+            <li key={p.id}>
+              <PostCard
+                post={p}
+                section={section}
+                verified={role === "verified"}
+                replyExpanded={expanded}
+                onReply={() => onReply(p.id, p.title)}
+                thread={
+                  expanded ? (
+                    <ForumThread
+                      role={role}
+                      replies={repliesByPost[p.id] ?? []}
+                      loading={threadLoading === p.id}
+                      draft={replyDraft}
+                      onDraftChange={setReplyDraft}
+                      onSubmit={() => onSubmitReply(p.id)}
+                      submitting={replySubmitting}
+                      replyError={replyError}
+                    />
+                  ) : null
+                }
+              />
+            </li>
+          );
+        })}
       </ul>
 
       <div className="mt-4 flex items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white/60 p-4">
@@ -413,8 +588,8 @@ export function ForumPage({ city }: { city: City }) {
           <Icon name="shield" className="h-5 w-5" />
         </span>
         <p className="text-[13px] leading-relaxed text-slate-600">
-          <span className="font-semibold text-slate-800">Everyone can browse.</span> Posting is open to verified runner
-          profiles; guests, pending, and denied profiles stay read-only. Replies are coming soon.
+          <span className="font-semibold text-slate-800">Everyone can browse.</span> Posting and replying are open to
+          verified runner profiles; guests, pending, and denied profiles stay read-only.
         </p>
       </div>
 
@@ -442,7 +617,7 @@ export function ForumPage({ city }: { city: City }) {
       <aside className="desktop-forum-context" aria-label="Forum guidance">
         <p className="text-[11px] font-extrabold uppercase tracking-[.12em] text-[#FF5741]">Community guidelines</p>
         <h2 className="mt-2 text-lg font-extrabold tracking-tight text-slate-900">A useful local forum</h2>
-        <p className="mt-2 text-[13px] leading-relaxed text-slate-600">Browse announcements, community notes, and runner questions. Posting is open to verified members; replies are coming soon.</p>
+        <p className="mt-2 text-[13px] leading-relaxed text-slate-600">Browse announcements, community notes, and runner questions. Posting and replying are open to verified members.</p>
         <div className="mt-4 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-500"><strong className="text-slate-700">Keep it local.</strong> Share route details and event context that help fellow runners.</div>
       </aside>
       </div>

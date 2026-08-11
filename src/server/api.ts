@@ -119,7 +119,7 @@ import {
   listTrustedMembers,
   revokeTrustedMember,
 } from "./verification";
-import { publicForumPosts, createForumPost } from "./forum";
+import { publicForumPosts, createForumPost, publicForumReplies, createForumReply, forumReplyCounts, forumPostPublic } from "./forum";
 
 export const SESSION_COOKIE = "runlocal_sid";
 export const ADMIN_COOKIE = "runlocal_admin";
@@ -607,7 +607,7 @@ async function handleApi(
     if (!cityId || !cityExists(db, cityId)) {
       return err(res, { status: 400, error: "invalid_city" }), true;
     }
-    return ok(res, { cityId, posts: publicForumPosts(db, cityId) }), true;
+    return ok(res, { cityId, posts: publicForumPosts(db, cityId), replyCounts: forumReplyCounts(db, cityId) }), true;
   }
   if (method === "POST" && url.pathname === "/api/forum") {
     const sess = requireSession(db, cookies);
@@ -617,6 +617,32 @@ async function handleApi(
     if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
     await db.persist();
     return ok(res, { post: result.data.post }), true;
+  }
+
+  // ---- public forum replies (comments on a post) ---------------------------
+  // GET is a public city-scoped read of a post's replies; POST is verified-only
+  // with the same authorization as posting, plus the target post must exist,
+  // be visible, live in the author's home city (cross-city denied), and not be
+  // moderation-hidden/archived. Hidden posts 404 on read (never leaked).
+  if (method === "GET" && url.pathname === "/api/forum/replies") {
+    const cityId = url.searchParams.get("city") ?? "";
+    const postId = url.searchParams.get("post") ?? "";
+    if (!cityId || !cityExists(db, cityId)) {
+      return err(res, { status: 400, error: "invalid_city" }), true;
+    }
+    if (!postId || !forumPostPublic(db, cityId, postId)) {
+      return err(res, { status: 404, error: "post_not_found" }), true;
+    }
+    return ok(res, { postId, replies: publicForumReplies(db, postId) }), true;
+  }
+  if (method === "POST" && url.pathname === "/api/forum/replies") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { postId?: unknown; body?: unknown };
+    const result = createForumReply(db, sess.accountId, body, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { reply: result.data.reply }), true;
   }
 
   // ---- activity integrations (provider-neutral public shapes) -------------

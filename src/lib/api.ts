@@ -467,11 +467,27 @@ export interface ForumPostView {
   replies: number;
   pinned: boolean;
 }
-export function getForumPosts(cityId: string): Promise<ApiResult<{ cityId: string; posts: ForumPostView[] }>> {
+export function getForumPosts(cityId: string): Promise<ApiResult<{ cityId: string; posts: ForumPostView[]; replyCounts: Record<string, number> }>> {
   return request(`/api/forum?city=${encodeURIComponent(cityId)}`);
 }
 export function createForumPost(input: { section: import("../types").ForumSection; title: string; body: string }): Promise<ApiResult<{ post: ForumPostView }>> {
   return request("/api/forum", { method: "POST", body: JSON.stringify(input) });
+}
+
+// --------------------------------------------------- public forum replies
+/** A user-created reply to a forum post, as served by /api/forum/replies. */
+export interface ForumReplyView {
+  id: string;
+  postId: string;
+  body: string;
+  author: string;
+  createdAt: string;
+}
+export function getForumReplies(cityId: string, postId: string): Promise<ApiResult<{ postId: string; replies: ForumReplyView[] }>> {
+  return request(`/api/forum/replies?city=${encodeURIComponent(cityId)}&post=${encodeURIComponent(postId)}`);
+}
+export function createForumReply(input: { postId: string; body: string }): Promise<ApiResult<{ reply: ForumReplyView }>> {
+  return request("/api/forum/replies", { method: "POST", body: JSON.stringify(input) });
 }
 
 // -------------------------------------------------- public approved content
