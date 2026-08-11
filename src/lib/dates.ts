@@ -1,5 +1,5 @@
 // Date helpers for the "this week" event model. Pure functions — unit tested.
-import type { RunEvent } from "../types";
+import type { InviteLabel, RunEvent } from "../types";
 
 export const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 export const DAY_ABBREV = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -36,6 +36,66 @@ export interface DatedRunEvent extends RunEvent {
   dayAbbrev: string;
 }
 
+/**
+ * Canonical registry record shape consumed by mergeWeekEventSources. Matches
+ * the public subset of api.CanonicalEvent returned by /api/events.
+ */
+export interface WeekCanonicalSource {
+  id: string;
+  seedRefId: string | null;
+  groupId: string;
+  title: string;
+  dayOfWeek: number;
+  time: string;
+  location: string;
+  distanceLabel: string;
+  invite: InviteLabel;
+  externalUrl: string | null;
+  status: "draft" | "approved" | "published" | "hidden" | "archived";
+  hidden: boolean;
+  archivedAt: string | null;
+}
+/**
+ * Merge the three weekly run sources — client seed slots, the server canonical
+ * registry, and approved recurring community events — so each logical run
+ * appears exactly once before date resolution:
+ * - canonical seed copies (server-materialized rows carrying a seedRefId) are
+ *   dropped when the client seed already carries that slot;
+ * - canonical community copies (id "event:<refId>") are dropped when the
+ *   approved recurring community event with id "<refId>" is already present.
+ * Admin-created canonical runs (no seedRefId, no "event:" prefix) have no
+ * duplicate anywhere and are always kept, as are every distinct seed slot
+ * (e.g. two different groups on the same weekday). The returned list is ready
+ * for resolveWeekEvents, which then filters past occurrences.
+ */
+export function mergeWeekEventSources(
+  seed: RunEvent[],
+  canonical: readonly WeekCanonicalSource[],
+  recurring: RunEvent[],
+): RunEvent[] {
+  const seedKeys = new Set(seed.map((e) => `seed:${e.id}`));
+  const communityKeys = new Set(recurring.map((e) => `community:${e.id}`));
+  const out: RunEvent[] = [...seed];
+  for (const e of canonical) {
+    if (e.status !== "published" || e.hidden || e.archivedAt) continue;
+    if (e.seedRefId && seedKeys.has(`seed:${e.seedRefId}`)) continue;
+    const refId = e.id.startsWith("event:") ? e.id.slice("event:".length) : null;
+    if (refId && communityKeys.has(`community:${refId}`)) continue;
+    out.push({
+      id: e.id,
+      groupId: e.groupId,
+      title: e.title,
+      dayOfWeek: e.dayOfWeek,
+      time: e.time,
+      location: e.location,
+      distanceLabel: e.distanceLabel,
+      invite: e.invite,
+      externalUrl: e.externalUrl ?? undefined,
+    });
+  }
+  out.push(...recurring);
+  return out;
+}
 /** Resolve recurring weekly events to concrete dates and sort chronologically. */
 export function resolveWeekEvents(events: RunEvent[], now: Date): DatedRunEvent[] {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();

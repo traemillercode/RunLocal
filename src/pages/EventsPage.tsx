@@ -5,7 +5,7 @@ import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { GroupSubmissionSheet, IndependentEventSheet } from "../components/SubmissionSheets";
 import { Chip, Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
-import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS, occurrenceHasStarted } from "../lib/dates";
+import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS, occurrenceHasStarted, mergeWeekEventSources } from "../lib/dates";
 import { filterOneTimeEvents } from "../lib/activityDates";
 import { Link } from "react-router-dom";
 import { canDo, roleLabel } from "../lib/accounts";
@@ -60,11 +60,15 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
         externalUrl: e.externalUrl ?? undefined,
       }));
     const today = new Date();
+    // The server registry (/api/events) materializes the seed slots as its own
+    // rows (random ids, seedRefId pointing back at the seed id) and community
+    // events as "event:<refId>" rows alongside the approved /api/content copy.
+    // Dedupe by seedRefId / refId so each logical run renders exactly once.
+    const merged = mergeWeekEventSources(city.events, canonicalEvents ?? [], recurring);
     // Recurring seed slots describe the full weekly schedule, including a
     // Monday slot after Monday has passed; one-time community activity is
     // filtered separately below by its calendar date.
-    const canonical = (canonicalEvents ?? []).filter((e) => e.status === "published" && !e.hidden && !e.archivedAt).map((e) => ({ id: e.id, groupId: e.groupId, title: e.title, dayOfWeek: e.dayOfWeek, time: e.time, location: e.location, distanceLabel: e.distanceLabel, invite: e.invite, externalUrl: e.externalUrl ?? undefined }));
-    const resolved = resolveWeekEvents([...city.events, ...canonical, ...recurring], today)
+    const resolved = resolveWeekEvents(merged, today)
       .filter((e) => !hidden.has(`event:${e.id}`) && !occurrenceHasStarted(e, today))
       .sort((a, b) => {
         const ha = highlights.get(`event:${a.id}`);
