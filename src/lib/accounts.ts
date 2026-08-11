@@ -69,6 +69,13 @@ export interface PublicAccount {
    * are paused. Never a count or score — just the state boolean.
    */
   underReview: boolean;
+  /**
+   * Trusted Member (manual trust / blue-check) state — server-authoritative
+   * and display-only here. Distinct from identity verification: granted only
+   * by Global/City Admins through audited endpoints to identity-verified
+   * members. The client can render it but can never set it.
+   */
+  trustedMember?: boolean;
   profilePhotoUrl: string | null;
 }
 

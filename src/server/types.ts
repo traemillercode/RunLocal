@@ -120,6 +120,19 @@ export interface AccountRecord {
    */
   underReview: boolean;
   underReviewAt: string | null;
+  /**
+   * Trusted Member (manual trust / blue-check) state — server-authoritative.
+   * Distinct from identity verification (`status === "verified"`): this badge
+   * is granted ONLY by a Global Admin (any city) or a City Admin (their exact
+   * scope city) through audited, reason-required endpoints, and only to
+   * accounts that have already completed real identity verification (never to
+   * pending/rejected accounts — no fabricated verification). Admins can never
+   * set it on their own account. `trustedMemberAt` records when the current
+   * grant was made (cleared on revoke; the full history lives in the audit
+   * log).
+   */
+  trustedMember: boolean;
+  trustedMemberAt: string | null;
 }
 
 export interface SessionRecord {
@@ -178,6 +191,9 @@ export type AdminAction =
   | "admin.appeal_reinstate"
   | "admin.appeal_uphold"
   | "admin.trust_threshold"
+  | "admin.trust_grant"
+  | "admin.trust_revoke"
+  | "admin.trust_list"
   | "admin.safety_report_list"
   | "admin.safety_report_resolve"
   | "admin.event_list"
@@ -210,6 +226,9 @@ export type AdminAction =
   | "cityadmin.group_rrca"
   | "cityadmin.content_highlight"
   | "cityadmin.audit"
+  | "cityadmin.trust_grant"
+  | "cityadmin.trust_revoke"
+  | "cityadmin.trust_list"
   | "account.delete"
   | "group.membership_request"
   | "group.membership_approve"

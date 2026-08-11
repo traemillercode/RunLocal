@@ -232,6 +232,8 @@ export interface AdminSearchRow {
   phoneLast4: string | null;
   createdAt: string;
   verifiedAt: string | null;
+  /** Trusted Member (manual trust / blue-check) state — display-only here. */
+  trustedMember: boolean;
 }
 
 /** Owner-only pending queue row — redacted public fields only. */
@@ -813,6 +815,40 @@ export function adminGetTrust(reason: string): Promise<ApiResult<AdminTrustView>
 }
 export function adminSetTrustThreshold(threshold: number, reason: string): Promise<ApiResult<{ threshold: number; newlyUnderReview: number }>> {
   return adminRequest("/api/admin/trust/threshold", reason, { method: "POST", body: JSON.stringify({ threshold }) });
+}
+/** Trusted Member (manual trust / blue-check) roster row - public fields only. */
+export interface TrustedMemberRow {
+  accountId: string;
+  name: string;
+  email: string;
+  cityId: string | null;
+  trustedMemberAt: string | null;
+  trustedMember: boolean;
+  status: string;
+}
+/** Global Admin grants the Trusted Member badge by account email (audited). */
+export function adminGrantTrust(email: string, reason: string): Promise<ApiResult<{ member: TrustedMemberRow }>> {
+  return adminRequest("/api/admin/trust/grant", reason, { method: "POST", body: JSON.stringify({ email }) });
+}
+/** Global Admin revokes the Trusted Member badge by account id (audited). */
+export function adminRevokeTrust(accountId: string, reason: string): Promise<ApiResult<{ member: TrustedMemberRow }>> {
+  return adminRequest(`/api/admin/trust/${encodeURIComponent(accountId)}/revoke`, reason, { method: "POST" });
+}
+/** Global Admin roster of every trusted member (routine audited read). */
+export function adminGetTrustedMembers(reason: string): Promise<ApiResult<{ members: TrustedMemberRow[] }>> {
+  return adminRequest("/api/admin/trust/members", reason);
+}
+/** City Admin grants the Trusted Member badge within their exact scope city (audited). */
+export function cityGrantTrust(email: string, reason: string): Promise<ApiResult<{ member: TrustedMemberRow }>> {
+  return adminRequest("/api/admin/city/trust/grant", reason, { method: "POST", body: JSON.stringify({ email }) });
+}
+/** City Admin revokes the Trusted Member badge within their exact scope city (audited). */
+export function cityRevokeTrust(accountId: string, reason: string): Promise<ApiResult<{ member: TrustedMemberRow }>> {
+  return adminRequest(`/api/admin/city/trust/${encodeURIComponent(accountId)}/revoke`, reason, { method: "POST" });
+}
+/** City Admin roster - trusted members in the caller's scope city only (routine audited read). */
+export function cityGetTrustedMembers(reason: string): Promise<ApiResult<{ members: TrustedMemberRow[] }>> {
+  return adminRequest("/api/admin/city/trust/members", reason);
 }
 
 export interface MyGroupMembership { id:string; groupId:string; cityId:string; groupName:string; status:"pending"|"active"|"declined"|"revoked"|"left"; requestedAt:string; updatedAt:string }

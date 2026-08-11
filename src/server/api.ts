@@ -111,6 +111,14 @@ import {
   validTags,
   validTrustReason,
 } from "./trust";
+import {
+  cityGrantTrustedMember,
+  cityListTrustedMembers,
+  cityRevokeTrustedMember,
+  grantTrustedMember,
+  listTrustedMembers,
+  revokeTrustedMember,
+} from "./verification";
 
 export const SESSION_COOKIE = "runlocal_sid";
 export const ADMIN_COOKIE = "runlocal_admin";
@@ -1669,6 +1677,53 @@ async function handleAdmin(
     return ok(res, { threshold: t, newlyUnderReview }), true;
   }
 
+  // ---- Trusted Member (manual trust / blue-check) - Task 7 slice 1 ----
+  // Grant (by email) is a Global Admin op; revoke (by id) too. City Admins
+  // use the /api/admin/city/trust/* variants below - the server enforces the
+  // exact scope city on every call, and no admin can ever set/clear the badge
+  // on their own account. All operations are reason-required and audited.
+  if (method === "POST" && url.pathname === "/api/admin/trust/grant") {
+    const body = (await readJson(req)) as { email?: unknown };
+    const result = grantTrustedMember(db, ctx, typeof body.email === "string" ? body.email : "", now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { member: result.data }), true;
+  }
+  const trustRevokeMatch = /^\/api\/admin\/trust\/([a-f0-9]{32})\/revoke\/?$/.exec(url.pathname);
+  if (trustRevokeMatch && method === "POST") {
+    const result = revokeTrustedMember(db, ctx, trustRevokeMatch[1], now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { member: result.data }), true;
+  }
+  if (method === "GET" && url.pathname === "/api/admin/trust/members") {
+    const result = listTrustedMembers(db, ctx, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { members: result.data }), true;
+  }
+  // City Admin variants - the target's home city must equal the caller's
+  // exact scope city (enforced server-side with enforceCity).
+  if (method === "POST" && url.pathname === "/api/admin/city/trust/grant") {
+    const body = (await readJson(req)) as { email?: unknown };
+    const result = cityGrantTrustedMember(db, ctx, typeof body.email === "string" ? body.email : "", now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { member: result.data }), true;
+  }
+  const cityTrustRevokeMatch = /^\/api\/admin\/city\/trust\/([a-f0-9]{32})\/revoke\/?$/.exec(url.pathname);
+  if (cityTrustRevokeMatch && method === "POST") {
+    const result = cityRevokeTrustedMember(db, ctx, cityTrustRevokeMatch[1], now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { member: result.data }), true;
+  }
+  if (method === "GET" && url.pathname === "/api/admin/city/trust/members") {
+    const result = cityListTrustedMembers(db, ctx, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { members: result.data }), true;
+  }
   if (method === "GET" && url.pathname === "/api/admin/overview") {
     const result = adminOverview(db, ctx, now);
     if (!result.ok) return sendErr(result), true;
