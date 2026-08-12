@@ -1,6 +1,6 @@
 import { newId } from "./store";
 import type { AdminCtx, AdminResult } from "./admin";
-import { authorizeScoped } from "./admin";
+import { authorizeScoped, routineAdminCtx } from "./admin";
 import type { Db } from "./store";
 import type { InviteLabel } from "../types";
 import { CITIES } from "../data/cities";
@@ -23,7 +23,8 @@ export function materializeSeedEvents(db: Db, cities = CITIES, now = new Date())
 }
 export function publicEvents(db: Db, cityId?: string): RunEventRecord[] { return db.listEvents().filter(e => (!cityId || e.cityId === cityId) && e.status === "published" && !e.hidden && !e.archivedAt); }
 export function listAdminEvents(db: Db, ctx: AdminCtx, cityId?: string, now = new Date()): AdminResult<RunEventRecord[]> {
-  const a = authorizeScoped(db, ctx, "admin.event_list", null, now, { enforceCity: cityId ?? undefined, auditCity: cityId ?? null }); if (!a.ok) return a;
+  // Routine read: audited with the server-generated routine reason — no operator prompt.
+  const a = authorizeScoped(db, routineAdminCtx(ctx), "admin.event_list", null, now, { enforceCity: cityId ?? undefined, auditCity: cityId ?? null }); if (!a.ok) return a;
   return { ok: true, data: db.listEvents().filter(e => !cityId || e.cityId === cityId) };
 }
 export type EventInput = Partial<Pick<RunEventRecord,"cityId"|"groupId"|"title"|"dayOfWeek"|"time"|"location"|"distanceLabel"|"invite"|"externalUrl">>;

@@ -21,7 +21,7 @@ import { authorizeOwner, authorizeScoped } from "./admin";
 import { REASON_MAX } from "./admin";
 import type { Db } from "./store";
 import { isSuspended } from "./store";
-import type { AccountRecord, ContentKind, ContentRecord, FlagRecord, GroupModRecord } from "./types";
+import type { AccountRecord, ContentKind, ContentRecord, FlagKind, FlagRecord, GroupModRecord } from "./types";
 
 // ------------------------------------------------------------------- views
 
@@ -29,7 +29,7 @@ export interface FlagView {
   id: string;
   cityId: string;
   contentId: string;
-  kind: ContentKind;
+  kind: FlagKind;
   refId: string;
   title: string;
   reason: string;

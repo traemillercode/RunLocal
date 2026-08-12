@@ -119,7 +119,9 @@ import {
   listTrustedMembers,
   revokeTrustedMember,
 } from "./verification";
-import { publicForumPosts, createForumPost, publicForumReplies, createForumReply, forumReplyCounts, forumPostPublic } from "./forum";
+import { publicForumPosts, createForumPost, publicForumReplies, createForumReply, forumReplyCounts, forumPostPublic, editForumPost, deleteForumPost, editForumReply, deleteForumReply } from "./forum";
+import { createContentFlag } from "./contentFlags";
+import { withdrawSubmission } from "./submissions";
 
 export const SESSION_COOKIE = "runlocal_sid";
 export const ADMIN_COOKIE = "runlocal_admin";
@@ -597,6 +599,26 @@ async function handleApi(
     return ok(res, publicApprovedContent(db, cityId)), true;
   }
 
+  // ---- generic content-report flag (verified runner) -----------------------
+  // POST /api/content/:kind/:id/flag — verified runners flag content in their
+  // own home city (post / reply / event / race / group). Reason 5-500 required,
+  // self-report blocked, duplicate-protected (open flag for same reporter +
+  // target -> 409), rate-limited (5/hr shared bucket), creates a FlagRecord via
+  // the store (reporter identity + reason are admin-only in every view) and
+  // audits `content.flag`.
+  const flagRoute = /^\/api\/content\/(post|reply|event|race|group)\/([^/]+)\/flag$/.exec(url.pathname);
+  if (flagRoute && method === "POST") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const account = db.getAccount(sess.accountId);
+    if (!account || account.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { reason?: unknown };
+    const result = createContentFlag(db, account, { kind: flagRoute[1], id: decodeURIComponent(flagRoute[2]), reason: body.reason }, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { flag: result.data.flag }), true;
+  }
+
   // ---- public forum (user-created posts; seed posts render from city data) --
   // GET is a public city-scoped read of USER-created posts only (seed posts
   // stay in the client's city seed). POST is verified-only and server-
@@ -617,6 +639,30 @@ async function handleApi(
     if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
     await db.persist();
     return ok(res, { post: result.data.post }), true;
+  }
+
+  // ---- author edit/delete of a user-created forum post ---------------------
+  // PATCH /api/forum/:id — author-only edit (re-validates title/body, stamps
+  // updatedAt, audited); DELETE /api/forum/:id — author-only soft-delete (state
+  // deleted, body/title blanked, registry row archived so replies/counts stop
+  // rendering, audited). Non-authors 404 (never leaked); moderation-hidden or
+  // archived posts are unavailable (post_unavailable); cross-city denied.
+  const forumPostAuthor = /^\/api\/forum\/([^/]+)$/.exec(url.pathname);
+  if (forumPostAuthor && (method === "PATCH" || method === "DELETE")) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const id = decodeURIComponent(forumPostAuthor[1]);
+    if (method === "PATCH") {
+      const body = (await readJson(req)) as { title?: unknown; body?: unknown };
+      const result = editForumPost(db, sess.accountId, id, body, now);
+      if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+      await db.persist();
+      return ok(res, { post: result.data.post }), true;
+    }
+    const result = deleteForumPost(db, sess.accountId, id, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { deleted: true }), true;
   }
 
   // ---- public forum replies (comments on a post) ---------------------------
@@ -643,6 +689,28 @@ async function handleApi(
     if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
     await db.persist();
     return ok(res, { reply: result.data.reply }), true;
+  }
+
+  // ---- author edit/delete of a forum reply ----------------------------------
+  // PATCH /api/forum/replies/:id — author-only body edit (1-1000, audited);
+  // DELETE /api/forum/replies/:id — author-only soft-delete (visible -> deleted,
+  // body blanked, row preserved, audited).
+  const forumReplyAuthor = /^\/api\/forum\/replies\/([^/]+)$/.exec(url.pathname);
+  if (forumReplyAuthor && (method === "PATCH" || method === "DELETE")) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const id = decodeURIComponent(forumReplyAuthor[1]);
+    if (method === "PATCH") {
+      const body = (await readJson(req)) as { body?: unknown };
+      const result = editForumReply(db, sess.accountId, id, body, now);
+      if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+      await db.persist();
+      return ok(res, { reply: result.data.reply }), true;
+    }
+    const result = deleteForumReply(db, sess.accountId, id, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { deleted: true }), true;
   }
 
   // ---- activity integrations (provider-neutral public shapes) -------------
@@ -1148,6 +1216,20 @@ async function handleApi(
     return ok(res, { submissions: mySubmissions(db, sess.accountId) }), true;
   }
 
+  // POST /api/my/submissions/:id/withdraw — the SUBMITTER pulls a still-pending
+  // submission back. Author-only (404 otherwise), pending -> withdrawn;
+  // withdrawn records leave the admin pending queue but stay in the
+  // submitter's own history. Audited as submission.withdraw.
+  const withdrawMatch = /^\/api\/my\/submissions\/([^/]+)\/withdraw$/.exec(url.pathname);
+  if (withdrawMatch && method === "POST") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const result = withdrawSubmission(db, sess.accountId, decodeURIComponent(withdrawMatch[1]), now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { submission: { id: result.data.id, status: result.data.status } }), true;
+  }
+
   // ---- private My Runs (RSVP attendance + solo runs; server-authoritative) -
   // Past visibility rule (exact): a past row is returned ONLY when the runner
   // checked in to that occurrence or explicitly kept it ("Keep on My Runs").
@@ -1400,7 +1482,7 @@ async function handleApi(
 
   // ---- occurrence-scoped run-day discussion -------------------------------
   const discussionPath = /^\/api\/events\/([^/]+)\/occurrences\/([^/]+)\/discussion(?:\/([^/]+))?$/i.exec(url.pathname);
-  if (discussionPath && (method === "GET" || method === "POST" || method === "DELETE")) {
+  if (discussionPath && (method === "GET" || method === "POST" || method === "PATCH" || method === "DELETE")) {
     const eventParam = decodeURIComponent(discussionPath[1]);
     const occurrenceId = decodeURIComponent(discussionPath[2]);
     const event = db.listEvents().find(e => e.id === eventParam || e.seedRefId === eventParam || e.id === `event:${eventParam}`);
@@ -1431,6 +1513,22 @@ async function handleApi(
       const target = db.getDiscussion(decodeURIComponent(discussionPath[3] ?? ""));
       if (!target || target.authorId !== account.id || target.occurrenceId !== requestedCanonical || target.state === "deleted") return err(res, { status: 404, error: "not_found" }), true;
       db.updateDiscussion(target.id, { state: "deleted", body: "", title: null }); await db.persist(); return ok(res, { deleted: true }), true;
+    }
+
+    if (method === "PATCH") {
+      // Author edit of a discussion thread/comment: author-only (404 for anyone
+      // else), same occurrence, same city/participant gate already enforced
+      // above. Body re-validated (1-1000), thread title 1-120, updatedAt
+      // stamped by the store, audited as discussion.edit.
+      const target = db.getDiscussion(decodeURIComponent(discussionPath[3] ?? ""));
+      if (!target || target.authorId !== account.id || target.occurrenceId !== requestedCanonical || target.state === "deleted") return err(res, { status: 404, error: "not_found" }), true;
+      const b = await readJson(req) as Record<string, unknown>;
+      const body = typeof b.body === "string" ? b.body.trim() : "";
+      const title = typeof b.title === "string" ? b.title.trim() : target.title;
+      if (!body || body.length > 1000 || (title !== null && (!title || title.length > 120))) return err(res, { status: 400, error: "invalid_discussion" }), true;
+      const updated = db.updateDiscussion(target.id, { body: body.slice(0, 1000), title: title ? title.slice(0, 120) : target.title })!;
+      db.appendAudit({ admin: account.email, action: "discussion.edit", reason: "Author edited their run-day discussion", targetId: target.id, ip: "member-action", cityId: target.cityId, owner: account.email, change: `discussion edited by author (${body.length} chars)` }, now);
+      await db.persist(); return ok(res, { discussion: publicDto(updated) }), true;
     }
     const b = await readJson(req) as Record<string, unknown>;
     const body = typeof b.body === "string" ? b.body.trim() : "";

@@ -722,6 +722,46 @@ export function removeSubmission(
   return { ok: true, data: { id: submissionId } };
 }
 
+// ------------------------------------------------------- submitter withdraw
+// The submitter may pull a still-pending submission back before any admin
+// decision. The record is NOT removed: it flips to status "withdrawn", which
+// leaves the admin pending queue (the queue filters on status === "pending")
+// while staying in the submitter's own "My submissions" history with its
+// withdrawn status. Author-only (404 for anyone else — never leaked), and only
+// a pending record can be withdrawn (decided records return 409). Audited as
+// `submission.withdraw` with the submitter identity + city.
+
+export type WithdrawResult = AdminResult<SubmissionRecord>;
+
+/**
+ * Submit-author withdrawal of a pending submission. `accountId` is the
+ * session identity (server-resolved); the record must belong to that account.
+ */
+export function withdrawSubmission(db: Db, accountId: string, submissionId: string, now = new Date()): WithdrawResult {
+  const rec = db.getAccount(accountId);
+  if (!rec || rec.deletedAt) return { ok: false, status: 401, error: "sign_in_required" };
+  const sub = db.getSubmission(submissionId);
+  if (!sub || sub.submitterAccountId !== rec.id) return { ok: false, status: 404, error: "not_found" };
+  if (sub.status !== "pending") {
+    return { ok: false, status: 409, error: "already_decided", message: "Only pending submissions can be withdrawn — this one was already decided." };
+  }
+  const updated = db.updateSubmission(submissionId, { status: "withdrawn", decidedAt: now.toISOString(), decidedBy: rec.email })!;
+  db.appendAudit(
+    {
+      admin: rec.email,
+      action: "submission.withdraw",
+      reason: "Submitter withdrew their pending submission",
+      targetId: submissionId,
+      ip: "member-action",
+      cityId: sub.cityId,
+      owner: rec.email,
+      change: `withdrawn (was pending) — ${titleFor(sub.payload)}`,
+    },
+    now,
+  );
+  return { ok: true, data: updated };
+}
+
 // ------------------------------------------------------------- public view
 export interface PublicUserRace {
   id: string;

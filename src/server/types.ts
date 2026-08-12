@@ -224,6 +224,7 @@ export type AdminAction =
   | "admin.discussion_delete"
   | "admin.submission_edit"
   | "admin.submission_remove"
+  | "submission.withdraw"
   | "cityadmin.dashboard"
   | "cityadmin.submission_list"
   | "cityadmin.submission_approve"
@@ -246,7 +247,13 @@ export type AdminAction =
   | "group.leader_assign"
   | "group.leader_remove"
   | "group.ownership_transfer"
-  | "group.profile_edit";
+  | "group.profile_edit"
+  | "forum.post_edit"
+  | "forum.post_delete"
+  | "forum.reply_edit"
+  | "forum.reply_delete"
+  | "discussion.edit"
+  | "content.flag";
 
 export interface AuditEntry {
   id: string;
@@ -336,6 +343,7 @@ export interface PersistedDb {
   joinRequestRate?: Record<string, number[]>;
   safetyReports?: SafetyReportRecord[];
   safetyReportRate?: Record<string, number[]>;
+  contentFlagRate?: Record<string, number[]>;
   notificationPreferences?: NotificationPreferenceRecord[];
   notifications?: NotificationRecord[];
   discussions?: DiscussionRecord[];
@@ -511,6 +519,12 @@ export interface CityInvitationRecord {
 
 /** What kind of seeded content a moderation record refers to. */
 export type ContentKind = "event" | "race" | "post";
+/**
+ * What a flag may target. Everything with a content-registry row maps to its
+ * registry kind/refId; entities without registry rows (forum replies, groups)
+ * use the kind + id directly.
+ */
+export type FlagKind = ContentKind | "reply" | "group";
 
 export interface ContentRecord {
   /** Registry id — `${kind}:${refId}` (e.g. "event:mon-social"). */
@@ -569,7 +583,7 @@ export interface FlagRecord {
   id: string;
   cityId: string;
   contentId: string;
-  kind: ContentKind;
+  kind: FlagKind;
   refId: string;
   title: string;
   /** The reporter's stated reason — owner-only, never in a public payload. */
@@ -587,7 +601,16 @@ export interface FlagRecord {
 
 /** What a community member can submit for admin review. */
 export type SubmissionKind = "race" | "group" | "event";
-export type SubmissionStatus = "pending" | "approved" | "rejected";
+/**
+ * Submission lifecycle:
+ *  - pending   → in the admin queue, awaiting a decision;
+ *  - approved  → created the public record (group / race / event);
+ *  - rejected  → declined by an admin (rejection reason stored);
+ *  - withdrawn → the SUBMITTER pulled a still-pending submission back before
+ *    any admin decision. Withdrawn records leave the admin pending queue but
+ *    stay in the submitter's own "My submissions" history.
+ */
+export type SubmissionStatus = "pending" | "approved" | "rejected" | "withdrawn";
 
 /** Race submission payload — one-off race listing with external registration. */
 export interface RaceSubmissionPayload {

@@ -413,3 +413,235 @@ export function createForumReply(
     },
   };
 }
+
+// ------------------------------------------------------- author edit/delete
+// Author-owned moderation: the person who wrote a post/reply may correct or
+// retract it. The same verified-runner identity gate applies, plus:
+//  - ONLY the author may touch the record (non-authors get 404 — the record is
+//    never leaked), and the target must live in the author's home city;
+//  - a moderation-hidden/archived post is unavailable for author edits too
+//    (mirrors the reply gate's `post_unavailable` semantics);
+//  - edits re-validate exactly like creation (title 1-120, body 1-2000 for
+//    posts, 1-1000 for replies) and stamp updatedAt;
+//  - delete is a SOFT delete: state "deleted", body/title blanked, row
+//    preserved for the trail, and the moderation registry row is marked
+//    archived so hidden replies and reply counts stop rendering.
+// Every mutation is audited (forum.post_edit / forum.post_delete /
+// forum.reply_edit / forum.reply_delete) with the author identity, city, and a
+// change summary.
+
+export type ForumAuthorEditResult =
+  | { ok: true; data: { post: PublicForumPost; record: ForumPostRecord } }
+  | { ok: false; status: number; error: string; message?: string };
+
+/** Identity + ownership gate shared by the author edit/delete handlers. */
+function authorizeForumAuthor(db: Db, accountId: string, now = new Date()): { ok: true; rec: AccountRecord } | { ok: false; status: number; error: string; message?: string } {
+  const rec: AccountRecord | undefined = db.getAccount(accountId);
+  if (!rec || rec.deletedAt) return { ok: false, status: 401, error: "sign_in_required" };
+  if (rec.status !== "verified") {
+    return {
+      ok: false,
+      status: 403,
+      error: "verification_required",
+      message: "Only verified runners can edit forum content — finish verification first.",
+    };
+  }
+  if (isSuspended(rec, now)) {
+    return { ok: false, status: 403, error: "suspended", message: "Your account is suspended and can't edit right now." };
+  }
+  const cityId = rec.cityId ?? "";
+  if (!cityId || !cityExists(db, cityId)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "city_required",
+      message: "Choose your home city before editing — Run Local is city-scoped.",
+    };
+  }
+  return { ok: true, rec };
+}
+
+/**
+ * Author edit of a user-created forum post. Author-only (404 for non-authors —
+ * the post is never leaked), same-city required, and a moderation-hidden or
+ * archived post is unavailable for editing (`post_unavailable`, mirroring the
+ * reply gate). Title (1-120) and body (1-2000) are re-validated; the registry
+ * title follows the corrected title so admin surfaces stay in sync. Audited.
+ */
+export function editForumPost(
+  db: Db,
+  accountId: string,
+  postId: string,
+  input: { title?: unknown; body?: unknown },
+  now = new Date(),
+): ForumAuthorEditResult {
+  const auth = authorizeForumAuthor(db, accountId, now);
+  if (!auth.ok) return auth;
+  const post = db.getForumPost(postId);
+  if (!post || post.state !== "visible") return { ok: false, status: 404, error: "post_not_found", message: "That post isn't available." };
+  if (post.authorAccountId !== auth.rec.id) return { ok: false, status: 404, error: "post_not_found", message: "That post isn't available." };
+  if (post.cityId !== auth.rec.cityId) {
+    return { ok: false, status: 403, error: "cross_city_denied", message: "Edits stay within your home city's forum — switch cities to edit there." };
+  }
+  if (postModerated(db, postId)) {
+    return { ok: false, status: 403, error: "post_unavailable", message: "This post is no longer available for edits." };
+  }
+  const title = typeof input.title === "string" ? input.title.trim() : "";
+  const body = typeof input.body === "string" ? input.body.trim() : "";
+  if (!title || title.length > MAX_TITLE) {
+    return { ok: false, status: 400, error: "invalid_title", message: `Give your post a title (1-${MAX_TITLE} characters).` };
+  }
+  if (!body || body.length > MAX_BODY) {
+    return { ok: false, status: 400, error: "invalid_body", message: `Write a post (1-${MAX_BODY} characters).` };
+  }
+  const updated = db.updateForumPost(postId, { title: title.slice(0, MAX_TITLE), body: body.slice(0, MAX_BODY) })!;
+  // Keep the moderation registry title in sync with the author's correction.
+  const content = db.getContent(`post:${postId}`);
+  if (content) db.upsertContent({ ...content, title: updated.title });
+  const change = title !== post.title ? `title: "${post.title.slice(0, 60)}" -> "${updated.title.slice(0, 60)}"` : `body edited (${body.length} chars)`;
+  db.appendAudit({ admin: auth.rec.email, action: "forum.post_edit", reason: "Author edited their forum post", targetId: postId, ip: "author-action", cityId: post.cityId, owner: auth.rec.email, change }, now);
+  return {
+    ok: true,
+    data: {
+      post: {
+        id: updated.id,
+        section: updated.section,
+        title: updated.title,
+        body: updated.body,
+        author: auth.rec.name,
+        authorNote: null,
+        createdAt: forumDateLabel(updated.createdAt, now),
+        replies: visibleReplyCount(db, updated.id),
+        pinned: false,
+      },
+      record: updated,
+    },
+  };
+}
+
+/**
+ * Author soft-delete of a user-created forum post. Same author-only gate as
+ * edit. The post row flips to state "deleted" with body/title blanked and its
+ * moderation registry row is marked archived, so replies and reply counts stop
+ * rendering everywhere. Audited.
+ */
+export function deleteForumPost(
+  db: Db,
+  accountId: string,
+  postId: string,
+  now = new Date(),
+): ForumAuthorEditResult {
+  const auth = authorizeForumAuthor(db, accountId, now);
+  if (!auth.ok) return auth;
+  const post = db.getForumPost(postId);
+  if (!post || post.state !== "visible") return { ok: false, status: 404, error: "post_not_found", message: "That post isn't available." };
+  if (post.authorAccountId !== auth.rec.id) return { ok: false, status: 404, error: "post_not_found", message: "That post isn't available." };
+  if (post.cityId !== auth.rec.cityId) {
+    return { ok: false, status: 403, error: "cross_city_denied", message: "Removals stay within your home city's forum — switch cities to remove there." };
+  }
+  if (postModerated(db, postId)) {
+    return { ok: false, status: 403, error: "post_unavailable", message: "This post is no longer available for removal." };
+  }
+  const updated = db.updateForumPost(postId, { state: "deleted", body: "", title: "" })!;
+  // Archive the registry row so hidden replies + counts stop rendering.
+  const content = db.getContent(`post:${postId}`);
+  if (content) db.upsertContent({ ...content, archived: true, archivedAt: now.toISOString() });
+  db.appendAudit({ admin: auth.rec.email, action: "forum.post_delete", reason: "Author removed their forum post", targetId: postId, ip: "author-action", cityId: post.cityId, owner: auth.rec.email, change: `soft-deleted by author: "${post.title.slice(0, 60)}"` }, now);
+  return {
+    ok: true,
+    data: {
+      post: {
+        id: updated.id,
+        section: updated.section,
+        title: updated.title,
+        body: updated.body,
+        author: auth.rec.name,
+        authorNote: null,
+        createdAt: forumDateLabel(updated.createdAt, now),
+        replies: 0,
+        pinned: false,
+      },
+      record: updated,
+    },
+  };
+}
+
+export type ForumReplyAuthorEditResult =
+  | { ok: true; data: { reply: PublicForumReply; record: ForumReplyRecord } }
+  | { ok: false; status: number; error: string; message?: string };
+
+/** Author-only gate shared by the reply edit/delete handlers. */
+function authorizeForumReplyAuthor(db: Db, accountId: string, replyId: string, now = new Date()): { ok: true; rec: AccountRecord; reply: ForumReplyRecord } | { ok: false; status: number; error: string; message?: string } {
+  const auth = authorizeForumAuthor(db, accountId, now);
+  if (!auth.ok) return auth;
+  const reply = db.getForumReply(replyId);
+  if (!reply || reply.state !== "visible") return { ok: false, status: 404, error: "reply_not_found", message: "That reply isn't available." };
+  if (reply.authorAccountId !== auth.rec.id) return { ok: false, status: 404, error: "reply_not_found", message: "That reply isn't available." };
+  if (reply.cityId !== auth.rec.cityId) {
+    return { ok: false, status: 403, error: "cross_city_denied", message: "Reply edits stay within your home city's forum." };
+  }
+  return { ok: true, rec: auth.rec, reply };
+}
+
+/**
+ * Author edit of a forum reply. Author-only (404 for non-authors), same-city,
+ * body re-validated (1-1000). Audited.
+ */
+export function editForumReply(
+  db: Db,
+  accountId: string,
+  replyId: string,
+  input: { body?: unknown },
+  now = new Date(),
+): ForumReplyAuthorEditResult {
+  const auth = authorizeForumReplyAuthor(db, accountId, replyId, now);
+  if (!auth.ok) return auth;
+  const body = typeof input.body === "string" ? input.body.trim() : "";
+  if (!body || body.length > MAX_REPLY) {
+    return { ok: false, status: 400, error: "invalid_body", message: `Write a reply (1-${MAX_REPLY} characters).` };
+  }
+  const updated = db.updateForumReply(replyId, { body: body.slice(0, MAX_REPLY) })!;
+  db.appendAudit({ admin: auth.rec.email, action: "forum.reply_edit", reason: "Author edited their forum reply", targetId: replyId, ip: "author-action", cityId: auth.reply.cityId, owner: auth.rec.email, change: `reply body edited (${body.length} chars)` }, now);
+  return {
+    ok: true,
+    data: {
+      reply: {
+        id: updated.id,
+        postId: updated.postId,
+        body: updated.body,
+        author: auth.rec.name,
+        createdAt: forumDateLabel(updated.createdAt, now),
+      },
+      record: updated,
+    },
+  };
+}
+
+/**
+ * Author soft-delete of a forum reply (state "deleted", body blanked, row
+ * preserved). Audited.
+ */
+export function deleteForumReply(
+  db: Db,
+  accountId: string,
+  replyId: string,
+  now = new Date(),
+): ForumReplyAuthorEditResult {
+  const auth = authorizeForumReplyAuthor(db, accountId, replyId, now);
+  if (!auth.ok) return auth;
+  const updated = db.updateForumReply(replyId, { state: "deleted", body: "" })!;
+  db.appendAudit({ admin: auth.rec.email, action: "forum.reply_delete", reason: "Author removed their forum reply", targetId: replyId, ip: "author-action", cityId: auth.reply.cityId, owner: auth.rec.email, change: "reply soft-deleted by author" }, now);
+  return {
+    ok: true,
+    data: {
+      reply: {
+        id: updated.id,
+        postId: updated.postId,
+        body: updated.body,
+        author: auth.rec.name,
+        createdAt: forumDateLabel(updated.createdAt, now),
+      },
+      record: updated,
+    },
+  };
+}

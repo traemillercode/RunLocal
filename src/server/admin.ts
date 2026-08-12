@@ -732,7 +732,9 @@ export function toCsv(rows: AdminRecordView[]): string {
 }
 
 export function adminAuditLog(db: Db, ctx: AdminCtx, limit = 100, now = new Date()): AdminResult<ReturnType<Db["listAudit"]>> {
-  const auth = authorizeAdmin(db, ctx, "admin.audit", null, now);
+  // Audit-log read is a ROUTINE READ (like content/submission/event lists):
+  // audited, but no operator-entered reason is required.
+  const auth = authorizeAdmin(db, routineAdminCtx(ctx), "admin.audit", null, now);
   if (!auth.ok) return auth;
   return { ok: true, data: db.listAudit(limit) };
 }

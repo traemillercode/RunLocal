@@ -201,6 +201,7 @@ export class Db {
   private joinRequestRate = new Map<string, number[]>();
   private safetyReports = new Map<string, SafetyReportRecord>();
   private safetyReportRate = new Map<string, number[]>();
+  private contentFlagRate = new Map<string, number[]>();
   private notificationPreferences = new Map<string, import("./types").NotificationPreferenceRecord>();
   private notifications = new Map<string, import("./types").NotificationRecord>();
   private discussions = new Map<string, import("./types").DiscussionRecord>();
@@ -306,6 +307,7 @@ export class Db {
       for (const f of parsed.forumPosts ?? []) this.forumPosts.set(f.id, f);
       for (const r of parsed.forumReplies ?? []) this.forumReplies.set(r.id, r);
       for (const [accountId, timestamps] of Object.entries(parsed.safetyReportRate ?? {})) this.safetyReportRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
+      for (const [accountId, timestamps] of Object.entries(parsed.contentFlagRate ?? {})) this.contentFlagRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
       for (const [accountId, timestamps] of Object.entries(parsed.joinRequestRate ?? {})) {
         this.joinRequestRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
       }
@@ -350,6 +352,7 @@ export class Db {
       joinRequestRate: Object.fromEntries(this.joinRequestRate.entries()),
       safetyReports: [...this.safetyReports.values()],
       safetyReportRate: Object.fromEntries(this.safetyReportRate.entries()),
+      contentFlagRate: Object.fromEntries(this.contentFlagRate.entries()),
       notificationPreferences: [...this.notificationPreferences.values()],
       notifications: [...this.notifications.values()],
       discussions: [...this.discussions.values()],
@@ -535,6 +538,8 @@ export class Db {
   addSafetyReport(r: SafetyReportRecord): void { this.safetyReports.set(r.id, r); }
   updateSafetyReport(id: string, patch: Partial<SafetyReportRecord>): SafetyReportRecord | undefined { const r=this.safetyReports.get(id); if (!r) return; const next={...r,...patch}; this.safetyReports.set(id,next); return next; }
   consumeSafetyReportRate(accountId:string, nowMs:number, limit=3, windowMs=60*60*1000): boolean { const current=(this.safetyReportRate.get(accountId)??[]).filter(t=>nowMs-t<windowMs); if(current.length>=limit){this.safetyReportRate.set(accountId,current);return false;} current.push(nowMs);this.safetyReportRate.set(accountId,current);return true; }
+  /** Shared content-flag limiter: 5 flags per account per rolling hour. */
+  consumeContentFlagRate(accountId:string, nowMs:number, limit=5, windowMs=60*60*1000): boolean { const current=(this.contentFlagRate.get(accountId)??[]).filter(t=>nowMs-t<windowMs); if(current.length>=limit){this.contentFlagRate.set(accountId,current);return false;} current.push(nowMs);this.contentFlagRate.set(accountId,current);return true; }
   getSettings<T>(fallback:T): T { return (this.settings ?? fallback) as T; }
   setSettings(settings: import("./types").SiteSettings): void { this.settings = settings; }
   getCity(id:string): import("./types").CmsCity | undefined { return this.cities.get(id); }
