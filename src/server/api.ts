@@ -127,6 +127,17 @@ import {
 import { publicForumPosts, createForumPost, publicForumReplies, createForumReply, forumReplyCounts, forumPostPublic, editForumPost, deleteForumPost, editForumReply, deleteForumReply, setForumPostPinned } from "./forum";
 import { createContentFlag } from "./contentFlags";
 import { withdrawSubmission } from "./submissions";
+import {
+  acceptConnection,
+  blockConnection,
+  connectionState,
+  declineConnection,
+  mutualConnections,
+  removeConnection,
+  requestConnection,
+  searchable,
+} from "./connections";
+import { canView } from "./privacy";
 
 export const SESSION_COOKIE = "runlocal_sid";
 export const ADMIN_COOKIE = "runlocal_admin";
@@ -248,6 +259,35 @@ export function displayNameFromEmail(email: string): string {
     .filter(Boolean)
     .map((w) => (w[0] ?? "").toUpperCase() + w.slice(1));
   return (words.join(" ") || "Runner").slice(0, 60);
+}
+
+/** Compact public DTO for a runner tag. Identity is limited to ids — the
+ * tagger's identity is server-derived and never exposed beyond the id. */
+function tagDto(t: import("./types").TagRecord) {
+  return { id: t.id, contentType: t.contentType, contentId: t.contentId, taggedUserId: t.taggedUserId, taggedByUserId: t.taggedByUserId, hiddenByTaggedUser: t.hiddenByTaggedUser, createdAt: t.createdAt };
+}
+
+/**
+ * Resolve a tag's content to a public row for the Tagged tab (posts/events).
+ * Posts must exist, be visible, and not moderation-hidden; events must exist
+ * and be published, not hidden/archived. "run" tags reference strictly
+ * private personal runs and never surface publicly -> null.
+ */
+function resolveTaggedContent(db: Db, t: import("./types").TagRecord): { kind: "post" | "event"; id: string; title: string } | null {
+  if (t.contentType === "post") {
+    const post = db.getForumPost(t.contentId);
+    if (!post || post.state !== "visible") return null;
+    const mod = db.getContent(`post:${post.id}`);
+    if (mod?.hidden || mod?.archived) return null;
+    return { kind: "post", id: post.id, title: post.title };
+  }
+  if (t.contentType === "event") {
+    const raw = t.contentId.replace(/^event:/, "");
+    const event = db.listEvents().find((e) => e.id === t.contentId || e.id === raw || e.seedRefId === raw);
+    if (!event || event.status !== "published" || event.hidden || event.archivedAt) return null;
+    return { kind: "event", id: event.id, title: event.title };
+  }
+  return null; // "run" tags stay private (personal runs)
 }
 
 function isSecure(req: IncomingMessage): boolean {
@@ -1457,8 +1497,20 @@ async function handleApi(
   if (runnerMatch && method === "GET") {
     const rec = db.getAccount(runnerMatch[1]);
     if (!rec || !publicRunnerProfile(rec, now)) return err(res, { status: 404, error: "not_found" }), true;
+    // Connections & privacy additions: relationship state, mutual count, and
+    // whether the owner's show_connections_list setting lets this viewer see
+    // the count (guests pass only when the setting is public).
+    const sess = requireSession(db, cookies);
+    const viewerId = sess && !db.getAccount(sess.accountId)?.deletedAt ? sess.accountId : null;
+    const mutualVisible = canView(db, viewerId, rec.id, "show_connections_list");
+    const mutual = mutualVisible && viewerId !== null ? mutualConnections(db, viewerId, rec.id) : [];
     return ok(res, {
-      profile: publicRunnerProfile(rec, now),
+      profile: {
+        ...publicRunnerProfile(rec, now)!,
+        connectionState: connectionState(db, viewerId, rec.id),
+        mutualConnectionsCount: mutualVisible ? mutual.length : 0,
+        mutualVisible,
+      },
       trust: publicTrust(db, runnerMatch[1], null),
       recognitions: publicRecognitions(db, rec.cityId ?? ""),
     }), true;
@@ -1516,6 +1568,279 @@ async function handleApi(
   }
   const ja=/^\/api\/join-requests\/([^/]+)\/(accept|decline|cancel)$/.exec(url.pathname);
   if(ja&&method==="POST"){const s=requireSession(db,cookies);if(!s)return err(res,{status:401,error:"sign_in_required"}),true;const r=db.getJoinRequest(ja[1]);if(!r)return err(res,{status:404,error:"not_found"}),true;if(r.state!=="pending")return err(res,{status:409,error:"invalid_state"}),true;if(new Date(r.expiresAt)<=now){db.updateJoinRequest(r.id,{state:"expired",updatedAt:now.toISOString()});await db.persist();return err(res,{status:409,error:"expired"}),true;}const action=ja[2];if((action==="accept" && r.requesterId!==s.accountId && r.recipientId!==s.accountId)||(action==="decline"&&r.recipientId!==s.accountId)||(action==="cancel"&&r.requesterId!==s.accountId))return err(res,{status:403,error:"forbidden"}),true;const requesterAccepted = r.requesterAccepted || (action === "accept" && r.requesterId === s.accountId); const recipientAccepted = r.recipientAccepted || (action === "accept" && r.recipientId === s.accountId); const state: import("./types").JoinRequestState=action==="accept"?(requesterAccepted && recipientAccepted ? "accepted" : "pending"):action==="decline"?"declined":"cancelled"; const next={...r,state,requesterAccepted,recipientAccepted,updatedAt:now.toISOString()};db.updateJoinRequest(r.id,next);await db.persist();return ok(res,{request:{id:next.id,contextType:next.contextType,state:next.state,createdAt:next.createdAt,expiresAt:next.expiresAt,updatedAt:next.updatedAt},mutual:state === "accepted"}),true;}
+
+  // ==================== CONNECTIONS & PRIVACY ==============================
+  // Runner-to-runner connections. Every mutation goes through the connections
+  // service (src/server/connections.ts) — the ONE place that writes rows and
+  // enforces the owner's edge cases; this layer only maps results to HTTP.
+  // Unblock is served by the EXISTING POST /api/blocks DELETE endpoint (one
+  // block system — no duplicate routes).
+
+  // ---- GET /api/connections: request inbox + accepted list -----------------
+  if (method === "GET" && url.pathname === "/api/connections") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const viewer = db.getAccount(sess.accountId);
+    if (!viewer || viewer.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
+    const requests = db
+      .listIncomingRequests(sess.accountId)
+      .map((r) => ({ record: r, from: db.getAccount(r.requesterId) }))
+      .filter((x): x is { record: import("./types").ConnectionRecord; from: import("./types").AccountRecord } => !!x.from && !x.from.deletedAt && publicRunnerProfile(x.from, now) !== null)
+      .sort((a, b) => b.record.createdAt.localeCompare(a.record.createdAt))
+      .map(({ record, from }) => ({ requestId: record.id, from: publicRunnerProfile(from, now)!, createdAt: record.createdAt }));
+    const connections = db
+      .listAcceptedConnections(sess.accountId)
+      .map((c) => (c.requesterId === sess.accountId ? c.addresseeId : c.requesterId))
+      .map((id) => db.getAccount(id))
+      .filter((rec): rec is import("./types").AccountRecord => !!rec && !rec.deletedAt && publicRunnerProfile(rec, now) !== null)
+      .filter((rec) => !q || rec.name.toLowerCase().includes(q) || (rec.username ?? "").toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((rec) => ({ ...publicRunnerProfile(rec, now)!, connectionState: "connected" as const }));
+    return ok(res, { requests, connections, pendingCount: requests.length }), true;
+  }
+
+  // ---- connection lifecycle mutations --------------------------------------
+  // POST /api/connections/:id/request — :id is the TARGET ACCOUNT id.
+  // POST /api/connections/:id/accept|decline — :id is the REQUEST id; the
+  //   service enforces addressee-only (existence is never leaked: not_found).
+  // POST /api/connections/:id/remove|block — :id is the OTHER ACCOUNT id.
+  const connectionAction = /^\/api\/connections\/([^/]+)\/(request|accept|decline|remove|block)$/.exec(url.pathname);
+  if (connectionAction && method === "POST") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const viewer = db.getAccount(sess.accountId);
+    if (!viewer || viewer.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const param = decodeURIComponent(connectionAction[1]);
+    const action = connectionAction[2];
+    if (action === "request") {
+      const target = db.getAccount(param);
+      if (!target || target.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
+      const result = requestConnection(db, sess.accountId, param, now);
+      if (!result.ok) {
+        if (result.error === "blocked") return err(res, { status: 403, error: "blocked" }), true;
+        if (result.error === "cannot_connect_self") return err(res, { status: 400, error: "cannot_connect_self" }), true;
+        return err(res, { status: 400, error: result.error ?? "error" }), true;
+      }
+      await db.persist();
+      return ok(res, { status: result.status, resolved: result.resolved === true }), true;
+    }
+    if (action === "accept") {
+      const result = acceptConnection(db, sess.accountId, param, now);
+      if (!result.ok) {
+        if (result.error === "blocked") return err(res, { status: 403, error: "blocked" }), true;
+        if (result.error === "not_pending") return err(res, { status: 409, error: "not_pending" }), true;
+        return err(res, { status: 404, error: "not_found" }), true;
+      }
+      await db.persist();
+      return ok(res, { status: "accepted" }), true;
+    }
+    if (action === "decline") {
+      const result = declineConnection(db, sess.accountId, param, now);
+      if (!result.ok) {
+        if (result.error === "blocked") return err(res, { status: 403, error: "blocked" }), true;
+        if (result.error === "not_pending") return err(res, { status: 409, error: "not_pending" }), true;
+        return err(res, { status: 404, error: "not_found" }), true;
+      }
+      await db.persist();
+      return ok(res, { status: "declined" }), true;
+    }
+    if (action === "remove") {
+      const result = removeConnection(db, sess.accountId, param, now);
+      if (!result.ok) return err(res, { status: 404, error: "not_connected" }), true;
+      await db.persist();
+      return ok(res, { status: "removed" }), true;
+    }
+    // block
+    if (param === sess.accountId) return err(res, { status: 400, error: "invalid_block" }), true;
+    const target = db.getAccount(param);
+    if (!target || target.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
+    blockConnection(db, sess.accountId, param, now);
+    await db.persist();
+    return ok(res, { status: "blocked" }), true;
+  }
+
+  // ---- GET /api/people/search: verified-account name search -----------------
+  // Search-index filter only: `searchable_by_name = false` hides the user from
+  // search for EVERYONE (connections included), while profile-by-id and
+  // connection views stay unaffected (see connections.searchable). Blocks beat
+  // everything (bidirectional). Empty q → empty list. The viewer never
+  // appears in their own results (self-connection is impossible).
+  if (method === "GET" && url.pathname === "/api/people/search") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
+    if (!q) return ok(res, { people: [] }), true;
+    const people = db
+      .listAccounts()
+      .filter((rec) => !rec.deletedAt && rec.status === "verified" && rec.id !== sess.accountId && publicRunnerProfile(rec, now) !== null)
+      .filter((rec) => rec.name.toLowerCase().includes(q) || (rec.username ?? "").toLowerCase().includes(q))
+      .filter((rec) => searchable(db, sess.accountId, rec.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((rec) => ({ ...publicRunnerProfile(rec, now)!, connectionState: connectionState(db, sess.accountId, rec.id) }));
+    return ok(res, { people }), true;
+  }
+
+  // ---- GET /api/events/:id/occurrences/:occ/connections-going --------------
+  // The viewer's accepted connections who RSVP'd/attended this exact
+  // occurrence. Each attendee is included ONLY when
+  // canView(viewer, attendee, show_upcoming_events, {eventId, occurrenceId})
+  // passes — the event-level visibilityOverride resolves inside canView.
+  // Guests 401; pending/rejected 403; unknown/unpublished occurrence 404.
+  const goingPath = /^\/api\/events\/([^/]+)\/occurrences\/([^/]+)\/connections-going$/.exec(url.pathname);
+  if (goingPath && method === "GET") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const viewer = db.getAccount(sess.accountId);
+    if (!viewer || viewer.deletedAt || viewer.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const eventParam = decodeURIComponent(goingPath[1]);
+    const occurrenceId = decodeURIComponent(goingPath[2]);
+    const event = db.listEvents().find((e) => e.id === eventParam || e.seedRefId === eventParam || e.id === `event:${eventParam}`);
+    const separator = occurrenceId.lastIndexOf(":");
+    const occurrenceEventId = separator > 0 ? occurrenceId.slice(0, separator) : "";
+    const runDate = separator > 0 ? occurrenceId.slice(separator + 1) : "";
+    const occ =
+      event && (event.id === occurrenceEventId || event.id === occurrenceEventId.replace(/^event:/, "") || event.seedRefId === occurrenceEventId.replace(/^event:/, ""))
+        ? resolveOccurrence(db, event.id, runDate)
+        : null;
+    const requestedCanonical = occ && (occ.occurrenceId === occurrenceId || (occ.event?.seedRefId && occurrenceId === `event:${occ.event.seedRefId}:${runDate}`)) ? occ.occurrenceId : "";
+    if (!event || !occ || !requestedCanonical || event.status !== "published" || event.hidden || event.archivedAt) return err(res, { status: 404, error: "not_found" }), true;
+    const connectedIds = new Set(db.listAcceptedConnections(sess.accountId).map((c) => (c.requesterId === sess.accountId ? c.addresseeId : c.requesterId)));
+    const going = db
+      .listAttendance()
+      .filter((a) => (a.role === "rsvp" || a.role === "host") && a.occurrenceId === requestedCanonical)
+      .map((a) => db.getAccount(a.accountId))
+      .filter((rec): rec is import("./types").AccountRecord => !!rec && !rec.deletedAt && connectedIds.has(rec.id))
+      .filter((rec) => canView(db, sess.accountId, rec.id, "show_upcoming_events", { eventId: occ.eventId, occurrenceId: requestedCanonical }))
+      .sort((x, y) => x.name.localeCompare(y.name))
+      .map((rec) => ({ accountId: rec.id, name: rec.name, username: rec.username ?? null, profilePhotoUrl: rec.profilePhotoRef ? `/uploads/public/${rec.profilePhotoRef}` : null }));
+    return ok(res, going), true;
+  }
+
+  // ---- GET/PUT /api/profile/privacy (own settings; partial merge) ----------
+  // Validation lives in store.setPrivacy (validatePrivacyPatch): unknown
+  // fields rejected, show_saved_events can never be public, every value
+  // type-checked. Response is always the FULL settings record.
+  if (method === "GET" && url.pathname === "/api/profile/privacy") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    return ok(res, { settings: db.getPrivacy(sess.accountId) }), true;
+  }
+  if (method === "PUT" && url.pathname === "/api/profile/privacy") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const allowed = ["profile_visibility", "show_upcoming_events", "show_saved_events", "show_past_activity", "show_connections_list", "show_tagged_content", "searchable_by_name"];
+    const patch: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(body)) {
+      if (!allowed.includes(k)) return err(res, { status: 400, error: "invalid_privacy", message: `Unknown privacy setting: ${k}` }), true;
+      patch[k] = v;
+    }
+    let settings;
+    try {
+      settings = db.setPrivacy(sess.accountId, patch);
+    } catch {
+      return err(res, { status: 400, error: "invalid_privacy" }), true;
+    }
+    await db.persist();
+    return ok(res, { settings }), true;
+  }
+
+  // ---- runner tags on content (posts/events/runs) --------------------------
+  // POST /api/tags — verified actor, target must exist, self-tag rejected,
+  // blocked pairs rejected. No approval needed. PATCH /api/tags/:id/self —
+  // ONLY the tagged user may toggle their own hiddenByTaggedUser flag.
+  if (method === "POST" && url.pathname === "/api/tags") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const actor = db.getAccount(sess.accountId);
+    if (!actor || actor.deletedAt || actor.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const body = (await readJson(req)) as { contentType?: unknown; contentId?: unknown; taggedUserId?: unknown };
+    const contentType = body.contentType;
+    const contentId = typeof body.contentId === "string" ? body.contentId : "";
+    const taggedUserId = typeof body.taggedUserId === "string" ? body.taggedUserId : "";
+    if ((contentType !== "run" && contentType !== "post" && contentType !== "event") || !contentId || !taggedUserId) return err(res, { status: 400, error: "invalid_tag" }), true;
+    if (taggedUserId === sess.accountId) return err(res, { status: 400, error: "cannot_tag_self" }), true;
+    const target = db.getAccount(taggedUserId);
+    if (!target || target.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
+    if (db.isBlocked(sess.accountId, taggedUserId)) return err(res, { status: 403, error: "blocked" }), true;
+    const tag: import("./types").TagRecord = { id: newId(), contentType, contentId, taggedUserId, taggedByUserId: sess.accountId, hiddenByTaggedUser: false, createdAt: now.toISOString() };
+    db.addTag(tag);
+    await db.persist();
+    return ok(res, { tag: tagDto(tag) }), true;
+  }
+  // GET /api/tags?contentType=&contentId= — public-safe read (guests OK):
+  // hidden_by_tagged_user rows are excluded UNLESS the viewer is the tagged
+  // user; blocked pairs (viewer ↔ tagged user) are excluded; each row carries
+  // the tagged user's public profile.
+  if (method === "GET" && url.pathname === "/api/tags") {
+    const contentType = url.searchParams.get("contentType") ?? "";
+    const contentId = url.searchParams.get("contentId") ?? "";
+    if ((contentType !== "run" && contentType !== "post" && contentType !== "event") || !contentId) return err(res, { status: 400, error: "invalid_tag_query" }), true;
+    const sess = requireSession(db, cookies);
+    const viewerId = sess ? sess.accountId : null;
+    const tags = db
+      .getTagsForContent(contentType, contentId)
+      .filter((t) => !(t.hiddenByTaggedUser && t.taggedUserId !== viewerId))
+      .filter((t) => viewerId === null || !db.isBlocked(viewerId, t.taggedUserId))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((t) => ({ ...tagDto(t), taggedUser: publicRunnerProfile(db.getAccount(t.taggedUserId)!, now) }))
+      .filter((x) => x.taggedUser !== null);
+    return ok(res, { tags }), true;
+  }
+  const tagSelf = /^\/api\/tags\/([^/]+)\/self$/.exec(url.pathname);
+  if (tagSelf && method === "PATCH") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { hiddenByTaggedUser?: unknown };
+    if (typeof body.hiddenByTaggedUser !== "boolean") return err(res, { status: 400, error: "invalid_hidden_flag" }), true;
+    const tag = db.getTag(decodeURIComponent(tagSelf[1]));
+    if (!tag) return err(res, { status: 404, error: "not_found" }), true;
+    if (tag.taggedUserId !== sess.accountId) return err(res, { status: 403, error: "forbidden" }), true;
+    const updated = db.updateTag(tag.id, { hiddenByTaggedUser: body.hiddenByTaggedUser })!;
+    await db.persist();
+    return ok(res, { tag: tagDto(updated) }), true;
+  }
+  // GET /api/runners/:id/tagged — content (posts/events) where this runner is
+  // tagged. Gated by canView(viewer, owner, show_tagged_content); hidden rows
+  // drop for everyone except the tagged user themselves; blocked pairs are
+  // handled inside canView (blocked beats everything → empty).
+  const runnerTagged = /^\/api\/runners\/([a-f0-9]{32})\/tagged$/.exec(url.pathname);
+  if (runnerTagged && method === "GET") {
+    const owner = db.getAccount(runnerTagged[1]);
+    if (!owner || owner.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
+    const sess = requireSession(db, cookies);
+    const viewerId = sess ? sess.accountId : null;
+    if (!canView(db, viewerId, owner.id, "show_tagged_content")) return ok(res, { tagged: [] }), true;
+    const tagged = db
+      .getTagsForUser(owner.id)
+      .filter((t) => !(t.hiddenByTaggedUser && viewerId !== owner.id))
+      .map((t) => ({ tag: { id: t.id, contentType: t.contentType, contentId: t.contentId, hiddenByTaggedUser: t.hiddenByTaggedUser, createdAt: t.createdAt }, content: resolveTaggedContent(db, t) }))
+      .filter((x) => x.content !== null)
+      .sort((a, b) => b.tag.createdAt.localeCompare(a.tag.createdAt));
+    return ok(res, { tagged }), true;
+  }
+  // GET /api/runners/:id/activity — the runner's public forum posts, gated by
+  // canView(viewer, owner, show_past_activity). Public read (guests pass only
+  // when the setting is public — the default). Empty when nothing is visible.
+  const runnerActivity = /^\/api\/runners\/([a-f0-9]{32})\/activity$/.exec(url.pathname);
+  if (runnerActivity && method === "GET") {
+    const owner = db.getAccount(runnerActivity[1]);
+    if (!owner || owner.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
+    const sess = requireSession(db, cookies);
+    const viewerId = sess ? sess.accountId : null;
+    if (!canView(db, viewerId, owner.id, "show_past_activity")) return ok(res, { activity: [] }), true;
+    const activity = db
+      .listForumPosts()
+      .filter((f) => f.authorAccountId === owner.id && f.state === "visible")
+      .filter((f) => {
+        const mod = db.getContent(`post:${f.id}`);
+        return !mod?.hidden && !mod?.archived;
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((f) => ({ id: f.id, title: f.title, excerpt: f.body.slice(0, 200), section: f.section, createdAt: f.createdAt }));
+    return ok(res, { activity }), true;
+  }
 
   // ---- strictly private PersonalRun records -------------------------------
   // Account identity is always derived from the HttpOnly session. PersonalRuns
