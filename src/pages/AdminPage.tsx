@@ -19,6 +19,7 @@ import { EventCmsSection } from "../components/EventCmsSection";
 import { Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
 import type { AdminRecordView, AdminSearchRow, AuditEntryView, DashboardView, PendingQueueRow } from "../lib/api";
+import { ALL_OP_ROLES, roleLabel, type OpRole } from "../lib/accounts";
 import { CITIES } from "../data/cities";
 import { ContentManagementSection } from "../components/ContentManagementSection";
 import { useAccount } from "../state/account";
@@ -984,6 +985,13 @@ export function AdminPage() {
               <Icon name="shield" className="h-4 w-4" /> View selfie (audited)
             </PillButton>
           )}
+          <RoleEditor
+            record={record}
+            viewerIsCityAdmin={isCityAdmin}
+            viewerCityScope={cityScope ?? null}
+            reason={reason}
+            onSaved={() => void openRecord(record.id)}
+          />
           {detailError ? <div className="mt-3"><Err msg={detailError} /></div> : null}
           <div className="mt-4 grid grid-cols-3 gap-2">
             <PillButton variant="secondary" className="w-full px-2" onClick={() => void doAction("approve")} disabled={record.status === "verified"}>
@@ -1040,5 +1048,205 @@ function Row({ k, v, sensitive }: { k: string; v: string; sensitive?: boolean })
       <span className="w-28 shrink-0 font-semibold text-slate-500">{k}</span>
       <span className={`flex-1 break-all ${sensitive ? "font-mono text-slate-800" : "text-slate-800"}`}>{v}</span>
     </li>
+  );
+}
+
+/** Server error codes the roles endpoint can return, mapped to operator-facing copy. */
+function roleErrorMessage(code: string | undefined): string | null {
+  switch (code) {
+    case "invalid_roles":
+      return "That role set isn't valid — pick from the roles shown below.";
+    case "invalid_city":
+      return "The City Admin role requires a valid city scope — choose one from the list.";
+    case "city_scope_denied":
+      return "Your admin access is scoped to one city — you can only manage accounts in your own city.";
+    case "roles_out_of_scope":
+      return "City Admins may only add or remove the Group Leader role within their own city.";
+    case "owner_cannot_demote":
+      return "The owner always holds Site Admin and cannot be demoted.";
+    case "verification_incomplete":
+      return "Admin roles (City Admin, Site Admin) require an identity-verified account.";
+    case "account_not_found":
+      return "Account not found — it may have been deleted.";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Audited multi-role editor for one account record. Renders the current role
+ * set with roleLabel(), lets the operator toggle assignable roles, and PATCHes
+ * the FULL desired set to /api/admin/accounts/:id/roles. Server-enforced
+ * rules are mirrored in the UI: City Admins only get the group_leader toggle
+ * (own city only); Global Admins (owner or key admin) get the full set; the
+ * owner's site_admin can never be removed. Server errors surface inline.
+ */
+function RoleEditor({
+  record,
+  viewerIsCityAdmin,
+  viewerCityScope,
+  reason,
+  onSaved,
+}: {
+  record: AdminRecordView;
+  viewerIsCityAdmin: boolean;
+  viewerCityScope: string | null;
+  reason: string;
+  onSaved?: () => void;
+}) {
+  const [draft, setDraft] = useState<Set<OpRole>>(() => new Set(record.roles));
+  const [citySel, setCitySel] = useState<string>(record.adminCityId ?? record.cityId ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+  const outOfScope = viewerIsCityAdmin && record.cityId !== viewerCityScope;
+  const canEdit = !viewerIsCityAdmin || !outOfScope;
+  const cityName = (id: string | null) => CITIES.find((c) => c.id === id)?.name ?? id ?? null;
+
+  const toggle = (role: OpRole) => {
+    if (busy || (record.isOwner && role === "site_admin")) return;
+    setSaved(null);
+    setError(null);
+    const next = new Set(draft);
+    if (next.has(role)) next.delete(role);
+    else next.add(role);
+    setDraft(next);
+  };
+
+  const save = async () => {
+    setError(null);
+    setSaved(null);
+    if (!reason.trim() || reason.trim().length < 5) {
+      setError("Enter a reason (min 5 characters) to save role changes — every change is audited.");
+      return;
+    }
+    const roles = ALL_OP_ROLES.filter((r) => draft.has(r));
+    if (roles.length === 0) {
+      setError("At least one role is required — everyone keeps Verified Runner.");
+      return;
+    }
+    setBusy(true);
+    const r = await api.adminAssignRoles(record.id, roles, draft.has("city_admin") ? citySel || null : null, reason.trim());
+    setBusy(false);
+    if (r.ok) {
+      setSaved(`Roles saved — ${r.data.account.roles.map(roleLabel).join(", ")}. This change is in the audit log.`);
+      setDraft(new Set(r.data.account.roles));
+      setCitySel(r.data.account.adminCityId ?? citySel);
+      onSaved?.();
+    } else {
+      setError(roleErrorMessage(r.error.code) ?? r.error.message ?? "Couldn't save roles.");
+    }
+  };
+
+  return (
+    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-[13px] font-bold text-slate-900">Roles</h3>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {record.roles.map((r) => (
+            <span key={r} className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${r === "site_admin" ? "bg-slate-800 text-white" : r === "city_admin" ? "bg-indigo-100 text-indigo-700" : r === "group_leader" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+              {roleLabel(r)}
+            </span>
+          ))}
+        </div>
+      </div>
+      <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+        Roles glue together: a higher role includes every lower one. Saving replaces the full set — it is audited with the reason above.
+        {record.adminCityId ? ` City Admin scope: ${cityName(record.adminCityId)}.` : ""}
+      </p>
+      {!canEdit ? (
+        <p className="mt-2 rounded-lg bg-amber-50 p-2.5 text-[12px] text-amber-800">
+          This account is outside your city scope ({viewerCityScope ?? "none"}) — you may not change its roles here.
+        </p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {!viewerIsCityAdmin && (
+            <>
+              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-white p-2.5 ring-1 ring-slate-200">
+                <span className="text-[13px] text-slate-800">
+                  <span className="font-semibold">Group Leader</span>
+                  <span className="block text-[11px] text-slate-500">Label role for people who run a club or group.</span>
+                </span>
+                <input type="checkbox" checked={draft.has("group_leader")} onChange={() => toggle("group_leader")} disabled={busy} className="h-4 w-4 accent-[#FF5741]" />
+              </label>
+              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-white p-2.5 ring-1 ring-slate-200">
+                <span className="text-[13px] text-slate-800">
+                  <span className="font-semibold">City Admin</span>
+                  <span className="block text-[11px] text-slate-500">Scoped to exactly one city. Requires an identity-verified account.</span>
+                </span>
+                <input type="checkbox" checked={draft.has("city_admin")} onChange={() => toggle("city_admin")} disabled={busy} className="h-4 w-4 accent-[#FF5741]" />
+              </label>
+              {draft.has("city_admin") && (
+                <div>
+                  <label htmlFor={`role-city-${record.id}`} className="mb-1 block text-[11px] font-semibold text-slate-600">
+                    City scope (required for City Admin)
+                  </label>
+                  <select
+                    id={`role-city-${record.id}`}
+                    value={citySel}
+                    onChange={(e) => setCitySel(e.target.value)}
+                    disabled={busy}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-[13px] text-slate-900 outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
+                  >
+                    <option value="">Choose a city…</option>
+                    {CITIES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}, {c.state}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-white p-2.5 ring-1 ring-slate-200">
+                <span className="text-[13px] text-slate-800">
+                  <span className="font-semibold">Site Admin</span>
+                  <span className="block text-[11px] text-slate-500">Top of the hierarchy — includes every lower role. Requires an identity-verified account.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={draft.has("site_admin")}
+                  onChange={() => toggle("site_admin")}
+                  disabled={busy || record.isOwner}
+                  className="h-4 w-4 accent-[#FF5741]"
+                  aria-label={record.isOwner ? "Site Admin (locked — the owner always holds it)" : "Site Admin"}
+                />
+              </label>
+              {record.isOwner && <p className="text-[11px] text-slate-500">The owner always holds Site Admin — it cannot be removed here.</p>}
+            </>
+          )}
+          {viewerIsCityAdmin && (
+            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-white p-2.5 ring-1 ring-slate-200">
+              <span className="text-[13px] text-slate-800">
+                <span className="font-semibold">Group Leader</span>
+                <span className="block text-[11px] text-slate-500">City Admins may only add or remove this role, in their own city.</span>
+              </span>
+              <input type="checkbox" checked={draft.has("group_leader")} onChange={() => toggle("group_leader")} disabled={busy} className="h-4 w-4 accent-[#FF5741]" />
+            </label>
+          )}
+          {error ? <Err msg={error} /> : null}
+          {saved ? <Info msg={saved} /> : null}
+          <div className="flex gap-2">
+            <PillButton variant="primary" className="flex-1" onClick={() => void save()} disabled={busy}>
+              {busy ? "Saving…" : "Save roles"}
+            </PillButton>
+            {record.roles.some((r) => r !== "runner") && (
+              <PillButton
+                variant="ghost"
+                className="flex-1"
+                disabled={busy || (record.isOwner && record.roles.includes("site_admin"))}
+                onClick={() => {
+                  setError(null);
+                  setSaved(null);
+                  setDraft(new Set(["runner"]));
+                  setCitySel(record.cityId ?? "");
+                }}
+              >
+                Reset to Runner
+              </PillButton>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

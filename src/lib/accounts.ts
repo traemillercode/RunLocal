@@ -25,6 +25,28 @@ export function canDo(role: AccountRole, action: GatedAction): boolean {
   return ROLE_RANK[role] >= ROLE_RANK[MIN_ROLE[action]];
 }
 
+/**
+ * Operational account roles (multi-role model, server-authoritative). Roles
+ * "glue together": each role implies every role of equal or lower rank
+ * (runner(0) < group_leader(1) < city_admin(2) < site_admin(3)), so the
+ * effective role is the highest-ranked held role. The server ships the full
+ * `roles` set on the public account; this module only renders it.
+ */
+export type OpRole = "runner" | "group_leader" | "city_admin" | "site_admin";
+export const OP_ROLE_RANK: Record<OpRole, number> = { runner: 0, group_leader: 1, city_admin: 2, site_admin: 3 };
+export const ALL_OP_ROLES: OpRole[] = ["runner", "group_leader", "city_admin", "site_admin"];
+
+/** Highest-ranked role from a public account's role set. */
+export function effectiveOpRole(account: Pick<PublicAccount, "roles" | "role">): OpRole {
+  const roles = Array.isArray(account.roles) && account.roles.length > 0 ? account.roles : [account.role];
+  return roles.reduce<OpRole>((a, b) => (OP_ROLE_RANK[b] > OP_ROLE_RANK[a] ? b : a), "runner");
+}
+
+/** "Roles glue together": true when the account effectively holds `role`. */
+export function accountHasRole(account: Pick<PublicAccount, "roles" | "role">, role: OpRole): boolean {
+  return OP_ROLE_RANK[effectiveOpRole(account)] >= OP_ROLE_RANK[role];
+}
+
 /** A public account payload — the ONLY account shape the client may hold. */
 export interface PublicAccount {
   id: string;
@@ -48,7 +70,9 @@ export interface PublicAccount {
   /** The only verification artifact shown publicly. */
   badge: "verified" | null;
   /** Assigned runner role — a label only, never a power source. */
-  role: "runner" | "group_leader" | "city_admin";
+  role: OpRole;
+  /** Full multi-role set (server-authoritative; `role` = highest of these). */
+  roles: OpRole[];
   /** City Admin's server-enforced scope, when applicable. */
   /** City Admin scope exposed for rendering only; authorization remains server-side. */
   adminCityId?: string | null;
@@ -132,5 +156,14 @@ export function phaseLabel(phase: PublicAccount["phase"]): string {
 
 /** Human-readable label for the assigned runner role. */
 export function roleLabel(role: PublicAccount["role"]): string {
-  return role === "group_leader" ? "Group Leader" : "Verified Runner";
+  switch (role) {
+    case "group_leader":
+      return "Group Leader";
+    case "city_admin":
+      return "City Admin";
+    case "site_admin":
+      return "Site Admin";
+    default:
+      return "Verified Runner";
+  }
 }

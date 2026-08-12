@@ -47,6 +47,7 @@ function account(patch: Partial<PublicAccount> = {}): PublicAccount {
     underReview: false,
     profilePhotoUrl: null,
     ...patch,
+    roles: patch.roles ?? ["runner"],
   };
 }
 const city = CITIES[0];

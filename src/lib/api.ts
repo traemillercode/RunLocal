@@ -5,7 +5,7 @@
  * whether the backend is configured. No verification data is stored
  * client-side; sessions are HttpOnly cookies set by the server.
  */
-import type { Me } from "./accounts";
+import type { Me, OpRole } from "./accounts";
 import { normalizeErrorCode, normalizeErrorMessage } from "./errors";
 
 export class ApiError extends Error {
@@ -262,6 +262,14 @@ export interface AdminRecordView extends AdminSearchRow {
   canViewSelfie: boolean;
   /** Applicant-facing rejection reason stored at rejection (admin view). */
   rejectionReason: string | null;
+  /** Home city id (admin view — used by the role editor's city scoping). */
+  cityId: string | null;
+  /** Full multi-role set (effective — owner-implied site_admin included). */
+  roles: OpRole[];
+  /** City Admin scope, when the account holds city_admin. */
+  adminCityId: string | null;
+  /** Server-derived owner flag — the owner can never be demoted below site_admin. */
+  isOwner: boolean;
 }
 
 export interface AuditEntryView {
@@ -304,6 +312,13 @@ export function adminSetStatus(id: string, action: "approve" | "reject", reason:
   return adminRequest(`/api/admin/records/${id}/${action}?role=${role}`, reason, {
     method: "POST",
     ...(action === "reject" ? { body: JSON.stringify({ reason }) } : {}),
+  });
+}
+/** Audited multi-role assignment — the body carries the FULL desired role set (set semantics). */
+export function adminAssignRoles(id: string, roles: OpRole[], cityId: string | null, reason: string): Promise<ApiResult<{ account: { accountId: string; roles: OpRole[]; role: OpRole; adminCityId: string | null } }>> {
+  return adminRequest(`/api/admin/accounts/${id}/roles`, reason, {
+    method: "PATCH",
+    body: JSON.stringify({ roles, cityId }),
   });
 }
 

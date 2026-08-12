@@ -12,6 +12,7 @@
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { accountRoles, effectiveRole, hasRole, highestRole, normalizeRoles, storedRoles } from "./accountRoles";
 import type {
   AccountRecord,
   AuditEntry,
@@ -92,6 +93,8 @@ export interface PublicAccount {
   badge: "verified" | null;
   /** Assigned runner role (label only — never a power source). */
   role: AccountRecord["role"];
+  /** Full multi-role set (server-authoritative; `role` = highest of these). */
+  roles: AccountRecord["roles"];
   /** City Admin scope is display-only; authorization checks stay server-side. */
   adminCityId?: string | null;
   /** Server-derived super-admin flag (from RUN_LOCAL_OWNER_EMAIL). */
@@ -151,8 +154,9 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new D
     status: rec.status,
     phase: rec.status === "pending" ? rec.phase : null,
     badge: rec.status === "verified" ? "verified" : null,
-    role: rec.role,
-    adminCityId: rec.role === "city_admin" ? rec.adminCityId : null,
+    role: effectiveRole(rec),
+    roles: accountRoles(rec),
+    adminCityId: hasRole(rec, "city_admin") ? rec.adminCityId : null,
     isOwner,
     suspended: isSuspended(rec, now),
     underReview: rec.underReview === true,
@@ -259,6 +263,12 @@ export class Db {
         // multi-city foundation lack them — treat as `null` (not a City Admin).
         a.adminCityId = a.adminCityId ?? null;
         a.rolePriorAdmin = a.rolePriorAdmin ?? null;
+        // Multi-role migration: accounts persisted before `roles` existed
+        // carry only the legacy single `role` — treat it as their full role
+        // set (the helpers fall back the same way for in-memory records).
+        if (!Array.isArray(a.roles) || a.roles.length === 0) {
+          a.roles = a.role ? [a.role] : ["runner"];
+        }
         // Same for the community-trust review state: accounts persisted before
         // it existed lack the fields — treat as not under review.
         a.underReview = a.underReview === true;
@@ -448,6 +458,7 @@ export class Db {
       status: "pending",
       phase: "email",
       role: "runner",
+      roles: ["runner"],
       adminCityId: null,
       rolePriorAdmin: null,
       requestedRole: input.requestedRole ?? null,
@@ -484,6 +495,20 @@ export class Db {
     const rec = this.accounts.get(id);
     if (!rec) return undefined;
     const next = { ...rec, ...patch };
+    // Keep the legacy single `role` field and the multi-role `roles` set in
+    // sync for ALL callers (backward-compat guarantee of the multi-role model):
+    // - `roles` (an array) is the authoritative write form — derive `role` as
+    //   the set's highest-ranked member (production writers use rolesPatch /
+    //   addRolePatch, which already pass both consistently).
+    // - a legacy single `role` write (test fixtures / pre-multi-role callers)
+    //   is MERGED into the stored set rather than replacing it, so a role set
+    //   that already exists (e.g. ["runner"]) never shadows the new role.
+    if (Array.isArray(patch.roles)) {
+      next.role = highestRole(normalizeRoles(patch.roles));
+    } else if (patch.role !== undefined) {
+      next.roles = normalizeRoles([...storedRoles(rec), patch.role]);
+      next.role = highestRole(next.roles);
+    }
     this.accounts.set(id, next);
     return next;
   }
