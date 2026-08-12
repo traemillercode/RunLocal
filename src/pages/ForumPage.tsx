@@ -11,6 +11,7 @@ import { getActivityFeed, type PublicActivityCard } from "../lib/api";
 import { useModerated } from "../state/moderated";
 import { canDo, type AccountRole } from "../lib/accounts";
 import { actionMenuItems, type ActionKey } from "../lib/actionModel";
+import { PostTags, TagRunnerSheet } from "../components/Tagging";
 import * as api from "../lib/api";
 import { FORUM_SECTIONS, type City, type ForumSection, type QaSort } from "../types";
 
@@ -444,6 +445,7 @@ export function PostCard({
   thread = null,
   verified,
   onAction,
+  tags,
 }: {
   post: ForumPostRow;
   section: ForumSection;
@@ -453,6 +455,8 @@ export function PostCard({
   verified: boolean;
   /** Menu action dispatcher — the page maps each key to an edit sheet or confirm flow. */
   onAction?: (key: ActionKey) => void;
+  /** Tag chips under the post body (PostTags) — renders nothing when empty. */
+  tags?: ReactNode;
 }) {
   const initials = post.author
     .split(/\s+/)
@@ -480,6 +484,7 @@ export function PostCard({
             </span>
           </div>
           <p className="mt-1 text-[13px] leading-relaxed text-slate-600 line-clamp-3">{post.body}</p>
+          {tags}
         </div>
       </div>
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-4 py-2.5">
@@ -587,6 +592,12 @@ export function ForumPage({ city }: { city: City }) {
   const [editReply, setEditReply] = useState<{ postId: string; replyId: string; body: string } | null>(null);
   const [editReplyBusy, setEditReplyBusy] = useState(false);
   const [editReplyError, setEditReplyError] = useState<string | null>(null);
+  // Tagging (v1): composer targets one forum post; successful tags bump
+  // tagsReload so every post's chip list refetches (small N, keeps chips
+  // honest without per-post bookkeeping).
+  const [tagPost, setTagPost] = useState<ForumPostRow | null>(null);
+  const [tagsReload, setTagsReload] = useState(0);
+  const viewerId = me?.status === "signed_in" ? me.account.id : null;
 
   const loadForum = () => {
     void api.getForumPosts(city.id).then((r) => {
@@ -741,6 +752,11 @@ export function ForumPage({ city }: { city: City }) {
         break;
       case "report":
         setConfirm({ kind: "report_post", postId: post.id, title: post.title });
+        break;
+      case "tag":
+        // Verified authors only (server capability) — open the tag composer
+        // for this post; createTag re-validates server-side.
+        setTagPost(post);
         break;
       case "pin":
         setConfirm({ kind: "pin_post", postId: post.id, title: post.title });
@@ -1024,6 +1040,7 @@ export function ForumPage({ city }: { city: City }) {
                 replyExpanded={expanded}
                 onReply={() => onReply(p.id, p.title)}
                 onAction={handlePostAction(p)}
+                tags={<PostTags postId={p.id} viewerId={viewerId} reloadKey={tagsReload} />}
                 thread={
                   expanded ? (
                     <ForumThread
@@ -1112,6 +1129,15 @@ export function ForumPage({ city }: { city: City }) {
           />
         ) : null}
       </Sheet>
+
+      {/* Tag a runner on a forum post (verified author capability only) */}
+      <TagRunnerSheet
+        open={tagPost !== null}
+        onClose={() => setTagPost(null)}
+        contentType="post"
+        contentId={tagPost?.id ?? ""}
+        onTagged={() => setTagsReload((n) => n + 1)}
+      />
 
       {/* Shared confirmation sheet — author delete (variant B), admin hide/restore/
           delete (variant A, reason-required), verified report (reason + privacy note) */}

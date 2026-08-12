@@ -27,6 +27,7 @@ export type ActionKey =
   | "manage_members"
   | "manage_leaders"
   | "suspend"
+  | "tag"
   | "pin"
   | "unpin";
 
@@ -54,6 +55,7 @@ export const ACTION_META: Record<ActionKey, ActionMeta> = {
   manage_members: { key: "manage_members", label: "Manage members", icon: "users", danger: false },
   manage_leaders: { key: "manage_leaders", label: "Manage leaders", icon: "shield", danger: false },
   suspend: { key: "suspend", label: "Suspend", icon: "ban", danger: true },
+  tag: { key: "tag", label: "Tag a runner", icon: "tag", danger: false },
   pin: { key: "pin", label: "Pin", icon: "pin", danger: false },
   unpin: { key: "unpin", label: "Unpin", icon: "clock", danger: false },
 };
