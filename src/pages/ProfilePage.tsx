@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { TrustedBadge } from "../components/TrustedBadge";
 import { ActionMenu } from "../components/ActionMenu";
@@ -7,7 +7,7 @@ import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { Chip, Icon, PillButton, Sheet } from "../components/ui";
 import type { City } from "../types";
 import { resolveWeekEvents } from "../lib/dates";
-import { phaseLabel, roleLabel } from "../lib/accounts";
+import { roleLabel } from "../lib/accounts";
 import { actionMenuItems, type ActionKey } from "../lib/actionModel";
 import { useToast } from "../lib/toast";
 import * as api from "../lib/api";
@@ -15,6 +15,13 @@ import type { AppStore } from "../lib/store";
 import { useAccount } from "../state/account";
 import { useSelectedCity } from "../state/city";
 import { TrustProfileSection } from "../components/TrustProfileSection";
+import {
+  RunnerProfileTabs,
+  RunnerActivityPanel,
+  RunnerTaggedPanel,
+  type RunnerProfileTab,
+} from "./RunnerProfilePage";
+import type { RunnerActivityRow, RunnerTaggedRow } from "../lib/api";
 
 function initials(name: string): string {
   return name
@@ -379,10 +386,20 @@ export function ProfileGroupsCard({ signedIn }: { signedIn: boolean }) {
   return <ProfileGroupsCardContent membershipCount={membershipCount} pendingRequests={pendingRequests} loading={loading} />;
 }
 
+/**
+ * /profile — the signed-in runner's OWN public-profile experience (not a
+ * settings dashboard). Identity header, Activity + Tagged content (same
+ * server-gated surfaces as /runners/:id, fetched for the viewer's own id),
+ * Groups/clubs, submissions and trust — plus a "View public profile" link to
+ * /runners/:id. ALL settings forms (username, photo, notifications, privacy,
+ * account, home city) live on SettingsPage; /profile never renders them.
+ */
 export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
-  const navigate = useNavigate();
   const { me, backendAvailable } = useAccount();
   const { hasHomeCity } = useSelectedCity();
+  const [tab, setTab] = useState<RunnerProfileTab>("activity");
+  const [activity, setActivity] = useState<RunnerActivityRow[] | null>(null);
+  const [tagged, setTagged] = useState<RunnerTaggedRow[] | null>(null);
 
   const rsvps = useMemo(() => {
     const all = resolveWeekEvents(city.events, new Date());
@@ -393,11 +410,22 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
   const name = signedIn?.name ?? "Guest runner";
   const photo = signedIn?.profilePhotoUrl ?? null;
   const verified = signedIn?.status === "verified";
+  const accountId = signedIn?.id ?? null;
+
+  // Own-profile Activity | Tagged — the same server-gated public-profile
+  // endpoints /runners/:id uses, called with the viewer's own id.
+  useEffect(() => {
+    if (!accountId) return;
+    let alive = true;
+    void api.getRunnerActivity(accountId).then((r) => { if (alive) setActivity(r.ok ? r.data.activity : []); });
+    void api.getRunnerTagged(accountId).then((r) => { if (alive) setTagged(r.ok ? r.data.tagged : []); });
+    return () => { alive = false; };
+  }, [accountId]);
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
       <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Profile</h1>
-      <p className="mt-0.5 text-sm font-medium text-slate-500">Runner profile & settings</p>
+      <p className="mt-0.5 text-sm font-medium text-slate-500">Your public profile</p>
 
       {!backendAvailable ? (
         <section className="mt-4 rounded-2xl bg-amber-50 p-4 text-[13px] leading-relaxed text-amber-900 ring-1 ring-amber-200">
@@ -485,13 +513,38 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
             Verified runners get RSVPs, a public profile, and posting access. Sign up with your email and password,
             confirm your email, then complete a live selfie — reviewed by a person, never shown publicly.
           </p>
-          <PillButton variant="secondary" onClick={() => navigate("/login?mode=signup")} className="mt-3.5 w-full">
+          <Link
+            to="/login?mode=signup"
+            className="mt-3.5 flex min-h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-[#FF5741] text-sm font-semibold text-[#14171C] active:bg-[#e94735]"
+          >
             <Icon name="shield" className="h-4 w-4" /> Create account
-          </PillButton>
+          </Link>
         </section>
       ) : (
-        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70"><h2 className="text-[15px] font-bold text-slate-900">Profile settings</h2><p className="mt-1 text-[13px] text-slate-600">Manage your username and notification preferences in Settings.</p><PillButton variant="secondary" onClick={() => navigate("/settings")} className="mt-3 w-full">Open Settings</PillButton></section>
+        /* View public profile — the public /runners/:id view of this account */
+        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+          <h2 className="text-[15px] font-bold text-slate-900">Public profile</h2>
+          <p className="mt-1 text-[13px] text-slate-600">See your profile the way other runners see it — activity, tags, and community standing.</p>
+          <Link
+            to={`/runners/${encodeURIComponent(signedIn.id)}`}
+            className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-[#14171C] text-sm font-semibold text-white active:bg-[#252a31]"
+          >
+            View public profile
+          </Link>
+        </section>
       )}
+
+      {/* Activity + Tagged — own public-profile content (server-gated) */}
+      {signedIn ? (
+        <>
+          <RunnerProfileTabs tab={tab} onSelect={setTab} />
+          {tab === "activity" ? (
+            <RunnerActivityPanel rows={activity} loading={activity === null} />
+          ) : (
+            <RunnerTaggedPanel rows={tagged} isOwn busyTagId={null} onToggleHide={() => {}} />
+          )}
+        </>
+      ) : null}
 
       {/* Groups & clubs — directory entry + My Groups with pending counts */}
       {signedIn ? <ProfileGroupsCard signedIn={!!signedIn} /> : null}
@@ -503,61 +556,6 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
         <TrustProfileSection
           me={{ id: signedIn.id, name: signedIn.name, email: signedIn.email, underReview: signedIn.underReview === true }}
         />
-      ) : null}
-
-      {/* Home city — account-owned; change happens in Settings (server-validated) */}
-      {signedIn ? (
-        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-[15px] font-bold text-slate-900">Home city</h2>
-              {hasHomeCity ? (
-                <p className="truncate text-[13px] font-semibold text-[#14171C]">
-                  {city.name}, {city.state}
-                </p>
-              ) : (
-                <p className="text-[13px] font-semibold text-amber-700">Not set yet — choose your home city</p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => navigate("/settings")}
-              className="shrink-0 rounded-full bg-slate-100 px-4 py-2 text-[13px] font-semibold text-slate-700 active:bg-slate-200"
-            >
-              {hasHomeCity ? "Change" : "Choose"}
-            </button>
-          </div>
-          <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-            Your events, races, and forum default to your home city. Changing it re-scopes your community content.
-          </p>
-        </section>
-      ) : null}
-
-      {/* Rejected — denied card (never shown as pending) */}
-      {signedIn && signedIn.status === "rejected" ? (
-        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-red-100">
-          <h2 className="text-[15px] font-bold text-slate-900">Verification denied</h2>
-          <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
-            Your identity check was not approved, so your profile is read-only — you can browse, but can't RSVP,
-            post, or submit.
-          </p>
-          {signedIn.rejectionReason ? (
-            <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-[12px] leading-relaxed text-red-700">
-              <span className="font-semibold">Why:</span> {signedIn.rejectionReason}
-            </p>
-          ) : null}
-          <PillButton variant="ghost" onClick={() => navigate("/verify")} className="mt-3.5 w-full">
-            <Icon name="shield" className="h-4 w-4" /> View verification status
-          </PillButton>
-        </section>
-      ) : signedIn && !verified ? (
-        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
-          <h2 className="text-[15px] font-bold text-slate-900">Finish verification</h2>
-          <p className="mt-1 text-[13px] text-slate-500">{phaseLabel(signedIn.phase)}</p>
-          <PillButton variant="secondary" onClick={() => navigate("/verify")} className="mt-3.5 w-full">
-            <Icon name="chevronRight" className="h-4 w-4 rotate-180" /> Continue
-          </PillButton>
-        </section>
       ) : null}
 
       {/* Verified content */}
@@ -587,32 +585,15 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
           <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
             <h2 className="text-[15px] font-bold text-slate-900">My groups</h2>
             <p className="mt-1 text-[13px] leading-relaxed text-slate-600">Only groups you've actually joined or requested to join appear here.</p>
-            <PillButton variant="secondary" onClick={() => navigate("/my-groups")} className="mt-3.5 w-full">
+            <Link
+              to="/my-groups"
+              className="mt-3.5 flex min-h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-[#FF5741] text-sm font-semibold text-[#14171C] active:bg-[#e94735]"
+            >
               <Icon name="chevronRight" className="h-4 w-4 rotate-180" /> View my groups
-            </PillButton>
+            </Link>
           </div>
         </section>
       ) : null}
-
-      {/* Settings */}
-      <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
-        <button
-          type="button"
-          onClick={() => navigate("/settings")}
-          className="flex min-h-14 w-full items-center justify-between gap-3 px-5 text-left active:bg-slate-50"
-        >
-          <span className="flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-slate-600">
-              <Icon name="sort" className="h-4.5 w-4.5" />
-            </span>
-            <span>
-              <span className="block text-[14px] font-semibold text-slate-800">Settings</span>
-              <span className="block text-xs text-slate-500">Account, preferences & owner tools</span>
-            </span>
-          </span>
-          <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-slate-300" />
-        </button>
-      </section>
     </div>
   );
 }

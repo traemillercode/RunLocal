@@ -7,8 +7,8 @@ const styles = readFileSync("src/styles/app.css", "utf8");
 describe("Races desktop rail refinement", () => {
   it("uses a truthful wide-desktop rail with visible city/count context", () => {
     expect(page).toContain("desktop-races-layout");
-    expect(page).toContain("desktop-races-rail");
-    expect(page).toContain("Upcoming in {city.name}");
+    expect(page).toContain("RailStack");
+    expect(page).toContain("Upcoming in ${city.name}");
     expect(page).toContain("{races.length} approved listing");
     expect(page).toContain("Verified runners can submit a race for review");
   });

@@ -108,7 +108,7 @@ describe("EventDetailView (UI)", () => {
     expect(html).toContain("Add to My Runs"); // My Runs action
     expect(html).toContain("External details"); // external link action
     expect(html).toContain('href="https://www.facebook.com/runcomo/"');
-    expect(html).toContain("Back to this week");
+    expect(html).toContain("Back to Events");
   });
 
   it("renders verified-only gating and RSVP state on the action button", () => {

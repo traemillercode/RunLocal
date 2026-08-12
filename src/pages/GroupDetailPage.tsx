@@ -11,6 +11,7 @@ function GroupPhoto({ name, kind, url, className }: { name: string; kind: "cover
   return url?.trim() ? <img src={url} alt={`${name} ${kind}`} className={className} /> : <GroupPhotoFallback name={name} kind={kind} className={className} />;
 }
 
+import { BackLink } from "../components/BackLink";
 export function GroupDetailPage({ id }: { id: string }) {
   const { me } = useAccount();
   const [group, setGroup] = useState<api.PublicUserGroup | null>(null);
@@ -25,8 +26,8 @@ export function GroupDetailPage({ id }: { id: string }) {
     void api.requestGroupMembership(group.id).then((r) => setNotice(r.ok ? "Membership request sent." : r.error.message));
   };
   return <section className="mx-auto max-w-3xl px-4 py-6">
-    <GroupPhoto name={group.name} kind="cover" url={group.coverPhotoUrl} className="h-48 w-full rounded-2xl object-cover" />
-    <div className="mt-5 flex gap-4"><GroupPhoto name={group.name} kind="logo" url={group.logoPhotoUrl} className="h-20 w-20 shrink-0 rounded-2xl object-cover" /><div><h1 className="text-3xl font-black">{group.name}</h1><p className="text-slate-600">{group.groupType === "rrca-chartered" ? "RRCA-Chartered Club" : "Community Run Group"}{group.rrcaVerified ? " · RRCA verified" : ""}</p></div></div>
+    <BackLink to="/groups">Back to Groups</BackLink>
+    <GroupPhoto name={group.name} kind="cover" url={group.coverPhotoUrl} className="h-48 w-full rounded-2xl object-cover" />    <div className="mt-5 flex gap-4"><GroupPhoto name={group.name} kind="logo" url={group.logoPhotoUrl} className="h-20 w-20 shrink-0 rounded-2xl object-cover" /><div><h1 className="text-3xl font-black">{group.name}</h1><p className="text-slate-600">{group.groupType === "rrca-chartered" ? "RRCA-Chartered Club" : "Community Run Group"}{group.rrcaVerified ? " · RRCA verified" : ""}</p></div></div>
     <p className="mt-5 whitespace-pre-wrap">{group.description}</p><h2 className="mt-6 font-bold">Group leaders</h2><ul className="mt-2">{(group.leaders ?? []).map((l) => <li key={l.id}>{l.name}</li>)}</ul>
     <p className="mt-5 text-sm text-slate-600">Membership: {group.membershipMode === "open" ? "Open" : "Request to join"}</p>
     {group.membershipMode === "request" ? (me ? <button type="button" onClick={request} className="mt-4 rounded-[10px] bg-[#14171C] px-5 py-3 text-sm font-bold text-white">Request to join</button> : <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">Sign in to request membership. <Link className="font-bold underline" to="/login">Sign in</Link></p>) : null}

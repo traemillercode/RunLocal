@@ -233,6 +233,8 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
   const { hidden, highlights, groupBadges } = useModerated();
   const { events: userEvents, groups: userGroups } = usePublicContent();
   const [query, setQuery] = useState("");
+  /** Feed segment filter — All | Group runs | Independent runs (by groupId). */
+  const [feedSegment, setFeedSegment] = useState<"all" | "group" | "independent">("all");
   const [eventSheetOpen, setEventSheetOpen] = useState(false);
   const [groupSheetOpen, setGroupSheetOpen] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
@@ -301,14 +303,18 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
         return rb - ra;
       });
     const q = query.trim().toLowerCase();
-    if (!q) return resolved;
-    return resolved.filter(
-      (e) =>
-        e.title.toLowerCase().includes(q) ||
-        e.location.toLowerCase().includes(q) ||
-        (city.groups.find((g) => g.id === e.groupId)?.name.toLowerCase() ?? "").includes(q),
-    );
-  }, [city, query, hidden, highlights, userEvents, canonicalEvents, localHidden]);
+    const matched = !q
+      ? resolved
+      : resolved.filter(
+          (e) =>
+            e.title.toLowerCase().includes(q) ||
+            e.location.toLowerCase().includes(q) ||
+            (city.groups.find((g) => g.id === e.groupId)?.name.toLowerCase() ?? "").includes(q),
+        );
+    if (feedSegment === "group") return matched.filter((e) => e.groupId !== "");
+    if (feedSegment === "independent") return matched.filter((e) => e.groupId === "");
+    return matched;
+  }, [city, query, feedSegment, hidden, highlights, userEvents, canonicalEvents, localHidden]);
 
   const groups = useMemo(() => {
     const map = new Map<string, typeof events>();
@@ -456,6 +462,25 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
           </PillButton>
         </div>
       </div>
+      <div role="group" aria-label="This week's runs" className="mt-3 flex gap-1 rounded-[10px] bg-slate-100 p-1">
+        {([
+          ["all", "All"],
+          ["group", "Group runs"],
+          ["independent", "Independent runs"],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={feedSegment === value}
+            onClick={() => setFeedSegment(value)}
+            className={`h-9 flex-1 rounded-lg text-[13px] font-semibold transition-colors ${
+              feedSegment === value ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="mt-2 flex gap-2" data-tour-target="events-actions">
         <PillButton
           variant="ghost"
@@ -492,8 +517,20 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
       {groups.length === 0 ? (
         <div className="mt-10 flex flex-col items-center gap-2 rounded-2xl bg-white p-8 text-center ring-1 ring-slate-200/70">
           <Icon name="search" className="h-8 w-8 text-slate-300" />
-          <p className="text-sm font-semibold text-slate-700">No runs match “{query}”</p>
-          <p className="text-xs text-slate-500">Try a route name, location, or group.</p>
+          <p className="text-sm font-semibold text-slate-700">
+            {feedSegment === "group"
+              ? "No group runs this week yet"
+              : feedSegment === "independent"
+                ? "No independent runs this week yet"
+                : `No runs match “${query}”`}
+          </p>
+          <p className="text-xs text-slate-500">
+            {feedSegment === "group"
+              ? "Try the All view or check back next week."
+              : feedSegment === "independent"
+                ? "Try the All view or check back next week."
+                : "Try a route name, location, or group."}
+          </p>
         </div>
       ) : (
         groups.map(([key, list]) => (
@@ -527,7 +564,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
         ))
       )}
 
-      {oneOffThisWeek.length > 0 ? (
+      {oneOffThisWeek.length > 0 && feedSegment !== "group" ? (
         <section aria-label="One-time runs" className="mt-6">
           <h2 className="mb-2 flex items-center gap-2 text-[13px] font-bold uppercase tracking-wider text-slate-500">
             <span className="h-px flex-1 bg-slate-200" /> One-time runs this week
