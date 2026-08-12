@@ -13,6 +13,7 @@ import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { accountRoles, effectiveRole, hasRole, highestRole, normalizeRoles, storedRoles } from "./accountRoles";
+import { PRIVACY_DEFAULTS } from "./types";
 import type {
   AccountRecord,
   AuditEntry,
@@ -46,6 +47,47 @@ export function nowIso(now = new Date()): string {
 
 export function newId(): string {
   return randomBytes(16).toString("hex");
+}
+
+/**
+ * Canonical connection key — the SORTED pair (least/greatest id). One row per
+ * pair: A→B and B→A always map to the same key and can never coexist.
+ */
+export function connectionKey(a: string, b: string): string {
+  return a < b ? `${a}:${b}` : `${b}:${a}`;
+}
+
+function isActiveConnection(status: import("./types").ConnectionStatus): boolean {
+  return status === "pending" || status === "accepted";
+}
+
+/**
+ * Validate a privacy patch before it reaches the store. Throws on any unknown
+ * field or invalid value. The owner-locked rule `show_saved_events` can never
+ * be "public" is enforced HERE (write guard) and again in canView (read guard).
+ */
+export function validatePrivacyPatch(patch: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(patch)) {
+    switch (key) {
+      case "profile_visibility":
+        if (value !== "public" && value !== "connections_only") throw new Error("privacy: invalid profile_visibility (must be public or connections_only)");
+        break;
+      case "show_upcoming_events":
+      case "show_past_activity":
+      case "show_connections_list":
+      case "show_tagged_content":
+        if (value !== "public" && value !== "connections_only" && value !== "private") throw new Error(`privacy: invalid ${key}`);
+        break;
+      case "show_saved_events":
+        if (value !== "connections_only" && value !== "private") throw new Error("privacy: show_saved_events must be connections_only or private (never public)");
+        break;
+      case "searchable_by_name":
+        if (typeof value !== "boolean") throw new Error("privacy: searchable_by_name must be a boolean");
+        break;
+      default:
+        throw new Error(`privacy: unknown field "${key}"`);
+    }
+  }
 }
 
 export function hashCode(code: string, salt: string): string {
@@ -216,6 +258,12 @@ export class Db {
   private waiverSignatures = new Map<string, import("./waivers").GroupWaiverSignature>();
   private checkins = new Map<string, import("./checkins").EventCheckInRecord>();
   private checkinQrSessions = new Map<string, import("./checkins").CheckInQrSession>();
+  /** Runner connections — keyed by the SORTED pair (least/greatest id), so one row per pair. */
+  private connections = new Map<string, import("./types").ConnectionRecord>();
+  /** Per-account privacy settings — keyed by accountId (defaults when absent). */
+  private privacy = new Map<string, import("./types").PrivacySettingsRecord>();
+  /** Runner tags on content — keyed by tag id. */
+  private tags = new Map<string, import("./types").TagRecord>();
   /**
    * Private upload bytes (credential proofs) kept in memory so in-memory/test
    * stores can serve them back; file-backed stores mirror the bytes to disk
@@ -304,7 +352,7 @@ export class Db {
       for (const c of parsed.concerns ?? []) this.concerns.set(c.id, c);
       for (const a of parsed.appeals ?? []) this.appeals.set(a.id, a);
       for (const r of parsed.recognitions ?? []) this.recognitions.set(`${r.accountId}:${r.role}`, r);
-      for (const a of parsed.attendance ?? []) this.attendance.set(a.id, { ...a, deletedAt: a.deletedAt ?? null });
+      for (const a of parsed.attendance ?? []) this.attendance.set(a.id, { ...a, deletedAt: a.deletedAt ?? null, visibilityOverride: a.visibilityOverride ?? "inherit" });
       for (const r of parsed.personalRuns ?? []) this.personalRuns.set(r.id, r);
       for (const p of parsed.matchingPreferences ?? []) this.matchingPreferences.set(p.accountId, p);
       for (const j of parsed.joinRequests ?? []) this.joinRequests.set(j.id, { ...j, requesterAccepted: j.requesterAccepted ?? false, recipientAccepted: j.recipientAccepted ?? false });
@@ -325,6 +373,15 @@ export class Db {
       for (const s of parsed.waiverSignatures ?? []) this.waiverSignatures.set(s.id, s);
       for (const c of parsed.checkins ?? []) this.checkins.set(c.id, c);
       for (const q of parsed.checkinQrSessions ?? []) this.checkinQrSessions.set(q.id, q);
+      // Connections: key by the sorted pair. Terminal history rows (declined/
+      // removed) load as-is; missing timestamps normalize to null.
+      for (const c of parsed.connections ?? []) {
+        this.connections.set(connectionKey(c.requesterId, c.addresseeId), { ...c, respondedAt: c.respondedAt ?? null, removedAt: c.removedAt ?? null });
+      }
+      // Privacy: records persisted before a field existed are merged over the
+      // verbatim owner-spec defaults so they keep working.
+      for (const p of parsed.privacy ?? []) this.privacy.set(p.accountId, { ...PRIVACY_DEFAULTS, ...p, accountId: p.accountId });
+      for (const t of parsed.tags ?? []) this.tags.set(t.id, t);
     } catch {
       // First run — empty store. db.json is created on first persist().
     }
@@ -373,6 +430,9 @@ export class Db {
       waiverSignatures: [...this.waiverSignatures.values()],
       checkins: [...this.checkins.values()],
       checkinQrSessions: [...this.checkinQrSessions.values()],
+      connections: [...this.connections.values()],
+      privacy: [...this.privacy.values()],
+      tags: [...this.tags.values()],
     };
     const file = join(this.dataDir, "db.json");
     const tmp = `${file}.tmp`;
@@ -853,6 +913,95 @@ export class Db {
   addAttendance(a: import("./types").AttendanceRecord) { this.attendance.set(a.id, a); return a; }
   updateAttendance(id: string, patch: Partial<import("./types").AttendanceRecord>) { const a = this.attendance.get(id); if (!a) return undefined; const next = { ...a, ...patch }; this.attendance.set(id, next); return next; }
   removeAttendance(id: string) { this.attendance.delete(id); }
+  /**
+   * Read one account's event/occurrence visibility override. Returns
+   * "inherit" when the account has no matching attendance row (or the row
+   * carries no override) — the caller (canView) falls through to the global
+   * setting in that case. `occurrenceId` refines the lookup to the exact
+   * occurrence; when no occurrence-exact row exists, event-level rows apply.
+   */
+  getAttendanceVisibilityOverride(accountId: string, eventId: string, occurrenceId?: string): import("./types").AttendanceVisibility {
+    const norm = (id: string) => id.replace(/^event:/, "");
+    const rows = [...this.attendance.values()].filter((a) => !a.deletedAt && a.accountId === accountId && norm(a.eventId) === norm(eventId));
+    if (occurrenceId) {
+      const exact = rows.find((a) => a.occurrenceId === occurrenceId);
+      if (exact) return exact.visibilityOverride ?? "inherit";
+    }
+    const withOverride = rows.find((a) => (a.visibilityOverride ?? "inherit") !== "inherit");
+    return withOverride ? (withOverride.visibilityOverride ?? "inherit") : "inherit";
+  }
+  // ------------------------------------------------------- connections & privacy
+  /** The single row for a pair (any status), regardless of request direction. */
+  getConnectionPair(a: string, b: string): import("./types").ConnectionRecord | undefined {
+    return this.connections.get(connectionKey(a, b));
+  }
+  /** Accepted rows where the account is either side. */
+  listAcceptedConnections(accountId: string): import("./types").ConnectionRecord[] {
+    return [...this.connections.values()].filter((c) => c.status === "accepted" && (c.requesterId === accountId || c.addresseeId === accountId));
+  }
+  /** Pending requests addressed to the account. */
+  listIncomingRequests(accountId: string): import("./types").ConnectionRecord[] {
+    return [...this.connections.values()].filter((c) => c.status === "pending" && c.addresseeId === accountId);
+  }
+  /** The ACTIVE (pending|accepted) row between the account and otherId, if any. */
+  listActiveConnection(accountId: string, otherId: string): import("./types").ConnectionRecord | undefined {
+    const c = this.getConnectionPair(accountId, otherId);
+    return c && isActiveConnection(c.status) ? c : undefined;
+  }
+  /**
+   * Write a connection row, keyed by the sorted pair. Enforces the one-active-
+   * row invariant: writing an ACTIVE row (pending/accepted) while an active row
+   * already exists for the pair throws — callers must resolve or reuse the
+   * existing active state (see src/server/connections.ts). Terminal history
+   * (declined/removed) is freely superseded by a fresh row.
+   */
+  upsertConnection(record: import("./types").ConnectionRecord): import("./types").ConnectionRecord {
+    const existing = this.getConnectionPair(record.requesterId, record.addresseeId);
+    if (existing && isActiveConnection(existing.status) && isActiveConnection(record.status)) {
+      throw new Error("connection: one-active-row invariant violated for pair");
+    }
+    this.connections.set(connectionKey(record.requesterId, record.addresseeId), record);
+    return record;
+  }
+  updateConnection(id: string, patch: Partial<import("./types").ConnectionRecord>): import("./types").ConnectionRecord | undefined {
+    for (const [key, c] of this.connections) {
+      if (c.id === id) {
+        const next = { ...c, ...patch };
+        this.connections.set(key, next);
+        return next;
+      }
+    }
+    return undefined;
+  }
+  /** The account's privacy settings — verbatim owner-spec defaults when no record exists. */
+  getPrivacy(accountId: string): import("./types").PrivacySettingsRecord {
+    return this.privacy.get(accountId) ?? { accountId, ...PRIVACY_DEFAULTS };
+  }
+  /** Upsert a privacy record, validating every patched value (throws on invalid). */
+  setPrivacy(accountId: string, patch: Partial<Omit<import("./types").PrivacySettingsRecord, "accountId">>): import("./types").PrivacySettingsRecord {
+    validatePrivacyPatch(patch as Record<string, unknown>);
+    const next: import("./types").PrivacySettingsRecord = { ...this.getPrivacy(accountId), ...patch, accountId };
+    this.privacy.set(accountId, next);
+    return next;
+  }
+  // ---------------------------------------------------------------------- tags
+  getTagsForContent(contentType: import("./types").TagContentType, contentId: string): import("./types").TagRecord[] {
+    return [...this.tags.values()].filter((t) => t.contentType === contentType && t.contentId === contentId);
+  }
+  getTagsForUser(userId: string): import("./types").TagRecord[] {
+    return [...this.tags.values()].filter((t) => t.taggedUserId === userId);
+  }
+  addTag(tag: import("./types").TagRecord): import("./types").TagRecord {
+    this.tags.set(tag.id, tag);
+    return tag;
+  }
+  updateTag(id: string, patch: Partial<import("./types").TagRecord>): import("./types").TagRecord | undefined {
+    const t = this.tags.get(id);
+    if (!t) return undefined;
+    const next = { ...t, ...patch };
+    this.tags.set(id, next);
+    return next;
+  }
   listPersonalRuns(accountId?: string) { return [...this.personalRuns.values()].filter(r => !accountId || r.accountId === accountId); }
   getPersonalRun(id: string) { return this.personalRuns.get(id); }
   addPersonalRun(r: import("./types").PersonalRunRecord) { this.personalRuns.set(r.id, r); return r; }

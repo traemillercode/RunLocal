@@ -385,6 +385,12 @@ export interface PersistedDb {
   checkins?: import("./checkins").EventCheckInRecord[];
   /** New-runner QR sessions (token hashes only — raw tokens are never stored). */
   checkinQrSessions?: import("./checkins").CheckInQrSession[];
+  /** Runner connections — one row per pair, keyed by the sorted pair. */
+  connections?: ConnectionRecord[];
+  /** Per-account privacy settings (keyed by accountId; defaults when absent). */
+  privacy?: PrivacySettingsRecord[];
+  /** Runner tags on content ("run"|"post"|"event"). */
+  tags?: TagRecord[];
 }
 
 export interface DiscussionRecord {
@@ -463,6 +469,74 @@ export interface JoinRequestRecord {
 }
 export interface BlockRecord { blockerId: string; blockedId: string; createdAt: string; }
 
+// ------------------------------------------------------- connections & privacy
+
+/**
+ * Runners connection lifecycle. ONE row per account pair, keyed by the sorted
+ * pair (least/greatest id) so A→B and B→A can never coexist in the store.
+ * `pending`/`accepted` are ACTIVE states — at most one active row per pair;
+ * `declined`/`removed` are terminal HISTORY states that never block a future
+ * request (a later request simply supersedes the row). Rows are never
+ * hard-deleted: `removeConnection` soft-deletes via the `removed` status.
+ */
+export type ConnectionStatus = "pending" | "accepted" | "declined" | "removed";
+export interface ConnectionRecord {
+  id: string;
+  /** The account that initiated the request. */
+  requesterId: string;
+  /** The account the request was addressed to. */
+  addresseeId: string;
+  status: ConnectionStatus;
+  createdAt: string;
+  /** When the request was accepted or declined (null until then). */
+  respondedAt: string | null;
+  /** When the row was soft-deleted via removeConnection/block (null until then). */
+  removedAt: string | null;
+}
+
+/**
+ * Per-account privacy settings. When no record exists the store applies
+ * `PRIVACY_DEFAULTS` (verbatim owner spec). `show_saved_events` can NEVER be
+ * "public" — enforced by `setPrivacy` validation and by the canView guard.
+ */
+export type ProfileVisibility = "public" | "connections_only";
+export type ContentVisibility = "public" | "connections_only" | "private";
+export type SavedEventsVisibility = "connections_only" | "private";
+export interface PrivacySettingsRecord {
+  accountId: string;
+  profile_visibility: ProfileVisibility;
+  show_upcoming_events: ContentVisibility;
+  show_saved_events: SavedEventsVisibility;
+  show_past_activity: ContentVisibility;
+  show_connections_list: ContentVisibility;
+  show_tagged_content: ContentVisibility;
+  searchable_by_name: boolean;
+}
+/** Verbatim owner-spec defaults — applied when no privacy record exists. */
+export const PRIVACY_DEFAULTS: Omit<PrivacySettingsRecord, "accountId"> = {
+  profile_visibility: "public",
+  show_upcoming_events: "connections_only",
+  show_saved_events: "private",
+  show_past_activity: "public",
+  show_connections_list: "connections_only",
+  show_tagged_content: "connections_only",
+  searchable_by_name: true,
+};
+
+/** Runner tags on content ("run"|"post"|"event"). `hiddenByTaggedUser` is the
+ * tagged runner's private self-hide toggle — never visible to other users;
+ * their view of the tag simply drops the hidden user. */
+export type TagContentType = "run" | "post" | "event";
+export interface TagRecord {
+  id: string;
+  contentType: TagContentType;
+  contentId: string;
+  taggedUserId: string;
+  taggedByUserId: string;
+  hiddenByTaggedUser: boolean;
+  createdAt: string;
+}
+
 export const MATCHING_CONSENT_VERSION = "2026-08-04.matching.v1";
 export const PERSONAL_RUN_CONSENT_VERSION = "2026-08-04.v1";
 export interface PersonalRunRecord {
@@ -498,7 +572,15 @@ export interface RecognitionRecord { accountId:string; cityId:string; role:"coac
  * for ratings: a reviewer may rate a reviewee only for an event BOTH of them
  * attended (shared RSVP/host-attendance).
  */
-export interface AttendanceRecord { id:string; accountId:string; eventId:string; role:"rsvp"|"host"; createdAt:string; /** Concrete occurrence; absent on legacy event-level rows. */ occurrenceId?: string; runDate?: string; startsAt?: string; /** Soft-delete stamp: set when an admin archives the event. The row is preserved (audit trail) but excluded from active RSVP/eligibility checks. */ deletedAt?: string|null; /** Opt-in "Keep on My Runs": a past occurrence stays visible in My Runs forever (indefinite kept history). */ kept?: boolean; }
+/** Per-event/occurrence visibility override (see AttendanceRecord.visibilityOverride). */
+export type AttendanceVisibility = "inherit" | "public" | "connections_only" | "private";
+export interface AttendanceRecord { id:string; accountId:string; eventId:string; role:"rsvp"|"host"; createdAt:string; /** Concrete occurrence; absent on legacy event-level rows. */ occurrenceId?: string; runDate?: string; startsAt?: string; /** Soft-delete stamp: set when an admin archives the event. The row is preserved (audit trail) but excluded from active RSVP/eligibility checks. */ deletedAt?: string|null; /** Opt-in "Keep on My Runs": a past occurrence stays visible in My Runs forever (indefinite kept history). */ kept?: boolean; /**
+   * Event-level privacy override — "inherit" (default) means the OWNER's
+   * global `show_upcoming_events` setting applies; any other value REPLACES it
+   * for visibility decisions about this specific event/occurrence (see
+   * `canView` in src/server/privacy.ts). Absent on rows created before the
+   * field existed and read as "inherit".
+   */ visibilityOverride?: AttendanceVisibility; }
 
 export interface SiteSettings { title:string; wordmark:string; tagline:string; primary:string; accent:string; surface:string; strings:Record<string,string>; tags:Record<string,string[]>; providers:Record<string,boolean>; bottomNav:string[]; announcement:{text:string;link?:string}|null; logoRef:string|null; faviconRef:string|null; /**
    * Community-trust policy, configurable by a Global Admin. `underReviewThreshold`
