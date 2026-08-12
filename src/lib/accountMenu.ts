@@ -11,6 +11,14 @@
 import type { Me } from "./accounts";
 import { phaseLabel, roleLabel } from "./accounts";
 import { CITIES } from "../data/cities";
+import { NAV_ENTRIES } from "./nav";
+
+/** Look up a nav entry by id (all ids referenced here exist in NAV_ENTRIES). */
+function navEntry(id: string) {
+  const entry = NAV_ENTRIES.find((e) => e.id === id);
+  if (!entry) throw new Error(`Unknown nav entry: ${id}`);
+  return entry;
+}
 
 export interface MenuEntry {
   key: string;
@@ -56,8 +64,11 @@ export function profileMenuEntries(me: Me | null): { entries: MenuEntry[]; signe
       hint: statusLabel,
       to: "/verify",
     },
-    { key: "settings", label: "Settings", icon: "sort", to: "/settings" },
-    { key: "connections", label: "Connections", icon: "users", to: "/connections" },
+    // Profile and Settings are distinct entries with distinct icons/labels —
+    // both derived from the single nav model.
+    { key: "profile", label: "My profile", icon: navEntry("profile").icon, to: navEntry("profile").route },
+    { key: "settings", label: navEntry("settings").label, icon: navEntry("settings").icon, to: navEntry("settings").route },
+    { key: "connections", label: navEntry("connections").label, icon: navEntry("connections").icon, to: navEntry("connections").route },
   ];
   if (account.isOwner) {
     entries.push({

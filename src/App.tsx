@@ -41,9 +41,7 @@ import { CheckinPage } from "./pages/CheckinPage";
 import { parseAuthCallback } from "./lib/recovery";
 import * as supabase from "./lib/supabase";
 import { TourHost } from "./components/TourHost";
-
-/** Routes that get a chrome-free wizard layout (no bottom nav). */
-const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login", "/recovery", "/confirmation", "/callback", "/checkin"]);
+import { NO_NAV_PATHS } from "./lib/nav";
 
 function GroupRoute() { const location = useLocation(); const id = location.pathname.split("/").pop() ?? ""; return <GroupDetailPage id={id} />; }
 function RunnerRoute() { const location = useLocation(); const id = location.pathname.split("/").pop() ?? ""; return <RunnerProfilePage id={id} />; }
