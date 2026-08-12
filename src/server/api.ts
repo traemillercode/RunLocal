@@ -1125,6 +1125,8 @@ async function handleApi(
     const tombstone = db.updateAccount(rec.id, scrubbed)!;
     tombstone.purgeAt = new Date(new Date(now.toISOString()).getTime() + tombstone.retentionYears * 365 * 24 * 60 * 60 * 1000).toISOString();
     db.deleteSessionsForAccount(rec.id);
+    db.deleteNotificationsForAccount(rec.id);
+    db.deleteNotificationPreferences(rec.id);
     db.appendAudit({ admin: rec.email, action: "account.delete", reason: "User requested account deletion", targetId: rec.id, ip }, now);
     await db.persist();
     clearCookie(res, SESSION_COOKIE, secure);

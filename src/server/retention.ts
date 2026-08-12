@@ -77,6 +77,8 @@ export async function purgeEligible(db: Db, now = new Date()): Promise<PurgeResu
       db.removeAccount(rec.id);
       db.deleteSessionsForAccount(rec.id);
       db.deleteCode(rec.id);
+      db.deleteNotificationsForAccount(rec.id);
+      db.deleteNotificationPreferences(rec.id);
       purged.push(rec.id);
     } else {
       retained.push(rec.id);

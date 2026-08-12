@@ -41,4 +41,26 @@ describe("notification preferences and inbox API", () => {
     expect((await call(db, "GET", "/api/notifications", one.cookie)).body.unreadCount).toBe(0);
     expect((await call(db, "GET", "/api/notifications", two.cookie)).body.unreadCount).toBe(1);
   });
+  it("account deletion removes the account's notifications and preferences, leaving other accounts untouched", async () => {
+    const db = createMemoryStore(); const one = account(db, "one@example.com"); const two = account(db, "two@example.com");
+    db.addNotification(notification(one.id, "one")); db.addNotification(notification(one.id, "two")); db.addNotification(notification(two.id, "other"));
+    await call(db, "PATCH", "/api/notifications/preferences", one.cookie, { run_reminders: true });
+    await call(db, "PATCH", "/api/notifications/preferences", two.cookie, { community_updates: true });
+    expect(db.listNotifications(one.id)).toHaveLength(2);
+    expect(db.getNotificationPreferences(one.id)).toMatchObject({ run_reminders: true });
+    expect(db.listNotifications(two.id).map((n) => n.id)).toEqual(["other"]);
+
+    const del = await call(db, "POST", "/api/account/delete", one.cookie);
+    expect(del.status).toBe(200);
+    expect(del.body.status).toBe("deleted");
+
+    // Deleted account: notification rows and the preferences record are gone
+    // (preferences fall back to synthesized defaults once the record is removed).
+    expect(db.listNotifications(one.id)).toEqual([]);
+    expect(db.getNotificationPreferences(one.id)).toMatchObject({ run_reminders: false, community_updates: false, account_alerts: false });
+
+    // Other account: notifications and preferences are untouched.
+    expect(db.listNotifications(two.id).map((n) => n.id)).toEqual(["other"]);
+    expect(db.getNotificationPreferences(two.id)).toMatchObject({ run_reminders: false, community_updates: true });
+  });
 });
