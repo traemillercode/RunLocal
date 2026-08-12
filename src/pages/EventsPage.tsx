@@ -140,7 +140,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
       <div className="desktop-two-column"><div>
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">This week</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900" data-tour-target="home-heading">This week</h1>
           <p className="mt-0.5 text-sm font-medium text-slate-500">
             {weekRangeLabel(weekStart)} · {city.name}, {city.state}
           </p>
@@ -151,7 +151,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
           </PillButton>
         </div>
       </div>
-      <div className="mt-2 flex gap-2">
+      <div className="mt-2 flex gap-2" data-tour-target="events-actions">
         <PillButton
           variant="ghost"
           className="min-h-9 flex-1 px-3 text-[12px]"

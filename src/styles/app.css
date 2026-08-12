@@ -100,3 +100,14 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
 @media (min-width: 1024px) {
   .desktop-account-action { display: flex; width: 100%; min-height: 46px; align-items: center; gap: 12px; border-radius: 10px; padding: 0 12px; color: #cbd5e1; font-size: 14px; font-weight: 700; text-align: left; }
 }
+
+/* ── Verified-runner onboarding tour ─────────────────────────────
+   The TourHost overlay dims the app; the card animates in. All tour
+   animation is gated on prefers-reduced-motion: reduce → static. */
+.tour-overlay { animation: tour-fade 180ms ease-out both; }
+.tour-card { animation: tour-pop 200ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes tour-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tour-pop { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .tour-overlay, .tour-card { animation: none; }
+}

@@ -21,6 +21,7 @@ import { useSelectedCity } from "../state/city";
 import * as supabase from "../lib/supabase";
 import { PASSWORD_REQUIREMENTS, passwordRequirements } from "./LoginPage";
 import { normalizeUsername, USERNAME_HINT, USERNAME_PROMPT } from "../lib/username";
+import { requestTourReplay } from "../lib/tour";
 
 const inputCls =
   "h-12 w-full rounded-[10px] border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
@@ -37,6 +38,30 @@ export function changePasswordValidation(password: string, confirmation: string)
 /** Settings password changes require a live, verified, non-suspended account. */
 export function passwordChangeEligibility(status: PublicAccount["status"], suspended: boolean): string | null {
   return status === "verified" && !suspended ? null : "Password changes are available only for verified, active accounts.";
+}
+
+/** Replay affordance for the verified-runner onboarding tour (Settings). */
+function WelcomeTourSettings() {
+  return (
+    <section
+      className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70"
+      data-tour-target="settings-replay"
+    >
+      <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Welcome tour</h2>
+      <div className="flex items-center justify-between gap-3 px-5 py-4">
+        <p className="text-[13px] leading-relaxed text-slate-600">
+          Replay the six-step tour of events, forum, My Runs, groups, and profile.
+        </p>
+        <button
+          type="button"
+          onClick={() => requestTourReplay(window.localStorage)}
+          className="shrink-0 rounded-[10px] bg-[#14171C] px-4 py-2 text-sm font-semibold text-white active:bg-[#252a31]"
+        >
+          Show tour
+        </button>
+      </div>
+    </section>
+  );
 }
 
 function UsernameEditor({ account, refresh }: { account: PublicAccount; refresh: () => Promise<void> }) {
@@ -283,6 +308,7 @@ export function SettingsPage() {
       {signedIn && account ? <ProfilePhotoSettings account={account} refresh={refresh} /> : null}
       {signedIn && account ? <ChangePasswordSettings account={account} /> : null}
       {signedIn && account ? <ActivityConnections /> : null}
+      {signedIn && account?.status === "verified" ? <WelcomeTourSettings /> : null}
       {/* Account */}
       <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
         <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Account</h2>

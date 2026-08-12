@@ -36,6 +36,7 @@ import { RosterPage } from "./pages/RosterPage";
 import { CheckinPage } from "./pages/CheckinPage";
 import { parseAuthCallback } from "./lib/recovery";
 import * as supabase from "./lib/supabase";
+import { TourHost } from "./components/TourHost";
 
 /** Routes that get a chrome-free wizard layout (no bottom nav). */
 const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login", "/recovery", "/confirmation", "/callback", "/checkin"]);
@@ -110,6 +111,7 @@ function Shell() {
         </ModeratedProvider>
       </main>
       {!noNav ? <BottomNav /> : null}
+      <TourHost />
       <CitySheet
         open={cityOpen}
         onClose={() => setCityOpen(false)}

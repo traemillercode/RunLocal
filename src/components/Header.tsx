@@ -30,7 +30,7 @@ function GuestLoginCta() {
 
 export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet: () => void }) {
   return (
-    <header className="app-shell-header sticky top-0 z-40 border-b border-white/10 bg-[#14171C] text-white shadow-sm">
+    <header className="app-shell-header sticky top-0 z-40 border-b border-white/10 bg-[#14171C] text-white shadow-sm" data-tour-target="app-header">
       <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between gap-2 px-3">
         {/* Clickable logo / title — always returns to the city home feed. The
             wordmark is sized down on narrow screens (and hidden entirely only
