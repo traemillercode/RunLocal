@@ -87,7 +87,7 @@ describe("TagRunnerSheetBody — composer", () => {
     expect(none).toContain("No runners found");
     expect(none).toContain("disabled");
     const error = renderToStaticMarkup(<TagRunnerSheetBody {...bodyProps} error="That didn't work." />);
-    expect(error).toContain("That didn't work.");
+    expect(error).toContain("That didn&#x27;t work.");
   });
   it("locks the create payload contract: searchPeople + createTag with contentType/contentId/taggedUserId", async () => {
     const source = await readFileSync(resolve(process.cwd(), "src/components/Tagging.tsx"), "utf8");

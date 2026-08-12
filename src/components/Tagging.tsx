@@ -62,7 +62,7 @@ export function TagChips({
             {isSelf ? (
               <button
                 type="button"
-                aria-label={tag.hiddenByTaggedUser ? "Show me again on this tag" : "Hide me from this tag"}
+                aria-label={tag.hiddenByTaggedUser ? "Show my name on this tag" : "Hide my name on this tag"}
                 aria-pressed={!tag.hiddenByTaggedUser}
                 disabled={busyTagId === tag.id}
                 onClick={() => onToggleHide(tag)}

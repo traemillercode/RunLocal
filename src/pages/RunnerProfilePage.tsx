@@ -597,26 +597,30 @@ export function RunnerProfilePage({ id }: { id: string }) {
           />
         </>
       )}
-      <VerifiedGateSheet
-        open={gateOpen}
-        onClose={() => setGateOpen(false)}
-        role={role}
-        actionLabel="connecting with runners"
-        pendingLabel="Your profile is still in review."
-        rejectionReason={me?.status === "signed_in" ? me.account.rejectionReason ?? null : null}
-      />
-      <ModerationConfirmSheet
-        open={removeOpen}
-        onClose={() => { if (!removeBusy) { setRemoveOpen(false); setRemoveError(null); } }}
-        title="Remove this connection?"
-        entity={data?.profile.name ?? ""}
-        impact="You'll no longer see each other's shared content. You can send a new request later."
-        confirmLabel="Remove connection"
-        tone="neutral"
-        busy={removeBusy}
-        error={removeError}
-        onConfirm={runRemove}
-      />
+      {gateOpen ? (
+        <VerifiedGateSheet
+          open
+          onClose={() => setGateOpen(false)}
+          role={role}
+          actionLabel="connecting with runners"
+          pendingLabel="Your profile is still in review."
+          rejectionReason={me?.status === "signed_in" ? me.account.rejectionReason ?? null : null}
+        />
+      ) : null}
+      {removeOpen ? (
+        <ModerationConfirmSheet
+          open
+          onClose={() => { if (!removeBusy) { setRemoveOpen(false); setRemoveError(null); } }}
+          title="Remove this connection?"
+          entity={data?.profile.name ?? ""}
+          impact="You'll no longer see each other's shared content. You can send a new request later."
+          confirmLabel="Remove connection"
+          tone="neutral"
+          busy={removeBusy}
+          error={removeError}
+          onConfirm={runRemove}
+        />
+      ) : null}
     </div>
   );
 }

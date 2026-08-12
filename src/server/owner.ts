@@ -23,6 +23,7 @@ export function ownerEmail(env: Env = process.env): string {
 }
 
 /** Case-insensitive owner check against a stored account email. */
-export function isOwnerEmail(email: string, env: Env = process.env): boolean {
+export function isOwnerEmail(email: string | null | undefined, env: Env = process.env): boolean {
+  if (!email) return false;
   return email.trim().toLowerCase() === ownerEmail(env);
 }

@@ -93,7 +93,7 @@ describe("ConnectionsGoingRow inside EventDetailView", () => {
     expect(html).toContain("1 connection going");
     // The row sits between the dark header block and the chip/detail block.
     const headerEnd = html.indexOf('class="rounded-t-2xl bg-[#14171C]');
-    const row = html.indexOf("connections going");
+    const row = /connections? going/.exec(html)?.index ?? -1;
     const detailBlock = html.indexOf("space-y-3.5");
     expect(headerEnd).toBeGreaterThan(-1);
     expect(row).toBeGreaterThan(headerEnd);
