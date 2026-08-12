@@ -1695,7 +1695,8 @@ async function handleApi(
     if (!viewer || viewer.deletedAt || viewer.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
     const eventParam = decodeURIComponent(goingPath[1]);
     const occurrenceId = decodeURIComponent(goingPath[2]);
-    const event = db.listEvents().find((e) => e.id === eventParam || e.seedRefId === eventParam || e.id === `event:${eventParam}`);
+    const rawEventParam = eventParam.replace(/^event:/, "");
+    const event = db.listEvents().find((e) => e.id === eventParam || e.id === rawEventParam || e.seedRefId === rawEventParam);
     const separator = occurrenceId.lastIndexOf(":");
     const occurrenceEventId = separator > 0 ? occurrenceId.slice(0, separator) : "";
     const runDate = separator > 0 ? occurrenceId.slice(separator + 1) : "";
