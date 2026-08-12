@@ -371,7 +371,7 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
         <h1 className="mt-3 text-xl font-extrabold">Run not found</h1>
         <p className="mt-1 text-sm text-slate-500">This run isn't in the current week, or it's no longer listed.</p>
         <Link to="/" className="mt-4 inline-block rounded-[10px] bg-[#14171C] px-5 py-3 text-sm font-semibold text-white">
-          Back to this week
+          Back to Events
         </Link>
       </div>
     );

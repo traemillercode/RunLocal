@@ -574,13 +574,13 @@ type ConfirmAction =
 export function upcomingGroupRunRows(city: City, now = new Date(), limit = 3): { id: string; title: string; meta: string }[] {
   const todayIdx = (now.getDay() + 6) % 7;
   return city.events
-    .map((e) => {
-      const days = (e.dayOfWeek - todayIdx + 7) % 7;
+    .map((e) => ({ e, days: (e.dayOfWeek - todayIdx + 7) % 7 }))
+    .sort((a, b) => a.days - b.days)
+    .slice(0, limit)
+    .map(({ e, days }) => {
       const when = days === 0 ? "Today" : days === 1 ? "Tomorrow" : WEEKDAY_LABELS[e.dayOfWeek];
-      return { id: e.id, title: e.title, meta: `${when} · ${e.time}`, sort: days };
-    })
-    .sort((a, b) => a.sort - b.sort)
-    .slice(0, limit);
+      return { id: e.id, title: e.title, meta: `${when} · ${e.time}` };
+    });
 }
 
 export function ForumRailCrossLinks({ city }: { city: City }) {

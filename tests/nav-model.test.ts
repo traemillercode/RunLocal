@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NAV_ENTRIES, entriesForSurface, activeForPath } from "../src/lib/nav";
+import { NAV_ENTRIES, entriesForSurface, activeForPath, NO_NAV_PATHS } from "../src/lib/nav";
 
 describe("single nav model (src/lib/nav.ts)", () => {
   it("defines all entries in canonical order", () => {
@@ -48,8 +48,8 @@ describe("single nav model (src/lib/nav.ts)", () => {
     expect(activeForPath(profile, "/runners-news")).toBe(false);
   });
   it("exposes the chrome-free wizard paths for the shell AND the sidebar", () => {
-    const { NO_NAV_PATHS } = require("../src/lib/nav") as typeof import("../src/lib/nav");
-    for (const p of ["/verify", "/admin", "/login", "/recovery", "/confirmation", "/callback", "/checkin"]) {
+    const paths = ["/verify", "/admin", "/login", "/recovery", "/confirmation", "/callback", "/checkin"];
+    for (const p of paths) {
       expect(NO_NAV_PATHS.has(p), p).toBe(true);
     }
   });

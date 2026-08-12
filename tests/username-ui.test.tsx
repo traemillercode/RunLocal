@@ -11,6 +11,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { LoginPage } from "../src/pages/LoginPage";
 import { ProfilePage } from "../src/pages/ProfilePage";
+import { SettingsPage } from "../src/pages/SettingsPage";
 import { CITIES } from "../src/data/cities";
 import type { Me, PublicAccount } from "../src/lib/accounts";
 import { USERNAME_HINT } from "../src/lib/username";
@@ -101,7 +102,7 @@ describe("ProfilePage — username display & editor", () => {
     auth(account({ username: "taylor_runs" }));
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <ProfilePage city={city} store={store} />
+        <SettingsPage />
       </MemoryRouter>,
     );
     expect(html).toContain("@taylor_runs");
