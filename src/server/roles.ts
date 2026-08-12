@@ -29,6 +29,7 @@
 import type { AccountRecord, GroupModRecord } from "./types";
 import type { Db } from "./store";
 import { isOwnerEmail } from "./owner";
+import { hasRole } from "./accountRoles";
 
 /** The role an account holds ON a specific group, or "none". */
 export type GroupRole = "owner" | "leader" | "member" | "none";
@@ -58,7 +59,7 @@ export function isGroupLead(db: Db, group: GroupModRecord | undefined, actor: Ac
  * group's city.
  */
 export function isCityAdminForGroup(actor: AccountRecord | null | undefined, group: GroupModRecord | undefined): boolean {
-  if (!actor || !group || actor.deletedAt || actor.role !== "city_admin") return false;
+  if (!actor || !group || actor.deletedAt || !hasRole(actor, "city_admin")) return false;
   return typeof actor.adminCityId === "string" && actor.adminCityId === group.cityId;
 }
 
@@ -73,7 +74,7 @@ export function isGlobalAdmin(actor: AccountRecord | null | undefined): boolean 
  * moderation capability lists (e.g. forum posts) without needing a group.
  */
 export function isCityAdminForCity(actor: AccountRecord | null | undefined, cityId: string | null | undefined): boolean {
-  if (!actor || actor.deletedAt || actor.role !== "city_admin") return false;
+  if (!actor || actor.deletedAt || !hasRole(actor, "city_admin")) return false;
   return typeof actor.adminCityId === "string" && actor.adminCityId.length > 0 && actor.adminCityId === cityId;
 }
 
@@ -127,7 +128,7 @@ export function groupsManagedBy(db: Db, actor: AccountRecord | null | undefined)
   if (!actor || actor.deletedAt || actor.status !== "verified") return [];
   const all = db.listGroups().filter((g) => !(g.archived ?? false));
   if (isGlobalAdmin(actor)) return all.sort((a, b) => a.name.localeCompare(b.name));
-  if (actor.role === "city_admin" && typeof actor.adminCityId === "string") {
+  if (hasRole(actor, "city_admin") && typeof actor.adminCityId === "string") {
     return all.filter((g) => g.cityId === actor.adminCityId).sort((a, b) => a.name.localeCompare(b.name));
   }
   return groupsLedBy(db, actor);

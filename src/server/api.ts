@@ -33,6 +33,7 @@ import {
   validReason,
   authorizeAdmin,
   adminAccessLevel,
+  assignAccountRoles,
   assignCityAdmin,
   revokeCityAdmin,
   listCityAdmins,
@@ -2333,6 +2334,18 @@ async function handleAdmin(
     if (!result.ok) return sendErr(result), true;
     await db.persist();
     return ok(res, { revoked: result.data.accountId }), true;
+  }
+  // PATCH /api/admin/accounts/:id/roles — audited multi-role assignment
+  // (set semantics: the body carries the FULL desired role set + optional
+  // city scope for city_admin). Global Admin: any role incl. site_admin.
+  // City Admin: group_leader toggles only, own city only.
+  const rolesMatch = /^\/api\/admin\/accounts\/([a-f0-9]{32})\/roles\/?$/.exec(url.pathname);
+  if (rolesMatch && method === "PATCH") {
+    const body = (await readJson(req)) as { roles?: unknown; cityId?: unknown };
+    const result = assignAccountRoles(db, ctx, rolesMatch[1], body, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, { account: result.data }), true;
   }
 
   // ---- Global Admin: city invitations (audited; token shown once) ---------

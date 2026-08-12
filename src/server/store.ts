@@ -12,6 +12,7 @@
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { accountRoles, effectiveRole, hasRole } from "./accountRoles";
 import type {
   AccountRecord,
   AuditEntry,
@@ -151,8 +152,9 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new D
     status: rec.status,
     phase: rec.status === "pending" ? rec.phase : null,
     badge: rec.status === "verified" ? "verified" : null,
-    role: rec.role,
-    adminCityId: rec.role === "city_admin" ? rec.adminCityId : null,
+    role: effectiveRole(rec),
+    roles: accountRoles(rec),
+    adminCityId: hasRole(rec, "city_admin") ? rec.adminCityId : null,
     isOwner,
     suspended: isSuspended(rec, now),
     underReview: rec.underReview === true,
@@ -259,6 +261,12 @@ export class Db {
         // multi-city foundation lack them — treat as `null` (not a City Admin).
         a.adminCityId = a.adminCityId ?? null;
         a.rolePriorAdmin = a.rolePriorAdmin ?? null;
+        // Multi-role migration: accounts persisted before `roles` existed
+        // carry only the legacy single `role` — treat it as their full role
+        // set (the helpers fall back the same way for in-memory records).
+        if (!Array.isArray(a.roles) || a.roles.length === 0) {
+          a.roles = a.role ? [a.role] : ["runner"];
+        }
         // Same for the community-trust review state: accounts persisted before
         // it existed lack the fields — treat as not under review.
         a.underReview = a.underReview === true;
@@ -448,6 +456,7 @@ export class Db {
       status: "pending",
       phase: "email",
       role: "runner",
+      roles: ["runner"],
       adminCityId: null,
       rolePriorAdmin: null,
       requestedRole: input.requestedRole ?? null,

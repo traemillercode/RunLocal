@@ -23,6 +23,19 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import type { AccountRecord, AccountRole, AdminAction } from "./types";
 import type { Db } from "./store";
 import { isOwnerEmail, ownerEmail } from "./owner";
+import {
+  ALL_ACCOUNT_ROLES,
+  ADMIN_ROLES,
+  accountRoles,
+  addRolePatch,
+  effectiveRole,
+  hasRole,
+  highestRole,
+  normalizeRoles,
+  removeRolePatch,
+  rolesPatch,
+  storedRoles,
+} from "./accountRoles";
 
 export const ADMIN_KEY_VAR = "RUN_LOCAL_ADMIN_KEY";
 export const ADMIN_EMAIL_VAR = "RUN_LOCAL_ADMIN_EMAIL";
@@ -204,7 +217,7 @@ export function sessionAccount(db: Db, ctx: AdminCtx): AccountRecord | null {
 
 /** True when the account is a City Admin with exactly one city scope. */
 export function isCityAdminAccount(rec: AccountRecord): boolean {
-  return rec.role === "city_admin" && typeof rec.adminCityId === "string" && rec.adminCityId.length > 0;
+  return hasRole(rec, "city_admin") && typeof rec.adminCityId === "string" && rec.adminCityId.length > 0;
 }
 
 export interface ScopedOptions {
@@ -355,9 +368,9 @@ export function assignCityAdmin(
       },
     };
   }
-  const roleBefore = rec.role === "city_admin" ? rec.rolePriorAdmin : rec.role;
+  const roleBefore = hasRole(rec, "city_admin") ? rec.rolePriorAdmin : rec.role;
   const updated = db.updateAccount(rec.id, {
-    role: "city_admin",
+    ...rolesPatch([...storedRoles(rec), "city_admin"]),
     adminCityId: cityId,
     rolePriorAdmin: roleBefore === "city_admin" ? null : roleBefore,
     // A Global Admin grant is explicit trust, but it never bypasses the
@@ -388,10 +401,117 @@ export function revokeCityAdmin(
   if (!rec || rec.deletedAt) return { ok: false, status: 404, error: "not_found" };
   if (!isCityAdminAccount(rec)) return { ok: false, status: 409, error: "not_city_admin" };
   const restored = rec.rolePriorAdmin === "group_leader" ? "group_leader" : "runner";
-  db.updateAccount(accountId, { role: restored, adminCityId: null, rolePriorAdmin: null, lastActivityAt: now.toISOString() });
+  const prior = storedRoles(rec).filter((r) => r !== "city_admin");
+  db.updateAccount(accountId, {
+    ...rolesPatch(prior.length > 0 ? prior : [restored]),
+    adminCityId: null,
+    rolePriorAdmin: null,
+    lastActivityAt: now.toISOString(),
+  });
   const cityId = rec.adminCityId!;
   db.appendAudit({ admin: auth.data.admin, action: "admin.city_admin_revoke", reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId: accountId, ip: ctx.ip, cityId }, now);
   return { ok: true, data: { accountId } };
+}
+
+// ---------------------------------------------------- multi-role assignment
+// PATCH /api/admin/accounts/:id/roles — the audited role editor backend. Set
+// semantics: the caller sends the FULL desired role set (each UI toggle adds
+// or removes exactly one role, then submits the whole array). The legacy
+// single `role` field is kept in sync server-side (highest-ranked role).
+//
+// Permission boundaries (never client-settable):
+//  - Global Admin (owner or key admin): may assign ANY role, including
+//    site_admin, and may set the city_admin city scope.
+//  - City Admin: may only ADD or REMOVE group_leader, and only for accounts
+//    whose home city is the admin's own scope city. city_admin / site_admin
+//    are permanently out of reach.
+//  - Admin roles (city_admin / site_admin) require an identity-verified
+//    target (verified, or a pending_review account that completed email +
+//    selfie — the grant is the review decision, mirroring assignCityAdmin).
+//  - The owner email can never be demoted below site_admin (site_admin is
+//    owner-implied server-side regardless, and the stored set must agree).
+
+export interface RolesAssignResult {
+  accountId: string;
+  roles: AccountRole[];
+  role: AccountRole;
+  adminCityId: string | null;
+}
+
+/** Identity gate for admin roles: verified, or completed email+selfie (pending_review). */
+function identityReady(rec: AccountRecord): boolean {
+  return rec.status === "verified" || (rec.status === "pending" && rec.phase === "pending_review" && Boolean(rec.selfieRef));
+}
+
+export function assignAccountRoles(
+  db: Db,
+  ctx: AdminCtx,
+  accountId: string,
+  input: { roles?: unknown; cityId?: unknown },
+  now = new Date(),
+): AdminResult<RolesAssignResult> {
+  const raw = Array.isArray(input.roles) ? input.roles : null;
+  if (!raw || raw.length === 0 || raw.some((r) => typeof r !== "string" || !ALL_ACCOUNT_ROLES.includes(r as AccountRole))) {
+    return { ok: false, status: 400, error: "invalid_roles", message: "Roles must be a non-empty array of known roles." };
+  }
+  const desired = normalizeRoles(raw as AccountRole[]);
+  const rec = db.getAccount(accountId);
+  if (!rec || rec.deletedAt) return { ok: false, status: 404, error: "account_not_found" };
+
+  // City scope for city_admin: required, and must be a registry city.
+  let cityId: string | null = null;
+  if (desired.includes("city_admin")) {
+    const cid = typeof input.cityId === "string" && input.cityId.trim() ? input.cityId.trim() : rec.adminCityId ?? null;
+    if (!cid || !db.getCity(cid)) {
+      return { ok: false, status: 400, error: "invalid_city", message: "The city_admin role requires a valid city scope." };
+    }
+    cityId = cid;
+  }
+
+  const current = accountRoles(rec);
+  const change = `roles: ${current.join(",") || "none"} -> ${desired.join(",")}${cityId ? `; city: ${cityId}` : ""}`;
+
+  // Audit the attempt with the before/after summary (written on success).
+  const auth = authorizeScoped(db, ctx, "admin.roles_assign", rec.id, now, {
+    auditCity: cityId ?? rec.cityId ?? null,
+    change,
+  });
+  if (!auth.ok) return auth;
+
+  if (auth.data.scope.kind === "city") {
+    // City Admin: group_leader toggles only, own city only.
+    const scopeCity = auth.data.scope.cityId!;
+    if (rec.cityId !== scopeCity) {
+      return { ok: false, status: 403, error: "city_scope_denied", message: "City Admins may only manage roles of accounts in their own city." };
+    }
+    const removed = current.filter((r) => !desired.includes(r));
+    const added = desired.filter((r) => !current.includes(r));
+    if (removed.some((r) => r !== "group_leader") || added.some((r) => r !== "group_leader")) {
+      return { ok: false, status: 403, error: "roles_out_of_scope", message: "City Admins may only add or remove the group_leader role within their own city." };
+    }
+  }
+
+  // The owner can never be demoted below site_admin.
+  if (isOwnerEmail(rec.email) && !desired.includes("site_admin")) {
+    return { ok: false, status: 409, error: "owner_cannot_demote", message: "The owner account always holds site_admin and cannot be demoted." };
+  }
+
+  // Admin roles require an identity-verified target.
+  if (desired.some((r) => ADMIN_ROLES.includes(r)) && !identityReady(rec)) {
+    return { ok: false, status: 409, error: "verification_incomplete", message: "Admin roles (city_admin, site_admin) require an identity-verified target." };
+  }
+
+  const updated = db.updateAccount(rec.id, {
+    ...rolesPatch(desired),
+    adminCityId: desired.includes("city_admin") ? cityId : null,
+    lastActivityAt: now.toISOString(),
+    // Mirror assignCityAdmin: granting an admin role to an account that has
+    // completed email + selfie (pending_review) IS the review decision.
+    ...(desired.some((r) => ADMIN_ROLES.includes(r)) && rec.status !== "verified" && rec.phase === "pending_review" && rec.selfieRef
+      ? { status: "verified" as const, verifiedAt: now.toISOString() }
+      : {}),
+  })!;
+  return { ok: true, data: { accountId: updated.id, roles: accountRoles(updated), role: effectiveRole(updated), adminCityId: updated.adminCityId } };
 }
 
 /** Admin login — issues a session id (caller sets the cookie). */
@@ -515,6 +635,12 @@ export interface AdminRecordView extends AdminSearchRow {
   canViewSelfie: boolean;
   /** The applicant-facing reason stored at rejection (admin-set, admin-viewable). */
   rejectionReason: string | null;
+  /** Home city id (admin view — used by the role editor's city scoping). */
+  cityId: string | null;
+  /** Full multi-role set (effective — owner-implied site_admin included). */
+  roles: AccountRole[];
+  /** City Admin scope, when the account holds city_admin. */
+  adminCityId: string | null;
 }
 
 export function adminGetRecord(
@@ -555,6 +681,9 @@ export function adminGetRecord(
       retentionYears: rec.retentionYears,
       canViewSelfie: Boolean(rec.selfieRef && rec.selfieRef.endsWith(".jpg")),
       rejectionReason: rec.rejectionReason ?? null,
+      cityId: rec.cityId ?? null,
+      roles: accountRoles(rec),
+      adminCityId: rec.adminCityId ?? null,
     },
   };
 }
@@ -606,6 +735,9 @@ export function adminSetStatus(
     status,
     verifiedAt: status === "verified" ? now.toISOString() : null,
     role: status === "verified" ? role : rec.role,
+    // Approval grants the chosen role into the multi-role set (role stays in
+    // sync as the highest-ranked member; rejection leaves roles untouched).
+    ...(status === "verified" ? addRolePatch(rec, role) : {}),
     // Rejection is a revocation of any current verified/badge presentation:
     // the account must never keep a Verified or Trusted presentation it no
     // longer has. Audit history (authorizeAdmin above) preserves the full

@@ -23,6 +23,7 @@
 import { newId } from "./store";
 import type { Db } from "./store";
 import { isSuspended } from "./store";
+import { addRolePatch } from "./accountRoles";
 import type { AdminCtx, AdminResult } from "./admin";
 import { authorizeAdmin, authorizeScoped, routineAdminCtx } from "./admin";
 import { REASON_MAX, REASON_MIN } from "./admin";
@@ -640,7 +641,9 @@ function decideSubmissionCore(
     });
     const submitter = db.getAccount(rec.submitterAccountId);
     if (submitter && !submitter.deletedAt) {
-      db.updateAccount(submitter.id, { role: "group_leader" });
+      // Group approval grants the submitter the Group Leader role — pushed
+      // into the multi-role set (the legacy single `role` stays in sync).
+      db.updateAccount(submitter.id, addRolePatch(submitter, "group_leader"));
     }
   }
   const updated = db.updateSubmission(submissionId, {

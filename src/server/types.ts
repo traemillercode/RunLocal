@@ -18,16 +18,24 @@ export type AccountStatus = "pending" | "verified" | "rejected";
 /** Server-tracked stage of the verification funnel. */
 export type VerifyPhase = "email" | "code" | "selfie" | "pending_review";
 /**
- * Runner role, assigned by the owner/operator at approval time. `runner` is the
- * default (a "Verified Runner"); `group_leader` is a label role for people who
- * run a club/group. `city_admin` is assigned ONLY by a Global Admin (owner or
- * key admin) through the audited city-admin assignment endpoint — it is never
- * accepted from any client payload, and it always carries exactly one city
- * scope (`AccountRecord.adminCityId`). Neither `runner` nor `group_leader`
- * carries admin powers; the owner/super-admin identity is derived server-side
- * from RUN_LOCAL_OWNER_EMAIL, never from a client-supplied role.
+ * Operational account roles (multi-role model). `runner` is the default (a
+ * "Verified Runner"); `group_leader` is a label role for people who run a
+ * club/group; `city_admin` is scoped to exactly one city
+ * (`AccountRecord.adminCityId`); `site_admin` is the top of the hierarchy
+ * (the owner email is ALWAYS a site admin, server-derived; a Global Admin may
+ * also grant the stored role to other verified accounts).
+ *
+ * Roles "glue together": each role implies every role of equal or lower rank
+ * (runner(0) < group_leader(1) < city_admin(2) < site_admin(3)), so the
+ * effective role is the highest-ranked held role. Role sets are stored on
+ * `AccountRecord.roles`; the legacy single `role` field is kept in sync
+ * (highest-ranked role) for backward compatibility during migration.
+ *
+ * Admin roles (city_admin / site_admin) are NEVER accepted from any client
+ * payload — only the audited role-assignment endpoints set them, and admin
+ * roles require an identity-verified target.
  */
-export type AccountRole = "runner" | "group_leader" | "city_admin";
+export type AccountRole = "runner" | "group_leader" | "city_admin" | "site_admin";
 
 export interface AccountRecord {
   id: string;
@@ -55,6 +63,13 @@ export interface AccountRecord {
   phase: VerifyPhase;
   /** Assigned runner role (set at approval; defaults to "runner"). */
   role: AccountRole;
+  /**
+   * Full multi-role set (the multi-role model). `role` above is the DEPRECATED
+   * single-source field, kept in sync for backward compat: every write sets
+   * both, with `role` = the highest-ranked role in `roles`. Records persisted
+   * before `roles` existed are normalized on load (roles := [role]).
+   */
+  roles: AccountRole[];
   /**
    * City Admin scope — exactly one city id, set ONLY by a Global Admin via the
    * audited assignment endpoint. Non-null means the account is a City Admin
@@ -192,6 +207,7 @@ export type AdminAction =
   | "admin.cms_city"
   | "admin.city_admin_assign"
   | "admin.city_admin_revoke"
+  | "admin.roles_assign"
   | "admin.invitation_create"
   | "admin.invitation_revoke"
   | "admin.view_credential_proof"

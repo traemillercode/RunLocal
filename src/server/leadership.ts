@@ -20,6 +20,7 @@
 import type { AccountRecord, AdminAction, GroupModRecord } from "./types";
 import type { Db } from "./store";
 import { newId } from "./store";
+import { hasRole } from "./accountRoles";
 import { validReason, REASON_MAX, type AdminResult } from "./admin";
 import {
   canManageGroupLeadership,
@@ -241,7 +242,7 @@ export function transferGroupOwnership(
   // The caller already passed canManageGroupLeadership, so the actor is the
   // group owner, the City Admin of the group's city, or the Global Admin.
   const actorIsOwner = group.ownerId === actor.id;
-  const actorIsAdmin = !actorIsOwner || actor.role === "city_admin" || isGlobalAdmin(actor);
+  const actorIsAdmin = !actorIsOwner || hasRole(actor, "city_admin") || isGlobalAdmin(actor);
   const targetIsLeader = (group.leaderIds ?? []).includes(target.id);
   if (actorIsOwner && !actorIsAdmin && !targetIsLeader) {
     return { ok: false, status: 400, error: "transfer_requires_leader", message: "Ownership can only be transferred to a current leader of the group." };
