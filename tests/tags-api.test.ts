@@ -103,8 +103,7 @@ describe("GET /api/tags — list visibility", () => {
     const postId = addPost(db, tagger, "Post with tags");
 
     await call(db, "POST", "/api/tags", { body: { contentType: "post", contentId: postId, taggedUserId: t1.id }, cookie: tagger.cookie });
-    const r2 = await call(db, "POST", "/api/tags", { body: { contentType: "post", contentId: postId, taggedUserId: t2.id }, cookie: tagger.cookie });
-    const t2TagId = r2.body.tag.id;
+    await call(db, "POST", "/api/tags", { body: { contentType: "post", contentId: postId, taggedUserId: t2.id }, cookie: tagger.cookie });
 
     // stranger sees both with taggedUser profiles
     const list = await call(db, "GET", `/api/tags?contentType=post&contentId=${encodeURIComponent(postId)}`, { cookie: stranger.cookie });
@@ -202,7 +201,7 @@ describe("GET /api/runners/:id/tagged", () => {
   });
 
   it("hidden rows drop for everyone except the owner; blocked pair sees nothing; public setting opens to strangers", async () => {
-    const { db, owner, connected, stranger, tagger, postId } = taggedSetup();
+    const { db, owner, connected, tagger, postId } = taggedSetup();
     await call(db, "POST", "/api/tags", { body: { contentType: "post", contentId: postId, taggedUserId: owner.id }, cookie: tagger.cookie });
     // owner self-hides their own tag
     const list = await call(db, "GET", `/api/tags?contentType=post&contentId=${encodeURIComponent(postId)}`, { cookie: owner.cookie });
