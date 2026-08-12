@@ -4,15 +4,21 @@ import { VerifiedBadge } from "../components/VerifiedBadge";
 import { TrustedBadge } from "../components/TrustedBadge";
 import { RunnerFeedbackSheet } from "../components/RunnerFeedbackSheet";
 import { Chip, Icon } from "../components/ui";
+import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
+import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { TrustSummary } from "../components/TrustProfileSection";
+import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
 import type { AccountRole } from "../lib/accounts";
 import {
   getRunnerProfile,
   type RecognitionView,
+  type RunnerActivityRow,
   type RunnerProfileResponse,
   type RunnerProfileView,
+  type RunnerTaggedRow,
 } from "../lib/api";
+import * as api from "../lib/api";
 function initials(name: string): string {
   return (
     name
@@ -63,6 +69,200 @@ export function RunnerProfileHeader({ profile }: { profile: RunnerProfileView })
           </div>
         </div>
       </div>
+    </section>
+  );
+}
+
+/**
+ * Connect / Requested / Accept Request / Connected affordance under the
+ * identity card. Presentational (no hooks) so SSR tests render the real
+ * markup per state.
+ *
+ * State comes ENTIRELY from the server's `connectionState` on the profile:
+ *  - connected → emerald "Connected" (tap → remove-connection confirm);
+ *  - requested_by_me → non-actionable ghost "Requested" + honest helper text
+ *    (withdrawing is not offered here; the addressee decides with
+ *    Accept/Decline and a cancelled request would only re-queue confusion);
+ *  - requested_to_me → volt "Accept Request" (resolved from the inbox);
+ *  - none → volt "Connect" (sends a request);
+ *  - pending/rejected viewers → volt "Connect" that opens the
+ *    VerifiedGateSheet on tap (same as RSVP);
+ *  - guests → NO button at all.
+ *
+ * Mutual line: rendered ONLY when the server says the count is visible
+ * (mutualVisible) AND it is > 0 — never "0 mutual connections".
+ */
+export function RunnerConnectBlock({
+  profile,
+  viewerRole,
+  busy = false,
+  onConnect,
+  onAcceptRequest,
+  onOpenGate,
+  onOpenRemove,
+}: {
+  profile: RunnerProfileView;
+  viewerRole: AccountRole;
+  busy?: boolean;
+  onConnect: () => void;
+  onAcceptRequest: () => void;
+  onOpenGate: () => void;
+  onOpenRemove: () => void;
+}) {
+  if (viewerRole === "guest") return null;
+  const state = profile.connectionState ?? null;
+  const mutualCount = profile.mutualVisible === true ? (profile.mutualConnectionsCount ?? 0) : 0;
+  const base = "mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-full text-sm font-semibold";
+  return (
+    <div>
+      {viewerRole === "verified" && state === "connected" ? (
+        <button type="button" onClick={onOpenRemove} disabled={busy} className={`${base} bg-emerald-100 text-emerald-800 active:opacity-90`}>
+          <Icon name="check" className="h-4 w-4" /> {busy ? "Removing…" : "Connected"}
+        </button>
+      ) : viewerRole === "verified" && state === "requested_by_me" ? (
+        <div>
+          <button type="button" disabled aria-disabled="true" className={`${base} bg-transparent text-slate-700 ring-1 ring-slate-200`}>
+            Requested
+          </button>
+          <p className="mt-1.5 text-center text-xs leading-relaxed text-slate-500">
+            Request sent — waiting on their reply. You can ask again later if it lapses.
+          </p>
+        </div>
+      ) : viewerRole === "verified" && state === "requested_to_me" ? (
+        <button type="button" onClick={onAcceptRequest} disabled={busy} className={`${base} bg-[#FF5741] text-[#14171C] active:bg-[#e94735]`}>
+          <Icon name="check" className="h-4 w-4" /> {busy ? "Accepting…" : "Accept Request"}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={viewerRole === "verified" ? onConnect : onOpenGate}
+          disabled={busy}
+          className={`${base} bg-[#FF5741] text-[#14171C] active:bg-[#e94735]`}
+        >
+          <Icon name="userPlus" className="h-4 w-4" /> {busy ? "Sending…" : "Connect"}
+        </button>
+      )}
+      {mutualCount > 0 ? (
+        <p className="mt-2 text-center text-[13px] font-medium text-slate-500">
+          {mutualCount} mutual connection{mutualCount === 1 ? "" : "s"}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Activity | Tagged tabs (ForumSectionTabs pattern) — presentational. */
+export type RunnerProfileTab = "activity" | "tagged";
+export function RunnerProfileTabs({ tab, onSelect }: { tab: RunnerProfileTab; onSelect: (t: RunnerProfileTab) => void }) {
+  const tabs: { id: RunnerProfileTab; label: string }[] = [
+    { id: "activity", label: "Activity" },
+    { id: "tagged", label: "Tagged" },
+  ];
+  return (
+    <div role="tablist" aria-label="Runner profile" className="mt-4 flex gap-1.5 rounded-2xl bg-slate-100 p-1.5">
+      {tabs.map((t) => {
+        const active = tab === t.id;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onSelect(t.id)}
+            className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl px-3 text-[13px] font-semibold transition-colors ${
+              active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 active:bg-white"
+            }`}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Activity panel — forum posts by this runner (server-gated by
+ * show_past_activity; the server sends [] when nothing is visible). */
+export function RunnerActivityPanel({ rows, loading = false }: { rows: RunnerActivityRow[] | null; loading?: boolean }) {
+  return (
+    <section aria-label="Recent forum activity" role="tabpanel" className="mt-3">
+      {loading || rows === null ? (
+        <p className="rounded-2xl bg-white p-5 text-center text-sm text-slate-500 ring-1 ring-slate-200/70">Loading activity…</p>
+      ) : rows.length === 0 ? (
+        <div className="rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200/70">
+          <p className="text-sm font-semibold text-slate-700">No public activity yet</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-500">
+            This runner hasn't posted anything publicly visible — or keeps their past activity private.
+          </p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+          {rows.map((a) => (
+            <li key={a.id} className="px-4 py-3.5">
+              <p className="text-[14px] font-semibold text-slate-900">{a.title}</p>
+              <p className="mt-0.5 line-clamp-2 text-[13px] leading-relaxed text-slate-500">{a.excerpt}</p>
+              <p className="mt-1 text-[11px] font-semibold text-slate-400">{a.createdAt}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** Tagged panel — content this runner is tagged on (server-gated by
+ * show_tagged_content; hidden-by-tagged-user rows drop except for the tagged
+ * runner themself, so only the tagged user ever sees the self-hide toggle). */
+export function RunnerTaggedPanel({
+  rows,
+  isOwn,
+  busyTagId,
+  onToggleHide,
+}: {
+  rows: RunnerTaggedRow[] | null;
+  isOwn: boolean;
+  busyTagId: string | null;
+  onToggleHide: (row: RunnerTaggedRow) => void;
+}) {
+  return (
+    <section aria-label="Tags on this runner" role="tabpanel" className="mt-3">
+      {rows === null ? (
+        <p className="rounded-2xl bg-white p-5 text-center text-sm text-slate-500 ring-1 ring-slate-200/70">Loading tags…</p>
+      ) : rows.length === 0 ? (
+        <div className="rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200/70">
+          <p className="text-sm font-semibold text-slate-700">No tags yet</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-500">
+            Runners can tag others on forum posts — tags on this runner will show up here.
+          </p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+          {rows.map((r) => (
+            <li key={r.tag.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
+              <span className="min-w-0">
+                <span className="block truncate text-[14px] font-semibold text-slate-900">{r.content.title}</span>
+                <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <Chip tone="sky">
+                    <Icon name="tag" className="h-3 w-3" /> {r.content.kind === "post" ? "Forum post" : "Event"}
+                  </Chip>
+                  {r.tag.hiddenByTaggedUser ? <Chip tone="outline">Hidden from this tag</Chip> : null}
+                </span>
+              </span>
+              {isOwn ? (
+                <button
+                  type="button"
+                  disabled={busyTagId === r.tag.id}
+                  aria-pressed={!r.tag.hiddenByTaggedUser}
+                  onClick={() => onToggleHide(r)}
+                  className="min-h-11 shrink-0 rounded-[10px] px-3 text-xs font-bold text-slate-600 active:bg-slate-100 disabled:text-slate-300"
+                >
+                  {busyTagId === r.tag.id ? "Saving…" : r.tag.hiddenByTaggedUser ? "Show me again" : "Hide me from this tag"}
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -202,13 +402,27 @@ export function RunnerShareFeedbackButton({ visible, onClick }: { visible: boole
  * Public (other-user) runner profile page at /runners/:id. Guest-accessible:
  * no account or role gate — the server returns only public-safe fields and
  * 404s for unknown/deleted/suspended accounts. Verified signed-in viewers get
- * the "Share feedback" affordance (ratings & concerns keyed to shared runs).
+ * the Connect affordance (relationship state comes from the server) and the
+ * "Share feedback" affordance (ratings & concerns keyed to shared runs).
  */
 export function RunnerProfilePage({ id }: { id: string }) {
   const { me, role } = useAccount();
+  const toast = useToast();
   const [state, setState] = useState<"loading" | "ready" | "missing">("loading");
   const [data, setData] = useState<RunnerProfileResponse | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // Connect block state: relationship mutations (optimistic + revert), the
+  // VerifiedGateSheet for pending/rejected viewers, and the remove-confirm.
+  const [gateOpen, setGateOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [busyConnect, setBusyConnect] = useState(false);
+  // Activity | Tagged tabs.
+  const [tab, setTab] = useState<RunnerProfileTab>("activity");
+  const [activity, setActivity] = useState<RunnerActivityRow[] | null>(null);
+  const [tagged, setTagged] = useState<RunnerTaggedRow[] | null>(null);
+  const [busyTagId, setBusyTagId] = useState<string | null>(null);
   const load = useCallback(() => {
     let live = true;
     setState("loading");
@@ -235,6 +449,109 @@ export function RunnerProfilePage({ id }: { id: string }) {
     });
   }, [id]);
   const viewerId = me?.status === "signed_in" ? me.account.id : null;
+  // Self-view via /runners/:id: no Connect affordance (you can't connect with
+  // yourself; own privacy lives in Settings), but the Tagged tab still shows
+  // self-hide toggles.
+  const isSelf = viewerId !== null && viewerId === id;
+  // Activity + Tagged fetch once the profile resolves. The SERVER gates both
+  // (show_past_activity / show_tagged_content) and sends [] when nothing is
+  // visible — the client never decides visibility.
+  useEffect(() => {
+    if (state !== "ready") return;
+    let alive = true;
+    void api.getRunnerActivity(id).then((r) => { if (alive) setActivity(r.ok ? r.data.activity : []); });
+    void api.getRunnerTagged(id).then((r) => { if (alive) setTagged(r.ok ? r.data.tagged : []); });
+    return () => { alive = false; };
+  }, [state, id]);
+
+  /** none → requestConnection; optimistic requested_by_me + revert on error. */
+  const connectTo = () => {
+    if (busyConnect || !data) return;
+    const prev = data;
+    setBusyConnect(true);
+    setData((cur) => (cur ? { ...cur, profile: { ...cur.profile, connectionState: "requested_by_me" } } : cur));
+    void api.requestConnection(data.profile.id).then((r) => {
+      setBusyConnect(false);
+      if (r.ok) {
+        toast(`Request sent to ${data.profile.name}.`, "success");
+      } else {
+        setData(prev);
+        toast(r.error.message ?? "Couldn't send the request. Try again.", "info");
+      }
+    });
+  };
+
+  /** requested_to_me → resolve the request id from the inbox (the profile DTO
+   * has no requestId), then accept. Honest error when it's no longer waiting. */
+  const acceptRequest = () => {
+    if (busyConnect || !data) return;
+    const prev = data;
+    setBusyConnect(true);
+    void api.getConnections().then((r) => {
+      if (!r.ok) {
+        setBusyConnect(false);
+        toast("Couldn't load the request — try again.", "info");
+        return;
+      }
+      const requestId = r.data.requests.find((x) => x.from.id === data.profile.id)?.requestId;
+      if (!requestId) {
+        setBusyConnect(false);
+        refresh();
+        toast("That request is no longer waiting.", "info");
+        return;
+      }
+      setData((cur) => (cur ? { ...cur, profile: { ...cur.profile, connectionState: "connected" } } : cur));
+      void api.acceptConnection(requestId).then((a) => {
+        setBusyConnect(false);
+        if (a.ok) {
+          toast(`You and ${data.profile.name} are now connected.`, "success");
+        } else {
+          setData(prev);
+          toast(a.error.message ?? "Couldn't accept the request. Try again.", "info");
+        }
+      });
+    });
+  };
+
+  /** connected → ModerationConfirmSheet → removeConnection; optimistic "none"
+   * with revert on error. */
+  const runRemove = () => {
+    if (removeBusy || !data) return;
+    const prev = data;
+    setRemoveBusy(true);
+    setRemoveError(null);
+    setData((cur) => (cur ? { ...cur, profile: { ...cur.profile, connectionState: "none" } } : cur));
+    void api.removeConnection(data.profile.id).then((r) => {
+      setRemoveBusy(false);
+      if (r.ok) {
+        setRemoveOpen(false);
+        toast(`Removed ${data.profile.name} from your connections.`, "success");
+      } else {
+        setData(prev);
+        setRemoveError(r.error.message ?? "Couldn't remove this connection. Try again.");
+      }
+    });
+  };
+
+  /** Tagged-row self-hide toggle — ONLY the tagged user sees it (server
+   * includes hidden rows only for them); optimistic + revert. */
+  const toggleTaggedHide = (row: RunnerTaggedRow) => {
+    if (busyTagId) return;
+    const prev = tagged;
+    const hidden = !row.tag.hiddenByTaggedUser;
+    setBusyTagId(row.tag.id);
+    setTagged((cur) => cur?.map((r) => (r.tag.id === row.tag.id ? { ...r, tag: { ...r.tag, hiddenByTaggedUser: hidden } } : r)) ?? cur);
+    void api.selfHideTag(row.tag.id, hidden).then((r) => {
+      setBusyTagId(null);
+      if (r.ok) {
+        toast(hidden ? "You're hidden from this tag." : "You're visible on this tag again.", "success");
+      } else {
+        setTagged(prev);
+        toast(r.error.message ?? "Couldn't update this tag.", "info");
+      }
+    });
+  };
+
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
       <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Runner profile</h1>
@@ -248,6 +565,23 @@ export function RunnerProfilePage({ id }: { id: string }) {
           <div className="mt-4">
             <RunnerProfileHeader profile={data.profile} />
           </div>
+          {!isSelf ? (
+            <RunnerConnectBlock
+              profile={data.profile}
+              viewerRole={role}
+              busy={busyConnect}
+              onConnect={connectTo}
+              onAcceptRequest={acceptRequest}
+              onOpenGate={() => setGateOpen(true)}
+              onOpenRemove={() => setRemoveOpen(true)}
+            />
+          ) : null}
+          <RunnerProfileTabs tab={tab} onSelect={setTab} />
+          {tab === "activity" ? (
+            <RunnerActivityPanel rows={activity} loading={activity === null} />
+          ) : (
+            <RunnerTaggedPanel rows={tagged} isOwn={isSelf} busyTagId={busyTagId} onToggleHide={toggleTaggedHide} />
+          )}
           <RunnerProfileTrust trust={data.trust} />
           <RunnerProfileCityRecognitions cityName={data.profile.cityName} recognitions={data.recognitions} />
           <RunnerShareFeedbackButton
@@ -263,6 +597,26 @@ export function RunnerProfilePage({ id }: { id: string }) {
           />
         </>
       )}
+      <VerifiedGateSheet
+        open={gateOpen}
+        onClose={() => setGateOpen(false)}
+        role={role}
+        actionLabel="connecting with runners"
+        pendingLabel="Your profile is still in review."
+        rejectionReason={me?.status === "signed_in" ? me.account.rejectionReason ?? null : null}
+      />
+      <ModerationConfirmSheet
+        open={removeOpen}
+        onClose={() => { if (!removeBusy) { setRemoveOpen(false); setRemoveError(null); } }}
+        title="Remove this connection?"
+        entity={data?.profile.name ?? ""}
+        impact="You'll no longer see each other's shared content. You can send a new request later."
+        confirmLabel="Remove connection"
+        tone="neutral"
+        busy={removeBusy}
+        error={removeError}
+        onConfirm={runRemove}
+      />
     </div>
   );
 }
