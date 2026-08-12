@@ -109,9 +109,9 @@ describe("PUT /api/races/:id (admin edit, audited)", () => {
     const kc = account(db, "kc@example.com", "kansas-city", { role: "city_admin", adminCityId: "kansas-city" });
     const runner = account(db, "runner@example.com");
     const seedId = CITIES[0].races[0].id;
-    const cross = await call(db, "PUT", `/api/races/${seedId}`, { cookie: kc.cookie, body: { name: "nope" } });
+    const cross = await call(db, "PUT", `/api/races/${seedId}`, { cookie: kc.cookie, body: { name: "nope", distances: "5K", date: "2026-09-01", location: "X", registrationUrl: "https://example.com/x" } });
     expect(cross.status).toBe(403);
-    const asRunner = await call(db, "PUT", `/api/races/${seedId}`, { cookie: runner.cookie, body: { name: "nope" } });
+    const asRunner = await call(db, "PUT", `/api/races/${seedId}`, { cookie: runner.cookie, body: { name: "nope", distances: "5K", date: "2026-09-01", location: "X", registrationUrl: "https://example.com/x" } });
     expect(asRunner.status).toBe(401);
     expect(db.getRace(seedId)!.name).not.toBe("nope");
   });
@@ -157,13 +157,13 @@ describe("PATCH /api/my/submissions/:id (submitter edits own pending only)", () 
       submitterAccountId: ownerId, submittedAt: "2026-01-01T00:00:00.000Z", decidedAt: null, decidedBy: null,
       payload: { kind: "race", name: "Original Race", distances: "5K", date: "2026-09-01", location: "A Place", registrationUrl: "https://example.com", description: "" },
     };
-    db.addSubmission(rec);
+    db.appendSubmission(rec);
     return rec;
   }
   it("the submitter edits their own pending race; approved rows are history-only (409)", async () => {
     const { db } = setup();
     const owner = account(db, "owner@example.com");
-    const rec = await pendingRace(db, owner.cookie);
+    const rec = await pendingRace(db, owner.id);
     const r = await call(db, "PATCH", `/api/my/submissions/${rec.id}`, { cookie: owner.cookie, body: { name: "Renamed Race", distances: "5K / 10K", date: "2026-09-01", location: "A Place", registrationUrl: "https://example.com" } });
     expect(r.status).toBe(200);
     expect((db.getSubmission(rec.id)!.payload as { name: string }).name).toBe("Renamed Race");
@@ -177,7 +177,7 @@ describe("PATCH /api/my/submissions/:id (submitter edits own pending only)", () 
     const { db } = setup();
     const owner = account(db, "owner@example.com");
     const stranger = account(db, "stranger@example.com");
-    const rec = await pendingRace(db, owner.cookie);
+    const rec = await pendingRace(db, owner.id);
     const r = await call(db, "PATCH", `/api/my/submissions/${rec.id}`, { cookie: stranger.cookie, body: { name: "Hijack" } });
     expect(r.status).toBe(404);
     expect((db.getSubmission(rec.id)!.payload as { name: string }).name).toBe("Original Race");
