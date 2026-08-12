@@ -35,6 +35,7 @@ import { GroupDetailPage } from "./pages/GroupDetailPage";
 import { MyGroupsPage } from "./pages/MyGroupsPage";
 import { GroupManagePage } from "./pages/GroupManagePage";
 import { NotificationsPage } from "./pages/NotificationsPage";
+import { ConnectionsPage } from "./pages/ConnectionsPage";
 import { RosterPage } from "./pages/RosterPage";
 import { CheckinPage } from "./pages/CheckinPage";
 import { parseAuthCallback } from "./lib/recovery";
@@ -104,6 +105,7 @@ function Shell() {
             <Route path="/profile" element={<ProfilePage city={city} store={store} />} />
             <Route path="/runners/:id" element={<RunnerRoute />} />
             <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/connections" element={<ConnectionsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/recovery" element={<RecoveryPage sessionError={recoveryError} />} />

@@ -57,6 +57,7 @@ export function profileMenuEntries(me: Me | null): { entries: MenuEntry[]; signe
       to: "/verify",
     },
     { key: "settings", label: "Settings", icon: "sort", to: "/settings" },
+    { key: "connections", label: "Connections", icon: "users", to: "/connections" },
   ];
   if (account.isOwner) {
     entries.push({

@@ -294,6 +294,154 @@ export function NotificationPreferencesSection({
   );
 }
 
+/**
+ * Privacy — who can see what on your public runner profile. Renders the
+ * owner-specified controls IN ORDER with plain-language labels only (never raw
+ * enum names). The safety line sits verbatim above "My upcoming runs & races",
+ * and "My saved runs & races" deliberately has only two options — no
+ * "Everyone", ever. Optimistic save with revert on error (mirrors
+ * toggleNotification). All visibility enforcement stays server-side
+ * (can_view); this section only persists the viewer's own preferences via
+ * GET/PUT /api/profile/privacy.
+ */
+const PRIVACY_LABELS: Record<string, string> = {
+  public: "Everyone",
+  connections_only: "Only my connections",
+  private: "Only me",
+};
+
+/** One slim radio row (Home-city card styling at px-3 py-2). */
+function PrivacyRadioRow({
+  question,
+  value,
+  options,
+  onSelect,
+}: {
+  question: string;
+  value: string;
+  options: readonly string[];
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <li className="px-5 py-3.5">
+      <p className="text-[14px] font-medium text-slate-700">{question}</p>
+      <ul role="radiogroup" aria-label={question} className="mt-2 space-y-1.5">
+        {options.map((opt) => {
+          const active = value === opt;
+          return (
+            <li key={opt}>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => onSelect(opt)}
+                className={`flex w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors ${
+                  active ? "border-[#14171C] bg-[#14171C] text-white" : "border-slate-200 bg-white text-slate-800 active:bg-slate-50"
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border ${active ? "border-[#FF5741]" : "border-slate-300"}`}
+                >
+                  {active ? <span className="h-2 w-2 rounded-full bg-[#FF5741]" /> : null}
+                </span>
+                <span className="text-[13px] font-semibold">{PRIVACY_LABELS[opt] ?? opt}</span>
+                {active ? <Icon name="check" className="ml-auto h-4 w-4 text-[#FF5741]" /> : null}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </li>
+  );
+}
+
+/** Presentational Privacy section — props only so SSR tests render the real markup. */
+export function PrivacySettingsSection({
+  settings,
+  onSave,
+  saving = false,
+  error = null,
+}: {
+  settings: api.PrivacySettings;
+  onSave: (patch: Partial<api.PrivacySettings>) => void;
+  saving?: boolean;
+  error?: string | null;
+}) {
+  return (
+    <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70" aria-busy={saving}>
+      <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Privacy</h2>
+      <ul className="divide-y divide-slate-100">
+        {error ? <li role="alert" className="bg-red-50 px-5 py-3 text-xs font-medium text-red-800">{error}</li> : null}
+        <PrivacyRadioRow
+          question="Who can find my profile"
+          value={settings.profile_visibility}
+          options={["public", "connections_only"]}
+          onSelect={(v) => onSave({ profile_visibility: v as api.ProfileVisibilitySetting })}
+        />
+        {/* Safety line — verbatim, directly ABOVE the upcoming-runs control. */}
+        <li className="bg-amber-50 px-5 py-3.5">
+          <p className="flex items-start gap-2 text-[13px] leading-relaxed text-amber-900">
+            <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0" />
+            Runs you haven't done yet reveal where you'll be. We default this to connections only.
+          </p>
+        </li>
+        <PrivacyRadioRow
+          question="My upcoming runs & races"
+          value={settings.show_upcoming_events}
+          options={["public", "connections_only", "private"]}
+          onSelect={(v) => onSave({ show_upcoming_events: v as api.ContentVisibilitySetting })}
+        />
+        <PrivacyRadioRow
+          question="My saved runs & races"
+          value={settings.show_saved_events}
+          options={["connections_only", "private"]}
+          onSelect={(v) => onSave({ show_saved_events: v as api.SavedEventsVisibilitySetting })}
+        />
+        <PrivacyRadioRow
+          question="My past activity"
+          value={settings.show_past_activity}
+          options={["public", "connections_only", "private"]}
+          onSelect={(v) => onSave({ show_past_activity: v as api.ContentVisibilitySetting })}
+        />
+        <PrivacyRadioRow
+          question="My connections list"
+          value={settings.show_connections_list}
+          options={["public", "connections_only", "private"]}
+          onSelect={(v) => onSave({ show_connections_list: v as api.ContentVisibilitySetting })}
+        />
+        <PrivacyRadioRow
+          question="Posts I'm tagged in"
+          value={settings.show_tagged_content}
+          options={["public", "connections_only", "private"]}
+          onSelect={(v) => onSave({ show_tagged_content: v as api.ContentVisibilitySetting })}
+        />
+        {/* searchable_by_name — its own switch, separated by the row border. */}
+        <li className="border-t border-slate-100 px-5 py-3.5">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[14px] font-medium text-slate-700">Let people find me by name</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.searchable_by_name}
+              aria-label={`Let people find me by name ${settings.searchable_by_name ? "on" : "off"}`}
+              onClick={() => onSave({ searchable_by_name: !settings.searchable_by_name })}
+              className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${settings.searchable_by_name ? "bg-[#14171C]" : "bg-slate-300"}`}
+            >
+              <span aria-hidden="true" className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${settings.searchable_by_name ? "left-6" : "left-1"}`} />
+            </button>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">Controls whether you appear in Find People.</p>
+        </li>
+      </ul>
+      <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
+        {saving ? "Saving…" : "Changes save as you tap."} These choices control what other runners can see on your
+        public profile; verification records and your private activity stay private to your account.
+      </p>
+    </section>
+  );
+}
+
 export function SettingsPage() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -301,10 +449,27 @@ export function SettingsPage() {
   const { city, cityId, signedIn, hasHomeCity, selectCity } = useSelectedCity();
   const [notificationPrefs, setNotificationPrefs] = useState<api.NotificationPreferences>({run_reminders:false,community_updates:false,account_alerts:false});
   const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [privacySettings, setPrivacySettings] = useState<api.PrivacySettings | null>(null);
+  const [privacyError, setPrivacyError] = useState<string | null>(null);
+  const [privacySaving, setPrivacySaving] = useState(false);
   const [browserPermission, setBrowserPermission] = useState<NotificationPermission | "unsupported">(typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported");
   const { unreadCount } = useNotifications();
   useEffect(() => { if (!signedIn) return; void api.getNotificationPreferences().then(r => { if (r.ok) setNotificationPrefs(r.data.preferences); else setNotificationError(r.error.message); }).catch(() => setNotificationError("Couldn’t load notification preferences. Try again.")); }, [signedIn]);
   const toggleNotification = async (key: keyof api.NotificationPreferences) => { const next = {...notificationPrefs, [key]: !notificationPrefs[key]}; setNotificationError(null); setNotificationPrefs(next); const r = await api.updateNotificationPreferences({[key]: next[key]}); if (!r.ok) { setNotificationPrefs(notificationPrefs); setNotificationError(r.error.message ?? "Couldn’t save notification preference. Try again."); } };
+  // Privacy settings load only when signed in; the section renders only after
+  // the real server values arrive (never guessed defaults). Saves are
+  // optimistic with revert on error, mirroring toggleNotification.
+  useEffect(() => { if (!signedIn) return; void api.getPrivacy().then(r => { if (r.ok) setPrivacySettings(r.data.settings); else setPrivacyError(r.error.message ?? "Couldn't load privacy settings."); }); }, [signedIn]);
+  const savePrivacy = async (patch: Partial<api.PrivacySettings>) => {
+    if (!privacySettings) return;
+    const prev = privacySettings;
+    setPrivacySettings({ ...privacySettings, ...patch });
+    setPrivacyError(null);
+    setPrivacySaving(true);
+    const r = await api.putPrivacy(patch);
+    setPrivacySaving(false);
+    if (!r.ok) { setPrivacySettings(prev); setPrivacyError(r.error.message ?? "Couldn't save privacy settings. Try again."); }
+  };
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [health, setHealth] = useState<api.HealthInfo | null>(null);
   // In-progress home-city selection (null = not editing / unchanged).
@@ -473,6 +638,16 @@ export function SettingsPage() {
           </li>
         </ul>
       </section>
+
+      {/* Privacy — who can see what on your public profile (between Preferences and Notifications) */}
+      {signedIn && privacySettings ? (
+        <PrivacySettingsSection
+          settings={privacySettings}
+          onSave={(patch) => void savePrivacy(patch)}
+          saving={privacySaving}
+          error={privacyError}
+        />
+      ) : null}
 
       {/* Notifications — one coherent section: category preferences, browser
           permission, and the link to the private notification center. */}

@@ -40,11 +40,14 @@ describe("tour targets on shell & nav surfaces", () => {
       </MemoryRouter>,
     );
     expect(html).toContain('data-tour-target="bottom-nav"');
-    // Five-tab nav is untouched: Events, Races, Forum, Profile, My Runs.
-    const tabs = ["Events", "Races", "Forum", "Profile", "My Runs"];
+    // Five-tab nav: Events, Races, Forum, Connections (Profile moved to the
+    // header avatar menu + desktop sidebar), My Runs.
+    const tabs = ["Events", "Races", "Forum", "Connections", "My Runs"];
     for (const t of tabs) expect(html).toContain(t);
     expect(html).toContain("grid-cols-5");
     expect(html).not.toContain("Groups");
+    expect(html).not.toContain('href="/profile"');
+    expect(html).toContain('href="/connections"');
   });
 
   it("DesktopSidebar exposes the Groups & Clubs directory link with the nav anchor", () => {
