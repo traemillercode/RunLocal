@@ -63,7 +63,8 @@ import {
 import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
 import { listLedGroups, leaderQueue, assignGroupLeader, removeGroupLeader, transferGroupOwnership, editGroupProfile, notifyLeadersOfMembershipRequest, type GroupProfilePatch } from "./leadership";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
-import { eventCapabilities, moderateEvent } from "./eventModeration";
+import { eventCapabilities, moderateEvent, editEventPublic } from "./eventModeration";
+import { publicRaces, editRacePublic } from "./races";
 import { listMyRuns, setMyRunKept, publicOccurrenceId, parseTzOffsetMinutes } from "./myRuns";
 import { buildMyRunsIcs } from "./ical";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
@@ -95,6 +96,7 @@ import { decideSubmission,
   cityDecideSubmission,
   requireVerifiedSubmitter,
   editPendingSubmission,
+  editPendingSubmissionSelf,
   removeSubmission,
 } from "./submissions";
 import { listAdminContent, editContentTitle, hideContent, restoreContent, archiveContent, deleteContent, listAdminDiscussions, editDiscussion, deleteDiscussion, setAnnouncement, clearAnnouncement } from "./contentAdmin";
@@ -124,7 +126,7 @@ import {
   listTrustedMembers,
   revokeTrustedMember,
 } from "./verification";
-import { publicForumPosts, createForumPost, publicForumReplies, createForumReply, forumReplyCounts, forumPostPublic, editForumPost, deleteForumPost, editForumReply, deleteForumReply, setForumPostPinned } from "./forum";
+import { publicForumPosts, createForumPost, publicForumReplies, createForumReply, forumReplyCounts, forumPostPublic, editForumPost, deleteForumPost, editForumReply, deleteForumReply, setForumPostPinned, editForumPostAdmin } from "./forum";
 import { createContentFlag } from "./contentFlags";
 import { withdrawSubmission } from "./submissions";
 import {
@@ -319,6 +321,11 @@ function originAllowed(req: IncomingMessage): boolean {
   const host = req.headers.host;
   return isAllowedOrigin(typeof origin === "string" ? origin : undefined, typeof host === "string" ? host : undefined);
 }
+/** Optional operator audit reason carried on the `x-audit-reason` header. */
+function reasonHeader(req: IncomingMessage): string | undefined {
+  const r = req.headers["x-audit-reason"];
+  return typeof r === "string" ? r : undefined;
+}
 
 function rateLimited(map: Map<string, number[]>, key: string, limit: number, windowMs: number, now: number): boolean {
   const window = (map.get(key) ?? []).filter((t) => now - t < windowMs);
@@ -360,7 +367,7 @@ async function handleApi(
   const ip = getIp(req);
   const secure = isSecure(req);
   const now = new Date();
-  if (["POST", "PATCH", "DELETE"].includes(method) && !originAllowed(req)) return err(res, { status: 403, error: "origin_not_allowed" }), true;
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(method) && !originAllowed(req)) return err(res, { status: 403, error: "origin_not_allowed" }), true;
 
   // ---- health (non-sensitive config booleans for the UI) -----------------
   if (method === "GET" && url.pathname === "/api/health") {
@@ -430,6 +437,54 @@ async function handleApi(
     if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
     await db.persist();
     return ok(res, { event: result.data }), true;
+  }
+  // ---- public event/race edit + race listing (owner batch 5) --------------
+  // PUT /api/events/:id - scoped edit (lead of the event's group, or city/
+  // global admin) - same predicate as the moderation endpoint.
+  const eventEdit = /^\/api\/events\/([^/]+)$/.exec(url.pathname);
+  if (eventEdit && method === "PUT") {
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const result = editEventPublic(db, { adminSessionId: cookies[ADMIN_COOKIE] ?? null, userSessionId: cookies[SESSION_COOKIE] ?? null, reason: undefined, ip }, decodeURIComponent(eventEdit[1]), body, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { event: result.data }), true;
+  }
+  // GET /api/races - public race listing (seed + approved community) with the
+  // requesting account's capabilities (mirrors /api/events).
+  if (method === "GET" && url.pathname === "/api/races") {
+    const cityId = url.searchParams.get("city") ?? "";
+    if (!cityId || !cityExists(db, cityId)) return err(res, { status: 400, error: "invalid_city" }), true;
+    const actor = sessionAccount(db, { adminSessionId: cookies[ADMIN_COOKIE] ?? null, userSessionId: cookies[SESSION_COOKIE] ?? null, ip });
+    return ok(res, { cityId, races: publicRaces(db, cityId, actor) }), true;
+  }
+  // PUT /api/races/:id - admin edit of a public race listing.
+  const raceEdit = /^\/api\/races\/([^/]+)$/.exec(url.pathname);
+  if (raceEdit && method === "PUT") {
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const result = editRacePublic(db, { adminSessionId: cookies[ADMIN_COOKIE] ?? null, userSessionId: cookies[SESSION_COOKIE] ?? null, reason: reasonHeader(req), ip }, decodeURIComponent(raceEdit[1]), body, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { race: result.data }), true;
+  }
+  // PATCH /api/my/submissions/:id - the submitter edits their own pending row.
+  const mySubmissionEdit = /^\/api\/my\/submissions\/([^/]+)$/.exec(url.pathname);
+  if (mySubmissionEdit && method === "PATCH") {
+    const account = sessionAccount(db, { adminSessionId: cookies[ADMIN_COOKIE] ?? null, userSessionId: cookies[SESSION_COOKIE] ?? null, ip });
+    if (!account) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const result = editPendingSubmissionSelf(db, account.id, decodeURIComponent(mySubmissionEdit[1]), body, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { submission: result.data }), true;
+  }
+  // PATCH /api/admin/forum/post/:id - admin edit of ANY user forum post.
+  const adminForumPostEdit = /^\/api\/admin\/forum\/post\/([^/]+)$/.exec(url.pathname);
+  if (adminForumPostEdit && method === "PATCH") {
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const result = editForumPostAdmin(db, { adminSessionId: cookies[ADMIN_COOKIE] ?? null, userSessionId: cookies[SESSION_COOKIE] ?? null, reason: reasonHeader(req), ip }, decodeURIComponent(adminForumPostEdit[1]), body, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, result.data), true;
   }
   // ---- public approved community content (no auth) -------------------------
   // Only APPROVED submissions ever appear here (pending/rejected never leave

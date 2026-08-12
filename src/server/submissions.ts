@@ -386,6 +386,10 @@ export interface MySubmissionView {
   decidedAt: string | null;
   /** Only ever set on the SUBMITTER's own view of a rejected record. */
   rejectionReason: string | null;
+  /** Server-computed actions (pending: edit_pending + withdraw; else []). */
+  capabilities: string[];
+  /** The submitter's own still-pending payload (prefill for the edit form). */
+  payload?: SubmissionPayload;
 }
 
 /**
@@ -403,10 +407,70 @@ export function mySubmissions(db: Db, accountId: string): MySubmissionView[] {
     submittedAt: s.submittedAt,
     decidedAt: s.decidedAt,
     rejectionReason: s.status === "rejected" ? s.rejectionReason : null,
-    // Only a still-pending record can be withdrawn; decided/withdrawn rows are
-    // history-only (the server re-validates on POST /withdraw regardless).
-    capabilities: s.status === "pending" ? ["withdraw"] : [],
+    // A still-pending record can be edited or withdrawn by its submitter;
+    // decided/withdrawn rows are history-only (the server re-validates on
+    // every mutation regardless).
+    capabilities: s.status === "pending" ? ["edit_pending", "withdraw"] : [],
+    // The submitter's own pending payload — sent back ONLY for their own
+    // still-pending records so the edit form can prefill current values.
+    payload: s.status === "pending" ? s.payload : undefined,
   }));
+}
+
+// --------------------------------------- submitter edit of a pending submission
+// Owner batch 5: a submitter may edit their own PENDING submission (any field,
+// re-validated with the same server rules as the original submit). Once the
+// record is decided (approved / rejected / withdrawn) it is history-only —
+// editing is admin-only from then on, and the server enforces that here.
+
+/**
+ * PATCH /api/my/submissions/:id — the submitter's own edit of a still-pending
+ * submission. 404 for records the caller doesn't own or that don't exist;
+ * 409 once the record is decided/withdrawn; every field re-validated through
+ * the same payload validators as submission (racePayloadFrom /
+ * groupPayloadFrom / eventPayloadFrom — group photo refs are preserved from
+ * the existing payload, they cannot be replaced through this endpoint).
+ * Audited as `submission.edit_pending` with the submitter's identity.
+ */
+export function editPendingSubmissionSelf(db: Db, accountId: string, submissionId: string, input: SubmissionEditInput, now = new Date()): AdminResult<SubmissionRecord> {
+  const rec = db.getSubmission(submissionId);
+  if (!rec || rec.submitterAccountId !== accountId) return { ok: false, status: 404, error: "not_found" };
+  if (rec.status !== "pending") return { ok: false, status: 409, error: "not_pending", message: "Only a pending submission can be edited — once it's been reviewed, changes require an admin." };
+
+  let payload: SubmissionPayload;
+  if (rec.kind === "race") {
+    const p = racePayloadFrom(input as RaceSubmitInput);
+    if (!p.ok) return p;
+    payload = p.data;
+  } else if (rec.kind === "group") {
+    const existing = rec.payload as GroupSubmissionPayload;
+    // Photos cannot be replaced through this endpoint — preserve the refs.
+    const merged = { ...input, coverPhoto: existing.coverPhotoRef, logoPhoto: existing.logoPhotoRef } as GroupSubmitInput;
+    const p = groupPayloadFrom(merged, rec.cityId);
+    if (!p.ok) return p;
+    payload = p.data;
+  } else {
+    const p = eventPayloadFrom(input as EventSubmitInput);
+    if (!p.ok) return p;
+    payload = p.data;
+  }
+
+  const updated = db.updateSubmission(rec.id, { payload })!;
+  db.appendAudit(
+    {
+      admin: db.getAccount(accountId)?.email ?? "unknown",
+      accountId,
+      action: "submission.edit_pending",
+      reason: "Submitter edited their own pending submission",
+      targetId: rec.id,
+      ip: "submitter-action",
+      cityId: rec.cityId,
+      owner: db.getAccount(accountId)?.email ?? null,
+      change: `pending ${rec.kind} edited (${titleFor(payload)})`,
+    },
+    now,
+  );
+  return { ok: true, data: updated };
 }
 
 // ------------------------------------------------------------- admin queue

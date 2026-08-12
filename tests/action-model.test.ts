@@ -67,6 +67,7 @@ describe("ACTION_META — metadata integrity", () => {
   it("covers every ActionKey exactly once", () => {
     expect([...ACTION_KEYS].sort()).toEqual(
       [
+        "edit",
         "edit_own",
         "delete_own",
         "hide",

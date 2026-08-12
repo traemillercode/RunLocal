@@ -15,6 +15,7 @@
  * nothing (callers must render no trigger at all).
  */
 export type ActionKey =
+  | "edit"
   | "edit_own"
   | "delete_own"
   | "hide"
@@ -43,6 +44,7 @@ export interface ActionMeta {
 }
 
 export const ACTION_META: Record<ActionKey, ActionMeta> = {
+  edit: { key: "edit", label: "Edit", icon: "pencil", danger: false },
   edit_own: { key: "edit_own", label: "Edit", icon: "pencil", danger: false },
   delete_own: { key: "delete_own", label: "Delete", icon: "trash", danger: true },
   hide: { key: "hide", label: "Hide", icon: "eyeOff", danger: false },

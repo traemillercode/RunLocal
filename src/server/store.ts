@@ -224,6 +224,7 @@ export class Db {
   private audits: AuditEntry[] = [];
   private content = new Map<string, ContentRecord>();
   private events = new Map<string, RunEventRecord>();
+  private races = new Map<string, import("./types").RaceRecord>();
   private groups = new Map<string, GroupModRecord>();
   private memberships = new Map<string, GroupMembershipRecord>();
   private flags: FlagRecord[] = [];
@@ -338,6 +339,7 @@ export class Db {
       this.audits = (parsed.audits ?? []).map((a) => ({ ...a, cityId: a.cityId ?? null, owner: a.owner ?? null, change: a.change ?? null }));
       for (const r of parsed.content ?? []) this.content.set(r.id, r);
       for (const e of parsed.events ?? []) this.events.set(e.id, e);
+      for (const r of parsed.races ?? []) this.races.set(r.id, r);
       for (const g of parsed.groups ?? []) this.groups.set(g.id, g);
       for (const m of parsed.memberships ?? []) this.memberships.set(m.id, m);
       this.flags = parsed.flags ?? [];
@@ -397,6 +399,7 @@ export class Db {
       audits: this.audits,
       content: [...this.content.values()],
       events: [...this.events.values()],
+      races: [...this.races.values()],
       groups: [...this.groups.values()],
       memberships: [...this.memberships.values()],
       flags: this.flags,
@@ -771,6 +774,10 @@ export class Db {
   listEvents(): RunEventRecord[] { return [...this.events.values()]; }
   getEvent(id: string): RunEventRecord | undefined { return this.events.get(id); }
   setEvent(rec: RunEventRecord): RunEventRecord { this.events.set(rec.id, rec); return rec; }
+  // ------------------------------------------------------------- canonical races
+  listRaces(): import("./types").RaceRecord[] { return [...this.races.values()]; }
+  getRace(id: string): import("./types").RaceRecord | undefined { return this.races.get(id); }
+  setRace(rec: import("./types").RaceRecord): import("./types").RaceRecord { this.races.set(rec.id, rec); return rec; }
 
   // ------------------------------------------- owner-dashboard registry
   listContent(): ContentRecord[] {
