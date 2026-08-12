@@ -99,7 +99,7 @@ export function EventFeedRow({
   const actionItems = actionMenuItems(capabilities);
   if (event.groupId === "") {
     return (
-      <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+      <article className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
         <div className="p-4 pb-3">
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-[15px] font-bold leading-snug text-slate-900">{event.title}</h3>
@@ -405,7 +405,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
               const oneOffItems = actionMenuItems(capsFor(e));
               return (
                 <li key={e.id}>
-                  <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+                  <article className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
                     <div className="p-4 pb-3">
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="text-[15px] font-bold leading-snug text-slate-900">{e.title}</h3>

@@ -36,117 +36,123 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
   const hasActions = actionItems.length > 0;
   return (
     <article
-      className={`desktop-event-card relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 transition-shadow before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-[#FF5741] before:to-[#ff9a7f] ${
+      className={`desktop-event-card relative rounded-2xl bg-white shadow-sm ring-1 transition-shadow ${
         event.isToday ? "ring-2 ring-[#FF5741] shadow-md" : "ring-slate-200/70"
       }`}
     >
-      {/* The whole card body is the primary tappable action — it navigates to the
-          in-app event detail view. The external-link icon and RSVP button live
-          OUTSIDE this link so they stay separate secondary actions. */}
-      <Link to={`/events/${event.id}`} aria-label={`${event.title} — event details`} className="block">
-        <div className="flex gap-3.5 p-4">
-          {/* Date block */}
-          <div
-            className={`flex w-14 shrink-0 flex-col items-center justify-center rounded-xl py-2 ${
-              event.isToday ? "bg-[#14171C] text-[#FF5741]" : "bg-slate-100 text-slate-700"
-            }`}
-          >
-            <span className="text-[10px] font-bold uppercase tracking-wider">{event.dayAbbrev}</span>
-            <span className="text-xl font-extrabold leading-tight">{event.date.getDate()}</span>
-            <span className="text-[10px] font-semibold uppercase text-slate-400">
-              {monthDayLabel(event.date).split(" ")[0]}
-            </span>
-          </div>
-          {/* Body */}
-          <div className="min-w-0 flex-1">
-            <h3 className={`${hasActions ? "pr-24" : "pr-11"} text-[15px] font-bold leading-snug text-slate-900`}>{event.title}</h3>
-            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-slate-600">
-              <span className="inline-flex items-center gap-1">
-                <Icon name="clock" className="h-3.5 w-3.5 text-slate-400" />
-                {event.time}
+      {/* Inner clip wrapper keeps the left accent bar and content inside the
+          card's rounded corners, while the ActionMenu (rendered outside this
+          wrapper, below) can overflow the card without being clipped. */}
+      <div className="relative overflow-hidden rounded-2xl before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-[#FF5741] before:to-[#ff9a7f]">
+        {/* The whole card body is the primary tappable action — it navigates to the
+            in-app event detail view. The external-link icon and RSVP button live
+            OUTSIDE this link so they stay separate secondary actions. */}
+        <Link to={`/events/${event.id}`} aria-label={`${event.title} — event details`} className="block">
+          <div className="flex gap-3.5 p-4">
+            {/* Date block */}
+            <div
+              className={`flex w-14 shrink-0 flex-col items-center justify-center rounded-xl py-2 ${
+                event.isToday ? "bg-[#14171C] text-[#FF5741]" : "bg-slate-100 text-slate-700"
+              }`}
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wider">{event.dayAbbrev}</span>
+              <span className="text-xl font-extrabold leading-tight">{event.date.getDate()}</span>
+              <span className="text-[10px] font-semibold uppercase text-slate-400">
+                {monthDayLabel(event.date).split(" ")[0]}
               </span>
-              <span className="inline-flex items-center gap-1">
-                <Icon name="mapPin" className="h-3.5 w-3.5 text-slate-400" />
-                <span className="truncate">{event.location}</span>
-              </span>
-            </p>
-            <p className="mt-1.5 text-[13px] font-medium text-slate-500">
-              {group ? group.name : "Local group"}
-              {label ? (
-                <span className="ml-1.5 font-normal text-slate-400">· {label}</span>
-              ) : null}
-            </p>
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              {featured ? (
-                <Chip tone="volt">
-                  <Icon name="spark" className="h-3 w-3" /> Featured
+            </div>
+            {/* Body */}
+            <div className="min-w-0 flex-1">
+              <h3 className={`${hasActions ? "pr-24" : "pr-11"} text-[15px] font-bold leading-snug text-slate-900`}>{event.title}</h3>
+              <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-slate-600">
+                <span className="inline-flex items-center gap-1">
+                  <Icon name="clock" className="h-3.5 w-3.5 text-slate-400" />
+                  {event.time}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Icon name="mapPin" className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="truncate">{event.location}</span>
+                </span>
+              </p>
+              <p className="mt-1.5 text-[13px] font-medium text-slate-500">
+                {group ? group.name : "Local group"}
+                {label ? (
+                  <span className="ml-1.5 font-normal text-slate-400">· {label}</span>
+                ) : null}
+              </p>
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                {featured ? (
+                  <Chip tone="volt">
+                    <Icon name="spark" className="h-3 w-3" /> Featured
+                  </Chip>
+                ) : null}
+                {pinned ? (
+                  <Chip tone="amber">
+                    <Icon name="pin" className="h-3 w-3" /> Pinned
+                  </Chip>
+                ) : null}
+                <Chip tone={event.invite === "Open to all" ? "emerald" : "amber"}>{event.invite}</Chip>
+                <Chip tone="outline">
+                  <Icon name="flag" className="h-3 w-3" /> {event.distanceLabel}
                 </Chip>
-              ) : null}
-              {pinned ? (
-                <Chip tone="amber">
-                  <Icon name="pin" className="h-3 w-3" /> Pinned
-                </Chip>
-              ) : null}
-              <Chip tone={event.invite === "Open to all" ? "emerald" : "amber"}>{event.invite}</Chip>
-              <Chip tone="outline">
-                <Icon name="flag" className="h-3 w-3" /> {event.distanceLabel}
-              </Chip>
+              </div>
             </div>
           </div>
+        </Link>
+        {/* External link — separate secondary action, opens in a new tab and never
+            triggers the internal /events/:id route. Slides left when the
+            moderation ActionMenu occupies the corner. */}
+        {event.externalUrl ? (
+          <a
+            href={event.externalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`${event.title} — external details (opens in new tab)`}
+            className={`absolute top-4 z-10 grid h-9 w-9 place-items-center rounded-full text-slate-400 ring-1 ring-slate-200 active:bg-slate-50 ${
+              hasActions ? "right-16" : "right-4"
+            }`}
+          >
+            <Icon name="external" className="h-4 w-4" />
+          </a>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-4 py-2.5">
+          <span className="min-w-0 text-xs font-semibold text-slate-500">{dayLabel(event.date, new Date())}</span>
+          <span className="text-xs text-slate-300">·</span>
+          <button
+            type="button"
+            onClick={onRsvp}
+            className={`inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full text-sm font-semibold transition-colors ${
+              rsvped
+                ? "bg-emerald-100 text-emerald-800"
+                : canRsvp
+                  ? "bg-[#FF5741] text-[#14171C] active:bg-[#e94735]"
+                  : "bg-slate-100 text-slate-500 active:bg-slate-200"
+            }`}
+          >
+            {rsvped ? (
+              <>
+                <Icon name="check" className="h-4 w-4" /> Remove from My Runs
+              </>
+            ) : canRsvp ? (
+              <>
+                <Icon name="rsvp" className="h-4 w-4" /> Add to My Runs
+              </>
+            ) : (
+              <>
+                <Icon name="rsvp" className="h-4 w-4" /> Add to My Runs
+              </>
+            )}
+          </button>
         </div>
-      </Link>
-      {/* External link — separate secondary action, opens in a new tab and never
-          triggers the internal /events/:id route. Slides left when the
-          moderation ActionMenu occupies the corner. */}
-      {event.externalUrl ? (
-        <a
-          href={event.externalUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={`${event.title} — external details (opens in new tab)`}
-          className={`absolute top-4 z-10 grid h-9 w-9 place-items-center rounded-full text-slate-400 ring-1 ring-slate-200 active:bg-slate-50 ${
-            hasActions ? "right-16" : "right-4"
-          }`}
-        >
-          <Icon name="external" className="h-4 w-4" />
-        </a>
-      ) : null}
+      </div>
       {/* Scoped moderation menu (group lead / city admin / global admin) —
-          server-driven capabilities; empty lists render no trigger. */}
+          server-driven capabilities; empty lists render no trigger. Rendered
+          outside the clip wrapper so its dropdown is never cut off. */}
       {hasActions ? (
         <div className="absolute right-4 top-4 z-20">
           <ActionMenu entityTitle={event.title} items={actionItems} onSelect={(key) => onAction?.(key)} />
         </div>
       ) : null}
-      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-4 py-2.5">
-        <span className="min-w-0 text-xs font-semibold text-slate-500">{dayLabel(event.date, new Date())}</span>
-        <span className="text-xs text-slate-300">·</span>
-        <button
-          type="button"
-          onClick={onRsvp}
-          className={`inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full text-sm font-semibold transition-colors ${
-            rsvped
-              ? "bg-emerald-100 text-emerald-800"
-              : canRsvp
-                ? "bg-[#FF5741] text-[#14171C] active:bg-[#e94735]"
-                : "bg-slate-100 text-slate-500 active:bg-slate-200"
-          }`}
-        >
-          {rsvped ? (
-            <>
-              <Icon name="check" className="h-4 w-4" /> Remove from My Runs
-            </>
-          ) : canRsvp ? (
-            <>
-              <Icon name="rsvp" className="h-4 w-4" /> Add to My Runs
-            </>
-          ) : (
-            <>
-              <Icon name="rsvp" className="h-4 w-4" /> Add to My Runs
-            </>
-          )}
-        </button>
-      </div>
     </article>
   );
 }

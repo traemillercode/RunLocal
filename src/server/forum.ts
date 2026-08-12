@@ -51,7 +51,7 @@ const MAX_REPLY = 1000;
  * exactly these lists, and every listed action maps to an endpoint that
  * re-validates the same rules server-side.
  */
-export type ForumCapability = "edit_own" | "delete_own" | "hide" | "restore" | "delete" | "report";
+export type ForumCapability = "edit_own" | "delete_own" | "hide" | "restore" | "delete" | "report" | "pin" | "unpin";
 
 /** Verified + not deleted + not suspended — the gate for author and report actions. */
 function verifiedActive(actor: AccountRecord | null | undefined, now: Date): boolean {
@@ -63,17 +63,22 @@ function verifiedActive(actor: AccountRecord | null | undefined, now: Date): boo
  *  - the author (verified, active) may Edit / Delete their own post;
  *  - Global Admins, and City Admins scoped to the post's city, may
  *    Hide / Restore / Delete via the existing contentAdmin routes
- *    (`/api/admin/content/post:<id>/…`);
+ *    (`/api/admin/content/post:<id>/…`), and may Pin / Unpin the post
+ *    (PATCH /api/forum/:id/pin — the "pin" capability shows while unpinned,
+ *    "unpin" while pinned);
  *  - any other verified, active runner may Report it
  *    (POST /api/content/post/:id/flag — self-report is blocked server-side).
  * Guests, pending/rejected accounts, and deleted/suspended accounts get [].
  */
-export function forumPostCapabilities(actor: AccountRecord | null | undefined, post: { authorAccountId: string; cityId: string }, now = new Date()): ForumCapability[] {
+export function forumPostCapabilities(actor: AccountRecord | null | undefined, post: { authorAccountId: string; cityId: string; pinned?: boolean }, now = new Date()): ForumCapability[] {
   if (!actor || actor.deletedAt) return [];
   const caps: ForumCapability[] = [];
   const isAuthor = post.authorAccountId === actor.id;
   if (isAuthor && verifiedActive(actor, now)) caps.push("edit_own", "delete_own");
-  if (isGlobalAdmin(actor) || isCityAdminForCity(actor, post.cityId)) caps.push("hide", "restore", "delete");
+  if (isGlobalAdmin(actor) || isCityAdminForCity(actor, post.cityId)) {
+    caps.push("hide", "restore", "delete");
+    caps.push(post.pinned === true ? "unpin" : "pin");
+  }
   if (!isAuthor && verifiedActive(actor, now)) caps.push("report");
   return caps;
 }
@@ -160,7 +165,7 @@ export function publicForumPosts(db: Db, cityId: string, actor?: AccountRecord |
         authorNote: null,
         createdAt: forumDateLabel(f.createdAt, now),
         replies: visibleReplyCount(db, f.id),
-        pinned: false,
+        pinned: f.pinned === true,
         authorId: f.authorAccountId,
         capabilities: forumPostCapabilities(actor, f, now),
       };
@@ -344,6 +349,7 @@ export function createForumPost(
     body: body.slice(0, MAX_BODY),
     authorAccountId: accountId,
     state: "visible",
+    pinned: false,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
   };
@@ -581,7 +587,7 @@ export function editForumPost(
         authorNote: null,
         createdAt: forumDateLabel(updated.createdAt, now),
         replies: visibleReplyCount(db, updated.id),
-        pinned: false,
+        pinned: updated.pinned === true,
         authorId: updated.authorAccountId,
         capabilities: forumPostCapabilities(auth.rec, updated, now),
       },
@@ -630,9 +636,94 @@ export function deleteForumPost(
         authorNote: null,
         createdAt: forumDateLabel(updated.createdAt, now),
         replies: 0,
-        pinned: false,
+        pinned: updated.pinned === true,
         authorId: updated.authorAccountId,
         capabilities: forumPostCapabilities(auth.rec, updated, now),
+      },
+      record: updated,
+    },
+  };
+}
+
+export type ForumPinResult =
+  | { ok: true; data: { post: PublicForumPost; record: ForumPostRecord } }
+  | { ok: false; status: number; error: string; message?: string };
+
+/**
+ * Admin pin/unpin of a user-created forum post (PATCH /api/forum/:id/pin).
+ *
+ * Authorization mirrors the capability computation: Global Admins and City
+ * Admins scoped to the post's city may pin; everyone else is denied (401 for
+ * guests, 403 for signed-in non-admins). Only user-created post records can
+ * be pinned — seed posts live in the client city data and resolve to 404 here.
+ * The change is persisted on the record (survives restarts via db.json) and
+ * mirrored onto the post's content-registry row so admin surfaces stay in
+ * sync. Every mutation is audited (forum.pin / forum.unpin) with the acting
+ * admin's identity, city, and a change summary. Pin state never affects
+ * moderation visibility — a pinned post can still be hidden/archived.
+ */
+export function setForumPostPinned(
+  db: Db,
+  accountId: string,
+  postId: string,
+  pinned: boolean,
+  now = new Date(),
+): ForumPinResult {
+  const rec: AccountRecord | undefined = db.getAccount(accountId);
+  if (!rec || rec.deletedAt) return { ok: false, status: 401, error: "sign_in_required" };
+  const post = db.getForumPost(postId);
+  if (!post || post.state !== "visible") {
+    return { ok: false, status: 404, error: "post_not_found", message: "That post isn't available." };
+  }
+  if (!isGlobalAdmin(rec) && !isCityAdminForCity(rec, post.cityId)) {
+    return {
+      ok: false,
+      status: 403,
+      error: "admin_required",
+      message: "Only a Global Admin or the post's City Admin can pin forum posts.",
+    };
+  }
+  if (post.pinned === pinned) {
+    return {
+      ok: false,
+      status: 400,
+      error: "already_in_state",
+      message: pinned ? "This post is already pinned." : "This post isn't pinned.",
+    };
+  }
+  const updated = db.updateForumPost(postId, { pinned })!;
+  // Mirror the pin state onto the content-registry row so admin surfaces
+  // (overview/CMS) reflect the forum's pin state.
+  const content = db.getContent(`post:${postId}`);
+  if (content) db.upsertContent({ ...content, pinned });
+  db.appendAudit(
+    {
+      admin: rec.email,
+      action: pinned ? "forum.pin" : "forum.unpin",
+      reason: pinned ? "Pinned forum post" : "Unpinned forum post",
+      targetId: postId,
+      ip: "admin-action",
+      cityId: post.cityId,
+      owner: rec.email,
+      change: pinned ? `pinned: "${post.title.slice(0, 60)}"` : `unpinned: "${post.title.slice(0, 60)}"`,
+    },
+    now,
+  );
+  return {
+    ok: true,
+    data: {
+      post: {
+        id: updated.id,
+        section: updated.section,
+        title: updated.title,
+        body: updated.body,
+        author: rec.name,
+        authorNote: null,
+        createdAt: forumDateLabel(updated.createdAt, now),
+        replies: visibleReplyCount(db, updated.id),
+        pinned: updated.pinned === true,
+        authorId: updated.authorAccountId,
+        capabilities: forumPostCapabilities(rec, updated, now),
       },
       record: updated,
     },

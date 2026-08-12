@@ -79,6 +79,8 @@ describe("ACTION_META — metadata integrity", () => {
         "manage_members",
         "manage_leaders",
         "suspend",
+        "pin",
+        "unpin",
       ].sort(),
     );
   });

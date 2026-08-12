@@ -26,7 +26,9 @@ export type ActionKey =
   | "edit_pending"
   | "manage_members"
   | "manage_leaders"
-  | "suspend";
+  | "suspend"
+  | "pin"
+  | "unpin";
 
 export interface ActionMeta {
   /** Stable key, matches the server-provided capability string. */
@@ -52,6 +54,8 @@ export const ACTION_META: Record<ActionKey, ActionMeta> = {
   manage_members: { key: "manage_members", label: "Manage members", icon: "users", danger: false },
   manage_leaders: { key: "manage_leaders", label: "Manage leaders", icon: "shield", danger: false },
   suspend: { key: "suspend", label: "Suspend", icon: "ban", danger: true },
+  pin: { key: "pin", label: "Pin", icon: "pin", danger: false },
+  unpin: { key: "unpin", label: "Unpin", icon: "clock", danger: false },
 };
 
 /** Every capability key must have resolvable metadata. */

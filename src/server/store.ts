@@ -304,7 +304,7 @@ export class Db {
       for (const n of parsed.notifications ?? []) this.notifications.set(n.id, n);
       for (const d of parsed.discussions ?? []) this.discussions.set(d.id, d);
       for (const [accountId, timestamps] of Object.entries(parsed.discussionRate ?? {})) this.discussionRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
-      for (const f of parsed.forumPosts ?? []) this.forumPosts.set(f.id, f);
+      for (const f of parsed.forumPosts ?? []) this.forumPosts.set(f.id, { ...f, pinned: f.pinned === true });
       for (const r of parsed.forumReplies ?? []) this.forumReplies.set(r.id, r);
       for (const [accountId, timestamps] of Object.entries(parsed.safetyReportRate ?? {})) this.safetyReportRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
       for (const [accountId, timestamps] of Object.entries(parsed.contentFlagRate ?? {})) this.contentFlagRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
