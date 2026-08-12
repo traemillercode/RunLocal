@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { EventCard } from "../components/EventCard";
+import { ActionMenu } from "../components/ActionMenu";
+import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { HomeCityBanner } from "../components/HomeCityBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { GroupSubmissionSheet, IndependentEventSheet } from "../components/SubmissionSheets";
 import { Chip, Icon, PillButton } from "../components/ui";
 import * as api from "../lib/api";
-import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS, occurrenceHasStarted, mergeWeekEventSources, bareEventId } from "../lib/dates";
+import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS, occurrenceHasStarted, mergeWeekEventSources, bareEventId, canonicalEventActions, type DatedRunEvent } from "../lib/dates";
+import { actionMenuItems, type ActionKey } from "../lib/actionModel";
 import { rsvpedEventIds } from "../lib/myRuns";
 import { filterOneTimeEvents } from "../lib/activityDates";
 import { Link } from "react-router-dom";
@@ -18,6 +21,126 @@ import { usePublicContent } from "../state/content";
 import { GROUP_TYPE_LABELS, type City } from "../types";
 import { HomeRightRail } from "../components/HomeRightRail";
 
+/** A scoped event-moderation action awaiting confirmation in the sheet. */
+export type EventConfirmKind = "hide" | "restore" | "delete";
+export interface EventConfirmAction {
+  kind: EventConfirmKind;
+  /** Canonical event id to PATCH (/api/events/:id/moderation). */
+  eventId: string;
+  /** The id the row renders under — used to hide/restore it locally. */
+  displayId: string;
+  title: string;
+}
+/** Display config for the shared confirm sheet, derived from the pending action. */
+export function eventConfirmMeta(kind: EventConfirmKind, title: string): {
+  title: string;
+  entity: string;
+  impact: string;
+  confirmLabel: string;
+  requireReason: boolean;
+} {
+  switch (kind) {
+    case "hide":
+      return {
+        title: "Hide this run?",
+        entity: title,
+        impact: "Members won't see it in the city schedule. You can restore it later.",
+        confirmLabel: "Hide run",
+        requireReason: true,
+      };
+    case "restore":
+      return {
+        title: "Restore this run?",
+        entity: title,
+        impact: "The run will be visible in the city schedule again.",
+        confirmLabel: "Restore run",
+        requireReason: false,
+      };
+    case "delete":
+      return {
+        title: "Delete this run?",
+        entity: title,
+        impact: "This can't be undone. The run will be removed from the city schedule; the record and audit trail are preserved.",
+        confirmLabel: "Delete run",
+        requireReason: true,
+      };
+  }
+}
+
+/**
+ * One rendered weekly row — group-run EventCard or the independent-run article —
+ * with the server-driven moderation ActionMenu attached. Pure presentational
+ * body (driven by props) so UI tests can render the real row markup with
+ * react-dom/server for each capability list.
+ */
+export function EventFeedRow({
+  event,
+  city,
+  rsvped,
+  canRsvp,
+  featured,
+  pinned,
+  groupBadge,
+  capabilities = [],
+  onRsvp,
+  onAction,
+}: {
+  event: DatedRunEvent;
+  city: City;
+  rsvped: boolean;
+  canRsvp: boolean;
+  featured?: boolean;
+  pinned?: boolean;
+  groupBadge?: boolean;
+  capabilities?: string[];
+  onRsvp: () => void;
+  onAction: (key: ActionKey) => void;
+}) {
+  const actionItems = actionMenuItems(capabilities);
+  if (event.groupId === "") {
+    return (
+      <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+        <div className="p-4 pb-3">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="text-[15px] font-bold leading-snug text-slate-900">{event.title}</h3>
+            <span className="flex shrink-0 items-center gap-1.5">
+              <Chip tone="outline">Independent Runner</Chip>
+              {actionItems.length > 0 ? <ActionMenu entityTitle={event.title} items={actionItems} onSelect={onAction} /> : null}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[13px] text-slate-500">{event.distanceLabel}</p>
+        </div>
+        <div className="space-y-1.5 px-4 pb-4 text-[13px] text-slate-600">
+          <p className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4 text-slate-400" />{event.time}</p>
+          <p className="flex items-center gap-2"><Icon name="mapPin" className="h-4 w-4 text-slate-400" />{event.location}</p>
+          <p className="flex items-center gap-2"><Icon name="users" className="h-4 w-4 text-slate-400" />{event.invite}</p>
+        </div>
+        {event.externalUrl ? (
+          <div className="border-t border-slate-100 px-4 py-2.5">
+            <a href={event.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[#14171C] text-sm font-semibold text-white">
+              Details <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
+            </a>
+          </div>
+        ) : null}
+      </article>
+    );
+  }
+  return (
+    <EventCard
+      event={event}
+      city={city}
+      rsvped={rsvped}
+      canRsvp={canRsvp}
+      onRsvp={onRsvp}
+      featured={featured}
+      pinned={pinned}
+      groupBadge={groupBadge}
+      capabilities={capabilities}
+      onAction={onAction}
+    />
+  );
+}
+
 export function EventsPage({ city }: { city: City; store: AppStore }) {
   const toast = useToast();
   const { role, me } = useAccount();
@@ -29,6 +152,14 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
   const [gateOpen, setGateOpen] = useState(false);
   const [myRunIds, setMyRunIds] = useState<Set<string>>(new Set());
   const [canonicalEvents, setCanonicalEvents] = useState<api.CanonicalEvent[] | null>(null);
+  // Group Lead / admin scoped moderation: server-driven capability lookup keyed
+  // by every id form a rendered row can carry, plus the confirm-sheet state and
+  // a local hidden overlay so hide/delete removes the row immediately (same
+  // behavior as the /api/moderated hidden set for operator actions).
+  const [localHidden, setLocalHidden] = useState<Set<string>>(new Set());
+  const [confirm, setConfirm] = useState<EventConfirmAction | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
     void api.getCanonicalEvents(city.id).then((r) => {
@@ -36,6 +167,8 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
     });
     return () => { alive = false; };
   }, [city.id]);
+  const canonicalActions = useMemo(() => canonicalEventActions(canonicalEvents ?? []), [canonicalEvents]);
+  const capsFor = (event: { id: string }) => canonicalActions.get(bareEventId(event.id))?.capabilities ?? [];
   const weekStart = startOfWeek(new Date());
   const canRsvp = canDo(role, "rsvp");
   useEffect(() => {
@@ -70,7 +203,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
     // Monday slot after Monday has passed; one-time community activity is
     // filtered separately below by its calendar date.
     const resolved = resolveWeekEvents(merged, today)
-      .filter((e) => !hidden.has(`event:${e.id}`) && !occurrenceHasStarted(e, today))
+      .filter((e) => !hidden.has(`event:${bareEventId(e.id)}`) && !localHidden.has(`event:${bareEventId(e.id)}`) && !occurrenceHasStarted(e, today))
       .sort((a, b) => {
         const ha = highlights.get(`event:${a.id}`);
         const hb = highlights.get(`event:${b.id}`);
@@ -86,7 +219,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
         e.location.toLowerCase().includes(q) ||
         (city.groups.find((g) => g.id === e.groupId)?.name.toLowerCase() ?? "").includes(q),
     );
-  }, [city, query, hidden, highlights, userEvents, canonicalEvents]);
+  }, [city, query, hidden, highlights, userEvents, canonicalEvents, localHidden]);
 
   const groups = useMemo(() => {
     const map = new Map<string, typeof events>();
@@ -107,10 +240,10 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
       .filter((e) => e.date)
       .filter((e) => {
         const d = new Date(`${e.date}T00:00:00`);
-        return d >= start && d <= end && !hidden.has(`event:${e.id}`);
+        return d >= start && d <= end && !hidden.has(`event:${bareEventId(e.id)}`) && !localHidden.has(`event:${bareEventId(e.id)}`);
       })
       .sort((a, b) => a.date!.localeCompare(b.date!));
-  }, [userEvents, hidden]);
+  }, [userEvents, hidden, localHidden]);
 
   const onRsvp = (eventId: string, title: string) => {
     if (!canRsvp) {
@@ -127,6 +260,45 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
       }
       setMyRunIds((ids) => { const next = new Set(ids); if (nowRsvped) next.add(key); else next.delete(key); return next; });
       toast(nowRsvped ? `You're in for "${title}"!` : `RSVP removed for "${title}".`, nowRsvped ? "success" : "neutral");
+    });
+  };
+
+  /** Menu dispatcher: map the capability key to a confirm-sheet state for the
+   *  canonical event row (resolved via the id-form index). Unknown keys and
+   *  rows without a server copy are ignored — the client never invents rights. */
+  const openConfirm = (event: { id: string; title: string }, key: ActionKey) => {
+    const kind: EventConfirmKind | null = key === "hide" ? "hide" : key === "restore" ? "restore" : key === "delete" ? "delete" : null;
+    if (!kind) return;
+    const entry = canonicalActions.get(event.id) ?? canonicalActions.get(bareEventId(event.id));
+    if (!entry) return;
+    setConfirm({ kind, eventId: entry.id, displayId: event.id, title: event.title });
+  };
+  const closeConfirm = () => {
+    if (confirmBusy) return;
+    setConfirm(null);
+    setConfirmError(null);
+  };
+  /** Execute the confirmed action — PATCH /api/events/:id/moderation re-validates server-side. */
+  const runConfirm = () => {
+    if (!confirm || confirmBusy) return;
+    const action = confirm;
+    setConfirmBusy(true);
+    setConfirmError(null);
+    void api.moderateEvent(action.eventId, action.kind).then((r) => {
+      setConfirmBusy(false);
+      if (r.ok) {
+        setConfirm(null);
+        setConfirmError(null);
+        const keys = [bareEventId(action.eventId), bareEventId(action.displayId)];
+        if (action.kind === "hide" || action.kind === "delete") {
+          setLocalHidden((s) => { const n = new Set(s); for (const k of keys) n.add(`event:${k}`); return n; });
+        } else {
+          setLocalHidden((s) => { const n = new Set(s); for (const k of keys) n.delete(`event:${k}`); return n; });
+        }
+        toast("Done.", "success");
+      } else {
+        setConfirmError(r.error.message ?? "That didn't work — try again.");
+      }
     });
   };
 
@@ -200,43 +372,20 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
             <ul className="space-y-3">
               {list.map((e) => {
                 const hl = highlights.get(`event:${e.id}`);
-                const independent = e.groupId === "";
                 return (
                   <li key={e.id}>
-                    {independent ? (
-                      <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
-                        <div className="p-4 pb-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className="text-[15px] font-bold leading-snug text-slate-900">{e.title}</h3>
-                            <Chip tone="outline">Independent Runner</Chip>
-                          </div>
-                          <p className="mt-0.5 text-[13px] text-slate-500">{e.distanceLabel}</p>
-                        </div>
-                        <div className="space-y-1.5 px-4 pb-4 text-[13px] text-slate-600">
-                          <p className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4 text-slate-400" />{e.time}</p>
-                          <p className="flex items-center gap-2"><Icon name="mapPin" className="h-4 w-4 text-slate-400" />{e.location}</p>
-                          <p className="flex items-center gap-2"><Icon name="users" className="h-4 w-4 text-slate-400" />{e.invite}</p>
-                        </div>
-                        {e.externalUrl ? (
-                          <div className="border-t border-slate-100 px-4 py-2.5">
-                            <a href={e.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[#14171C] text-sm font-semibold text-white">
-                              Details <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
-                            </a>
-                          </div>
-                        ) : null}
-                      </article>
-                    ) : (
-                      <EventCard
-                        event={e}
-                        city={city}
-                        rsvped={myRunIds.has(bareEventId(e.id))}
-                        canRsvp={canRsvp}
-                        onRsvp={() => onRsvp(e.id, e.title)}
-                        featured={hl?.featured}
-                        pinned={hl?.pinned}
-                        groupBadge={groupBadges.get(e.groupId)}
-                      />
-                    )}
+                    <EventFeedRow
+                      event={e}
+                      city={city}
+                      rsvped={myRunIds.has(bareEventId(e.id))}
+                      canRsvp={canRsvp}
+                      onRsvp={() => onRsvp(e.id, e.title)}
+                      featured={hl?.featured}
+                      pinned={hl?.pinned}
+                      groupBadge={groupBadges.get(e.groupId)}
+                      capabilities={capsFor(e)}
+                      onAction={(key) => openConfirm(e, key)}
+                    />
                   </li>
                 );
               })}
@@ -253,13 +402,17 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
           <ul className="space-y-3">
             {oneOffThisWeek.map((e) => {
               const [, m, d] = e.date!.split("-").map(Number);
+              const oneOffItems = actionMenuItems(capsFor(e));
               return (
                 <li key={e.id}>
                   <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
                     <div className="p-4 pb-3">
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="text-[15px] font-bold leading-snug text-slate-900">{e.title}</h3>
-                        <Chip tone="outline">Independent Runner</Chip>
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          <Chip tone="outline">Independent Runner</Chip>
+                          {oneOffItems.length > 0 ? <ActionMenu entityTitle={e.title} items={oneOffItems} onSelect={(key) => openConfirm(e, key)} /> : null}
+                        </span>
                       </div>
                         <p className="mt-0.5 text-[13px] text-slate-500">{MONTHS[m - 1]} {d}, {e.time} · {e.distanceLabel}</p>
                     </div>
@@ -333,6 +486,15 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
         actionLabel="submitting runs"
         pendingLabel="Your profile is still in review."
         rejectionReason={me?.status === "signed_in" ? me.account.rejectionReason ?? null : null}
+      />
+
+      <ModerationConfirmSheet
+        open={confirm !== null}
+        onClose={closeConfirm}
+        {...(confirm ? eventConfirmMeta(confirm.kind, confirm.title) : { title: "", entity: "", impact: "", confirmLabel: "", requireReason: false })}
+        busy={confirmBusy}
+        error={confirmError}
+        onConfirm={runConfirm}
       />
     </div>
   );

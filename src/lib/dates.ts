@@ -115,6 +115,37 @@ export function mergeWeekEventSources(
   out.push(...recurring);
   return out;
 }
+/** The moderation action available for one canonical event row: the canonical
+ * id to PATCH and the server-computed capability list. */
+export interface CanonicalEventAction {
+  /** Canonical event id — the exact id GET /api/events serves for this row. */
+  id: string;
+  /** Server-computed moderation capabilities; undefined on old responses = []. */
+  capabilities: string[];
+}
+/**
+ * Index canonical /api/events rows by EVERY id form a rendered weekly row can
+ * carry, so a card can attach the server-computed capability list and know
+ * which canonical id to PATCH:
+ *  - the canonical id itself (`e.id`) — admin-created runs render as-is;
+ *  - the seed id (`e.seedRefId`) — server-materialized seed copies carry a
+ *    random canonical id while the client city data still renders the seed id;
+ *  - the bare community refId — approved community events render with the
+ *    `event:<refId>` canonical copy dropped (deduped) and the `/api/content`
+ *    bare refId shown instead.
+ * Rows with no server copy get no entry (no menu). Capabilities never default
+ * on the client: an absent list stays [] exactly like an empty one.
+ */
+export function canonicalEventActions(events: readonly (WeekCanonicalSource & { capabilities?: string[] })[]): Map<string, CanonicalEventAction> {
+  const map = new Map<string, CanonicalEventAction>();
+  for (const e of events) {
+    const entry: CanonicalEventAction = { id: e.id, capabilities: e.capabilities ?? [] };
+    map.set(e.id, entry);
+    if (e.seedRefId) map.set(e.seedRefId, entry);
+    if (e.id.startsWith("event:")) map.set(e.id.slice("event:".length), entry);
+  }
+  return map;
+}
 /** Resolve recurring weekly events to concrete dates and sort chronologically. */
 export function resolveWeekEvents(events: RunEvent[], now: Date): DatedRunEvent[] {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();

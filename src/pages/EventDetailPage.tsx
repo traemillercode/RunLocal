@@ -11,9 +11,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Chip, Icon } from "../components/ui";
+import { ActionMenu } from "../components/ActionMenu";
+import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import * as api from "../lib/api";
-import { dayLabel, monthDayLabel, resolveWeekEvents, bareEventId, occurrenceIdFor, localDateLabel, type DatedRunEvent } from "../lib/dates";
+import { dayLabel, monthDayLabel, resolveWeekEvents, bareEventId, occurrenceIdFor, localDateLabel, canonicalEventActions, type DatedRunEvent } from "../lib/dates";
+import { actionMenuItems, type ActionKey } from "../lib/actionModel";
+import { eventConfirmMeta, type EventConfirmAction, type EventConfirmKind } from "./EventsPage";
 import { isOccurrenceRsvped } from "../lib/myRuns";
 import { canDo } from "../lib/accounts";
 import type { AppStore } from "../lib/store";
@@ -45,6 +49,8 @@ export function EventDetailView({
   featured = false,
   pinned = false,
   groupBadge,
+  capabilities = [],
+  onAction,
 }: {
   event: DatedRunEvent;
   city: City;
@@ -55,10 +61,15 @@ export function EventDetailView({
   featured?: boolean;
   pinned?: boolean;
   groupBadge?: boolean;
+  /** Server-computed moderation capabilities — empty/absent renders no menu. */
+  capabilities?: string[];
+  /** Menu action dispatcher — the page maps hide/restore/delete to confirm sheets. */
+  onAction?: (key: ActionKey) => void;
 }) {
   const group: RunGroup | undefined = city.groups.find((g) => g.id === event.groupId);
   const rrca = groupBadge ?? group?.groupType === "rrca-chartered";
   const label = group ? (rrca ? GROUP_TYPE_LABELS["rrca-chartered"] : GROUP_TYPE_LABELS.community) : null;
+  const actionItems = actionMenuItems(capabilities);
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
       <button type="button" onClick={onBack} className="mb-3 flex items-center gap-1 text-[13px] font-semibold text-slate-500">
@@ -98,6 +109,11 @@ export function EventDetailView({
             ) : null}
             <Chip tone={event.invite === "Open to all" ? "emerald" : "amber"}>{event.invite}</Chip>
             {group ? null : <Chip tone="outline">Independent Runner</Chip>}
+            {actionItems.length > 0 ? (
+              <span className="ml-auto">
+                <ActionMenu entityTitle={event.title} items={actionItems} onSelect={(key) => onAction?.(key)} />
+              </span>
+            ) : null}
           </div>
 
           <DetailRow icon="calendar">
@@ -241,6 +257,12 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
     void api.getMyRuns().then((r) => { if (r.ok) setMyRuns(r.data.runs); });
   }, [canRsvp]);
   useEffect(() => { void api.getCanonicalEvents(city.id).then((r) => { if (r.ok) setCanonicalEvents(r.data.events); }); }, [city.id]);
+  const canonicalActions = useMemo(() => canonicalEventActions(canonicalEvents), [canonicalEvents]);
+  // Scoped moderation (group lead / admin): local hidden overlay + confirm sheet.
+  const [localHidden, setLocalHidden] = useState<Set<string>>(new Set());
+  const [confirm, setConfirm] = useState<EventConfirmAction | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   // Same weekly resolution as the home/Events feed so an EventCard link always
   // resolves here. Only recurring events render as EventCards; independent
@@ -260,8 +282,8 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
         externalUrl: e.externalUrl ?? undefined,
       }));
     const canonical = canonicalEvents.filter((e) => e.status === "published" && !e.hidden && !e.archivedAt).map((e) => ({ id:e.id, groupId:e.groupId, title:e.title, dayOfWeek:e.dayOfWeek, time:e.time, location:e.location, distanceLabel:e.distanceLabel, invite:e.invite, externalUrl:e.externalUrl ?? undefined }));
-    return resolveWeekEvents([...city.events, ...canonical, ...recurring], new Date()).filter((e) => !hidden.has(`event:${e.id}`));
-  }, [city, hidden, userEvents, canonicalEvents]);
+    return resolveWeekEvents([...city.events, ...canonical, ...recurring], new Date()).filter((e) => !hidden.has(`event:${bareEventId(e.id)}`) && !localHidden.has(`event:${bareEventId(e.id)}`));
+  }, [city, hidden, userEvents, canonicalEvents, localHidden]);
 
   const event = events.find((e) => e.id === eventId) ?? null;
   // Leader tools: the roster link shows only when the signed-in verified
@@ -326,6 +348,42 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
     });
   };
 
+  // Scoped moderation: same server-driven capability lookup as the Events feed.
+  const eventCaps = canonicalActions.get(event.id) ?? canonicalActions.get(bareEventId(event.id));
+  const openConfirm = (key: ActionKey) => {
+    const kind: EventConfirmKind | null = key === "hide" ? "hide" : key === "restore" ? "restore" : key === "delete" ? "delete" : null;
+    if (!kind || !eventCaps) return;
+    setConfirm({ kind, eventId: eventCaps.id, displayId: event.id, title: event.title });
+  };
+  const closeConfirm = () => {
+    if (confirmBusy) return;
+    setConfirm(null);
+    setConfirmError(null);
+  };
+  /** Execute the confirmed action — PATCH /api/events/:id/moderation re-validates server-side. */
+  const runConfirm = () => {
+    if (!confirm || confirmBusy) return;
+    const action = confirm;
+    setConfirmBusy(true);
+    setConfirmError(null);
+    void api.moderateEvent(action.eventId, action.kind).then((r) => {
+      setConfirmBusy(false);
+      if (r.ok) {
+        setConfirm(null);
+        setConfirmError(null);
+        const keys = [bareEventId(action.eventId), bareEventId(action.displayId)];
+        if (action.kind === "hide" || action.kind === "delete") {
+          setLocalHidden((s) => { const n = new Set(s); for (const k of keys) n.add(`event:${k}`); return n; });
+        } else {
+          setLocalHidden((s) => { const n = new Set(s); for (const k of keys) n.delete(`event:${k}`); return n; });
+        }
+        toast("Done.", "success");
+      } else {
+        setConfirmError(r.error.message ?? "That didn't work — try again.");
+      }
+    });
+  };
+
   return (
     <>
       <div className="desktop-detail-layout">
@@ -340,6 +398,8 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
         featured={hl?.featured}
         pinned={hl?.pinned}
         groupBadge={groupBadges.get(event.groupId)}
+        capabilities={eventCaps?.capabilities}
+        onAction={openConfirm}
       />
       {isLeader && eventGroupId ? (
         <Link
@@ -363,6 +423,14 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
       </aside>
       </div>
       <VerifiedGateSheet open={gateOpen} onClose={() => setGateOpen(false)} role={role} actionLabel="adding this run to My Runs" pendingLabel="Your profile is still in review." rejectionReason={me?.status === "signed_in" ? me.account.rejectionReason ?? null : null} />
+      <ModerationConfirmSheet
+        open={confirm !== null}
+        onClose={closeConfirm}
+        {...(confirm ? eventConfirmMeta(confirm.kind, confirm.title) : { title: "", entity: "", impact: "", confirmLabel: "", requireReason: false })}
+        busy={confirmBusy}
+        error={confirmError}
+        onConfirm={runConfirm}
+      />
     </>
   );
 }
