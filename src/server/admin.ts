@@ -30,9 +30,7 @@ import {
   addRolePatch,
   effectiveRole,
   hasRole,
-  highestRole,
   normalizeRoles,
-  removeRolePatch,
   rolesPatch,
   storedRoles,
 } from "./accountRoles";
@@ -808,6 +806,9 @@ export function adminExportRows(
         retentionYears: rec.retentionYears,
         canViewSelfie: Boolean(rec.selfieRef && rec.selfieRef.endsWith(".jpg")),
         rejectionReason: rec.rejectionReason ?? null,
+        cityId: rec.cityId ?? null,
+        roles: accountRoles(rec),
+        adminCityId: rec.adminCityId ?? null,
       } satisfies AdminRecordView;
     });
   return { ok: true, data: { rows } };

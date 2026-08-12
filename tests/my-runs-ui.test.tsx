@@ -11,7 +11,7 @@ const { useAccountMock, getMyRunsMock } = vi.hoisted(() => ({ useAccountMock: vi
 vi.mock("../src/state/account", () => ({ useAccount: useAccountMock }));
 vi.mock("../src/lib/api", async () => { const actual = await vi.importActual<typeof import("../src/lib/api")>("../src/lib/api"); return { ...actual, getMyRuns: getMyRunsMock }; });
 
-const account: PublicAccount = { id: "a1", name: "Runner", email: "runner@example.com", username: "runner", cityId: "columbia-mo", status: "verified", phase: null, badge: "verified", role: "runner", isOwner: false, suspended: false, underReview: false, profilePhotoUrl: null };
+const account: PublicAccount = { id: "a1", name: "Runner", email: "runner@example.com", username: "runner", cityId: "columbia-mo", status: "verified", phase: null, badge: "verified", role: "runner", roles: ["runner"], isOwner: false, suspended: false, underReview: false, profilePhotoUrl: null };
 const auth = (me: Me | null) => useAccountMock.mockReturnValue({ me, backendAvailable: true, refresh: async () => {}, signOut: async () => {}, deleteMyAccount: async () => ({ ok: false, error: new Error("unavailable") }), role: me?.status === "signed_in" ? "verified" : "guest" });
 const render = () => renderToStaticMarkup(<MemoryRouter><MyRunsPage /></MemoryRouter>);
 /** A complete MyRunView fixture (RSVP variant) with the fields the server sends. */

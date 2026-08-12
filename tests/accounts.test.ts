@@ -23,8 +23,8 @@ describe("permission gating (canDo)", () => {
 describe("roleOf", () => {
   it("maps guest / pending / verified me payloads to roles", () => {
     const guest: Me = { status: "guest" };
-    const pending: Me = { status: "signed_in", account: { id: "a", name: "N", email: "n@x.com", username: "n_runner", cityId: "columbia-mo", status: "pending", phase: "pending_review", badge: null, role: "runner", isOwner: false, suspended: false, underReview: false, profilePhotoUrl: null } };
-    const verified: Me = { status: "signed_in", account: { id: "b", name: "V", email: "v@x.com", username: "v_runner", cityId: "columbia-mo", status: "verified", phase: null, badge: "verified", role: "runner", isOwner: false, suspended: false, underReview: false, profilePhotoUrl: null } };
+    const pending: Me = { status: "signed_in", account: { id: "a", name: "N", email: "n@x.com", username: "n_runner", cityId: "columbia-mo", status: "pending", phase: "pending_review", badge: null, role: "runner", roles: ["runner"], isOwner: false, suspended: false, underReview: false, profilePhotoUrl: null } };
+    const verified: Me = { status: "signed_in", account: { id: "b", name: "V", email: "v@x.com", username: "v_runner", cityId: "columbia-mo", status: "verified", phase: null, badge: "verified", role: "runner", roles: ["runner"], isOwner: false, suspended: false, underReview: false, profilePhotoUrl: null } };
     expect(roleOf(guest)).toBe("guest");
     expect(roleOf(pending)).toBe("pending");
     expect(roleOf(verified)).toBe("verified");

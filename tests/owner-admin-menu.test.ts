@@ -209,6 +209,7 @@ describe("profile menu states", () => {
         underReview: false,
         profilePhotoUrl: null,
         ...accountPatch,
+        roles: accountPatch.roles ?? ["runner"],
       },
     };
   }
@@ -235,7 +236,7 @@ describe("profile menu states", () => {
   });
 
   it("owner sees the Admin / Super Admin entry", () => {
-    const { entries } = profileMenuEntries(me({ isOwner: true }));
+    const { entries } = profileMenuEntries(me({ isOwner: true, roles: ["site_admin"] }));
     const admin = entries.find((e) => e.key === "admin");
     expect(admin).toBeDefined();
     expect(admin?.label).toBe("Admin control center");

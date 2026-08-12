@@ -31,6 +31,7 @@ const rejectedMe: Me = {
     phase: null,
     badge: null,
     role: "runner",
+    roles: ["runner"],
     adminCityId: null,
     isOwner: false,
     suspended: false,

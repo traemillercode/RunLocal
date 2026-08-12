@@ -93,6 +93,8 @@ export interface PublicAccount {
   badge: "verified" | null;
   /** Assigned runner role (label only — never a power source). */
   role: AccountRecord["role"];
+  /** Full multi-role set (server-authoritative; `role` = highest of these). */
+  roles: AccountRecord["roles"];
   /** City Admin scope is display-only; authorization checks stay server-side. */
   adminCityId?: string | null;
   /** Server-derived super-admin flag (from RUN_LOCAL_OWNER_EMAIL). */
