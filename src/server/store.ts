@@ -12,7 +12,7 @@
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { accountRoles, effectiveRole, hasRole } from "./accountRoles";
+import { accountRoles, effectiveRole, hasRole, highestRole, normalizeRoles, storedRoles } from "./accountRoles";
 import type {
   AccountRecord,
   AuditEntry,
@@ -495,6 +495,20 @@ export class Db {
     const rec = this.accounts.get(id);
     if (!rec) return undefined;
     const next = { ...rec, ...patch };
+    // Keep the legacy single `role` field and the multi-role `roles` set in
+    // sync for ALL callers (backward-compat guarantee of the multi-role model):
+    // - `roles` (an array) is the authoritative write form — derive `role` as
+    //   the set's highest-ranked member (production writers use rolesPatch /
+    //   addRolePatch, which already pass both consistently).
+    // - a legacy single `role` write (test fixtures / pre-multi-role callers)
+    //   is MERGED into the stored set rather than replacing it, so a role set
+    //   that already exists (e.g. ["runner"]) never shadows the new role.
+    if (Array.isArray(patch.roles)) {
+      next.role = highestRole(normalizeRoles(patch.roles));
+    } else if (patch.role !== undefined) {
+      next.roles = normalizeRoles([...storedRoles(rec), patch.role]);
+      next.role = highestRole(next.roles);
+    }
     this.accounts.set(id, next);
     return next;
   }
