@@ -79,7 +79,7 @@ describe("eventCapabilities (server-side predicate)", () => {
     const { db } = setup();
     const lead = account(db, "lead@example.com");
     leadGroup(db, "runcomo", lead.id);
-    expect(eventCapabilities(db, db.getAccount(lead.id), seedByRef(db, "mon-social"))).toEqual(["hide", "restore", "delete"]);
+    expect(eventCapabilities(db, db.getAccount(lead.id), seedByRef(db, "mon-social"))).toEqual(["edit", "hide", "restore", "delete"]);
   });
 
   it("a listed leader (not owner) gets the same keys", () => {
@@ -88,7 +88,7 @@ describe("eventCapabilities (server-side predicate)", () => {
     const leader = account(db, "leader@example.com");
     leadGroup(db, "ctc", owner.id);
     db.updateGroup("ctc", { leaderIds: [leader.id] });
-    expect(eventCapabilities(db, db.getAccount(leader.id), seedByRef(db, "tue-track"))).toEqual(["hide", "restore", "delete"]);
+    expect(eventCapabilities(db, db.getAccount(leader.id), seedByRef(db, "tue-track"))).toEqual(["edit", "hide", "restore", "delete"]);
   });
 
   it("leads get NO capabilities on events of groups they don't lead", () => {
@@ -145,9 +145,9 @@ describe("eventCapabilities (server-side predicate)", () => {
     const ca = account(db, "ca@example.com", "columbia-mo", { role: "city_admin", adminCityId: "columbia-mo" });
     const independent = makeEvent(db, "independent-run", { groupId: "" });
     const raceLike = makeEvent(db, "race-like", { groupId: "not-a-group" });
-    expect(eventCapabilities(db, db.getAccount(ca.id), seedByRef(db, "mon-social"))).toEqual(["hide", "restore", "delete"]);
-    expect(eventCapabilities(db, db.getAccount(ca.id), independent)).toEqual(["hide", "restore", "delete"]);
-    expect(eventCapabilities(db, db.getAccount(ca.id), raceLike)).toEqual(["hide", "restore", "delete"]);
+    expect(eventCapabilities(db, db.getAccount(ca.id), seedByRef(db, "mon-social"))).toEqual(["edit", "hide", "restore", "delete"]);
+    expect(eventCapabilities(db, db.getAccount(ca.id), independent)).toEqual(["edit", "hide", "restore", "delete"]);
+    expect(eventCapabilities(db, db.getAccount(ca.id), raceLike)).toEqual(["edit", "hide", "restore", "delete"]);
   });
 
   it("a city admin of ANOTHER city gets none", () => {
@@ -161,9 +161,9 @@ describe("eventCapabilities (server-side predicate)", () => {
     const global = account(db, DEFAULT_OWNER_EMAIL);
     const independent = makeEvent(db, "independent-run", { groupId: "" });
     const raceLike = makeEvent(db, "race-like", { groupId: "not-a-group" });
-    expect(eventCapabilities(db, db.getAccount(global.id), seedByRef(db, "mon-social"))).toEqual(["hide", "restore", "delete"]);
-    expect(eventCapabilities(db, db.getAccount(global.id), independent)).toEqual(["hide", "restore", "delete"]);
-    expect(eventCapabilities(db, db.getAccount(global.id), raceLike)).toEqual(["hide", "restore", "delete"]);
+    expect(eventCapabilities(db, db.getAccount(global.id), seedByRef(db, "mon-social"))).toEqual(["edit", "hide", "restore", "delete"]);
+    expect(eventCapabilities(db, db.getAccount(global.id), independent)).toEqual(["edit", "hide", "restore", "delete"]);
+    expect(eventCapabilities(db, db.getAccount(global.id), raceLike)).toEqual(["edit", "hide", "restore", "delete"]);
   });
 
   it("a hidden event omits hide; an archived event returns []", () => {
@@ -171,7 +171,7 @@ describe("eventCapabilities (server-side predicate)", () => {
     const lead = account(db, "lead@example.com");
     leadGroup(db, "runcomo", lead.id);
     const hidden = { ...seedByRef(db, "mon-social"), hidden: true, status: "hidden" as const };
-    expect(eventCapabilities(db, db.getAccount(lead.id), hidden)).toEqual(["restore", "delete"]);
+    expect(eventCapabilities(db, db.getAccount(lead.id), hidden)).toEqual(["edit", "restore", "delete"]);
     const archived = { ...seedByRef(db, "mon-social"), archivedAt: "2026-02-01T00:00:00.000Z", status: "archived" as const };
     expect(eventCapabilities(db, db.getAccount(lead.id), archived)).toEqual([]);
     expect(eventCapabilities(db, db.getAccount(lead.id), undefined)).toEqual([]);
@@ -196,8 +196,8 @@ describe("GET /api/events (optional actor capability lists)", () => {
     const r = await call(db, "GET", "/api/events?city=columbia-mo", { cookie: lead.cookie });
     expect(r.status).toBe(200);
     const byRef = new Map((r.body.events as Array<{ id: string; seedRefId: string | null; groupId: string; capabilities: string[] }>).map((e) => [e.seedRefId ?? e.id, e]));
-    expect(byRef.get("tue-track")!.capabilities).toEqual(["hide", "restore", "delete"]);
-    expect(byRef.get("sat-long")!.capabilities).toEqual(["hide", "restore", "delete"]);
+    expect(byRef.get("tue-track")!.capabilities).toEqual(["edit", "hide", "restore", "delete"]);
+    expect(byRef.get("sat-long")!.capabilities).toEqual(["edit", "hide", "restore", "delete"]);
     for (const ref of ["mon-social", "wed-kickstart", "thu-mizzou", "independent-run"]) {
       expect(byRef.get(ref)!.capabilities).toEqual([]);
     }

@@ -274,7 +274,11 @@ export type AdminAction =
   | "content.flag"
   | "group_lead.event_hide"
   | "group_lead.event_restore"
-  | "group_lead.event_delete";
+  | "group_lead.event_delete"
+  | "group_lead.event_edit"
+  | "admin.race_edit"
+  | "admin.forum_post_edit"
+  | "submission.edit_pending";
 
 export interface AuditEntry {
   id: string;
@@ -321,6 +325,37 @@ export interface RunEventRecord {
   hidden: boolean; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; archivedAt: string | null;
 }
 
+/**
+ * Canonical race record — the server-side source of truth for race listings
+ * that must survive admin edits (the events analog of `RunEventRecord`). Seed
+ * races are materialized at startup from the client seed; approved community
+ * race submissions keep their payload-driven rendering but share the same
+ * public view + capability model. `refId` is the seed id for seed rows and the
+ * `user-<submissionId>` ref for community rows.
+ */
+export interface RaceRecord {
+  id: string;
+  cityId: string;
+  refId: string;
+  /** "seed" = preview fixture (sample content); "submission" = approved community listing. */
+  source: "seed" | "submission";
+  name: string;
+  /** Display distance label, e.g. "5K / 10K". */
+  distances: string;
+  /** ISO yyyy-mm-dd race date. */
+  date: string;
+  location: string;
+  registrationUrl: string;
+  description: string;
+  organizer: string;
+  price: string;
+  registrationOpen: boolean;
+  registrationNote: string;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
 export interface PersistedDb {
   accounts: AccountRecord[];
   sessions: SessionRecord[];
@@ -334,6 +369,8 @@ export interface PersistedDb {
    */
   content: ContentRecord[];
   events?: RunEventRecord[];
+  /** Canonical race records (seed-materialized + admin-edited race facts). */
+  races?: RaceRecord[];
   /** Owner-dashboard group records: RRCA badge state + internal note. */
   groups: GroupModRecord[];
   memberships?: GroupMembershipRecord[];

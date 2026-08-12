@@ -34,6 +34,8 @@ import type { AccountRecord } from "./types";
 import type { ForumPostRecord, ForumReplyRecord } from "./types";
 import { isSuspended } from "./store";
 import { isCityAdminForCity, isGlobalAdmin } from "./roles";
+import type { AdminCtx } from "./admin";
+import { authorizeScoped } from "./admin";
 import { cityExists } from "./cms";
 import type { ForumSection } from "../types";
 import { CITIES } from "../data/cities";
@@ -51,7 +53,7 @@ const MAX_REPLY = 1000;
  * exactly these lists, and every listed action maps to an endpoint that
  * re-validates the same rules server-side.
  */
-export type ForumCapability = "edit_own" | "delete_own" | "hide" | "restore" | "delete" | "report" | "tag" | "pin" | "unpin";
+export type ForumCapability = "edit" | "edit_own" | "delete_own" | "hide" | "restore" | "delete" | "report" | "tag" | "pin" | "unpin";
 
 /** Verified + not deleted + not suspended — the gate for author and report actions. */
 function verifiedActive(actor: AccountRecord | null | undefined, now: Date): boolean {
@@ -78,7 +80,9 @@ export function forumPostCapabilities(actor: AccountRecord | null | undefined, p
   // approval — the tagged runner can self-hide; PATCH /api/tags/:id/self).
   if (isAuthor && verifiedActive(actor, now)) caps.push("edit_own", "delete_own", "tag");
   if (isGlobalAdmin(actor) || isCityAdminForCity(actor, post.cityId)) {
-    caps.push("hide", "restore", "delete");
+    // Admins can edit ANY post in their scope (published content is never
+    // submitter-editable once approved — the admin is the edit authority).
+    caps.push("edit", "hide", "restore", "delete");
     caps.push(post.pinned === true ? "unpin" : "pin");
   }
   if (!isAuthor && verifiedActive(actor, now)) caps.push("report");
@@ -810,6 +814,68 @@ export function deleteForumReply(
         createdAt: forumDateLabel(updated.createdAt, now),
         authorId: updated.authorAccountId,
         capabilities: forumReplyCapabilities(auth.rec, updated, now),
+      },
+      record: updated,
+    },
+  };
+}
+
+// ------------------------------------------------------------------ admin edit
+
+/**
+ * PATCH /api/admin/forum/post/:id — admin edit of ANY user forum post in the
+ * admin's scope (Global Admin anywhere; City Admin exactly for the post's
+ * city). This is the "admins can edit published content" path: author edits
+ * go through `editForumPost`; this route exists so a scoped admin can correct
+ * any post. Title (1-120) and body (1-2000) re-validated; the registry title
+ * stays in sync. Audited as `admin.forum_post_edit` with the operator reason.
+ */
+export function editForumPostAdmin(
+  db: Db,
+  ctx: AdminCtx,
+  postId: string,
+  input: { title?: unknown; body?: unknown },
+  now = new Date(),
+): ForumAuthorEditResult {
+  const post = db.getForumPost(postId);
+  if (!post || post.state !== "visible") return { ok: false, status: 404, error: "post_not_found", message: "That post isn't available." };
+  if (postModerated(db, postId)) {
+    return { ok: false, status: 403, error: "post_unavailable", message: "This post is no longer available for edits." };
+  }
+  const title = typeof input.title === "string" ? input.title.trim() : "";
+  const body = typeof input.body === "string" ? input.body.trim() : "";
+  if (!title || title.length > MAX_TITLE) {
+    return { ok: false, status: 400, error: "invalid_title", message: `Give your post a title (1-${MAX_TITLE} characters).` };
+  }
+  if (!body || body.length > MAX_BODY) {
+    return { ok: false, status: 400, error: "invalid_body", message: `Write a post (1-${MAX_BODY} characters).` };
+  }
+  const auth = authorizeScoped(db, ctx, "admin.forum_post_edit", postId, now, {
+    enforceCity: post.cityId,
+    auditCity: post.cityId,
+    owner: post.authorAccountId ? db.getAccount(post.authorAccountId)?.email ?? null : null,
+    change: title !== post.title ? `title: "${post.title.slice(0, 60)}" -> "${title.slice(0, 60)}"` : `body edited (${body.length} chars)`,
+  });
+  if (!auth.ok) return auth;
+  const updated = db.updateForumPost(postId, { title: title.slice(0, MAX_TITLE), body: body.slice(0, MAX_BODY) })!;
+  const content = db.getContent(`post:${postId}`);
+  if (content) db.upsertContent({ ...content, title: updated.title });
+  const actor = db.getAccount(auth.data.accountId ?? "");
+  return {
+    ok: true,
+    data: {
+      post: {
+        id: updated.id,
+        section: updated.section,
+        title: updated.title,
+        body: updated.body,
+        author: actor?.name ?? "Runner",
+        authorNote: null,
+        createdAt: forumDateLabel(updated.createdAt, now),
+        replies: visibleReplyCount(db, updated.id),
+        pinned: updated.pinned === true,
+        authorId: updated.authorAccountId,
+        capabilities: forumPostCapabilities(actor ?? undefined, updated, now),
       },
       record: updated,
     },
