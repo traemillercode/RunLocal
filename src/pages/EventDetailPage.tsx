@@ -39,6 +39,55 @@ function DetailRow({ icon, children }: { icon: string; children: ReactNode }) {
   );
 }
 
+function goingInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("") || "R";
+}
+
+/**
+ * "X connections going" strip — the viewer's accepted connections who RSVP'd to
+ * this exact occurrence (server-computed, canView-filtered). The server is the
+ * only authority on who qualifies; an EMPTY array renders nothing (never "0
+ * connections going"). Avatar stack caps at 5 with a "+N" overflow badge, and
+ * the row links to /connections.
+ */
+export function ConnectionsGoingRow({ connections }: { connections: api.ConnectionGoingRow[] }) {
+  if (connections.length === 0) return null;
+  const shown = connections.slice(0, 5);
+  const extra = connections.length - shown.length;
+  return (
+    <Link
+      to="/connections"
+      className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-4 py-2.5 active:bg-slate-50"
+    >
+      <span className="flex shrink-0 items-center -space-x-2">
+        {shown.map((c) =>
+          c.profilePhotoUrl ? (
+            <img key={c.accountId} src={c.profilePhotoUrl} alt="" className="h-6 w-6 rounded-full object-cover ring-2 ring-white md:h-7 md:w-7" />
+          ) : (
+            <span key={c.accountId} className="grid h-6 w-6 place-items-center rounded-full bg-slate-100 text-[9px] font-bold text-slate-600 ring-2 ring-white md:h-7 md:w-7">
+              {goingInitials(c.name)}
+            </span>
+          ),
+        )}
+        {extra > 0 ? (
+          <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-200 text-[9px] font-bold text-slate-700 ring-2 ring-white md:h-7 md:w-7">
+            +{extra}
+          </span>
+        ) : null}
+      </span>
+      <span className="min-w-0 flex-1 text-[13px] font-semibold text-slate-700">
+        {connections.length} connection{connections.length === 1 ? "" : "s"} going
+      </span>
+      <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-slate-400" />
+    </Link>
+  );
+}
+
 export function EventDetailView({
   event,
   city,
@@ -51,6 +100,7 @@ export function EventDetailView({
   groupBadge,
   capabilities = [],
   onAction,
+  connectionsGoing = [],
 }: {
   event: DatedRunEvent;
   city: City;
@@ -65,6 +115,8 @@ export function EventDetailView({
   capabilities?: string[];
   /** Menu action dispatcher — the page maps hide/restore/delete to confirm sheets. */
   onAction?: (key: ActionKey) => void;
+  /** Viewer's connections RSVP'd to this occurrence (server-computed). */
+  connectionsGoing?: api.ConnectionGoingRow[];
 }) {
   const group: RunGroup | undefined = city.groups.find((g) => g.id === event.groupId);
   const rrca = groupBadge ?? group?.groupType === "rrca-chartered";
@@ -94,6 +146,8 @@ export function EventDetailView({
             </p>
           ) : null}
         </div>
+
+        <ConnectionsGoingRow connections={connectionsGoing} />
 
         <div className="space-y-3.5 p-5">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -296,6 +350,17 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
     void api.getPublicGroup(eventGroupId).then((r) => { if (alive && r.ok) setGroup(r.data.group); });
     return () => { alive = false; };
   }, [eventGroupId]);
+  // Connections-going strip: the server returns the viewer's accepted
+  // connections who RSVP'd to this EXACT occurrence, each gated by
+  // canView(show_upcoming_events). Guests/pending/rejected get [] → no row.
+  const [connectionsGoing, setConnectionsGoing] = useState<api.ConnectionGoingRow[]>([]);
+  useEffect(() => {
+    if (!canRsvp || !event) { setConnectionsGoing([]); return; }
+    const occ = discussionOccurrenceId ?? occurrenceIdFor(event.id, localDateLabel(event.date));
+    let alive = true;
+    void api.getConnectionsGoing(event.id, occ).then((r) => { if (alive && r.ok) setConnectionsGoing(r.data); });
+    return () => { alive = false; };
+  }, [canRsvp, event, discussionOccurrenceId]);
   const isLeader = role === "verified" && !!group && me?.status === "signed_in" && (group.ownerId === me.account.id || (group.leaders ?? []).some((l) => l.id === me.account.id));
 
   if (!event) {
@@ -400,6 +465,7 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
         groupBadge={groupBadges.get(event.groupId)}
         capabilities={eventCaps?.capabilities}
         onAction={openConfirm}
+        connectionsGoing={connectionsGoing}
       />
       {isLeader && eventGroupId ? (
         <Link
