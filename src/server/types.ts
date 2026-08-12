@@ -252,6 +252,8 @@ export type AdminAction =
   | "forum.post_delete"
   | "forum.reply_edit"
   | "forum.reply_delete"
+  | "forum.pin"
+  | "forum.unpin"
   | "discussion.edit"
   | "content.flag"
   | "group_lead.event_hide"
@@ -392,6 +394,8 @@ export interface ForumPostRecord {
   body: string;
   authorAccountId: string;
   state: "visible" | "deleted";
+  /** Admin pinning — pinned posts sort first in the forum list. Default false. */
+  pinned: boolean;
   createdAt: string;
   updatedAt: string;
 }

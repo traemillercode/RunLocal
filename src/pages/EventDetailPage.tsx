@@ -76,8 +76,8 @@ export function EventDetailView({
         <Icon name="chevronRight" className="h-4 w-4 rotate-180" /> Back to this week
       </button>
 
-      <article className="desktop-detail-card overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
-        <div className="bg-[#14171C] p-5 text-white">
+      <article className="desktop-detail-card rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+        <div className="rounded-t-2xl bg-[#14171C] p-5 text-white">
           <p className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-[#FF5741]">
             {dayLabel(event.date, new Date())} · {event.time}
             {event.isToday ? (

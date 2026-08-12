@@ -34,6 +34,7 @@ export function ModerationConfirmSheet({
   note,
   busy = false,
   error = null,
+  tone = "danger",
   onConfirm,
 }: {
   open: boolean;
@@ -55,6 +56,8 @@ export function ModerationConfirmSheet({
   busy?: boolean;
   /** Server-side error message, announced via role="alert". */
   error?: string | null;
+  /** Confirm button color: "danger" (red, destructive) or "neutral" (dark, routine). */
+  tone?: "danger" | "neutral";
   /** Called with the reason string ("" when requireReason is false). */
   onConfirm: (reason: string) => void;
 }) {
@@ -114,7 +117,9 @@ export function ModerationConfirmSheet({
             type="button"
             onClick={handleConfirm}
             disabled={busy || (requireReason && !reasonValid)}
-            className={`rl-control inline-flex desktop-compact-control min-h-11 flex-1 items-center justify-center gap-2 px-5 text-sm font-semibold transition-colors bg-red-600 text-white active:bg-red-700 disabled:bg-slate-200 disabled:text-slate-400`}
+            className={`rl-control inline-flex desktop-compact-control min-h-11 flex-1 items-center justify-center gap-2 px-5 text-sm font-semibold transition-colors disabled:bg-slate-200 disabled:text-slate-400 ${
+              tone === "danger" ? "bg-red-600 text-white active:bg-red-700" : "bg-[#14171C] text-white active:bg-[#252a31]"
+            }`}
           >
             {busy ? "Working…" : confirmLabel}
           </button>

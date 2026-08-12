@@ -59,7 +59,7 @@ function forumSetup() {
   const db = createMemoryStore();
   const author = verifiedUser(db, "author@example.com");
   const other = verifiedUser(db, "other@example.com");
-  const post = db.addForumPost({ id: "post-1", section: "community", title: "Original title", body: "Original body", cityId: "columbia-mo", authorAccountId: author.rec.id, state: "visible", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
+  const post = db.addForumPost({ id: "post-1", section: "community", title: "Original title", body: "Original body", cityId: "columbia-mo", authorAccountId: author.rec.id, state: "visible", pinned: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
   db.upsertContent({ id: "post:post-1", cityId: "columbia-mo", kind: "post", refId: "post-1", title: "Original title", authorLabel: "Runner", authorAccountId: author.rec.id, featured: false, pinned: false, hidden: false, hiddenAt: null, archived: false, archivedAt: null });
   const reply = db.addForumReply({ id: "reply-1", postId: post.id, cityId: "columbia-mo", authorAccountId: author.rec.id, body: "Original reply", state: "visible", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
   return { db, author, other, post, reply };
@@ -94,7 +94,7 @@ describe("forum post author edit/delete", () => {
     expect((await call(f.db, "PATCH", `/api/forum/${f.post.id}`, { body: { title: "T", body: "B" }, cookie: pending.cookie })).status).toBe(403);
     // suspended author → 403
     const susp = verifiedUser(f.db, "susp@example.com");
-    const sp = f.db.addForumPost({ id: "post-2", section: "community", title: "S", body: "B", cityId: "columbia-mo", authorAccountId: susp.rec.id, state: "visible", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
+    const sp = f.db.addForumPost({ id: "post-2", section: "community", title: "S", body: "B", cityId: "columbia-mo", authorAccountId: susp.rec.id, state: "visible", pinned: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
     f.db.upsertContent({ id: "post:post-2", cityId: "columbia-mo", kind: "post", refId: "post-2", title: "S", authorLabel: "Runner", authorAccountId: susp.rec.id, featured: false, pinned: false, hidden: false, hiddenAt: null, archived: false, archivedAt: null });
     susp.rec.suspended = true; susp.rec.suspendedUntil = null;
     expect((await call(f.db, "PATCH", `/api/forum/${sp.id}`, { body: { title: "T", body: "B" }, cookie: susp.cookie })).status).toBe(403);

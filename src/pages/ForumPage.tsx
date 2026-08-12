@@ -357,7 +357,7 @@ export function ForumThread({
 }) {
   const verified = role === "verified";
   return (
-    <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3" data-testid={`thread-${""}`} aria-label="Replies">
+    <div className="rounded-b-2xl border-t border-slate-100 bg-slate-50/60 px-4 py-3" data-testid={`thread-${""}`} aria-label="Replies">
       {loading ? (
         <p className="text-xs font-medium text-slate-400">Loading replies…</p>
       ) : replies.length === 0 ? (
@@ -462,7 +462,7 @@ export function PostCard({
     .toUpperCase();
 
   return (
-    <article className="desktop-forum-card overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+    <article className="desktop-forum-card rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
       <div className="flex gap-3 p-4 pb-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-[13px] font-bold text-slate-600">
           {initials}
@@ -550,6 +550,8 @@ type ConfirmAction =
   | { kind: "restore_post"; postId: string; title: string }
   | { kind: "delete_post"; postId: string; title: string }
   | { kind: "report_post"; postId: string; title: string }
+  | { kind: "pin_post"; postId: string; title: string }
+  | { kind: "unpin_post"; postId: string; title: string }
   | { kind: "delete_own_reply"; postId: string; replyId: string; author: string }
   | { kind: "report_reply"; postId: string; replyId: string; author: string };
 
@@ -740,6 +742,12 @@ export function ForumPage({ city }: { city: City }) {
       case "report":
         setConfirm({ kind: "report_post", postId: post.id, title: post.title });
         break;
+      case "pin":
+        setConfirm({ kind: "pin_post", postId: post.id, title: post.title });
+        break;
+      case "unpin":
+        setConfirm({ kind: "unpin_post", postId: post.id, title: post.title });
+        break;
       default:
         // Unknown capability — the actionModel already filters these out, so
         // this branch is defensive only.
@@ -764,7 +772,7 @@ export function ForumPage({ city }: { city: City }) {
   };
 
   /** Display config for the shared confirm sheet, derived from the pending action. */
-  const confirmMeta: { title: string; entity: string; impact: string; confirmLabel: string; requireReason: boolean; note?: string } | null = useMemo(() => {
+  const confirmMeta: { title: string; entity: string; impact: string; confirmLabel: string; requireReason: boolean; note?: string; tone?: "danger" | "neutral" } | null = useMemo(() => {
     if (!confirm) return null;
     switch (confirm.kind) {
       case "delete_own_post":
@@ -808,6 +816,24 @@ export function ForumPage({ city }: { city: City }) {
           requireReason: true,
           note: "Only Run Local admins see your report and your name.",
         };
+      case "pin_post":
+        return {
+          title: "Pin this post?",
+          entity: confirm.title,
+          impact: "It will stay at the top of its forum section so more runners see it.",
+          confirmLabel: "Pin post",
+          requireReason: false,
+          tone: "neutral",
+        };
+      case "unpin_post":
+        return {
+          title: "Unpin this post?",
+          entity: confirm.title,
+          impact: "It will sort with the other posts again instead of staying at the top.",
+          confirmLabel: "Unpin post",
+          requireReason: false,
+          tone: "neutral",
+        };
       case "delete_own_reply":
         return {
           title: "Delete your reply?",
@@ -846,6 +872,8 @@ export function ForumPage({ city }: { city: City }) {
       : action.kind === "restore_post" ? api.adminTransitionContent(`post:${action.postId}`, "restore", reason)
       : action.kind === "delete_post" ? api.adminTransitionContent(`post:${action.postId}`, "delete", reason)
       : action.kind === "report_post" ? api.flagContent("post", action.postId, reason)
+      : action.kind === "pin_post" ? api.pinForumPost(action.postId, true)
+      : action.kind === "unpin_post" ? api.pinForumPost(action.postId, false)
       : action.kind === "delete_own_reply" ? api.deleteForumReply(action.replyId)
       : api.flagContent("reply", action.replyId, reason);
     void call.then((r) => {
@@ -863,6 +891,14 @@ export function ForumPage({ city }: { city: City }) {
         if (action.kind === "delete_own_reply") reloadThread(action.postId);
         if (action.kind === "delete_own_post" || action.kind === "hide_post" || action.kind === "restore_post" || action.kind === "delete_post") {
           loadForum();
+        }
+        // Pin/unpin: apply the server's returned post immediately so the chip
+        // appears/disappears and the menu flips without a full reload.
+        if (action.kind === "pin_post" || action.kind === "unpin_post") {
+          const updated = (r.data as { post?: api.ForumPostView } | undefined)?.post;
+          if (updated) {
+            setServerPosts((cur) => cur.map((p) => (p.id === updated.id ? { ...p, pinned: updated.pinned, capabilities: updated.capabilities } : p)));
+          }
         }
         toast(
           action.kind === "report_post" || action.kind === "report_reply"
@@ -1089,6 +1125,7 @@ export function ForumPage({ city }: { city: City }) {
           confirmLabel={confirmMeta.confirmLabel}
           requireReason={confirmMeta.requireReason}
           note={confirmMeta.note}
+          tone={confirmMeta.tone}
           busy={confirmBusy}
           error={confirmError}
           onConfirm={(reason) => runConfirm(reason)}

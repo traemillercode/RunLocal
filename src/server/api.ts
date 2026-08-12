@@ -123,7 +123,7 @@ import {
   listTrustedMembers,
   revokeTrustedMember,
 } from "./verification";
-import { publicForumPosts, createForumPost, publicForumReplies, createForumReply, forumReplyCounts, forumPostPublic, editForumPost, deleteForumPost, editForumReply, deleteForumReply } from "./forum";
+import { publicForumPosts, createForumPost, publicForumReplies, createForumReply, forumReplyCounts, forumPostPublic, editForumPost, deleteForumPost, editForumReply, deleteForumReply, setForumPostPinned } from "./forum";
 import { createContentFlag } from "./contentFlags";
 import { withdrawSubmission } from "./submissions";
 
@@ -668,6 +668,26 @@ async function handleApi(
     return ok(res, { post: result.data.post }), true;
   }
 
+  // ---- admin pin/unpin of a user-created forum post ------------------------
+  // PATCH /api/forum/:id/pin with { pinned: boolean } — Global Admin or the
+  // post's City Admin only (same predicates as the forum capability list).
+  // Persists on the post record, mirrors the content-registry row, and is
+  // audited (forum.pin / forum.unpin). Guests 401, signed-in non-admins 403,
+  // unknown/seed posts 404, same-state requests 400.
+  const forumPostPin = /^\/api\/forum\/([^/]+)\/pin\/?$/.exec(url.pathname);
+  if (forumPostPin && method === "PATCH") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const id = decodeURIComponent(forumPostPin[1]);
+    const body = (await readJson(req)) as { pinned?: unknown };
+    if (typeof body.pinned !== "boolean") {
+      return err(res, { status: 400, error: "invalid_pinned", message: "pinned must be true or false." }), true;
+    }
+    const result = setForumPostPinned(db, sess.accountId, id, body.pinned, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { post: result.data.post }), true;
+  }
   // ---- author edit/delete of a user-created forum post ---------------------
   // PATCH /api/forum/:id — author-only edit (re-validates title/body, stamps
   // updatedAt, audited); DELETE /api/forum/:id — author-only soft-delete (state

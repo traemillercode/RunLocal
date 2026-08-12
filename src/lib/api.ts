@@ -491,6 +491,10 @@ export function updateForumPost(id: string, input: { title: string; body: string
 export function deleteForumPost(id: string): Promise<ApiResult<{ post: ForumPostView }>> {
   return request(`/api/forum/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
+/** Admin pin/unpin of a forum post (PATCH /api/forum/:id/pin — server re-validates). */
+export function pinForumPost(id: string, pinned: boolean): Promise<ApiResult<{ post: ForumPostView }>> {
+  return request(`/api/forum/${encodeURIComponent(id)}/pin`, { method: "PATCH", body: JSON.stringify({ pinned }) });
+}
 
 // --------------------------------------------------- public forum replies
 /** A user-created reply to a forum post, as served by /api/forum/replies. */

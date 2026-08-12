@@ -50,7 +50,7 @@ function setup() {
   const runner = verifiedUser(db, "runner@example.com");
   const other = verifiedUser(db, "other@example.com");
   // a user-created forum post owned by `other` so self-report can be exercised
-  const post = db.addForumPost({ id: "user-post-1", section: "community", title: "User post", body: "Body", cityId: "columbia-mo", authorAccountId: other.rec.id, state: "visible", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
+  const post = db.addForumPost({ id: "user-post-1", section: "community", title: "User post", body: "Body", cityId: "columbia-mo", authorAccountId: other.rec.id, state: "visible", pinned: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
   db.upsertContent({ id: "post:user-post-1", cityId: "columbia-mo", kind: "post", refId: "user-post-1", title: "User post", authorLabel: "Other", authorAccountId: other.rec.id, featured: false, pinned: false, hidden: false, hiddenAt: null, archived: false, archivedAt: null });
   const reply = db.addForumReply({ id: "user-reply-1", postId: post.id, cityId: "columbia-mo", authorAccountId: other.rec.id, body: "A reply body", state: "visible", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" });
   return { db, runner, other, post, reply };
