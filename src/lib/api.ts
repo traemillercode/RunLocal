@@ -406,8 +406,10 @@ export interface MySubmissionView {
   submittedAt: string;
   decidedAt: string | null;
   rejectionReason: string | null;
-  /** Server-computed actions (pending → ["withdraw"]; decided rows get []). */
+  /** Server-computed actions (pending → ["edit_pending", "withdraw"]; decided rows get []). */
   capabilities: string[];
+  /** The submitter's own still-pending payload (prefill for the edit form). */
+  payload?: Record<string, unknown>;
 }
 
 export function submitRace(input: {
@@ -565,10 +567,47 @@ export interface PublicApprovedContent {
 export function getPublicContent(cityId: string): Promise<ApiResult<PublicApprovedContent>> {
   return request(`/api/content?city=${encodeURIComponent(cityId)}`);
 }
-export interface CanonicalEvent { id: string; seedRefId: string | null; cityId: string; groupId: string; title: string; dayOfWeek: number; time: string; location: string; distanceLabel: string; invite: "Open to all" | "Members + guests" | "RSVP requested"; externalUrl: string | null; provenance: "seed" | "community" | "admin"; status: "draft" | "approved" | "published" | "hidden" | "archived"; hidden: boolean; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; archivedAt: string | null; /** Server-computed moderation capabilities for the requesting account (hide/restore/delete for leads/admins). Optional — older server responses omit it; callers treat undefined as []. */ capabilities?: string[]; }
+export interface CanonicalEvent { id: string; seedRefId: string | null; cityId: string; groupId: string; title: string; dayOfWeek: number; /** One-time events carry an exact date; recurring events leave this null. */ scheduleDate?: string | null; time: string; location: string; distanceLabel: string; invite: "Open to all" | "Members + guests" | "RSVP requested"; externalUrl: string | null; provenance: "seed" | "community" | "admin"; status: "draft" | "approved" | "published" | "hidden" | "archived"; hidden: boolean; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; archivedAt: string | null; /** Server-computed moderation capabilities for the requesting account (hide/restore/delete for leads/admins). Optional — older server responses omit it; callers treat undefined as []. */ capabilities?: string[]; }
 export function getCanonicalEvents(cityId: string): Promise<ApiResult<{ cityId: string | null; events: CanonicalEvent[] }>> { return request(`/api/events?city=${encodeURIComponent(cityId)}`); }
 /** Scoped moderation of a canonical event (group lead / city admin / global admin) — PATCH /api/events/:id/moderation. The server re-validates the same capability predicate as GET /api/events; `id` must be the CANONICAL event id (the server resolves seedRefId matches itself). */
 export function moderateEvent(id: string, action: "hide" | "restore" | "delete"): Promise<ApiResult<{ event: CanonicalEvent }>> { return request(`/api/events/${encodeURIComponent(id)}/moderation`, { method: "PATCH", body: JSON.stringify({ action }) }); }
+export interface PublicRaceView {
+  id: string;
+  kind: "race";
+  name: string;
+  date: string;
+  distance: string;
+  location: string;
+  organizer: string;
+  price: string;
+  registrationUrl: string;
+  registrationOpen: boolean;
+  registrationNote: string;
+  description: string;
+  source: "seed" | "submission";
+  /** Server-computed capabilities (edit/delete for scoped admins). */
+  capabilities: string[];
+}
+/** Public race listing (seed + approved community) with the requesting account's capabilities. */
+export function getRaces(cityId: string): Promise<ApiResult<{ cityId: string; races: PublicRaceView[] }>> {
+  return request(`/api/races?city=${encodeURIComponent(cityId)}`);
+}
+/** Scoped admin edit of a public race listing — PUT /api/races/:id (audited, routine reason). */
+export function updateRace(id: string, input: { name?: string; distances?: string; date?: string; location?: string; registrationUrl?: string; description?: string }): Promise<ApiResult<{ race: PublicRaceView }>> {
+  return request(`/api/races/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(input) });
+}
+/** Scoped edit of a canonical event (group lead / city admin / global admin) — PUT /api/events/:id (audited, routine reason). */
+export function updateEvent(id: string, input: { title?: string; dayOfWeek?: number; scheduleDate?: string | null; time?: string; location?: string; distanceLabel?: string; invite?: string; externalUrl?: string | null }): Promise<ApiResult<{ event: CanonicalEvent }>> {
+  return request(`/api/events/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(input) });
+}
+/** Scoped admin edit of ANY user forum post — PATCH /api/admin/forum/post/:id (reason-required, audited). */
+export function adminUpdateForumPost(id: string, input: { title: string; body: string }): Promise<ApiResult<{ post: ForumPostView }>> {
+  return adminRequest(`/api/admin/forum/post/${encodeURIComponent(id)}`, "Forum post edit by scoped admin", { method: "PATCH", body: JSON.stringify(input) });
+}
+/** Submitter's own edit of a still-pending submission — PATCH /api/my/submissions/:id (audited). */
+export function updatePendingSubmission(id: string, input: Record<string, unknown>): Promise<ApiResult<{ submission: { id: string; status: string; title: string } }>> {
+  return request(`/api/my/submissions/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
 export function adminGetEvents(cityId: string | null, reason: string): Promise<ApiResult<{ events: CanonicalEvent[] }>> { return adminRequest(`/api/admin/events${cityId ? `?city=${encodeURIComponent(cityId)}` : ""}`, reason); }
 export function adminCreateEvent(input: Partial<CanonicalEvent>, reason: string): Promise<ApiResult<{ event: CanonicalEvent }>> { return adminRequest("/api/admin/events", reason, { method: "POST", body: JSON.stringify(input) }); }
 export function adminEditEvent(id: string, input: Partial<CanonicalEvent>, reason: string): Promise<ApiResult<{ event: CanonicalEvent }>> { return adminRequest(`/api/admin/events/${encodeURIComponent(id)}`, reason, { method: "PATCH", body: JSON.stringify(input) }); }

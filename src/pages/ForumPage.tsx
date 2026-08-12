@@ -230,6 +230,7 @@ export function ForumEditPostSheetBody({
   onBodyChange,
   submitting = false,
   error = null,
+  admin = false,
   onSubmit,
 }: {
   section: ForumSection;
@@ -239,13 +240,15 @@ export function ForumEditPostSheetBody({
   onBodyChange: (value: string) => void;
   submitting?: boolean;
   error?: string | null;
+  /** Admin edit of ANY post in scope — audited with the operator identity. */
+  admin?: boolean;
   onSubmit: () => void;
 }) {
   return (
     <div className="space-y-4">
-      <p className="flex items-start gap-2 rounded-xl bg-emerald-50 p-3.5 text-[13px] leading-relaxed text-emerald-900">
-        <Icon name="check" className="mt-0.5 h-4 w-4 shrink-0" />
-        Only you can edit your own post. Changes are saved to your city's forum.
+      <p className={`flex items-start gap-2 rounded-xl p-3.5 text-[13px] leading-relaxed ${admin ? "bg-amber-50 text-amber-900" : "bg-emerald-50 text-emerald-900"}`}>
+        <Icon name={admin ? "lock" : "check"} className="mt-0.5 h-4 w-4 shrink-0" />
+        {admin ? "You're editing this post as an admin — the change is recorded in the audit log." : "Only you can edit your own post. Changes are saved to your city's forum."}
       </p>
       <div>
         <span className="mb-1.5 block text-sm font-semibold text-slate-700">Section</span>
@@ -586,7 +589,7 @@ export function ForumPage({ city }: { city: City }) {
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
-  const [editPost, setEditPost] = useState<{ id: string; title: string; body: string } | null>(null);
+  const [editPost, setEditPost] = useState<{ id: string; title: string; body: string; admin?: boolean } | null>(null);
   const [editPostBusy, setEditPostBusy] = useState(false);
   const [editPostError, setEditPostError] = useState<string | null>(null);
   const [editReply, setEditReply] = useState<{ postId: string; replyId: string; body: string } | null>(null);
@@ -737,6 +740,11 @@ export function ForumPage({ city }: { city: City }) {
     switch (key) {
       case "edit_own":
         setEditPost({ id: post.id, title: post.title, body: post.body });
+        break;
+      case "edit":
+        // Scoped admin edit of ANY post (global or exact city scope) — the
+        // server re-validates the scope and audits the operator.
+        setEditPost({ id: post.id, title: post.title, body: post.body, admin: true });
         break;
       case "delete_own":
         setConfirm({ kind: "delete_own_post", postId: post.id, title: post.title });
@@ -935,12 +943,13 @@ export function ForumPage({ city }: { city: City }) {
     if (!title || !body) { setEditPostError("Add a title and some details before saving."); return; }
     setEditPostBusy(true);
     setEditPostError(null);
-    void api.updateForumPost(editPost.id, { title, body }).then((r) => {
+    const call = editPost.admin ? api.adminUpdateForumPost(editPost.id, { title, body }) : api.updateForumPost(editPost.id, { title, body });
+    void call.then((r) => {
       setEditPostBusy(false);
       if (r.ok) {
         setEditPost(null);
         loadForum();
-        toast("Your post is updated.", "success");
+        toast(editPost.admin ? "Post updated as admin." : "Your post is updated.", "success");
       } else {
         setEditPostError(r.error.message ?? "Couldn't update — try again.");
       }
@@ -1096,7 +1105,7 @@ export function ForumPage({ city }: { city: City }) {
       <Sheet
         open={editPost !== null}
         onClose={() => !editPostBusy && setEditPost(null)}
-        title="Edit your post"
+        title={editPost?.admin ? "Edit post (admin)" : "Edit your post"}
         subtitle={editPost ? FORUM_SECTIONS.find((s) => s.id === editPostSection)?.label : undefined}
       >
         {editPost ? (
@@ -1108,6 +1117,7 @@ export function ForumPage({ city }: { city: City }) {
             onBodyChange={(body) => setEditPost((cur) => (cur ? { ...cur, body } : cur))}
             submitting={editPostBusy}
             error={editPostError}
+            admin={editPost.admin === true}
             onSubmit={submitEditPost}
           />
         ) : null}

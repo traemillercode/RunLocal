@@ -5,7 +5,7 @@ import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { HomeCityBanner } from "../components/HomeCityBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { GroupSubmissionSheet, IndependentEventSheet } from "../components/SubmissionSheets";
-import { Chip, Icon, PillButton } from "../components/ui";
+import { Chip, Icon, PillButton, Sheet } from "../components/ui";
 import * as api from "../lib/api";
 import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS, occurrenceHasStarted, mergeWeekEventSources, bareEventId, canonicalEventActions, type DatedRunEvent } from "../lib/dates";
 import { actionMenuItems, type ActionKey } from "../lib/actionModel";
@@ -65,6 +65,92 @@ export function eventConfirmMeta(kind: EventConfirmKind, title: string): {
         requireReason: true,
       };
   }
+}
+
+export interface EventEditDraft {
+  eventId: string;
+  title: string;
+  time: string;
+  location: string;
+  distanceLabel: string;
+  invite: string;
+  externalUrl: string;
+  dayOfWeek: number | null;
+  scheduleDate: string | null;
+}
+
+/**
+ * "Edit run" sheet body — presentational, prefilled from the canonical event.
+ * Recurring events edit the weekday slot; one-time events edit the calendar
+ * date. Save calls PUT /api/events/:id (server re-validates + audits).
+ */
+export function EventEditSheet({
+  draft,
+  submitting = false,
+  error = null,
+  onDraftChange,
+  onSubmit,
+  onClose,
+}: {
+  draft: EventEditDraft;
+  submitting?: boolean;
+  error?: string | null;
+  onDraftChange: (patch: Partial<EventEditDraft>) => void;
+  onSubmit: () => void;
+  onClose: () => void;
+}) {
+  const oneTime = draft.dayOfWeek === null;
+  return (
+    <div className="space-y-4">
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-semibold text-slate-700">Run title</span>
+        <input type="text" value={draft.title} maxLength={100} onChange={(e) => onDraftChange({ title: e.target.value })} placeholder="e.g. Tuesday Track Night" className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-700">Time</span>
+          <input type="text" value={draft.time} maxLength={20} onChange={(e) => onDraftChange({ time: e.target.value })} placeholder="6:00 PM" className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-700">Distance</span>
+          <input type="text" value={draft.distanceLabel} maxLength={80} onChange={(e) => onDraftChange({ distanceLabel: e.target.value })} placeholder="3–5 miles" className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
+        </label>
+      </div>
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-semibold text-slate-700">Location</span>
+        <input type="text" value={draft.location} maxLength={160} onChange={(e) => onDraftChange({ location: e.target.value })} placeholder="Where does it meet?" className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-700">Schedule</span>
+          {oneTime ? (
+            <input type="date" value={draft.scheduleDate ?? ""} onChange={(e) => onDraftChange({ scheduleDate: e.target.value || null })} className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-[16px] text-slate-900 outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
+          ) : (
+            <select value={String(draft.dayOfWeek)} onChange={(e) => onDraftChange({ dayOfWeek: Number(e.target.value) })} className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-[16px] text-slate-900 outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60">
+              {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d, i) => <option key={d} value={i}>{d}</option>)}
+            </select>
+          )}
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-700">Who can join?</span>
+          <select value={draft.invite} onChange={(e) => onDraftChange({ invite: e.target.value })} className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-[16px] text-slate-900 outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60">
+            {["Open to all", "Members + guests", "RSVP requested"].map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+        </label>
+      </div>
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-semibold text-slate-700">Details link <span className="font-normal text-slate-400">(optional)</span></span>
+        <input type="url" value={draft.externalUrl} onChange={(e) => onDraftChange({ externalUrl: e.target.value })} placeholder="https://…" className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
+      </label>
+      {error ? <p role="alert" className="rounded-xl bg-rose-50 p-3 text-[13px] font-semibold text-rose-800">{error}</p> : null}
+      <div className="flex gap-3">
+        <PillButton variant="ghost" className="flex-1" onClick={onClose} disabled={submitting}>Cancel</PillButton>
+        <PillButton variant="primary" className="flex-1" disabled={submitting || !draft.title.trim() || !draft.location.trim()} onClick={onSubmit}>
+          {submitting ? "Saving…" : "Save changes"}
+        </PillButton>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -160,6 +246,9 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
   const [confirm, setConfirm] = useState<EventConfirmAction | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<EventEditDraft | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
     void api.getCanonicalEvents(city.id).then((r) => {
@@ -267,11 +356,55 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
    *  canonical event row (resolved via the id-form index). Unknown keys and
    *  rows without a server copy are ignored — the client never invents rights. */
   const openConfirm = (event: { id: string; title: string }, key: ActionKey) => {
+    if (key === "edit") {
+      const entry = canonicalActions.get(event.id) ?? canonicalActions.get(bareEventId(event.id));
+      const rec = canonicalEvents?.find((e) => e.id === entry?.id || (e.seedRefId !== null && e.seedRefId === bareEventId(event.id)));
+      if (!entry || !rec) return;
+      setEditTarget({
+        eventId: entry.id,
+        title: rec.title,
+        time: rec.time,
+        location: rec.location,
+        distanceLabel: rec.distanceLabel,
+        invite: rec.invite,
+        externalUrl: rec.externalUrl ?? "",
+        dayOfWeek: rec.scheduleDate ? null : rec.dayOfWeek,
+        scheduleDate: rec.scheduleDate ?? null,
+      });
+      setEditError(null);
+      return;
+    }
     const kind: EventConfirmKind | null = key === "hide" ? "hide" : key === "restore" ? "restore" : key === "delete" ? "delete" : null;
     if (!kind) return;
     const entry = canonicalActions.get(event.id) ?? canonicalActions.get(bareEventId(event.id));
     if (!entry) return;
     setConfirm({ kind, eventId: entry.id, displayId: event.id, title: event.title });
+  };
+  /** PUT /api/events/:id — the server re-validates scope + fields and audits. */
+  const saveEdit = () => {
+    if (!editTarget || editBusy) return;
+    const t = editTarget;
+    setEditBusy(true);
+    setEditError(null);
+    void api.updateEvent(t.eventId, {
+      title: t.title.trim(),
+      time: t.time.trim(),
+      location: t.location.trim(),
+      distanceLabel: t.distanceLabel.trim(),
+      invite: t.invite,
+      externalUrl: t.externalUrl.trim() || null,
+      ...(t.dayOfWeek !== null ? { dayOfWeek: t.dayOfWeek } : { scheduleDate: t.scheduleDate }),
+    }).then((r) => {
+      setEditBusy(false);
+      if (r.ok) {
+        setEditTarget(null);
+        // Reflect the server's updated canonical record so cards re-render.
+        setCanonicalEvents((cur) => (cur ? cur.map((e) => (e.id === r.data.event.id ? r.data.event : e)) : cur));
+        toast("Run updated.", "success");
+      } else {
+        setEditError(r.error.message ?? "Couldn't save — try again.");
+      }
+    });
   };
   const closeConfirm = () => {
     if (confirmBusy) return;
@@ -487,6 +620,19 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
         pendingLabel="Your profile is still in review."
         rejectionReason={me?.status === "signed_in" ? me.account.rejectionReason ?? null : null}
       />
+
+      <Sheet open={editTarget !== null} onClose={() => { if (!editBusy) { setEditTarget(null); setEditError(null); } }} title="Edit run" subtitle="Changes are reviewed against the same rules as new runs.">
+        {editTarget ? (
+          <EventEditSheet
+            draft={editTarget}
+            submitting={editBusy}
+            error={editError}
+            onDraftChange={(patch) => setEditTarget((cur) => (cur ? { ...cur, ...patch } : cur))}
+            onSubmit={saveEdit}
+            onClose={() => { if (!editBusy) { setEditTarget(null); setEditError(null); } }}
+          />
+        ) : null}
+      </Sheet>
 
       <ModerationConfirmSheet
         open={confirm !== null}

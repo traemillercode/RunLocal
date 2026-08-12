@@ -4,11 +4,12 @@ import { VerifiedBadge } from "../components/VerifiedBadge";
 import { TrustedBadge } from "../components/TrustedBadge";
 import { ActionMenu } from "../components/ActionMenu";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
-import { Chip, Icon, PillButton } from "../components/ui";
+import { Chip, Icon, PillButton, Sheet } from "../components/ui";
 import type { City } from "../types";
 import { resolveWeekEvents } from "../lib/dates";
 import { phaseLabel, roleLabel } from "../lib/accounts";
-import { actionMenuItems } from "../lib/actionModel";
+import { actionMenuItems, type ActionKey } from "../lib/actionModel";
+import { useToast } from "../lib/toast";
 import * as api from "../lib/api";
 import type { AppStore } from "../lib/store";
 import { useAccount } from "../state/account";
@@ -33,6 +34,96 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
 };
 
 /**
+ * "Edit pending submission" sheet — presentational, kind-conditional fields
+ * prefilled from the submitter's own pending payload. Photos on group
+ * submissions can't be replaced through this endpoint (server preserves the
+ * existing refs). Save calls PATCH /api/my/submissions/:id which re-validates
+ * every field with the same rules as the original submit.
+ */
+export function SubmissionEditSheet({
+  open,
+  kind,
+  draft,
+  busy = false,
+  error = null,
+  onDraftChange,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  kind: api.SubmissionKind;
+  draft: Record<string, string>;
+  busy?: boolean;
+  error?: string | null;
+  onDraftChange: (patch: Record<string, string>) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  const inputCls = "h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
+  const oneTime = draft.type !== "recurring";
+  return (
+    <Sheet open={open} onClose={onClose} title="Edit pending submission" subtitle="Changes go back into the review queue.">
+      <div className="space-y-4">
+        {kind === "race" ? (
+          <>
+            <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Race name</span><input type="text" value={draft.name ?? ""} maxLength={120} onChange={(e) => onDraftChange({ name: e.target.value })} className={inputCls} /></label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Distances</span><input type="text" value={draft.distances ?? ""} maxLength={80} onChange={(e) => onDraftChange({ distances: e.target.value })} className={inputCls} /></label>
+              <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Date</span><input type="date" value={draft.date ?? ""} onChange={(e) => onDraftChange({ date: e.target.value })} className={inputCls} /></label>
+            </div>
+            <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Location</span><input type="text" value={draft.location ?? ""} maxLength={160} onChange={(e) => onDraftChange({ location: e.target.value })} className={inputCls} /></label>
+            <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Registration link</span><input type="url" value={draft.registrationUrl ?? ""} onChange={(e) => onDraftChange({ registrationUrl: e.target.value })} className={inputCls} /></label>
+            <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Description <span className="font-normal text-slate-400">(optional)</span></span><textarea value={draft.description ?? ""} rows={3} maxLength={1000} onChange={(e) => onDraftChange({ description: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" /></label>
+          </>
+        ) : kind === "group" ? (
+          <>
+            <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Group name</span><input type="text" value={draft.name ?? ""} maxLength={80} onChange={(e) => onDraftChange({ name: e.target.value })} className={inputCls} /></label>
+            <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Description</span><textarea value={draft.description ?? ""} rows={3} maxLength={500} onChange={(e) => onDraftChange({ description: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" /></label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">GroupMe</span><input type="url" value={draft.groupmeUrl ?? ""} onChange={(e) => onDraftChange({ groupmeUrl: e.target.value })} className={inputCls} /></label>
+              <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Facebook</span><input type="url" value={draft.facebookUrl ?? ""} onChange={(e) => onDraftChange({ facebookUrl: e.target.value })} className={inputCls} /></label>
+              <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Instagram</span><input type="url" value={draft.instagramUrl ?? ""} onChange={(e) => onDraftChange({ instagramUrl: e.target.value })} className={inputCls} /></label>
+              <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Website</span><input type="url" value={draft.websiteUrl ?? ""} onChange={(e) => onDraftChange({ websiteUrl: e.target.value })} className={inputCls} /></label>
+            </div>
+            <p className="rounded-xl bg-slate-50 p-3 text-[12px] leading-relaxed text-slate-500">Group photos can't be changed here — keep the submission pending and an admin can help with those.</p>
+          </>
+        ) : (
+          <>
+            <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Run title</span><input type="text" value={draft.title ?? ""} maxLength={100} onChange={(e) => onDraftChange({ title: e.target.value })} className={inputCls} /></label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Time</span><input type="text" value={draft.time ?? ""} maxLength={20} onChange={(e) => onDraftChange({ time: e.target.value })} className={inputCls} /></label>
+              <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Distance</span><input type="text" value={draft.distanceLabel ?? ""} maxLength={80} onChange={(e) => onDraftChange({ distanceLabel: e.target.value })} className={inputCls} /></label>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-slate-700">Schedule</span>
+                {oneTime ? (
+                  <input type="date" value={draft.date ?? ""} onChange={(e) => onDraftChange({ date: e.target.value, type: "one_time" })} className={inputCls} />
+                ) : (
+                  <select value={draft.dayOfWeek ?? "0"} onChange={(e) => onDraftChange({ dayOfWeek: e.target.value, type: "recurring" })} className={inputCls}>
+                    {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d, i) => <option key={d} value={i}>{d}</option>)}
+                  </select>
+                )}
+              </label>
+              <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Who can join?</span><select value={draft.invite ?? "Open to all"} onChange={(e) => onDraftChange({ invite: e.target.value })} className={inputCls}>{["Open to all", "Members + guests", "RSVP requested"].map((o) => <option key={o} value={o}>{o}</option>)}</select></label>
+            </div>
+            <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Location</span><input type="text" value={draft.location ?? ""} maxLength={160} onChange={(e) => onDraftChange({ location: e.target.value })} className={inputCls} /></label>
+            <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Details link <span className="font-normal text-slate-400">(optional)</span></span><input type="url" value={draft.externalUrl ?? ""} onChange={(e) => onDraftChange({ externalUrl: e.target.value })} className={inputCls} /></label>
+            <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">Description <span className="font-normal text-slate-400">(optional)</span></span><textarea value={draft.description ?? ""} rows={3} maxLength={1000} onChange={(e) => onDraftChange({ description: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" /></label>
+          </>
+        )}
+        {error ? <p role="alert" className="rounded-xl bg-rose-50 p-3 text-[13px] font-semibold text-rose-800">{error}</p> : null}
+        <div className="flex gap-3">
+          <PillButton variant="ghost" className="flex-1" onClick={onClose} disabled={busy}>Cancel</PillButton>
+          <PillButton variant="primary" className="flex-1" disabled={busy} onClick={onSubmit}>{busy ? "Saving…" : "Save changes"}</PillButton>
+        </div>
+        <p className="text-center text-xs text-slate-400">Once reviewed, submissions are history-only — edits then require an admin.</p>
+      </div>
+    </Sheet>
+  );
+}
+
+/**
  * The signed-in user's OWN submission rows — presentational (no data hooks) so
  * SSR tests can render the real markup: pending rows get the Withdraw action
  * menu (capability `withdraw`), decided rows render no trigger, and withdrawn
@@ -40,10 +131,13 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
  */
 export function MySubmissionsContent({
   rows,
+  onAction,
   onWithdraw,
 }: {
   rows: api.MySubmissionView[];
-  /** Opens the variant-B confirm for a pending submission. */
+  /** Menu dispatcher — the parent maps edit_pending to the edit sheet and withdraw to the confirm. */
+  onAction?: (row: api.MySubmissionView, key: ActionKey) => void;
+  /** Deprecated legacy prop — treats every action as a withdraw (older callers). */
   onWithdraw?: (id: string, title: string) => void;
 }) {
   return (
@@ -59,8 +153,8 @@ export function MySubmissionsContent({
                 <p className="text-xs text-slate-500">{KIND_LABELS[r.kind] ?? r.kind}</p>
               </div>
               <span className="flex shrink-0 items-center gap-1.5">
-                {items.length > 0 && onWithdraw ? (
-                  <ActionMenu entityTitle={`${r.title} submission`} items={items} onSelect={() => onWithdraw(r.id, r.title)} />
+                {items.length > 0 && (onAction || onWithdraw) ? (
+                  <ActionMenu entityTitle={`${r.title} submission`} items={items} onSelect={(key) => (onAction ? onAction(r, key) : onWithdraw?.(r.id, r.title))} />
                 ) : null}
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${st.cls}`}>{st.label}</span>
               </span>
@@ -85,6 +179,42 @@ export function MySubmissions({ signedIn }: { signedIn: boolean }) {
   const [withdrawTarget, setWithdrawTarget] = useState<{ id: string; title: string } | null>(null);
   const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [editRow, setEditRow] = useState<api.MySubmissionView | null>(null);
+  const [editDraft, setEditDraft] = useState<Record<string, string>>({});
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const toast = useToast();
+  const openRowAction = (row: api.MySubmissionView, key: ActionKey) => {
+    if (key === "edit_pending") {
+      const p = (row.payload ?? {}) as Record<string, unknown>;
+      const draft: Record<string, string> = {};
+      for (const [k, v] of Object.entries(p)) {
+        if (typeof v === "string" || typeof v === "number") draft[k] = String(v);
+      }
+      setEditDraft(draft);
+      setEditRow(row);
+      setEditError(null);
+      return;
+    }
+    if (key === "withdraw") setWithdrawTarget({ id: row.id, title: row.title });
+    setWithdrawError(null);
+  };
+  const savePendingEdit = () => {
+    if (!editRow || editBusy) return;
+    const row = editRow;
+    setEditBusy(true);
+    setEditError(null);
+    void api.updatePendingSubmission(row.id, editDraft).then((r) => {
+      setEditBusy(false);
+      if (r.ok) {
+        setEditRow(null);
+        load();
+        toast?.("Submission updated — it's back in the review queue.", "success");
+      } else {
+        setEditError(r.error.message ?? "Couldn't save — try again.");
+      }
+    });
+  };
   const load = () => {
     setLoading(true); setError(null);
     void api.getMySubmissions().then((r) => {
@@ -134,7 +264,7 @@ export function MySubmissions({ signedIn }: { signedIn: boolean }) {
       ) : !rows || rows.length === 0 ? (
         <p className="mt-3 text-[13px] text-slate-500">Nothing submitted yet. Submit a race, group, or independent run from the Races and Events pages.</p>
       ) : (
-        <MySubmissionsContent rows={rows} onWithdraw={(id, title) => { setWithdrawTarget({ id, title }); setWithdrawError(null); }} />
+        <MySubmissionsContent rows={rows} onAction={openRowAction} />
       )}
       <ModerationConfirmSheet
         open={withdrawTarget !== null}
@@ -146,6 +276,16 @@ export function MySubmissions({ signedIn }: { signedIn: boolean }) {
         busy={withdrawBusy}
         error={withdrawError}
         onConfirm={() => confirmWithdraw()}
+      />
+      <SubmissionEditSheet
+        open={editRow !== null}
+        kind={editRow?.kind ?? "race"}
+        draft={editDraft}
+        busy={editBusy}
+        error={editError}
+        onDraftChange={(patch) => setEditDraft((cur) => ({ ...cur, ...patch }))}
+        onClose={() => { if (!editBusy) { setEditRow(null); setEditError(null); } }}
+        onSubmit={savePendingEdit}
       />
     </section>
   );
