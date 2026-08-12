@@ -51,7 +51,7 @@ const MAX_REPLY = 1000;
  * exactly these lists, and every listed action maps to an endpoint that
  * re-validates the same rules server-side.
  */
-export type ForumCapability = "edit_own" | "delete_own" | "hide" | "restore" | "delete" | "report" | "pin" | "unpin";
+export type ForumCapability = "edit_own" | "delete_own" | "hide" | "restore" | "delete" | "report" | "tag" | "pin" | "unpin";
 
 /** Verified + not deleted + not suspended — the gate for author and report actions. */
 function verifiedActive(actor: AccountRecord | null | undefined, now: Date): boolean {
@@ -74,7 +74,9 @@ export function forumPostCapabilities(actor: AccountRecord | null | undefined, p
   if (!actor || actor.deletedAt) return [];
   const caps: ForumCapability[] = [];
   const isAuthor = post.authorAccountId === actor.id;
-  if (isAuthor && verifiedActive(actor, now)) caps.push("edit_own", "delete_own");
+  // Verified authors may tag runners on their own posts (lightweight, no
+  // approval — the tagged runner can self-hide; PATCH /api/tags/:id/self).
+  if (isAuthor && verifiedActive(actor, now)) caps.push("edit_own", "delete_own", "tag");
   if (isGlobalAdmin(actor) || isCityAdminForCity(actor, post.cityId)) {
     caps.push("hide", "restore", "delete");
     caps.push(post.pinned === true ? "unpin" : "pin");
