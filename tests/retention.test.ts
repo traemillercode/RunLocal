@@ -50,14 +50,24 @@ describe("purge removes selfie + phone records", () => {
       phone: "+15735550124",
       selfieRef: `${fresh.id}_selfie.jpg`,
     });
+    // Seed notifications + preferences for both accounts; purge must remove the
+    // stale account's rows without touching the retained account's rows.
+    db.addNotification({ id: "stale-n1", accountId: stale.id, category: "account_alerts", title: "stale", body: "b", createdAt: "2019-06-01T00:00:00.000Z", readAt: null });
+    db.setNotificationPreferences(stale.id, { run_reminders: true });
+    db.addNotification({ id: "fresh-n1", accountId: fresh.id, category: "account_alerts", title: "fresh", body: "b", createdAt: "2026-07-01T00:00:00.000Z", readAt: null });
+    db.setNotificationPreferences(fresh.id, { community_updates: true });
 
     const result = await purgeEligible(db, T0);
     expect(result.purged).toContain(stale.id);
     expect(result.retained).toContain(fresh.id);
     expect(db.getAccount(stale.id)).toBeUndefined();
+    expect(db.listNotifications(stale.id)).toEqual([]);
+    expect(db.getNotificationPreferences(stale.id)).toMatchObject({ run_reminders: false, community_updates: false });
     const kept = db.getAccount(fresh.id)!;
     expect(kept.phone).toBe("+15735550124");
     expect(kept.selfieRef).toBe(`${fresh.id}_selfie.jpg`);
+    expect(db.listNotifications(fresh.id).map((n) => n.id)).toEqual(["fresh-n1"]);
+    expect(db.getNotificationPreferences(fresh.id)).toMatchObject({ community_updates: true });
   });
 
   it("default retention is 3 years and configurable", () => {

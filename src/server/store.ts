@@ -373,6 +373,16 @@ export class Db {
   listNotifications(accountId: string) { return [...this.notifications.values()].filter(n=>n.accountId===accountId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
   updateNotification(id: string, accountId: string, patch: {readAt:string|null}) { const n=this.notifications.get(id); if(!n||n.accountId!==accountId)return undefined; n.readAt=patch.readAt; return n; }
   markAllNotificationsRead(accountId:string) { const at=this.now().toISOString(); for(const n of this.notifications.values()) if(n.accountId===accountId)n.readAt=at; }
+  /** Remove every notification row for an account (account deletion / purge — no orphaned private data). */
+  deleteNotificationsForAccount(accountId: string): void {
+    for (const [id, n] of this.notifications) {
+      if (n.accountId === accountId) this.notifications.delete(id);
+    }
+  }
+  /** Remove an account's notification preference record entirely (account deletion / purge). */
+  deleteNotificationPreferences(accountId: string): void {
+    this.notificationPreferences.delete(accountId);
+  }
   listDiscussions(occurrenceId: string) { return [...this.discussions.values()].filter(d => d.occurrenceId === occurrenceId && d.state === "visible").sort((a,b) => a.createdAt.localeCompare(b.createdAt)); }
   /** All discussions for an event (any occurrence), soft-deleted included — cascade/audit tooling. */
   listDiscussionsByEvent(eventId: string) { return [...this.discussions.values()].filter(d => d.eventId === eventId); }
