@@ -13,7 +13,7 @@
  */
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { NotificationPreferencesSection } from "../src/pages/SettingsPage";
 import type { NotificationPreferences } from "../src/lib/api";
 
