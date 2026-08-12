@@ -253,7 +253,10 @@ export type AdminAction =
   | "forum.reply_edit"
   | "forum.reply_delete"
   | "discussion.edit"
-  | "content.flag";
+  | "content.flag"
+  | "group_lead.event_hide"
+  | "group_lead.event_restore"
+  | "group_lead.event_delete";
 
 export interface AuditEntry {
   id: string;
@@ -285,6 +288,12 @@ export interface AuditEntry {
    * never hard-deleted so the full trail survives.
    */
   change: string | null;
+  /**
+   * Run Local account id of the actor (signed-in user actions outside the
+   * admin-session model, e.g. group-lead moderation). Null for key-admin
+   * sessions and legacy entries written before this field existed.
+   */
+  accountId: string | null;
 }
 
 export interface RunEventRecord {
