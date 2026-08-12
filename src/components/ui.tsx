@@ -244,6 +244,12 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M12 13v3M9 20h6M10.5 16h3l.7 4H9.8l.7-4z" />
     </>
   ),
+  bell: (
+    <>
+      <path d="M18 8.5a6 6 0 0 0-12 0c0 6.5-2.5 7.8-2.5 7.8h17S18 15 18 8.5z" />
+      <path d="M13.7 19.5a2 2 0 0 1-3.4 0" />
+    </>
+  ),
 };
 
 export function Icon({ name, className = "h-5 w-5" }: { name: string; className?: string }) {

@@ -7,6 +7,7 @@ import { CITIES } from "./data/cities";
 import { ToastProvider } from "./lib/toast";
 import { useAppState } from "./lib/store";
 import { AccountProvider } from "./state/account";
+import { NotificationsProvider } from "./state/notifications";
 import { ModeratedProvider } from "./state/moderated";
 import { PublicContentProvider } from "./state/content";
 import { useSelectedCity } from "./state/city";
@@ -32,6 +33,7 @@ import { MarketingPage } from "./pages/MarketingPage";
 import { GroupDetailPage } from "./pages/GroupDetailPage";
 import { MyGroupsPage } from "./pages/MyGroupsPage";
 import { GroupManagePage } from "./pages/GroupManagePage";
+import { NotificationsPage } from "./pages/NotificationsPage";
 import { RosterPage } from "./pages/RosterPage";
 import { CheckinPage } from "./pages/CheckinPage";
 import { parseAuthCallback } from "./lib/recovery";
@@ -98,6 +100,7 @@ function Shell() {
             <Route path="/my-runs" element={<MyRunsPage />} />
             <Route path="/personal-runs" element={<PersonalRunsPage />} />
             <Route path="/profile" element={<ProfilePage city={city} store={store} />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/recovery" element={<RecoveryPage sessionError={recoveryError} />} />
@@ -128,9 +131,11 @@ export default function App() {
   return (
     <ToastProvider>
       <AccountProvider>
-        <HashRouter>
-          <Shell />
-        </HashRouter>
+        <NotificationsProvider>
+          <HashRouter>
+            <Shell />
+          </HashRouter>
+        </NotificationsProvider>
       </AccountProvider>
     </ToastProvider>
   );

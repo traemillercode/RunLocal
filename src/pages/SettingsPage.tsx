@@ -8,7 +8,7 @@
  * no secrets.
  */
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { TrustedBadge } from "../components/TrustedBadge";
 import { Chip, Icon, PillButton } from "../components/ui";
@@ -17,7 +17,9 @@ import { phaseLabel, roleLabel, type PublicAccount } from "../lib/accounts";
 import * as api from "../lib/api";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
+import { useNotifications } from "../state/notifications";
 import { useSelectedCity } from "../state/city";
+import { NOTIFICATION_CATEGORY_META } from "../lib/notifications";
 import * as supabase from "../lib/supabase";
 import { PASSWORD_REQUIREMENTS, passwordRequirements } from "./LoginPage";
 import { normalizeUsername, USERNAME_HINT, USERNAME_PROMPT } from "../lib/username";
@@ -210,17 +212,98 @@ export function ProfilePhotoSettings({ account, refresh }: { account: PublicAcco
   );
 }
 
+/**
+ * One coherent Notifications section for Settings: category preferences
+ * (each labeled with whether it delivers today), browser permission, and a
+ * link to the private notification center. Presentational — driven by props
+ * so UI tests render the real markup without providers.
+ *
+ * Honesty contract: `NOTIFICATION_CATEGORY_META` marks only categories with a
+ * real server producer as active; everything else is clearly labeled
+ * "Coming soon" and the browser copy never claims background push.
+ */
+export function NotificationPreferencesSection({
+  prefs,
+  unreadCount,
+  browserPermission,
+  error,
+  onToggle,
+  onAllowBrowser,
+}: {
+  prefs: api.NotificationPreferences;
+  unreadCount: number | null;
+  browserPermission: NotificationPermission | "unsupported";
+  error: string | null;
+  onToggle: (key: keyof api.NotificationPreferences) => void;
+  onAllowBrowser: () => void;
+}) {
+  const unread = unreadCount ?? 0;
+  return (
+    <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+      <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Notifications</h2>
+      <ul className="divide-y divide-slate-100">
+        {error ? <li role="alert" className="bg-red-50 px-5 py-3 text-xs font-medium text-red-800">{error}</li> : null}
+        {NOTIFICATION_CATEGORY_META.map((meta) => {
+          const value = prefs[meta.key];
+          return (
+            <li key={meta.key} className="px-5 py-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[14px] font-medium text-slate-700">{meta.label}</span>
+                <div className="flex shrink-0 items-center gap-2">
+                  {meta.available ? <Chip tone="emerald">Active</Chip> : <Chip tone="amber">Coming soon</Chip>}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={value}
+                    aria-label={`${meta.label} ${value ? "on" : "off"}`}
+                    onClick={() => onToggle(meta.key)}
+                    className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${value ? "bg-[#14171C]" : "bg-slate-300"}`}
+                  >
+                    <span aria-hidden="true" className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${value ? "left-6" : "left-1"}`} />
+                  </button>
+                </div>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">{meta.description}</p>
+            </li>
+          );
+        })}
+        <li className="px-5 py-3">
+          <p className="text-sm font-semibold">Browser notifications</p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+            {browserPermission === "unsupported" ? "This browser does not support notifications." : browserPermission === "denied" ? "Notifications are blocked in your browser settings." : browserPermission === "granted" ? "Allowed for foreground notices only." : "Not enabled."}
+          </p>
+          {browserPermission === "default" ? (
+            <button type="button" className="mt-2 rounded-[10px] bg-slate-900 px-3 py-2 text-xs font-semibold text-white" onClick={onAllowBrowser}>Allow browser notifications</button>
+          ) : null}
+        </li>
+        <li>
+          <Link to="/notifications" className="flex min-h-11 w-full items-center justify-between gap-3 px-5 text-left active:bg-slate-50">
+            <span className="text-[14px] font-medium text-slate-700">In-app notifications</span>
+            <span className="flex items-center gap-1 text-[14px] font-semibold text-[#14171C]">
+              {unread > 0 ? `${unread} unread` : "None unread"} <Icon name="chevronRight" className="h-4 w-4 text-slate-300" />
+            </span>
+          </Link>
+        </li>
+      </ul>
+      <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
+        Category preferences are saved to your account and default to off. Only Community updates delivers in-app
+        notifications today; Run reminders and Account alerts are coming soon. In-app notifications are private to your
+        account. Browser permission is foreground-only; Run Local does not claim background push.
+      </p>
+    </section>
+  );
+}
+
 export function SettingsPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const { me, backendAvailable, signOut, deleteMyAccount, refresh } = useAccount();
   const { city, cityId, signedIn, hasHomeCity, selectCity } = useSelectedCity();
   const [notificationPrefs, setNotificationPrefs] = useState<api.NotificationPreferences>({run_reminders:false,community_updates:false,account_alerts:false});
-  const [notificationCount, setNotificationCount] = useState(0);
   const [notificationError, setNotificationError] = useState<string | null>(null);
-  const [notifications, setNotifications] = useState<api.InAppNotification[]>([]);
   const [browserPermission, setBrowserPermission] = useState<NotificationPermission | "unsupported">(typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported");
-  useEffect(() => { if (!signedIn) return; void api.getNotificationPreferences().then(r => { if (r.ok) setNotificationPrefs(r.data.preferences); else setNotificationError(r.error.message); }).catch(() => setNotificationError("Couldn’t load notification preferences. Try again.")); void api.getNotifications().then(r => { if (r.ok) { setNotificationCount(r.data.unreadCount); setNotifications(r.data.notifications); } }); }, [signedIn]);
+  const { unreadCount } = useNotifications();
+  useEffect(() => { if (!signedIn) return; void api.getNotificationPreferences().then(r => { if (r.ok) setNotificationPrefs(r.data.preferences); else setNotificationError(r.error.message); }).catch(() => setNotificationError("Couldn’t load notification preferences. Try again.")); }, [signedIn]);
   const toggleNotification = async (key: keyof api.NotificationPreferences) => { const next = {...notificationPrefs, [key]: !notificationPrefs[key]}; setNotificationError(null); setNotificationPrefs(next); const r = await api.updateNotificationPreferences({[key]: next[key]}); if (!r.ok) { setNotificationPrefs(notificationPrefs); setNotificationError(r.error.message ?? "Couldn’t save notification preference. Try again."); } };
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [health, setHealth] = useState<api.HealthInfo | null>(null);
@@ -381,7 +464,6 @@ export function SettingsPage() {
       <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
         <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Preferences</h2>
         <ul className="divide-y divide-slate-100">
-          {notificationError ? <li role="alert" className="bg-red-50 px-5 py-3 text-xs font-medium text-red-800">{notificationError}</li> : null}
           <li className="flex items-center justify-between gap-3 px-5 py-3.5">
             <span className="text-[14px] font-medium text-slate-700">City</span>
             <span className="text-[14px] text-slate-500">
@@ -389,18 +471,21 @@ export function SettingsPage() {
               {signedIn && hasHomeCity ? " (home)" : ""}
             </span>
           </li>
-          {signedIn ? (Object.entries(notificationPrefs) as Array<[keyof api.NotificationPreferences, boolean]>).map(([key, value]) => (
-            <li key={key}><button type="button" onClick={() => void toggleNotification(key)} className="flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3.5 text-left active:bg-slate-50"><span className="text-[14px] font-medium text-slate-700">{key === "run_reminders" ? "Run reminders" : key === "community_updates" ? "Community updates" : "Account alerts"}</span><span aria-label={value ? "On" : "Off"} className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${value ? "bg-[#14171C]" : "bg-slate-300"}`}><span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${value ? "left-6" : "left-1"}`} /></span></button></li>
-          )) : null}
-          {signedIn ? <li className="flex items-center justify-between px-5 py-3 text-xs text-slate-500"><span>In-app notifications</span><span>{notificationCount} unread</span></li> : null}
-          {signedIn ? <li className="px-5 py-3"><p className="text-sm font-semibold">Browser notifications</p><p className="mt-1 text-xs text-slate-500">{browserPermission === "unsupported" ? "This browser does not support notifications." : browserPermission === "denied" ? "Notifications are blocked in your browser settings." : browserPermission === "granted" ? "Allowed for foreground notices only." : "Not enabled."}</p>{browserPermission === "default" ? <button type="button" className="mt-2 rounded-[10px] bg-slate-900 px-3 py-2 text-xs font-semibold text-white" onClick={() => void Notification.requestPermission().then(setBrowserPermission)}>Allow browser notifications</button> : null}</li> : null}
         </ul>
-        <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
-          Notification categories are saved to your account and default to off. In-app notifications are private to your account. Browser permission is foreground-only; Run Local does not claim background push.
-        </p>
       </section>
 
-      {signedIn ? <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5"><h2 className="text-[15px] font-bold">Notifications</h2><button type="button" className="text-xs font-semibold" disabled={!notificationCount} onClick={() => void api.markAllNotificationsRead().then(() => { setNotifications(v => v.map(n => ({...n, readAt: new Date().toISOString()}))); setNotificationCount(0); })}>Mark all read</button></div>{notifications.length ? <ul className="divide-y divide-slate-100">{notifications.map(n => <li key={n.id} className={`px-5 py-3 ${n.readAt ? "" : "bg-orange-50"}`}><button type="button" className="w-full text-left" onClick={() => !n.readAt && void api.markNotificationRead(n.id).then(() => { setNotifications(v => v.map(x => x.id === n.id ? {...x, readAt: new Date().toISOString()} : x)); setNotificationCount(v => Math.max(0,v-1)); })}><p className="text-sm font-semibold">{n.title}</p><p className="mt-1 text-xs text-slate-600">{n.body}</p><p className="mt-1 text-[11px] text-slate-400">{new Date(n.createdAt).toLocaleString()}</p></button></li>)}</ul> : <p className="px-5 py-4 text-sm text-slate-500">No notifications yet.</p>}</section> : null}
+      {/* Notifications — one coherent section: category preferences, browser
+          permission, and the link to the private notification center. */}
+      {signedIn ? (
+        <NotificationPreferencesSection
+          prefs={notificationPrefs}
+          unreadCount={unreadCount}
+          browserPermission={browserPermission}
+          error={notificationError}
+          onToggle={(key) => void toggleNotification(key)}
+          onAllowBrowser={() => void Notification.requestPermission().then(setBrowserPermission)}
+        />
+      ) : null}
       {/* Home city — account-owned, server-validated */}
       {signedIn ? (
         <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">

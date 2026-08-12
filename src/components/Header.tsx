@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import type { City } from "../types";
 import { AccountMenuButton } from "./AccountMenu";
+import { NotificationsBell } from "./NotificationsBell";
 import { useAccount } from "../state/account";
 import { Chip, Icon } from "./ui";
 import { Sheet } from "./ui";
@@ -58,6 +59,7 @@ export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet:
             </span>
             <Icon name="chevronDown" className="h-3.5 w-3.5 text-[#FF5741] min-[400px]:h-4 min-[400px]:w-4" />
           </button>
+          <NotificationsBell className="bg-white/10 ring-1 ring-white/20 active:bg-white/20" />
           <GuestLoginCta />
           <AccountMenuButton />
         </div>
