@@ -772,6 +772,32 @@ export interface RecognitionView {
 export function getRecognitions(cityId: string): Promise<ApiResult<{ recognitions: RecognitionView[] }>> {
   return request(`/api/recognitions?city=${encodeURIComponent(cityId)}`);
 }
+/**
+ * Public-safe identity of ANY account — the only fields a third party (or
+ * guest) may see. Never email, phone, suspended state, rejection reason,
+ * under-review state, or verification history.
+ */
+export interface RunnerProfileView {
+  id: string;
+  name: string;
+  username: string | null;
+  profilePhotoUrl: string | null;
+  /** Display name of the runner's home city (null when unset/unknown). */
+  cityName: string | null;
+  isVerified: boolean;
+  isTrustedMember: boolean;
+  isLeader: boolean;
+}
+/** GET /api/runners/:id — guest-accessible public runner profile. */
+export interface RunnerProfileResponse {
+  profile: RunnerProfileView;
+  trust: PublicTrustView;
+  /** Non-ranked qualitative recognition list for the runner's city. */
+  recognitions: RecognitionView[];
+}
+export function getRunnerProfile(id: string): Promise<ApiResult<RunnerProfileResponse>> {
+  return request(`/api/runners/${encodeURIComponent(id)}`);
+}
 
 /** One row of the runner's own private My Runs list. `kind` distinguishes an
  * RSVP'd event occurrence from a solo (personal) run. `kept`/`checkedIn` drive

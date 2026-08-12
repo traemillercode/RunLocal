@@ -218,7 +218,9 @@ describe("ForumThread — inline replies per role", () => {
   ];
   it("verified gets the live composer AND the existing replies", () => {
     const html = renderToStaticMarkup(
-      <ForumThread role="verified" replies={replies} draft="" onDraftChange={() => {}} onSubmit={() => {}} />,
+      <MemoryRouter>
+        <ForumThread role="verified" replies={replies} draft="" onDraftChange={() => {}} onSubmit={() => {}} />
+      </MemoryRouter>,
     );
     expect(html).toContain("Jordan Lee");
     expect(html).toContain("Sam Rivera");
@@ -232,7 +234,9 @@ describe("ForumThread — inline replies per role", () => {
 
   it("empty thread shows honest empty state for verified users", () => {
     const html = renderToStaticMarkup(
-      <ForumThread role="verified" replies={[]} draft="" onDraftChange={() => {}} onSubmit={() => {}} />,
+      <MemoryRouter>
+        <ForumThread role="verified" replies={[]} draft="" onDraftChange={() => {}} onSubmit={() => {}} />
+      </MemoryRouter>,
     );
     expect(html).toContain("No replies yet.");
     expect(html).toContain("Reply as yourself");
@@ -241,7 +245,9 @@ describe("ForumThread — inline replies per role", () => {
   it("guests / pending / rejected get read-only copy and NEVER the composer", () => {
     for (const role of ["guest", "pending", "rejected"] as const) {
       const html = renderToStaticMarkup(
-        <ForumThread role={role} replies={replies} draft="" onDraftChange={() => {}} onSubmit={() => {}} />,
+        <MemoryRouter>
+          <ForumThread role={role} replies={replies} draft="" onDraftChange={() => {}} onSubmit={() => {}} />
+        </MemoryRouter>,
       );
       expect(html).toContain("Replies are open to verified runner profiles");
       expect(html).toContain("Jordan Lee"); // replies are publicly readable

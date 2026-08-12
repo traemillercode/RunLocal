@@ -58,6 +58,21 @@ function replyRow(capabilities: string[]): ForumReplyView {
   };
 }
 
+
+function postRowWithId(capabilities: string[] = []): ForumPostRow {
+  return {
+    id: "p1",
+    section: "community",
+    title: "New group route",
+    body: "We added a 5K loop along the river.",
+    author: "Taylor Runner",
+    createdAt: "Aug 1",
+    replies: 2,
+    authorId: "acc_1",
+    capabilities,
+  };
+}
+
 function account(patch: Partial<PublicAccount> = {}): PublicAccount {
   return {
     id: "acc_1",
@@ -139,21 +154,27 @@ describe("forum PostCard — action menu per role", () => {
 describe("ForumThread — reply action menu per role", () => {
   it("reply author gets Edit + Delete with an accessible trigger", () => {
     const html = renderToStaticMarkup(
-      <ForumThread role="verified" replies={[replyRow(["edit_own", "delete_own"])]} draft="" onDraftChange={noop} onSubmit={noop} />,
+      <MemoryRouter>
+        <ForumThread role="verified" replies={[replyRow(["edit_own", "delete_own"])]} draft="" onDraftChange={noop} onSubmit={noop} />
+      </MemoryRouter>,
     );
     expect(html).toContain('aria-label="Actions for Reply by Jordan Lee"');
   });
 
   it("verified non-author gets Report on a reply", () => {
     const html = renderToStaticMarkup(
-      <ForumThread role="verified" replies={[replyRow(["report"])]} draft="" onDraftChange={noop} onSubmit={noop} />,
+      <MemoryRouter>
+        <ForumThread role="verified" replies={[replyRow(["report"])]} draft="" onDraftChange={noop} onSubmit={noop} />
+      </MemoryRouter>,
     );
     expect(html).toContain('aria-label="Actions for Reply by Jordan Lee"');
   });
 
   it("empty reply capabilities render no trigger", () => {
     const html = renderToStaticMarkup(
-      <ForumThread role="verified" replies={[replyRow([])]} draft="" onDraftChange={noop} onSubmit={noop} />,
+      <MemoryRouter>
+        <ForumThread role="verified" replies={[replyRow([])]} draft="" onDraftChange={noop} onSubmit={noop} />
+      </MemoryRouter>,
     );
     expect(html).not.toContain("Actions for");
     expect(html).not.toContain('aria-haspopup="menu"');
@@ -195,5 +216,32 @@ describe("ForumPage — seed posts carry admin-only menu items", () => {
     );
     expect(html).not.toContain("Actions for");
     expect(html).not.toContain('aria-haspopup="menu"');
+  });
+});
+
+describe("forum author → runner profile links", () => {
+  it("post with authorId links the author name to /runners/:authorId", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <PostCard post={postRowWithId()} section="community" onReply={noop} verified onAction={noop} />
+      </MemoryRouter>,
+    );
+    expect(html).toContain('href="/runners/acc_1"');
+    expect(html).toContain("Taylor Runner");
+  });
+  it("seed post (no authorId) keeps a plain author name, no link", () => {
+    const html = renderToStaticMarkup(<PostCard post={postRow([])} section="community" onReply={noop} verified onAction={noop} />);
+    expect(html).toContain("Taylor Runner");
+    expect(html).not.toContain('href="/runners/');
+    expect(html).not.toContain("<a ");
+  });
+  it("reply with authorId links the reply author name", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <ForumThread role="verified" replies={[replyRow([])]} draft="" onDraftChange={noop} onSubmit={noop} />
+      </MemoryRouter>,
+    );
+    expect(html).toContain('href="/runners/acc_2"');
+    expect(html).toContain("Jordan Lee");
   });
 });
