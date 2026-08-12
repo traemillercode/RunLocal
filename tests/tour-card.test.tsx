@@ -8,6 +8,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TourCard } from "../src/components/TourHost";
+import { TOUR_SETTINGS_SAMPLE_CAPTION } from "../src/components/TourSettingsSample";
 import { TOUR_STEPS } from "../src/lib/tour";
 
 const noop = () => {};
@@ -29,9 +30,17 @@ describe("TourCard (SSR markup)", () => {
     expect(html).toContain(TOUR_STEPS[0].body.split("'").join("&#x27;"));
   });
 
-  it("shows progress '1 of 6' on the first step and '6 of 6' on the last", () => {
-    expect(renderCard(0)).toContain("Welcome tour · 1 of 6");
-    expect(renderCard(TOUR_STEPS.length - 1)).toContain("Welcome tour · 6 of 6");
+  it("shows progress '1 of 7' on the first step and '7 of 7' on the last", () => {
+    expect(renderCard(0)).toContain("Welcome tour · 1 of 7");
+    expect(renderCard(TOUR_STEPS.length - 1)).toContain("Welcome tour · 7 of 7");
+  });
+
+  it("renders the Settings sample inside the last (Settings) step card", () => {
+    const html = renderCard(TOUR_STEPS.length - 1);
+    expect(TOUR_STEPS[TOUR_STEPS.length - 1].id).toBe("settings");
+    expect(html).toContain("data-tour-settings-sample");
+    expect(html).toContain(TOUR_SETTINGS_SAMPLE_CAPTION);
+    expect(html).toContain("My upcoming runs &amp; races");
   });
 
   it("shows Skip and Next on the first step but no Back", () => {

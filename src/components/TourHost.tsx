@@ -32,6 +32,7 @@ import {
   type TourStep,
 } from "../lib/tour";
 import { Icon } from "./ui";
+import { TourSettingsSample } from "./TourSettingsSample";
 
 /** Routes where the tour must never auto-start or navigate (auth funnels). */
 const TOUR_STOP_ROUTES = new Set([
@@ -90,6 +91,8 @@ export function TourCard({
         <p id={`${titleId}-body`} className="mt-1.5 text-[13.5px] leading-relaxed text-slate-600">
           {step.body}
         </p>
+        {/* Settings step: static preview of the Privacy section (SSR-safe, no hooks). */}
+        {step.id === "settings" ? <TourSettingsSample /> : null}
         <p className="mt-3 flex items-center gap-1.5 rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
           <Icon name="pin" className="h-3.5 w-3.5 shrink-0 text-[#FF5741]" />
           {step.targetLabel}

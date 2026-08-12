@@ -1,10 +1,10 @@
 /**
  * Verified-runner onboarding tour — pure model.
  *
- * The tour is a six-step, route-aware walkthrough shown ONCE to verified
+ * The tour is a seven-step, route-aware walkthrough shown ONCE to verified
  * runners (guests / pending / rejected / suspended accounts never see it).
  * Completion, dismissal, and Escape all persist the same localStorage marker
- * (`runlocal:tour:verified:v1`) so the tour never re-runs on its own; Settings
+ * (`runlocal:tour:verified:v2`) so the tour never re-runs on its own; Settings
  * offers an explicit replay that clears the marker and restarts it.
  *
  * This module is deliberately free of React and DOM so the gating, storage,
@@ -13,7 +13,7 @@
 import type { AccountRole } from "./accounts";
 
 /** localStorage marker — one key per tour version. Bump only on a rewrite. */
-export const TOUR_STORAGE_KEY = "runlocal:tour:verified:v1";
+export const TOUR_STORAGE_KEY = "runlocal:tour:verified:v2";
 export const TOUR_SEEN_VALUE = "seen";
 /** Window event Settings dispatches to start a replay. */
 export const TOUR_REPLAY_EVENT = "runlocal:tour:replay";
@@ -39,11 +39,13 @@ export interface TourStep {
 }
 
 /**
- * The six steps. Copy is deliberately honest about what is LIVE today:
- * forum posting/replies, My Runs list + calendar + .ics export, and the
- * Groups directory with memberships reachable from Profile. Matching,
- * messaging, and calendar synchronization are NOT available and are only
- * ever mentioned as "not available yet" (asserted in tests).
+ * The seven steps. Copy is deliberately honest about what is LIVE today:
+ * forum posting/replies, My Runs list + calendar + .ics export, the Groups
+ * directory with memberships reachable from Profile, and Settings' live
+ * privacy/notification controls (the Settings step shows a static preview of
+ * the privacy section inside the tour card). Matching, messaging, and calendar
+ * synchronization are NOT available and are only ever mentioned as "not
+ * available yet" (asserted in tests).
  */
 export const TOUR_STEPS: readonly TourStep[] = [
   {
@@ -52,7 +54,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     target: "[data-tour-target='home-heading']",
     targetLabel: "This week's runs",
     title: "Welcome, verified runner",
-    body: "You're all set. RSVP to group runs, post in the forum, and keep a private list of your runs. This six-step tour shows where everything lives — Skip ends it and it won't come back.",
+    body: "You're all set. RSVP to group runs, post in the forum, and keep a private list of your runs. This seven-step tour shows where everything lives — Skip ends it and it won't come back.",
   },
   {
     id: "events",
@@ -89,10 +91,18 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "profile",
     route: "/profile",
-    target: "[data-tour-target='profile-header']",
-    targetLabel: "Your profile",
+    target: "[data-tour-target='profile-my-groups']",
+    targetLabel: "Profile — My Groups",
     title: "Your profile hub",
-    body: "Profile holds your My Groups entry, submissions, and trust info; Settings has preferences and this tour. Matching, messaging, and calendar sync are not available yet — they're on the roadmap.",
+    body: "Your memberships and pending requests are here, and your submissions and trust info sit below. Settings is one step away. Matching, messaging, and calendar sync are not available yet — they're on the roadmap.",
+  },
+  {
+    id: "settings",
+    route: "/settings",
+    target: "[data-tour-target='settings-main']",
+    targetLabel: "Settings",
+    title: "Settings: your privacy, your way",
+    body: "Your privacy controls live here — who can find your profile, the visibility of your upcoming runs & races and saved runs & races, and whether people can find you by name. Notifications and preferences are here too, and changes save as you tap.",
   },
 ] as const;
 

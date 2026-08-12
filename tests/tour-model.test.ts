@@ -67,7 +67,7 @@ describe("tour storage", () => {
     expect(s.getItem("other")).toBe("keep");
   });
   it("uses the versioned key constant", () => {
-    expect(TOUR_STORAGE_KEY).toBe("runlocal:tour:verified:v1");
+    expect(TOUR_STORAGE_KEY).toBe("runlocal:tour:verified:v2");
     const s = memoryStorage({ [TOUR_STORAGE_KEY]: TOUR_SEEN_VALUE });
     expect(readTourSeen(s)).toBe(true);
   });
@@ -109,10 +109,10 @@ describe("tour reducer", () => {
 });
 
 describe("tour copy & steps (honesty constraints)", () => {
-  it("defines exactly six steps with unique ids and routes", () => {
-    expect(TOUR_STEPS).toHaveLength(6);
+  it("defines exactly seven steps with unique ids and routes", () => {
+    expect(TOUR_STEPS).toHaveLength(7);
     const ids = new Set(TOUR_STEPS.map((s) => s.id));
-    expect(ids.size).toBe(6);
+    expect(ids.size).toBe(7);
     for (const s of TOUR_STEPS) {
       expect(s.title.length).toBeGreaterThan(0);
       expect(s.body.length).toBeGreaterThan(0);
@@ -121,14 +121,41 @@ describe("tour copy & steps (honesty constraints)", () => {
       expect(s.targetLabel.length).toBeGreaterThan(0);
     }
   });
-  it("covers the six surfaces: home, events, forum, My Runs, groups, profile", () => {
+  it("covers the seven surfaces: home, events, forum, My Runs, groups, profile, settings", () => {
     const ids = TOUR_STEPS.map((s) => s.id);
-    expect(ids).toEqual(["welcome", "events", "forum", "my-runs", "groups", "profile"]);
+    expect(ids).toEqual(["welcome", "events", "forum", "my-runs", "groups", "profile", "settings"]);
     expect(TOUR_STEPS[1].route).toBe("/");
     expect(TOUR_STEPS[2].route).toBe("/forum");
     expect(TOUR_STEPS[3].route).toBe("/my-runs");
     expect(TOUR_STEPS[4].route).toBe("/groups");
     expect(TOUR_STEPS[5].route).toBe("/profile");
+    expect(TOUR_STEPS[6].route).toBe("/settings");
+  });
+  it("points the profile step at My Groups (memberships surface) and mentions Settings next", () => {
+    const profile = TOUR_STEPS.find((s) => s.id === "profile");
+    expect(profile?.target).toContain("profile-my-groups");
+    const body = profile?.body.toLowerCase() ?? "";
+    expect(body).toContain("memberships");
+    expect(body).toContain("pending requests");
+    expect(body).toContain("submissions");
+    expect(body).toContain("trust info");
+    expect(body).toContain("settings");
+  });
+  it("routes the settings step to /settings with the settings-main target", () => {
+    const settings = TOUR_STEPS.find((s) => s.id === "settings");
+    expect(settings?.route).toBe("/settings");
+    expect(settings?.target).toContain("settings-main");
+    const body = settings?.body.toLowerCase() ?? "";
+    // Privacy controls are live: upcoming-runs visibility, saved runs,
+    // profile visibility, and being findable by name.
+    expect(body).toContain("privacy");
+    expect(body).toContain("upcoming runs");
+    expect(body).toContain("saved runs");
+    expect(body).toContain("find your profile");
+    expect(body).toContain("find you by name");
+    expect(body).toContain("notifications");
+    // Settings is live — the step must NOT hedge it with not-available copy.
+    expect(settings?.body).not.toMatch(/not available yet/i);
   });
   it("claims forum posting and replies as live (they are)", () => {
     const forum = TOUR_STEPS.find((s) => s.id === "forum");

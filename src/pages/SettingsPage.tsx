@@ -52,7 +52,7 @@ function WelcomeTourSettings() {
       <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Welcome tour</h2>
       <div className="flex items-center justify-between gap-3 px-5 py-4">
         <p className="text-[13px] leading-relaxed text-slate-600">
-          Replay the six-step tour of events, forum, My Runs, groups, and profile.
+          Replay the seven-step tour of events, forum, My Runs, groups, profile, and Settings.
         </p>
         <button
           type="button"
@@ -542,8 +542,10 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
-      <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Settings</h1>
-      <p className="mt-0.5 text-sm font-medium text-slate-500">Account preferences & status</p>
+      <div data-tour-target="settings-main">
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Settings</h1>
+        <p className="mt-0.5 text-sm font-medium text-slate-500">Account preferences & status</p>
+      </div>
 
       {!backendAvailable ? (
         <section className="mt-4 rounded-2xl bg-amber-50 p-4 text-[13px] leading-relaxed text-amber-900 ring-1 ring-amber-200">

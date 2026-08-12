@@ -8,6 +8,8 @@
  * MemoryRouter. These assert markup — that the tour anchors exist without
  * disturbing layout — never client-side powers.
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -17,6 +19,7 @@ import { Header } from "../src/components/Header";
 import { HomeRightRail } from "../src/components/HomeRightRail";
 import { ProfileGroupsCardContent } from "../src/pages/ProfilePage";
 import { CITIES } from "../src/data/cities";
+import { TOUR_STEPS, TOUR_STORAGE_KEY } from "../src/lib/tour";
 
 const { useAccountMock } = vi.hoisted(() => ({ useAccountMock: vi.fn() }));
 vi.mock("../src/state/account", () => ({ useAccount: useAccountMock }));
@@ -122,5 +125,37 @@ describe("Profile Groups & clubs entry", () => {
     expect(html).toContain("My Groups");
     expect(html).not.toContain("memberships</span>");
     expect(html).not.toContain("pending</span>");
+  });
+});
+
+describe("tour step definitions (routes & targets)", () => {
+  it("defines seven steps ending in the Settings step", () => {
+    expect(TOUR_STEPS).toHaveLength(7);
+    expect(TOUR_STEPS.map((s) => s.id)).toEqual([
+      "welcome",
+      "events",
+      "forum",
+      "my-runs",
+      "groups",
+      "profile",
+      "settings",
+    ]);
+  });
+
+  it("points the profile step at profile-my-groups and the settings step at settings-main on /settings", () => {
+    const profile = TOUR_STEPS.find((s) => s.id === "profile");
+    const settings = TOUR_STEPS.find((s) => s.id === "settings");
+    expect(profile?.target).toContain("data-tour-target='profile-my-groups'");
+    expect(settings?.route).toBe("/settings");
+    expect(settings?.target).toContain("data-tour-target='settings-main'");
+  });
+
+  it("bumped the storage key to v2 so v1 viewers get the new tour", () => {
+    expect(TOUR_STORAGE_KEY).toBe("runlocal:tour:verified:v2");
+  });
+
+  it("the SettingsPage header carries the settings-main target the step points at", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/pages/SettingsPage.tsx"), "utf8");
+    expect(source).toContain('data-tour-target="settings-main"');
   });
 });
