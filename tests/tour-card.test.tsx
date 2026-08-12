@@ -8,6 +8,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TourCard } from "../src/components/TourHost";
+import { TOUR_SETTINGS_SAMPLE_CAPTION } from "../src/components/TourSettingsSample";
 import { TOUR_STEPS } from "../src/lib/tour";
 
 const noop = () => {};
@@ -38,7 +39,7 @@ describe("TourCard (SSR markup)", () => {
     const html = renderCard(TOUR_STEPS.length - 1);
     expect(TOUR_STEPS[TOUR_STEPS.length - 1].id).toBe("settings");
     expect(html).toContain("data-tour-settings-sample");
-    expect(html).toContain("A preview — your actual settings are on this page.");
+    expect(html).toContain(TOUR_SETTINGS_SAMPLE_CAPTION);
     expect(html).toContain("My upcoming runs &amp; races");
   });
 

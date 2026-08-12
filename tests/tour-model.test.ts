@@ -135,9 +135,10 @@ describe("tour copy & steps (honesty constraints)", () => {
     const profile = TOUR_STEPS.find((s) => s.id === "profile");
     expect(profile?.target).toContain("profile-my-groups");
     const body = profile?.body.toLowerCase() ?? "";
-    expect(body).toContain("my groups");
     expect(body).toContain("memberships");
     expect(body).toContain("pending requests");
+    expect(body).toContain("submissions");
+    expect(body).toContain("trust info");
     expect(body).toContain("settings");
   });
   it("routes the settings step to /settings with the settings-main target", () => {

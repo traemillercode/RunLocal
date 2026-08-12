@@ -5,7 +5,10 @@
  * Renders via renderToStaticMarkup with NO Router (and no providers) to prove
  * the component is SSR-safe — it must not call useNavigate or any hook
  * (the VerifiedGateSheet crash pattern). Labels are asserted verbatim against
- * SettingsPage's privacy section so the preview stays honest.
+ * SettingsPage's privacy section so the preview stays honest. The preview is
+ * decorative: the mock is aria-hidden with an sr-only "Preview only" label and
+ * must contain no switch semantics and no focusable/interactive elements, so
+ * the tab-trapping TourHost and screen readers treat it as pure decoration.
  */
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -30,22 +33,28 @@ describe("TourSettingsSample (SSR markup, no Router)", () => {
     expect(html).toContain("Let people find me by name");
   });
 
-  it("shows the name-finding row as a switch (aria-checked), matching the Settings page", () => {
+  it("is decorative: the sample is wrapped in an aria-hidden container with an sr-only 'Preview only' note", () => {
     const html = renderToStaticMarkup(<TourSettingsSample />);
-    expect(html).toContain('role="switch"');
-    expect(html).toContain('aria-checked="true"');
-    expect(html).toContain("Let people find me by name on");
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain("Preview only — not interactive");
+    expect(html).toContain("sr-only");
   });
 
   it("renders the preview caption verbatim", () => {
     const html = renderToStaticMarkup(<TourSettingsSample />);
     expect(html).toContain(TOUR_SETTINGS_SAMPLE_CAPTION);
-    expect(TOUR_SETTINGS_SAMPLE_CAPTION).toBe("A preview — your actual settings are on this page.");
+    expect(TOUR_SETTINGS_SAMPLE_CAPTION).toBe(
+      "A preview of a few privacy controls — your actual settings are on this page.",
+    );
   });
 
-  it("is presentational: no buttons, links, or interactive handlers", () => {
+  it("is purely visual: no switch semantics, no focusable or interactive elements", () => {
     const html = renderToStaticMarkup(<TourSettingsSample />);
+    expect(html).not.toContain('role="switch"');
+    expect(html).not.toContain("aria-checked");
     expect(html).not.toContain("<button");
+    expect(html).not.toContain("<input");
+    expect(html).not.toContain("tabindex");
     expect(html).not.toContain("<a ");
     expect(html).not.toContain("onClick");
   });

@@ -94,7 +94,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     target: "[data-tour-target='profile-my-groups']",
     targetLabel: "Profile — My Groups",
     title: "Your profile hub",
-    body: "Profile holds your My Groups entry — memberships and pending requests — plus your submissions and trust info. Settings is one step away. Matching, messaging, and calendar sync are not available yet — they're on the roadmap.",
+    body: "Your memberships and pending requests are here, and your submissions and trust info sit below. Settings is one step away. Matching, messaging, and calendar sync are not available yet — they're on the roadmap.",
   },
   {
     id: "settings",
