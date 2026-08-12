@@ -207,7 +207,7 @@ describe("forum POST /api/forum/replies", () => {
     const r = await call(f.db, "POST", "/api/forum/replies", reply(), f.cookie);
     expect(r.status).toBe(200);
     const replyObj = r.body.reply;
-    expect(Object.keys(replyObj).sort()).toEqual(["author", "body", "createdAt", "id", "postId"]);
+    expect(Object.keys(replyObj).sort()).toEqual(["author", "authorId", "body", "capabilities", "createdAt", "id", "postId"]);
     const out = await call(f.db, "GET", "/api/forum/replies?city=columbia-mo&post=p1");
     expect(JSON.stringify(out.body)).not.toContain("taylor@example.com");
     expect(JSON.stringify(out.body)).not.toContain(f.account.id);

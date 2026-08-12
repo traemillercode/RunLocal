@@ -402,6 +402,9 @@ export function mySubmissions(db: Db, accountId: string): MySubmissionView[] {
     submittedAt: s.submittedAt,
     decidedAt: s.decidedAt,
     rejectionReason: s.status === "rejected" ? s.rejectionReason : null,
+    // Only a still-pending record can be withdrawn; decided/withdrawn rows are
+    // history-only (the server re-validates on POST /withdraw regardless).
+    capabilities: s.status === "pending" ? ["withdraw"] : [],
   }));
 }
 

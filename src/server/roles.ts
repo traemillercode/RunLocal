@@ -68,6 +68,16 @@ export function isGlobalAdmin(actor: AccountRecord | null | undefined): boolean 
 }
 
 /**
+ * City Admin override scoped to ONE city (not a group): the actor is a City
+ * Admin whose assigned city is exactly `cityId`. Used to compute per-entity
+ * moderation capability lists (e.g. forum posts) without needing a group.
+ */
+export function isCityAdminForCity(actor: AccountRecord | null | undefined, cityId: string | null | undefined): boolean {
+  if (!actor || actor.deletedAt || actor.role !== "city_admin") return false;
+  return typeof actor.adminCityId === "string" && actor.adminCityId.length > 0 && actor.adminCityId === cityId;
+}
+
+/**
  * Group operations (waivers, check-ins, membership decisions, profile edits):
  * the group owner/leaders, the City Admin of the group's city, and the Global
  * Admin may act. Everyone else is denied.

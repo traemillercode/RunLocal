@@ -59,7 +59,7 @@ describe("forum GET /api/forum", () => {
     expect(p.replies).toBe(0);
     expect(p.section).toBe("community");
     expect(p.authorNote).toBeNull();
-    expect(Object.keys(p).sort()).toEqual(["author", "authorNote", "body", "createdAt", "id", "pinned", "replies", "section", "title"]);
+    expect(Object.keys(p).sort()).toEqual(["author", "authorId", "authorNote", "body", "capabilities", "createdAt", "id", "pinned", "replies", "section", "title"]);
     expect(JSON.stringify(r.body)).not.toContain("taylor@example.com");
   });
 });
