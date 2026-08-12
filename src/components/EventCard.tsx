@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { Chip, Icon } from "./ui";
+import { ActionMenu } from "./ActionMenu";
+import { actionMenuItems, type ActionKey } from "../lib/actionModel";
 import { GROUP_TYPE_LABELS, type City } from "../types";
 import { dayLabel, monthDayLabel, type DatedRunEvent } from "../lib/dates";
 interface EventCardProps {
@@ -17,11 +19,21 @@ interface EventCardProps {
    * groupType label is used (backend unreachable / not yet loaded).
    */
   groupBadge?: boolean;
+  /**
+   * Server-computed moderation capabilities for this run (hide/restore/delete
+   * for the event's group lead, or city/global admins). Absent/empty renders
+   * no ActionMenu trigger — guests and out-of-scope actors see nothing.
+   */
+  capabilities?: string[];
+  /** Menu action dispatcher — the page maps hide/restore/delete to confirm sheets. */
+  onAction?: (key: ActionKey) => void;
 }
-export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = false, pinned = false, groupBadge }: EventCardProps) {
+export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = false, pinned = false, groupBadge, capabilities, onAction }: EventCardProps) {
   const group = city.groups.find((g) => g.id === event.groupId);
   const rrca = groupBadge ?? group?.groupType === "rrca-chartered";
   const label = group ? (rrca ? GROUP_TYPE_LABELS["rrca-chartered"] : GROUP_TYPE_LABELS.community) : null;
+  const actionItems = actionMenuItems(capabilities);
+  const hasActions = actionItems.length > 0;
   return (
     <article
       className={`desktop-event-card relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 transition-shadow before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-gradient-to-b before:from-[#FF5741] before:to-[#ff9a7f] ${
@@ -47,7 +59,7 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
           </div>
           {/* Body */}
           <div className="min-w-0 flex-1">
-            <h3 className="pr-11 text-[15px] font-bold leading-snug text-slate-900">{event.title}</h3>
+            <h3 className={`${hasActions ? "pr-24" : "pr-11"} text-[15px] font-bold leading-snug text-slate-900`}>{event.title}</h3>
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-slate-600">
               <span className="inline-flex items-center gap-1">
                 <Icon name="clock" className="h-3.5 w-3.5 text-slate-400" />
@@ -84,17 +96,27 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
         </div>
       </Link>
       {/* External link — separate secondary action, opens in a new tab and never
-          triggers the internal /events/:id route. */}
+          triggers the internal /events/:id route. Slides left when the
+          moderation ActionMenu occupies the corner. */}
       {event.externalUrl ? (
         <a
           href={event.externalUrl}
           target="_blank"
           rel="noopener noreferrer"
           aria-label={`${event.title} — external details (opens in new tab)`}
-          className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full text-slate-400 ring-1 ring-slate-200 active:bg-slate-50"
+          className={`absolute top-4 z-10 grid h-9 w-9 place-items-center rounded-full text-slate-400 ring-1 ring-slate-200 active:bg-slate-50 ${
+            hasActions ? "right-16" : "right-4"
+          }`}
         >
           <Icon name="external" className="h-4 w-4" />
         </a>
+      ) : null}
+      {/* Scoped moderation menu (group lead / city admin / global admin) —
+          server-driven capabilities; empty lists render no trigger. */}
+      {hasActions ? (
+        <div className="absolute right-4 top-4 z-20">
+          <ActionMenu entityTitle={event.title} items={actionItems} onSelect={(key) => onAction?.(key)} />
+        </div>
       ) : null}
       <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-4 py-2.5">
         <span className="min-w-0 text-xs font-semibold text-slate-500">{dayLabel(event.date, new Date())}</span>
