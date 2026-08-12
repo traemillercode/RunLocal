@@ -346,11 +346,9 @@ export function AdminPage() {
 
   const doAudit = async () => {
     setDetailError(null);
-    if (!reason.trim() || reason.trim().length < 5) {
-      setDetailError("Enter a reason (min 5 characters) to view the audit log.");
-      return;
-    }
-    const r = await api.adminAudit(100, reason.trim());
+    // Audit-log READS are routine (server uses routineAdminCtx since Phase 2a):
+    // no operator-reason prompt here — decisions and mutations still require one.
+    const r = await api.adminAudit(100, "");
     if (r.ok) setAudit(r.data.entries);
     else setDetailError(r.error.status === 401 ? "Admin session expired — sign in again." : r.error.message ?? "Audit failed.");
   };
@@ -590,7 +588,8 @@ export function AdminPage() {
           Leader role), while reject requires a reason the submitter will see. Every action is audited with the reason above.
         </p>
         <div className="mt-3 space-y-3">
-          <textarea rows={2} placeholder={isCityAdmin ? "Reason for deciding this city queue — rejection reason goes to the submitter (min 5 characters)" : "Reason for approve/reject — the rejection reason goes to the submitter (min 5 characters); loading needs no reason"} value={subReason} onChange={(e) => setSubReason(e.target.value)} className={reasonCls} />
+          <label className="block text-[13px] font-semibold text-slate-700">Rejection reason — the submitter will see this</label>
+<textarea rows={2} placeholder={isCityAdmin ? "Rejection reason — the submitter will see this (min 5 characters)" : "Approval: internal audit note. Rejection: the reason the submitter will see (min 5 characters)"} value={subReason} onChange={(e) => setSubReason(e.target.value)} className={reasonCls} />
           <PillButton variant="primary" className="w-full" disabled={subBusy} onClick={() => void loadSubmissions()}>
             <Icon name="search" className="h-4 w-4" /> {subBusy ? "Loading…" : "Load submission queue"}
           </PillButton>

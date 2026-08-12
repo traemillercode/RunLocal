@@ -213,8 +213,8 @@ describe("ForumPage — verified users never see the verification gate", () => {
 
 describe("ForumThread — inline replies per role", () => {
   const replies = [
-    { id: "r1", postId: "p1", body: "I am in — see you at 6!", author: "Jordan Lee", createdAt: "Aug 3" },
-    { id: "r2", postId: "p1", body: "Bring a headlamp.", author: "Sam Rivera", createdAt: "Aug 3" },
+    { id: "r1", postId: "p1", body: "I am in — see you at 6!", author: "Jordan Lee", createdAt: "Aug 3", authorId: "acc_2", capabilities: [] },
+    { id: "r2", postId: "p1", body: "Bring a headlamp.", author: "Sam Rivera", createdAt: "Aug 3", authorId: "acc_3", capabilities: [] },
   ];
   it("verified gets the live composer AND the existing replies", () => {
     const html = renderToStaticMarkup(

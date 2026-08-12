@@ -37,6 +37,7 @@ import {
   revokeCityAdmin,
   listCityAdmins,
   cityAdminAudit,
+  sessionAccount,
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
@@ -629,7 +630,11 @@ async function handleApi(
     if (!cityId || !cityExists(db, cityId)) {
       return err(res, { status: 400, error: "invalid_city" }), true;
     }
-    return ok(res, { cityId, posts: publicForumPosts(db, cityId), replyCounts: forumReplyCounts(db, cityId) }), true;
+    // Optional actor: the public read stays anonymous but capability lists are
+    // computed per-account server-side (author/admin/report rights are never
+    // derived client-side).
+    const actor = sessionAccount(db, { adminSessionId: null, userSessionId: cookies[SESSION_COOKIE] ?? null, reason: undefined, ip: "" });
+    return ok(res, { cityId, posts: publicForumPosts(db, cityId, actor), replyCounts: forumReplyCounts(db, cityId) }), true;
   }
   if (method === "POST" && url.pathname === "/api/forum") {
     const sess = requireSession(db, cookies);
@@ -679,7 +684,8 @@ async function handleApi(
     if (!postId || !forumPostPublic(db, cityId, postId)) {
       return err(res, { status: 404, error: "post_not_found" }), true;
     }
-    return ok(res, { postId, replies: publicForumReplies(db, postId) }), true;
+    const actor = sessionAccount(db, { adminSessionId: null, userSessionId: cookies[SESSION_COOKIE] ?? null, reason: undefined, ip: "" });
+    return ok(res, { postId, replies: publicForumReplies(db, postId, now, actor) }), true;
   }
   if (method === "POST" && url.pathname === "/api/forum/replies") {
     const sess = requireSession(db, cookies);

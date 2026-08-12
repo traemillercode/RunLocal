@@ -379,7 +379,7 @@ export function getModerated(cityId: string): Promise<ApiResult<ModeratedState>>
 
 // ------------------------------------------------------------- submissions
 export type SubmissionKind = "race" | "group" | "event";
-export type SubmissionStatus = "pending" | "approved" | "rejected";
+export type SubmissionStatus = "pending" | "approved" | "rejected" | "withdrawn";
 
 /** A submitter's own submission row (statuses + rejection reason, own only). */
 export interface MySubmissionView {
@@ -391,6 +391,8 @@ export interface MySubmissionView {
   submittedAt: string;
   decidedAt: string | null;
   rejectionReason: string | null;
+  /** Server-computed actions (pending → ["withdraw"]; decided rows get []). */
+  capabilities: string[];
 }
 
 export function submitRace(input: {
@@ -415,6 +417,10 @@ export function submitEvent(input: {
 
 export function getMySubmissions(): Promise<ApiResult<{ submissions: MySubmissionView[] }>> {
   return request("/api/my/submissions");
+}
+/** Author withdraw of a still-pending submission (pending → withdrawn). */
+export function withdrawSubmission(id: string): Promise<ApiResult<{ ok: true; submission: { id: string; status: string } }>> {
+  return request(`/api/my/submissions/${encodeURIComponent(id)}/withdraw`, { method: "POST" });
 }
 
 /** Admin-only pending submission queue row (safe summaries). */
@@ -466,12 +472,24 @@ export interface ForumPostView {
   createdAt: string;
   replies: number;
   pinned: boolean;
+  /** Author account id — null for seed posts (never an "own" target). */
+  authorId: string | null;
+  /** Server-computed action capabilities for the requesting account. */
+  capabilities: string[];
 }
 export function getForumPosts(cityId: string): Promise<ApiResult<{ cityId: string; posts: ForumPostView[]; replyCounts: Record<string, number> }>> {
   return request(`/api/forum?city=${encodeURIComponent(cityId)}`);
 }
 export function createForumPost(input: { section: import("../types").ForumSection; title: string; body: string }): Promise<ApiResult<{ post: ForumPostView }>> {
   return request("/api/forum", { method: "POST", body: JSON.stringify(input) });
+}
+/** Author edit of an own forum post (PATCH /api/forum/:id — server re-validates). */
+export function updateForumPost(id: string, input: { title: string; body: string }): Promise<ApiResult<{ post: ForumPostView }>> {
+  return request(`/api/forum/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+/** Author delete of an own forum post (DELETE /api/forum/:id — soft delete). */
+export function deleteForumPost(id: string): Promise<ApiResult<{ post: ForumPostView }>> {
+  return request(`/api/forum/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 // --------------------------------------------------- public forum replies
@@ -482,12 +500,28 @@ export interface ForumReplyView {
   body: string;
   author: string;
   createdAt: string;
+  /** Author account id — persisted replies always have one. */
+  authorId: string;
+  /** Server-computed action capabilities for the requesting account. */
+  capabilities: string[];
 }
 export function getForumReplies(cityId: string, postId: string): Promise<ApiResult<{ postId: string; replies: ForumReplyView[] }>> {
   return request(`/api/forum/replies?city=${encodeURIComponent(cityId)}&post=${encodeURIComponent(postId)}`);
 }
 export function createForumReply(input: { postId: string; body: string }): Promise<ApiResult<{ reply: ForumReplyView }>> {
   return request("/api/forum/replies", { method: "POST", body: JSON.stringify(input) });
+}
+/** Author edit of an own reply (PATCH /api/forum/replies/:id — server re-validates). */
+export function updateForumReply(id: string, input: { body: string }): Promise<ApiResult<{ reply: ForumReplyView }>> {
+  return request(`/api/forum/replies/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+/** Author delete of an own reply (DELETE /api/forum/replies/:id — soft delete). */
+export function deleteForumReply(id: string): Promise<ApiResult<{ reply: ForumReplyView }>> {
+  return request(`/api/forum/replies/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+/** Verified-runner content flag (post/reply/event/race/group — admins review it). */
+export function flagContent(kind: "post" | "reply" | "event" | "race" | "group", id: string, reason: string): Promise<ApiResult<{ flag: { id: string; status: string } }>> {
+  return request(`/api/content/${kind}/${encodeURIComponent(id)}/flag`, { method: "POST", body: JSON.stringify({ reason }) });
 }
 
 // -------------------------------------------------- public approved content

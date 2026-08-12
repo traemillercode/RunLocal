@@ -10,6 +10,7 @@
  */
 import type { Me } from "./accounts";
 import { phaseLabel, roleLabel } from "./accounts";
+import { CITIES } from "../data/cities";
 
 export interface MenuEntry {
   key: string;
@@ -63,6 +64,16 @@ export function profileMenuEntries(me: Me | null): { entries: MenuEntry[]; signe
       label: "Admin control center",
       icon: "lock",
       hint: "Super Admin",
+      to: "/admin",
+    });
+  }
+  if (account.role === "city_admin" && account.adminCityId) {
+    const cityName = CITIES.find((c) => c.id === account.adminCityId)?.name ?? account.adminCityId;
+    entries.push({
+      key: "city-admin",
+      label: "City admin",
+      icon: "shield",
+      hint: cityName,
       to: "/admin",
     });
   }

@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { HomeCityBanner } from "../components/HomeCityBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
+import { ActionMenu } from "../components/ActionMenu";
+import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { Chip, Icon, PillButton, Sheet } from "../components/ui";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
 import { getActivityFeed, type PublicActivityCard } from "../lib/api";
 import { useModerated } from "../state/moderated";
 import { canDo, type AccountRole } from "../lib/accounts";
+import { actionMenuItems, type ActionKey } from "../lib/actionModel";
 import * as api from "../lib/api";
-import { FORUM_SECTIONS, type City, type ForumPost, type ForumSection, type QaSort } from "../types";
+import { FORUM_SECTIONS, type City, type ForumSection, type QaSort } from "../types";
 
 /**
  * Reply-button intent. Verified members are past the verification gate: they
@@ -212,11 +215,122 @@ export function ForumCreateSheetBody({
 }
 
 /**
+ * "Edit post" sheet body — presentational (no data hooks) so SSR tests can
+ * render the real markup. Reuses the create sheet's field styling; the section
+ * is a static label because author edits re-validate title/body only
+ * (PATCH /api/forum/:id).
+ */
+export function ForumEditPostSheetBody({
+  section,
+  title,
+  body,
+  onTitleChange,
+  onBodyChange,
+  submitting = false,
+  error = null,
+  onSubmit,
+}: {
+  section: ForumSection;
+  title: string;
+  body: string;
+  onTitleChange: (value: string) => void;
+  onBodyChange: (value: string) => void;
+  submitting?: boolean;
+  error?: string | null;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <p className="flex items-start gap-2 rounded-xl bg-emerald-50 p-3.5 text-[13px] leading-relaxed text-emerald-900">
+        <Icon name="check" className="mt-0.5 h-4 w-4 shrink-0" />
+        Only you can edit your own post. Changes are saved to your city's forum.
+      </p>
+      <div>
+        <span className="mb-1.5 block text-sm font-semibold text-slate-700">Section</span>
+        <span className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-[12px] font-semibold text-slate-600 ring-1 ring-slate-200">
+          <Icon name={SECTION_META[section].icon} className="h-4 w-4" /> {FORUM_SECTIONS.find((s) => s.id === section)?.label}
+        </span>
+      </div>
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-semibold text-slate-700">Title</span>
+        <input
+          type="text"
+          value={title}
+          maxLength={120}
+          onChange={(e) => onTitleChange(e.target.value)}
+          placeholder="What's this about?"
+          className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
+        />
+      </label>
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-semibold text-slate-700">Details</span>
+        <textarea
+          value={body}
+          rows={4}
+          maxLength={2000}
+          onChange={(e) => onBodyChange(e.target.value)}
+          placeholder="Share route details, questions, or local running news…"
+          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
+        />
+      </label>
+      {error ? <p role="alert" className="rounded-xl bg-rose-50 p-3 text-[13px] font-semibold text-rose-800">{error}</p> : null}
+      <PillButton variant="primary" className="w-full" disabled={submitting} onClick={onSubmit}>
+        <Icon name="check" className="h-4 w-4" /> {submitting ? "Saving…" : "Save changes"}
+      </PillButton>
+      <p className="text-center text-xs text-slate-400">Your edits update the post everywhere it appears.</p>
+    </div>
+  );
+}
+
+/**
+ * "Edit reply" sheet body — presentational. Author edits re-validate the body
+ * only (PATCH /api/forum/replies/:id).
+ */
+export function ForumEditReplySheetBody({
+  body,
+  onBodyChange,
+  submitting = false,
+  error = null,
+  onSubmit,
+}: {
+  body: string;
+  onBodyChange: (value: string) => void;
+  submitting?: boolean;
+  error?: string | null;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <label className="block">
+        <span className="mb-1 block text-sm font-semibold text-slate-700">Reply</span>
+        <textarea
+          value={body}
+          maxLength={1000}
+          rows={4}
+          onChange={(e) => onBodyChange(e.target.value)}
+          placeholder="Add a reply for your city's forum…"
+          className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
+        />
+      </label>
+      {error ? <p role="alert" className="rounded-xl bg-rose-50 p-3 text-[13px] font-semibold text-rose-800">{error}</p> : null}
+      <PillButton variant="primary" className="w-full" disabled={submitting} onClick={onSubmit}>
+        <Icon name="check" className="h-4 w-4" /> {submitting ? "Saving…" : "Save changes"}
+      </PillButton>
+      <p className="text-center text-xs text-slate-400">Your edit updates the reply in the thread.</p>
+    </div>
+  );
+}
+
+/**
  * Inline reply thread for one post — presentational (no data hooks) so SSR
  * tests can render the real markup per role. Verified members get the live
  * composer (submitted via `onSubmit`); guests / pending / rejected users see
  * the existing replies plus honest read-only copy — the verified-profile gate
  * with denial copy is driven by the page's Reply-button flow (replyIntent).
+ *
+ * Each reply row carries the server-computed capability list; the ActionMenu
+ * renders a trigger only when the actor has actions (author edit/delete,
+ * verified non-author report) and nothing at all for empty lists.
  */
 export function ForumThread({
   role,
@@ -227,6 +341,7 @@ export function ForumThread({
   submitting = false,
   replyError = null,
   loading = false,
+  onReplyAction,
 }: {
   role: AccountRole;
   replies: api.ForumReplyView[];
@@ -236,6 +351,8 @@ export function ForumThread({
   submitting?: boolean;
   replyError?: string | null;
   loading?: boolean;
+  /** Menu action dispatcher for a reply (author edit/delete, verified report). */
+  onReplyAction?: (reply: api.ForumReplyView, key: ActionKey) => void;
 }) {
   const verified = role === "verified";
   return (
@@ -257,9 +374,16 @@ export function ForumThread({
                   .toUpperCase()}
               </span>
               <div className="min-w-0 flex-1 rounded-xl bg-white p-3 ring-1 ring-slate-200/70">
-                <p className="text-xs font-semibold text-slate-700">
-                  {r.author} <span className="font-normal text-slate-400">· {r.createdAt}</span>
-                </p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="min-w-0 text-xs font-semibold text-slate-700">
+                    {r.author} <span className="font-normal text-slate-400">· {r.createdAt}</span>
+                  </p>
+                  <ActionMenu
+                    entityTitle={`Reply by ${r.author}`}
+                    items={actionMenuItems(r.capabilities)}
+                    onSelect={(key) => onReplyAction?.(r, key)}
+                  />
+                </div>
                 <p className="mt-0.5 whitespace-pre-wrap text-[13px] leading-relaxed text-slate-700">{r.body}</p>
               </div>
             </li>
@@ -296,20 +420,31 @@ export function ForumThread({
   );
 }
 
-function PostCard({
+/**
+ * One forum card row. Presentational (no data hooks) so SSR tests can render
+ * the real markup per role. The action menu is driven ENTIRELY by the
+ * server-computed capability list (user posts) or the admin-only list (seed
+ * posts): the author sees Edit/Delete, admins see Hide/Restore/Delete, any
+ * verified non-author sees Report, and an empty list renders no trigger at
+ * all — the client never derives rights from emails or roles.
+ */
+export function PostCard({
   post,
   section,
   onReply,
   replyExpanded = false,
   thread = null,
   verified,
+  onAction,
 }: {
-  post: ForumPost;
+  post: ForumPostRow;
   section: ForumSection;
   onReply: () => void;
   replyExpanded?: boolean;
   thread?: ReactNode;
   verified: boolean;
+  /** Menu action dispatcher — the page maps each key to an edit sheet or confirm flow. */
+  onAction?: (key: ActionKey) => void;
 }) {
   const initials = post.author
     .split(/\s+/)
@@ -326,12 +461,15 @@ function PostCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="text-[15px] font-bold leading-snug text-slate-900">{post.title}</h3>
-            {post.pinned ? (
-              <Chip tone={section === "announcements" ? "amber" : "neutral"}>
-                <Icon name="pin" className="h-3 w-3" /> Pinned
-              </Chip>
-            ) : null}
+            <h3 className="min-w-0 flex-1 text-[15px] font-bold leading-snug text-slate-900">{post.title}</h3>
+            <span className="flex shrink-0 items-center gap-1.5">
+              {post.pinned ? (
+                <Chip tone={section === "announcements" ? "amber" : "neutral"}>
+                  <Icon name="pin" className="h-3 w-3" /> Pinned
+                </Chip>
+              ) : null}
+              <ActionMenu entityTitle={post.title} items={actionMenuItems(post.capabilities)} onSelect={(key) => onAction?.(key)} />
+            </span>
           </div>
           <p className="mt-1 text-[13px] leading-relaxed text-slate-600 line-clamp-3">{post.body}</p>
         </div>
@@ -367,6 +505,38 @@ function PostCard({
   );
 }
 
+/**
+ * Merged forum row: seed posts (from the city data) plus server-persisted user
+ * posts, each carrying the capability list that drives its action menu. Seed
+ * posts get the admin-only list when the signed-in account is a Global Admin
+ * or an in-scope City Admin; user posts carry the server-computed list
+ * verbatim. An empty list renders no trigger.
+ */
+export interface ForumPostRow {
+  id: string;
+  section: ForumSection;
+  title: string;
+  body: string;
+  author: string;
+  authorNote?: string;
+  createdAt: string;
+  answered?: boolean;
+  pinned?: boolean;
+  replies: number;
+  /** Server-computed action capabilities (user posts) or the admin-only list (seed posts). */
+  capabilities: string[];
+}
+
+/** A moderation/author action awaiting confirmation in the sheet. */
+type ConfirmAction =
+  | { kind: "delete_own_post"; postId: string; title: string }
+  | { kind: "hide_post"; postId: string; title: string }
+  | { kind: "restore_post"; postId: string; title: string }
+  | { kind: "delete_post"; postId: string; title: string }
+  | { kind: "report_post"; postId: string; title: string }
+  | { kind: "delete_own_reply"; postId: string; replyId: string; author: string }
+  | { kind: "report_reply"; postId: string; replyId: string; author: string };
+
 export function ForumPage({ city }: { city: City }) {
   const toast = useToast();
   const { role, me } = useAccount();
@@ -385,6 +555,21 @@ export function ForumPage({ city }: { city: City }) {
   const [replyDraft, setReplyDraft] = useState("");
   const [replySubmitting, setReplySubmitting] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
+  // Phase 2b moderation UI state: author edit sheets, the shared confirm
+  // sheet, and the local hidden overlay so admin Hide/Delete removes seed
+  // posts (which live in the client city data) immediately — user posts are
+  // re-filtered by the server on the next loadForum().
+  const [localHidden, setLocalHidden] = useState<Set<string>>(new Set());
+  const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [editPost, setEditPost] = useState<{ id: string; title: string; body: string } | null>(null);
+  const [editPostBusy, setEditPostBusy] = useState(false);
+  const [editPostError, setEditPostError] = useState<string | null>(null);
+  const [editReply, setEditReply] = useState<{ postId: string; replyId: string; body: string } | null>(null);
+  const [editReplyBusy, setEditReplyBusy] = useState(false);
+  const [editReplyError, setEditReplyError] = useState<string | null>(null);
+
   const loadForum = () => {
     void api.getForumPosts(city.id).then((r) => {
       if (r.ok) {
@@ -408,16 +593,32 @@ export function ForumPage({ city }: { city: City }) {
     }
   };
 
-  const posts = useMemo(() => {
+  const reloadThread = (postId: string) => {
+    void api.getForumReplies(city.id, postId).then((r) => {
+      if (r.ok) setRepliesByPost((prev) => ({ ...prev, [postId]: r.data.replies }));
+    });
+  };
+
+  // Admin capability list for SEED posts (the server only computes
+  // capabilities for user-created posts it serves; seed posts live in the
+  // client city data and are moderated through the same content registry).
+  const account = me?.status === "signed_in" ? me.account : null;
+  const adminCaps: string[] =
+    account && (account.isOwner === true || (account.role === "city_admin" && account.adminCityId === city.id))
+      ? ["hide", "restore", "delete"]
+      : [];
+
+  const posts = useMemo<ForumPostRow[]>(() => {
     // Owner-hidden posts are excluded from public rendering (seed + user posts
     // share the `post:<id>` moderation registry; the server also filters).
     // Seed posts keep their sample reply counts and add persisted replies;
     // user posts carry the server-computed persisted count already.
-    const visible = city.forum
-      .filter((p) => !hidden.has(`post:${p.id}`))
-      .map((p) => ({ ...p, replies: p.replies + (replyCounts[p.id] ?? 0) }));
-    const userPosts: ForumPost[] = serverPosts
-      .filter((p) => !hidden.has(`post:${p.id}`))
+    const isHidden = (id: string) => hidden.has(`post:${id}`) || localHidden.has(`post:${id}`);
+    const visible: ForumPostRow[] = city.forum
+      .filter((p) => !isHidden(p.id))
+      .map((p) => ({ ...p, replies: p.replies + (replyCounts[p.id] ?? 0), capabilities: adminCaps }));
+    const userPosts: ForumPostRow[] = serverPosts
+      .filter((p) => !isHidden(p.id))
       .map((p) => ({
         id: p.id,
         section: p.section,
@@ -429,6 +630,7 @@ export function ForumPage({ city }: { city: City }) {
         answered: false,
         pinned: p.pinned,
         replies: p.replies,
+        capabilities: p.capabilities,
       }));
     let list = [...visible, ...userPosts].filter((p) => p.section === section);
     if (section === "qa") {
@@ -439,7 +641,7 @@ export function ForumPage({ city }: { city: City }) {
       return sorted;
     }
     return [...list].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
-  }, [city.forum, hidden, section, qaSort, serverPosts, replyCounts]);
+  }, [city.forum, hidden, localHidden, section, qaSort, serverPosts, replyCounts, adminCaps]);
 
   const [activityCards, setActivityCards] = useState<PublicActivityCard[]>([]);
   useEffect(() => { let live = true; void getActivityFeed(city.id).then((r) => { if (live && r.ok) setActivityCards(r.data.cards); }); return () => { live = false; }; }, [city.id]);
@@ -491,6 +693,211 @@ export function ForumPage({ city }: { city: City }) {
         toast("Your post is live.", "success");
       } else {
         setPostError(r.error.message ?? "Couldn't post — try again.");
+      }
+    });
+  };
+
+  // ---------------------------------------------- Phase 2b moderation wiring
+  // The ActionMenu dispatches a capability key here; the page maps each key to
+  // an edit sheet (author edit_own) or the shared confirm sheet. Every action
+  // maps to an endpoint that re-validates the same rules server-side — the
+  // menu is only ever a convenience affordance, never a rights grant.
+
+  const handlePostAction = (post: ForumPostRow) => (key: ActionKey) => {
+    switch (key) {
+      case "edit_own":
+        setEditPost({ id: post.id, title: post.title, body: post.body });
+        break;
+      case "delete_own":
+        setConfirm({ kind: "delete_own_post", postId: post.id, title: post.title });
+        break;
+      case "hide":
+        setConfirm({ kind: "hide_post", postId: post.id, title: post.title });
+        break;
+      case "restore":
+        setConfirm({ kind: "restore_post", postId: post.id, title: post.title });
+        break;
+      case "delete":
+        setConfirm({ kind: "delete_post", postId: post.id, title: post.title });
+        break;
+      case "report":
+        setConfirm({ kind: "report_post", postId: post.id, title: post.title });
+        break;
+      default:
+        // Unknown capability — the actionModel already filters these out, so
+        // this branch is defensive only.
+        break;
+    }
+  };
+
+  const handleReplyAction = (postId: string) => (reply: api.ForumReplyView, key: ActionKey) => {
+    switch (key) {
+      case "edit_own":
+        setEditReply({ postId, replyId: reply.id, body: reply.body });
+        break;
+      case "delete_own":
+        setConfirm({ kind: "delete_own_reply", postId, replyId: reply.id, author: reply.author });
+        break;
+      case "report":
+        setConfirm({ kind: "report_reply", postId, replyId: reply.id, author: reply.author });
+        break;
+      default:
+        break;
+    }
+  };
+
+  /** Display config for the shared confirm sheet, derived from the pending action. */
+  const confirmMeta: { title: string; entity: string; impact: string; confirmLabel: string; requireReason: boolean; note?: string } | null = useMemo(() => {
+    if (!confirm) return null;
+    switch (confirm.kind) {
+      case "delete_own_post":
+        return {
+          title: "Delete your post?",
+          entity: confirm.title,
+          impact: "Your post and its replies will be removed from the forum. This can't be undone.",
+          confirmLabel: "Delete post",
+          requireReason: false,
+        };
+      case "hide_post":
+        return {
+          title: "Hide this post?",
+          entity: confirm.title,
+          impact: "The post will disappear from public listings until an admin restores it. The reason is recorded in the audit log.",
+          confirmLabel: "Hide post",
+          requireReason: true,
+        };
+      case "restore_post":
+        return {
+          title: "Restore this post?",
+          entity: confirm.title,
+          impact: "The post will be visible in the forum again. The reason is recorded in the audit log.",
+          confirmLabel: "Restore post",
+          requireReason: true,
+        };
+      case "delete_post":
+        return {
+          title: "Delete this post?",
+          entity: confirm.title,
+          impact: "This permanently removes the post from public view — there is no restore path. The row and audit trail are preserved.",
+          confirmLabel: "Delete post",
+          requireReason: true,
+        };
+      case "report_post":
+        return {
+          title: "Report this post?",
+          entity: confirm.title,
+          impact: "Run Local admins will review it against the community guidelines.",
+          confirmLabel: "Report post",
+          requireReason: true,
+          note: "Only Run Local admins see your report and your name.",
+        };
+      case "delete_own_reply":
+        return {
+          title: "Delete your reply?",
+          entity: `Reply by ${confirm.author}`,
+          impact: "Your reply will be removed from the thread. This can't be undone.",
+          confirmLabel: "Delete reply",
+          requireReason: false,
+        };
+      case "report_reply":
+        return {
+          title: "Report this reply?",
+          entity: `Reply by ${confirm.author}`,
+          impact: "Run Local admins will review it against the community guidelines.",
+          confirmLabel: "Report reply",
+          requireReason: true,
+          note: "Only Run Local admins see your report and your name.",
+        };
+    }
+  }, [confirm]);
+
+  const closeConfirm = () => {
+    if (confirmBusy) return;
+    setConfirm(null);
+    setConfirmError(null);
+  };
+
+  /** Execute the confirmed action; every call re-validates server-side. */
+  const runConfirm = (reason: string) => {
+    if (!confirm || confirmBusy) return;
+    const action = confirm;
+    setConfirmBusy(true);
+    setConfirmError(null);
+    const call: Promise<api.ApiResult<unknown>> =
+      action.kind === "delete_own_post" ? api.deleteForumPost(action.postId)
+      : action.kind === "hide_post" ? api.adminTransitionContent(`post:${action.postId}`, "hide", reason)
+      : action.kind === "restore_post" ? api.adminTransitionContent(`post:${action.postId}`, "restore", reason)
+      : action.kind === "delete_post" ? api.adminTransitionContent(`post:${action.postId}`, "delete", reason)
+      : action.kind === "report_post" ? api.flagContent("post", action.postId, reason)
+      : action.kind === "delete_own_reply" ? api.deleteForumReply(action.replyId)
+      : api.flagContent("reply", action.replyId, reason);
+    void call.then((r) => {
+      setConfirmBusy(false);
+      if (r.ok) {
+        setConfirm(null);
+        setConfirmError(null);
+        // Keep seed-post visibility honest without a round-trip: registry
+        // hides/deletes overlay the client city data; restores lift them.
+        if (action.kind === "hide_post" || action.kind === "delete_post") {
+          setLocalHidden((s) => { const n = new Set(s); n.add(`post:${action.postId}`); return n; });
+        } else if (action.kind === "restore_post") {
+          setLocalHidden((s) => { const n = new Set(s); n.delete(`post:${action.postId}`); return n; });
+        }
+        if (action.kind === "delete_own_reply") reloadThread(action.postId);
+        if (action.kind === "delete_own_post" || action.kind === "hide_post" || action.kind === "restore_post" || action.kind === "delete_post") {
+          loadForum();
+        }
+        toast(
+          action.kind === "report_post" || action.kind === "report_reply"
+            ? "Thanks — an admin will review your report."
+            : "Done.",
+          "success",
+        );
+      } else {
+        setConfirmError(r.error.message ?? "That didn't work — try again.");
+      }
+    });
+  };
+
+  const submitEditPost = () => {
+    if (!editPost || editPostBusy) return;
+    const title = editPost.title.trim();
+    const body = editPost.body.trim();
+    if (!title || !body) { setEditPostError("Add a title and some details before saving."); return; }
+    setEditPostBusy(true);
+    setEditPostError(null);
+    void api.updateForumPost(editPost.id, { title, body }).then((r) => {
+      setEditPostBusy(false);
+      if (r.ok) {
+        setEditPost(null);
+        loadForum();
+        toast("Your post is updated.", "success");
+      } else {
+        setEditPostError(r.error.message ?? "Couldn't update — try again.");
+      }
+    });
+  };
+
+  /** Section of the post being edited — always a server-persisted user post. */
+  const editPostSection: ForumSection = editPost
+    ? (serverPosts.find((p) => p.id === editPost.id)?.section ?? "community")
+    : "community";
+
+  const submitEditReply = () => {
+    if (!editReply || editReplyBusy) return;
+    const body = editReply.body.trim();
+    if (!body) { setEditReplyError("Write a reply before saving."); return; }
+    const { postId, replyId } = editReply;
+    setEditReplyBusy(true);
+    setEditReplyError(null);
+    void api.updateForumReply(replyId, { body }).then((r) => {
+      setEditReplyBusy(false);
+      if (r.ok) {
+        setEditReply(null);
+        reloadThread(postId);
+        toast("Your reply is updated.", "success");
+      } else {
+        setEditReplyError(r.error.message ?? "Couldn't update — try again.");
       }
     });
   };
@@ -563,6 +970,7 @@ export function ForumPage({ city }: { city: City }) {
                 verified={role === "verified"}
                 replyExpanded={expanded}
                 onReply={() => onReply(p.id, p.title)}
+                onAction={handlePostAction(p)}
                 thread={
                   expanded ? (
                     <ForumThread
@@ -574,6 +982,7 @@ export function ForumPage({ city }: { city: City }) {
                       onSubmit={() => onSubmitReply(p.id)}
                       submitting={replySubmitting}
                       replyError={replyError}
+                      onReplyAction={handleReplyAction(p.id)}
                     />
                   ) : null
                 }
@@ -612,6 +1021,62 @@ export function ForumPage({ city }: { city: City }) {
           postError={postError}
         />
       </Sheet>
+
+      {/* Author edit post — reuses the create-sheet fields (section is static; edits are title/body only) */}
+      <Sheet
+        open={editPost !== null}
+        onClose={() => !editPostBusy && setEditPost(null)}
+        title="Edit your post"
+        subtitle={editPost ? FORUM_SECTIONS.find((s) => s.id === editPostSection)?.label : undefined}
+      >
+        {editPost ? (
+          <ForumEditPostSheetBody
+            section={editPostSection}
+            title={editPost.title}
+            body={editPost.body}
+            onTitleChange={(title) => setEditPost((cur) => (cur ? { ...cur, title } : cur))}
+            onBodyChange={(body) => setEditPost((cur) => (cur ? { ...cur, body } : cur))}
+            submitting={editPostBusy}
+            error={editPostError}
+            onSubmit={submitEditPost}
+          />
+        ) : null}
+      </Sheet>
+
+      {/* Author edit reply */}
+      <Sheet
+        open={editReply !== null}
+        onClose={() => !editReplyBusy && setEditReply(null)}
+        title="Edit your reply"
+      >
+        {editReply ? (
+          <ForumEditReplySheetBody
+            body={editReply.body}
+            onBodyChange={(body) => setEditReply((cur) => (cur ? { ...cur, body } : cur))}
+            submitting={editReplyBusy}
+            error={editReplyError}
+            onSubmit={submitEditReply}
+          />
+        ) : null}
+      </Sheet>
+
+      {/* Shared confirmation sheet — author delete (variant B), admin hide/restore/
+          delete (variant A, reason-required), verified report (reason + privacy note) */}
+      {confirmMeta ? (
+        <ModerationConfirmSheet
+          open={confirm !== null}
+          onClose={closeConfirm}
+          title={confirmMeta.title}
+          entity={confirmMeta.entity}
+          impact={confirmMeta.impact}
+          confirmLabel={confirmMeta.confirmLabel}
+          requireReason={confirmMeta.requireReason}
+          note={confirmMeta.note}
+          busy={confirmBusy}
+          error={confirmError}
+          onConfirm={(reason) => runConfirm(reason)}
+        />
+      ) : null}
 
       </div>
       <aside className="desktop-forum-context" aria-label="Forum guidance">

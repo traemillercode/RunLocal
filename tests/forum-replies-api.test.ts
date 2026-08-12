@@ -207,9 +207,14 @@ describe("forum POST /api/forum/replies", () => {
     const r = await call(f.db, "POST", "/api/forum/replies", reply(), f.cookie);
     expect(r.status).toBe(200);
     const replyObj = r.body.reply;
-    expect(Object.keys(replyObj).sort()).toEqual(["author", "body", "createdAt", "id", "postId"]);
+    expect(Object.keys(replyObj).sort()).toEqual(["author", "authorId", "body", "capabilities", "createdAt", "id", "postId"]);
     const out = await call(f.db, "GET", "/api/forum/replies?city=columbia-mo&post=p1");
     expect(JSON.stringify(out.body)).not.toContain("taylor@example.com");
-    expect(JSON.stringify(out.body)).not.toContain(f.account.id);
+    // The author's public account id is intentionally exposed as `authorId`
+    // (the client uses it to resolve edit/delete capabilities) — but no
+    // OTHER account id appears anywhere in the payload.
+    expect(out.body.replies[0].authorId).toBe(f.account.id);
+    const stranger = otherCity(f);
+    expect(JSON.stringify(out.body)).not.toContain(stranger.account.id);
   });
 });

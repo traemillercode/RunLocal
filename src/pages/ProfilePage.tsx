@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { TrustedBadge } from "../components/TrustedBadge";
+import { ActionMenu } from "../components/ActionMenu";
+import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { Chip, Icon, PillButton } from "../components/ui";
 import type { City } from "../types";
 import { resolveWeekEvents } from "../lib/dates";
 import { phaseLabel, roleLabel } from "../lib/accounts";
+import { actionMenuItems } from "../lib/actionModel";
 import * as api from "../lib/api";
 import type { AppStore } from "../lib/store";
 import { useAccount } from "../state/account";
@@ -26,13 +29,69 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   pending: { label: "Pending approval", cls: "bg-amber-100 text-amber-800" },
   approved: { label: "Approved", cls: "bg-emerald-100 text-emerald-800" },
   rejected: { label: "Rejected", cls: "bg-red-100 text-red-700" },
+  withdrawn: { label: "Withdrawn", cls: "bg-slate-100 text-slate-600" },
 };
+
+/**
+ * The signed-in user's OWN submission rows — presentational (no data hooks) so
+ * SSR tests can render the real markup: pending rows get the Withdraw action
+ * menu (capability `withdraw`), decided rows render no trigger, and withdrawn
+ * rows show the neutral "Withdrawn" chip.
+ */
+export function MySubmissionsContent({
+  rows,
+  onWithdraw,
+}: {
+  rows: api.MySubmissionView[];
+  /** Opens the variant-B confirm for a pending submission. */
+  onWithdraw?: (id: string, title: string) => void;
+}) {
+  return (
+    <ul className="mt-3 space-y-2.5">
+      {rows.map((r) => {
+        const st = STATUS_LABELS[r.status] ?? STATUS_LABELS.pending;
+        const items = actionMenuItems(r.capabilities);
+        return (
+          <li key={r.id} className="rounded-xl border border-slate-200 p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-semibold text-slate-800">{r.title}</p>
+                <p className="text-xs text-slate-500">{KIND_LABELS[r.kind] ?? r.kind}</p>
+              </div>
+              <span className="flex shrink-0 items-center gap-1.5">
+                {items.length > 0 && onWithdraw ? (
+                  <ActionMenu entityTitle={`${r.title} submission`} items={items} onSelect={() => onWithdraw(r.id, r.title)} />
+                ) : null}
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${st.cls}`}>{st.label}</span>
+              </span>
+            </div>
+            {r.status === "rejected" && r.rejectionReason ? (
+              <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-[12px] leading-relaxed text-red-700">
+                <span className="font-semibold">Why it was rejected:</span> {r.rejectionReason}
+              </p>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 /** The signed-in user's OWN submissions (server returns this account's records only). */
 export function MySubmissions({ signedIn }: { signedIn: boolean }) {
   const [rows, setRows] = useState<api.MySubmissionView[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [withdrawTarget, setWithdrawTarget] = useState<{ id: string; title: string } | null>(null);
+  const [withdrawBusy, setWithdrawBusy] = useState(false);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const load = () => {
+    setLoading(true); setError(null);
+    void api.getMySubmissions().then((r) => {
+      if (r.ok) setRows(r.data.submissions);
+      else setError(r.error.message);
+    }).catch(() => setError("Could not load submission status.")).finally(() => setLoading(false));
+  };
   useEffect(() => {
     if (!signedIn) return;
     let alive = true;
@@ -46,6 +105,23 @@ export function MySubmissions({ signedIn }: { signedIn: boolean }) {
       alive = false;
     };
   }, [signedIn]);
+  const confirmWithdraw = () => {
+    if (!withdrawTarget || withdrawBusy) return;
+    const target = withdrawTarget;
+    setWithdrawBusy(true);
+    setWithdrawError(null);
+    void api.withdrawSubmission(target.id).then((r) => {
+      setWithdrawBusy(false);
+      if (r.ok) {
+        setWithdrawTarget(null);
+        // The server returns the row as withdrawn with no further actions;
+        // reflect both locally so the chip flips and the menu disappears.
+        setRows((cur) => (cur ? cur.map((x) => (x.id === target.id ? { ...x, status: "withdrawn", capabilities: [] } : x)) : cur));
+      } else {
+        setWithdrawError(r.error.message ?? "Couldn't withdraw — try again.");
+      }
+    });
+  };
   if (!signedIn) return null;
   return (
     <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
@@ -54,32 +130,23 @@ export function MySubmissions({ signedIn }: { signedIn: boolean }) {
       {loading ? (
         <p className="mt-3 text-[13px] text-slate-400">Loading…</p>
       ) : error ? (
-        <div className="mt-3 rounded-xl bg-red-50 p-3 text-[13px] text-red-700"><p>{error}</p><button type="button" className="mt-2 font-semibold underline" onClick={() => { setRows(null); setError(null); setLoading(true); void api.getMySubmissions().then((r) => r.ok ? setRows(r.data.submissions) : setError(r.error.message)).finally(() => setLoading(false)); }}>Retry</button></div>
+        <div className="mt-3 rounded-xl bg-red-50 p-3 text-[13px] text-red-700"><p>{error}</p><button type="button" className="mt-2 font-semibold underline" onClick={load}>Retry</button></div>
       ) : !rows || rows.length === 0 ? (
         <p className="mt-3 text-[13px] text-slate-500">Nothing submitted yet. Submit a race, group, or independent run from the Races and Events pages.</p>
       ) : (
-        <ul className="mt-3 space-y-2.5">
-          {rows.map((r) => {
-            const st = STATUS_LABELS[r.status] ?? STATUS_LABELS.pending;
-            return (
-              <li key={r.id} className="rounded-xl border border-slate-200 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold text-slate-800">{r.title}</p>
-                    <p className="text-xs text-slate-500">{KIND_LABELS[r.kind] ?? r.kind}</p>
-                  </div>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${st.cls}`}>{st.label}</span>
-                </div>
-                {r.status === "rejected" && r.rejectionReason ? (
-                  <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-[12px] leading-relaxed text-red-700">
-                    <span className="font-semibold">Why it was rejected:</span> {r.rejectionReason}
-                  </p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+        <MySubmissionsContent rows={rows} onWithdraw={(id, title) => { setWithdrawTarget({ id, title }); setWithdrawError(null); }} />
       )}
+      <ModerationConfirmSheet
+        open={withdrawTarget !== null}
+        onClose={() => !withdrawBusy && setWithdrawTarget(null)}
+        title="Withdraw this submission?"
+        entity={withdrawTarget?.title ?? ""}
+        impact="It will leave the review queue. You can submit it again later."
+        confirmLabel="Withdraw"
+        busy={withdrawBusy}
+        error={withdrawError}
+        onConfirm={() => confirmWithdraw()}
+      />
     </section>
   );
 }

@@ -33,6 +33,7 @@ import { newId } from "./store";
 import type { AccountRecord } from "./types";
 import type { ForumPostRecord, ForumReplyRecord } from "./types";
 import { isSuspended } from "./store";
+import { isCityAdminForCity, isGlobalAdmin } from "./roles";
 import { cityExists } from "./cms";
 import type { ForumSection } from "../types";
 import { CITIES } from "../data/cities";
@@ -41,6 +42,58 @@ export const FORUM_SECTIONS = ["announcements", "community", "qa"] as const;
 const MAX_TITLE = 120;
 const MAX_BODY = 2000;
 const MAX_REPLY = 1000;
+
+/**
+ * Server-computed moderation capabilities for ONE entity, consumed verbatim by
+ * the client's action menu (src/lib/actionModel.ts — unknown keys are ignored,
+ * an empty list renders no trigger). The server is the only authority: the
+ * client never derives author/admin rights from emails or roles, it renders
+ * exactly these lists, and every listed action maps to an endpoint that
+ * re-validates the same rules server-side.
+ */
+export type ForumCapability = "edit_own" | "delete_own" | "hide" | "restore" | "delete" | "report";
+
+/** Verified + not deleted + not suspended — the gate for author and report actions. */
+function verifiedActive(actor: AccountRecord | null | undefined, now: Date): boolean {
+  return Boolean(actor && !actor.deletedAt && actor.status === "verified" && !isSuspended(actor, now));
+}
+
+/**
+ * Capability list for a forum POST as seen by `actor`:
+ *  - the author (verified, active) may Edit / Delete their own post;
+ *  - Global Admins, and City Admins scoped to the post's city, may
+ *    Hide / Restore / Delete via the existing contentAdmin routes
+ *    (`/api/admin/content/post:<id>/…`);
+ *  - any other verified, active runner may Report it
+ *    (POST /api/content/post/:id/flag — self-report is blocked server-side).
+ * Guests, pending/rejected accounts, and deleted/suspended accounts get [].
+ */
+export function forumPostCapabilities(actor: AccountRecord | null | undefined, post: { authorAccountId: string; cityId: string }, now = new Date()): ForumCapability[] {
+  if (!actor || actor.deletedAt) return [];
+  const caps: ForumCapability[] = [];
+  const isAuthor = post.authorAccountId === actor.id;
+  if (isAuthor && verifiedActive(actor, now)) caps.push("edit_own", "delete_own");
+  if (isGlobalAdmin(actor) || isCityAdminForCity(actor, post.cityId)) caps.push("hide", "restore", "delete");
+  if (!isAuthor && verifiedActive(actor, now)) caps.push("report");
+  return caps;
+}
+
+/**
+ * Capability list for a forum REPLY as seen by `actor`:
+ *  - the author (verified, active) may Edit / Delete their own reply;
+ *  - any other verified, active runner (admins included) may Report it —
+ *    replies have no content-registry row, so the existing contentAdmin
+ *    hide/restore/delete routes cannot act on them; the flag is the escalation
+ *    path (resolved from the admin dashboard, which can hide via the flag).
+ */
+export function forumReplyCapabilities(actor: AccountRecord | null | undefined, reply: { authorAccountId: string }, now = new Date()): ForumCapability[] {
+  if (!actor || actor.deletedAt) return [];
+  const caps: ForumCapability[] = [];
+  const isAuthor = reply.authorAccountId === actor.id;
+  if (isAuthor && verifiedActive(actor, now)) caps.push("edit_own", "delete_own");
+  if (!isAuthor && verifiedActive(actor, now)) caps.push("report");
+  return caps;
+}
 
 export interface PublicForumPost {
   id: string;
@@ -53,6 +106,10 @@ export interface PublicForumPost {
   createdAt: string;
   replies: number;
   pinned: boolean;
+  /** Author account id — null for seed posts (never an "own" target). */
+  authorId: string | null;
+  /** Server-computed action capabilities for the requesting account. */
+  capabilities: ForumCapability[];
 }
 
 export interface PublicForumReply {
@@ -61,6 +118,10 @@ export interface PublicForumReply {
   body: string;
   author: string;
   createdAt: string;
+  /** Author account id — always set for persisted replies. */
+  authorId: string;
+  /** Server-computed action capabilities for the requesting account. */
+  capabilities: ForumCapability[];
 }
 
 /** Compact "Aug 4" style label for the post list (same year) or "Aug 4, 2025". */
@@ -79,7 +140,7 @@ export function forumDateLabel(iso: string, now = new Date()): string {
  * sample counts stay in the seed; GET /api/forum also returns `replyCounts`
  * so the client can add persisted replies to seed counts).
  */
-export function publicForumPosts(db: Db, cityId: string): PublicForumPost[] {
+export function publicForumPosts(db: Db, cityId: string, actor?: AccountRecord | null, now = db.now()): PublicForumPost[] {
   return db
     .listForumPosts(cityId)
     .filter((f) => f.state === "visible")
@@ -97,9 +158,11 @@ export function publicForumPosts(db: Db, cityId: string): PublicForumPost[] {
         body: f.body,
         author: author?.name ?? "Runner",
         authorNote: null,
-        createdAt: forumDateLabel(f.createdAt, db.now()),
+        createdAt: forumDateLabel(f.createdAt, now),
         replies: visibleReplyCount(db, f.id),
         pinned: false,
+        authorId: f.authorAccountId,
+        capabilities: forumPostCapabilities(actor, f, now),
       };
     });
 }
@@ -201,7 +264,7 @@ export function forumPostPublic(db: Db, cityId: string, postId: string): Resolve
  * order). Replies inherit the parent post's moderation visibility — a hidden
  * or archived post returns no replies (the caller 404s on the post first).
  */
-export function publicForumReplies(db: Db, postId: string, now = new Date()): PublicForumReply[] {
+export function publicForumReplies(db: Db, postId: string, now = new Date(), actor?: AccountRecord | null): PublicForumReply[] {
   if (postModerated(db, postId)) return [];
   return db
     .listForumReplies(postId)
@@ -215,6 +278,8 @@ export function publicForumReplies(db: Db, postId: string, now = new Date()): Pu
         body: r.body,
         author: author?.name ?? "Runner",
         createdAt: forumDateLabel(r.createdAt, now),
+        authorId: r.authorAccountId,
+        capabilities: forumReplyCapabilities(actor, r, now),
       };
     });
 }
@@ -314,6 +379,8 @@ export function createForumPost(
         createdAt: forumDateLabel(post.createdAt, now),
         replies: 0,
         pinned: false,
+        authorId: post.authorAccountId,
+        capabilities: forumPostCapabilities(rec, post, now),
       },
       record: post,
     },
@@ -408,6 +475,8 @@ export function createForumReply(
         body: reply.body,
         author: author?.name ?? "Runner",
         createdAt: forumDateLabel(reply.createdAt, now),
+        authorId: reply.authorAccountId,
+        capabilities: forumReplyCapabilities(rec, reply, now),
       },
       record: reply,
     },
@@ -513,6 +582,8 @@ export function editForumPost(
         createdAt: forumDateLabel(updated.createdAt, now),
         replies: visibleReplyCount(db, updated.id),
         pinned: false,
+        authorId: updated.authorAccountId,
+        capabilities: forumPostCapabilities(auth.rec, updated, now),
       },
       record: updated,
     },
@@ -560,6 +631,8 @@ export function deleteForumPost(
         createdAt: forumDateLabel(updated.createdAt, now),
         replies: 0,
         pinned: false,
+        authorId: updated.authorAccountId,
+        capabilities: forumPostCapabilities(auth.rec, updated, now),
       },
       record: updated,
     },
@@ -611,6 +684,8 @@ export function editForumReply(
         body: updated.body,
         author: auth.rec.name,
         createdAt: forumDateLabel(updated.createdAt, now),
+        authorId: updated.authorAccountId,
+        capabilities: forumReplyCapabilities(auth.rec, updated, now),
       },
       record: updated,
     },
@@ -640,6 +715,8 @@ export function deleteForumReply(
         body: updated.body,
         author: auth.rec.name,
         createdAt: forumDateLabel(updated.createdAt, now),
+        authorId: updated.authorAccountId,
+        capabilities: forumReplyCapabilities(auth.rec, updated, now),
       },
       record: updated,
     },
