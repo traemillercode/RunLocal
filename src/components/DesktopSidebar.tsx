@@ -5,7 +5,7 @@ import { useAccount } from "../state/account";
 import { useNotifications } from "../state/notifications";
 
 const items = [
-  ["/", "Home", "home"], ["/races", "Races", "flag"], ["/forum", "Forum", "chat"], ["/groups", "Groups & Clubs", "users"], ["/profile", "Profile", "user"],
+  ["/", "Home", "home"], ["/races", "Races", "flag"], ["/forum", "Forum", "chat"], ["/groups", "Groups & Clubs", "users"], ["/connections", "Connections", "userPlus"], ["/profile", "Profile", "user"],
 ] as const;
 export function DesktopSidebar({ city, onOpenCitySheet }: { city: City; onOpenCitySheet: () => void }) {
   const location = useLocation();
