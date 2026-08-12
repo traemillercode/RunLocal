@@ -17,7 +17,8 @@
 import { isSuspended, newId } from "./store";
 import type { Db } from "./store";
 import { ALLOWED_TRUST_TAGS, type AccountRecord, type CredentialType, type TrustTag } from "./types";
-import { getCityById } from "../data/cities";
+import { CITIES, getCityById } from "../data/cities";
+import { sameEventId } from "./occurrences";
 import type { AdminResult } from "./admin";
 
 const MAX_PROOF = 8 * 1024 * 1024;
@@ -132,6 +133,59 @@ export function ratingEligibility(
     };
   }
   return { ok: true, data: { eventId: registryId } };
+}
+
+/** One row of the shared-events list: public event title + date only. */
+export interface SharedEventView {
+  /** Display-space event id the client sends back to POST /api/ratings. */
+  eventId: string;
+  /** Public event title from the canonical listing; "TBD" when unknown. */
+  title: string;
+  /** Date of the most recent shared occurrence, YYYY-MM-DD. */
+  date: string;
+}
+
+/**
+ * Public title of an event for the shared-events list. Resolves canonical CMS
+ * events first, then legacy moderation content records, then seed data —
+ * anything an attendance row can legally reference. Returns null when unknown
+ * so callers can render the honest "TBD" fallback.
+ */
+export function publicEventTitle(db: Db, eventId: string): string | null {
+  const raw = eventId.replace(/^event:/, "");
+  const canonical = db.listEvents().find((e) => e.id === eventId || e.id === raw || e.seedRefId === raw);
+  if (canonical) return canonical.title;
+  const content = db.getContent(eventId.startsWith("event:") ? eventId : `event:${raw}`);
+  if (content && content.kind === "event" && content.title) return content.title;
+  const seed = CITIES.flatMap((c) => c.events.map((e) => ({ e, cityId: c.id }))).find((x) => x.e.id === raw);
+  return seed ? seed.e.title : null;
+}
+
+/**
+ * Events BOTH accounts attended (RSVP or host) — the only basis for a rating
+ * or concern. Deliberately minimal: one row per event (most recent shared
+ * occurrence) with public title + date only. Never reveals other attendees,
+ * reviewer identity, or attendance history beyond the shared pair.
+ */
+export function sharedEvents(db: Db, reviewerId: string, revieweeId: string): SharedEventView[] {
+  const mine = db.listAttendance(reviewerId).filter((a) => a.role === "rsvp" || a.role === "host");
+  const theirs = db.listAttendance(revieweeId).filter((a) => a.role === "rsvp" || a.role === "host");
+  const rows = new Map<string, SharedEventView>();
+  for (const a of mine) {
+    const b = theirs.find((x) => sameEventId(x.eventId, a.eventId));
+    if (!b) continue;
+    const raw = a.eventId.replace(/^event:/, "");
+    const date = a.runDate ?? b.runDate ?? a.createdAt.slice(0, 10);
+    const prev = rows.get(raw);
+    if (prev && prev.date >= date) continue; // dedupe sibling occurrences; keep the most recent
+    const canonical = db.listEvents().find((e) => e.id === a.eventId || e.id === raw || e.seedRefId === raw);
+    rows.set(raw, {
+      eventId: canonical?.seedRefId ?? raw,
+      title: publicEventTitle(db, a.eventId) ?? "TBD",
+      date,
+    });
+  }
+  return [...rows.values()].sort((x, y) => y.date.localeCompare(x.date) || x.title.localeCompare(y.title));
 }
 
 export interface PublicTrustView {

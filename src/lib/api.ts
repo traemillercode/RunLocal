@@ -799,6 +799,21 @@ export function getRunnerProfile(id: string): Promise<ApiResult<RunnerProfileRes
   return request(`/api/runners/${encodeURIComponent(id)}`);
 }
 
+/**
+ * A run both the viewer and this runner attended (RSVP or host) — the only
+ * basis for sharing feedback. The server returns public titles + dates only,
+ * never other attendees or attendance history.
+ */
+export interface SharedEventView {
+  eventId: string;
+  title: string;
+  date: string;
+}
+/** GET /api/runners/:id/shared-events — verified signed-in runners only. */
+export function getRunnerSharedEvents(runnerId: string): Promise<ApiResult<{ events: SharedEventView[] }>> {
+  return request(`/api/runners/${encodeURIComponent(runnerId)}/shared-events`);
+}
+
 /** One row of the runner's own private My Runs list. `kind` distinguishes an
  * RSVP'd event occurrence from a solo (personal) run. `kept`/`checkedIn` drive
  * past visibility: a past row is shown only when the runner checked in to that

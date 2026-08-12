@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { TrustedBadge } from "../components/TrustedBadge";
+import { RunnerFeedbackSheet } from "../components/RunnerFeedbackSheet";
 import { Chip, Icon } from "../components/ui";
 import { TrustSummary } from "../components/TrustProfileSection";
+import { useAccount } from "../state/account";
+import type { AccountRole } from "../lib/accounts";
 import {
   getRunnerProfile,
   type RecognitionView,
@@ -173,14 +176,40 @@ export function RunnerProfileLoading() {
   );
 }
 /**
+ * Gate for the feedback affordance: VERIFIED signed-in viewers only, and never
+ * on your own profile (self-rating is blocked server-side anyway). Extracted
+ * for SSR unit tests.
+ */
+export function canViewerGiveFeedback(role: AccountRole, viewerId: string | null, profileId: string): boolean {
+  return role === "verified" && viewerId !== null && viewerId !== profileId;
+}
+
+/** "Share feedback" affordance — hidden for guests and unverified viewers. */
+export function RunnerShareFeedbackButton({ visible, onClick }: { visible: boolean; onClick: () => void }) {
+  if (!visible) return null;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#14171C] text-sm font-semibold text-white active:opacity-90"
+    >
+      <Icon name="chat" className="h-4 w-4" /> Share feedback
+    </button>
+  );
+}
+
+/**
  * Public (other-user) runner profile page at /runners/:id. Guest-accessible:
  * no account or role gate — the server returns only public-safe fields and
- * 404s for unknown/deleted/suspended accounts.
+ * 404s for unknown/deleted/suspended accounts. Verified signed-in viewers get
+ * the "Share feedback" affordance (ratings & concerns keyed to shared runs).
  */
 export function RunnerProfilePage({ id }: { id: string }) {
+  const { me, role } = useAccount();
   const [state, setState] = useState<"loading" | "ready" | "missing">("loading");
   const [data, setData] = useState<RunnerProfileResponse | null>(null);
-  useEffect(() => {
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const load = useCallback(() => {
     let live = true;
     setState("loading");
     setData(null);
@@ -197,6 +226,15 @@ export function RunnerProfilePage({ id }: { id: string }) {
       live = false;
     };
   }, [id]);
+  useEffect(() => load(), [load]);
+  /** Quiet refresh after a successful submit — no loading flash; tier copy
+   * updates when the server's rating threshold has been crossed. */
+  const refresh = useCallback(() => {
+    void getRunnerProfile(id).then((r) => {
+      if (r.ok) setData(r.data);
+    });
+  }, [id]);
+  const viewerId = me?.status === "signed_in" ? me.account.id : null;
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
       <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Runner profile</h1>
@@ -212,6 +250,17 @@ export function RunnerProfilePage({ id }: { id: string }) {
           </div>
           <RunnerProfileTrust trust={data.trust} />
           <RunnerProfileCityRecognitions cityName={data.profile.cityName} recognitions={data.recognitions} />
+          <RunnerShareFeedbackButton
+            visible={canViewerGiveFeedback(role, viewerId, id)}
+            onClick={() => setFeedbackOpen(true)}
+          />
+          <RunnerFeedbackSheet
+            open={feedbackOpen}
+            onClose={() => setFeedbackOpen(false)}
+            runnerId={id}
+            runnerName={data.profile.name}
+            onSubmitted={refresh}
+          />
         </>
       )}
     </div>
