@@ -154,7 +154,7 @@ describe("PATCH /api/my/submissions/:id (submitter edits own pending only)", () 
   function pendingRace(db: Db, ownerId: string): SubmissionRecord {
     const rec: SubmissionRecord = {
       id: "sub-pending-1", kind: "race", cityId: "columbia-mo", status: "pending",
-      submitterAccountId: ownerId, submittedAt: "2026-01-01T00:00:00.000Z", decidedAt: null, decidedBy: null,
+      submitterAccountId: ownerId, submittedAt: "2026-01-01T00:00:00.000Z", decidedAt: null, decidedBy: null, rejectionReason: null, publicRefId: null,
       payload: { kind: "race", name: "Original Race", distances: "5K", date: "2026-09-01", location: "A Place", registrationUrl: "https://example.com", description: "" },
     };
     db.appendSubmission(rec);
