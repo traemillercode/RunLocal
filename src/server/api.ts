@@ -62,6 +62,7 @@ import {
 import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
 import { listLedGroups, leaderQueue, assignGroupLeader, removeGroupLeader, transferGroupOwnership, editGroupProfile, notifyLeadersOfMembershipRequest, type GroupProfilePatch } from "./leadership";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
+import { eventCapabilities, moderateEvent } from "./eventModeration";
 import { listMyRuns, setMyRunKept, publicOccurrenceId, parseTzOffsetMinutes } from "./myRuns";
 import { buildMyRunsIcs } from "./ical";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
@@ -366,7 +367,26 @@ async function handleApi(
 
   if (method === "GET" && url.pathname === "/api/events") {
     const cityId = url.searchParams.get("city") ?? undefined;
-    return ok(res, { cityId: cityId ?? null, events: publicEvents(db, cityId) }), true;
+    // Optional actor: the public read stays anonymous but per-event moderation
+    // capabilities are computed server-side (never derived client-side). An
+    // anonymous caller receives [] per event, which clients treat as "no
+    // actions available".
+    const actor = sessionAccount(db, { adminSessionId: null, userSessionId: cookies[SESSION_COOKIE] ?? null, reason: undefined, ip: "" });
+    return ok(res, { cityId: cityId ?? null, events: publicEvents(db, cityId).map((e) => ({ ...e, capabilities: eventCapabilities(db, actor, e) })) }), true;
+  }
+  // ---- group-lead scoped event moderation ----------------------------------
+  // PATCH /api/events/:id/moderation — hide/restore/delete a recurring group
+  // run. The SAME predicate as the capability lists above is re-validated
+  // server-side: group leads act only on recurring runs of groups they lead
+  // (403 otherwise); races and independent events stay City/Global-admin-only;
+  // unknown ids 404. Audited with the distinct group_lead.event_* actions.
+  const eventModeration = /^\/api\/events\/([^/]+)\/moderation$/.exec(url.pathname);
+  if (eventModeration && method === "PATCH") {
+    const body = (await readJson(req)) as { action?: unknown };
+    const result = moderateEvent(db, { adminSessionId: cookies[ADMIN_COOKIE] ?? null, userSessionId: cookies[SESSION_COOKIE] ?? null, reason: undefined, ip }, decodeURIComponent(eventModeration[1]), typeof body.action === "string" ? body.action : "", now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { event: result.data }), true;
   }
   // ---- public approved community content (no auth) -------------------------
   // Only APPROVED submissions ever appear here (pending/rejected never leave

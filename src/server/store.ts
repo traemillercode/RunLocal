@@ -665,10 +665,10 @@ export class Db {
 
   // ------------------------------------------------------------------- audit
   appendAudit(
-    entry: Omit<AuditEntry, "id" | "at" | "cityId" | "owner" | "change"> & { cityId?: string | null; owner?: string | null; change?: string | null },
+    entry: Omit<AuditEntry, "id" | "at" | "cityId" | "owner" | "change" | "accountId"> & { cityId?: string | null; owner?: string | null; change?: string | null; accountId?: string | null },
     now = new Date(),
   ): AuditEntry {
-    const rec: AuditEntry = { ...entry, cityId: entry.cityId ?? null, owner: entry.owner ?? null, change: entry.change ?? null, id: newId(), at: nowIso(now) };
+    const rec: AuditEntry = { ...entry, cityId: entry.cityId ?? null, owner: entry.owner ?? null, change: entry.change ?? null, accountId: entry.accountId ?? null, id: newId(), at: nowIso(now) };
     this.audits.push(rec);
     return rec;
   }
