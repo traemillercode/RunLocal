@@ -110,6 +110,7 @@ import {
   ratingEligibility,
   reconcileTrustStatus,
   resolveEventId,
+  sharedEvents,
   trustThreshold,
   validTags,
   validTrustReason,
@@ -1408,6 +1409,22 @@ async function handleApi(
     const sess = requireSession(db, cookies);
     const viewerId = sess ? sess.accountId : null;
     return ok(res, publicTrust(db, id, viewerId)), true;
+  }
+
+  // ---- shared events (verified caller; titles + dates only; no identities)
+  // The ONLY basis for a rating/concern is an event BOTH runners attended
+  // (RSVP or host). Any verified runner may fetch the shared list for a
+  // specific reviewee; the payload is deliberately minimal (eventId + public
+  // title + date) and never reveals other attendees or attendance history.
+  const sharedMatch = /^\/api\/runners\/([a-f0-9]{32})\/shared-events$/.exec(url.pathname);
+  if (sharedMatch && method === "GET") {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const caller = db.getAccount(s.accountId);
+    if (!caller || caller.deletedAt || caller.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const reviewee = db.getAccount(sharedMatch[1]);
+    if (!reviewee || reviewee.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
+    if (reviewee.status !== "verified") return err(res, { status: 403, error: "verified_runner_required", message: "You can only share feedback with verified runners." }), true;
+    return ok(res, { events: sharedEvents(db, s.accountId, reviewee.id) }), true;
   }
 
   // ---- public runner profile (public-safe; guests OK; no private fields) --
