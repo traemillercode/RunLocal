@@ -639,6 +639,8 @@ export interface AdminRecordView extends AdminSearchRow {
   roles: AccountRole[];
   /** City Admin scope, when the account holds city_admin. */
   adminCityId: string | null;
+  /** Server-derived owner flag (RUN_LOCAL_OWNER_EMAIL) — the owner can never be demoted below site_admin. */
+  isOwner: boolean;
 }
 
 export function adminGetRecord(
@@ -682,6 +684,7 @@ export function adminGetRecord(
       cityId: rec.cityId ?? null,
       roles: accountRoles(rec),
       adminCityId: rec.adminCityId ?? null,
+      isOwner: isOwnerEmail(rec.email),
     },
   };
 }
@@ -809,6 +812,7 @@ export function adminExportRows(
         cityId: rec.cityId ?? null,
         roles: accountRoles(rec),
         adminCityId: rec.adminCityId ?? null,
+        isOwner: isOwnerEmail(rec.email),
       } satisfies AdminRecordView;
     });
   return { ok: true, data: { rows } };
