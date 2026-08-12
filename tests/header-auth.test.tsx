@@ -108,6 +108,18 @@ describe("guest account menu (UI)", () => {
     expect(html).not.toContain("Sign up");
     expect(html).not.toContain("Log in");
   });
+
+  it("shows the Connections entry in the signed-in account menu and routes to /connections", () => {
+    const html = renderToStaticMarkup(
+      <AccountMenuContent me={{ status: "signed_in", account: verifiedAccount() }} backendAvailable onNavigate={noop} onLogout={noop} />,
+    );
+    expect(html).toContain(">Connections<");
+    const { entries } = profileMenuEntries({ status: "signed_in", account: verifiedAccount() });
+    const connections = entries.find((e) => e.key === "connections");
+    expect(connections?.label).toBe("Connections");
+    expect(connections?.to).toBe("/connections");
+    expect(connections?.icon).toBe("users");
+  });
 });
 
 describe("account popup menu (UI)", () => {

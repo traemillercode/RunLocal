@@ -182,6 +182,9 @@ describe("DesktopSidebar authenticated account affordances (UI)", () => {
     expect(html).toContain('class="desktop-sidebar"');
     // Profile link appears in the main nav AND as the account row entry.
     expect(html.match(/href="\/profile"/g)).toHaveLength(2);
+    // Connections sits in the main nav for signed-in users too.
+    expect(html).toContain('href="/connections"');
+    expect(html).toContain(">Connections<");
     // Settings and Sign out exist only in the authenticated account area.
     expect(html).toContain('href="/settings"');
     expect(html).toContain('<button type="button" class="desktop-account-action"');
