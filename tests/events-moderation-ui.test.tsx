@@ -110,14 +110,18 @@ describe("EventFeedRow — moderation action menu per capability list", () => {
 describe("EventDetailView — moderation action menu", () => {
   it("renders the menu trigger when capabilities are present", () => {
     const html = renderToStaticMarkup(
-      <EventDetailView event={GROUP_RUN} city={city} rsvped={false} canRsvp onRsvp={noop} onBack={noop} capabilities={LEAD_CAPS} onAction={noop} />,
+      <MemoryRouter>
+        <EventDetailView event={GROUP_RUN} city={city} rsvped={false} canRsvp onRsvp={noop} onBack={noop} capabilities={LEAD_CAPS} onAction={noop} />
+      </MemoryRouter>,
     );
     expect(html).toContain('aria-label="Actions for Monday Evening Social Run"');
     expect(html).toContain('aria-haspopup="menu"');
   });
   it("renders no trigger when capabilities are empty (guest / out-of-scope)", () => {
     const html = renderToStaticMarkup(
-      <EventDetailView event={GROUP_RUN} city={city} rsvped={false} canRsvp={false} onRsvp={noop} onBack={noop} capabilities={[]} onAction={noop} />,
+      <MemoryRouter>
+        <EventDetailView event={GROUP_RUN} city={city} rsvped={false} canRsvp={false} onRsvp={noop} onBack={noop} capabilities={[]} onAction={noop} />
+      </MemoryRouter>,
     );
     expect(html).not.toContain("Actions for");
     expect(html).not.toContain('aria-haspopup="menu"');

@@ -181,7 +181,7 @@ describe("DesktopSidebar authenticated account affordances (UI)", () => {
     expect(html).toContain('aria-label="Primary navigation"');
     expect(html).toContain('class="desktop-sidebar"');
     // Profile link appears in the main nav AND as the account row entry.
-    expect(html.match(/href="\/profile"/g)).toHaveLength(2);
+    expect(html.match(/href="\/profile"/g)).toHaveLength(1);
     // Connections sits in the main nav for signed-in users too.
     expect(html).toContain('href="/connections"');
     expect(html).toContain(">Connections<");

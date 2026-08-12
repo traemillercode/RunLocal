@@ -14,6 +14,7 @@ import { useAccount } from "../state/account";
 import { useToast } from "../lib/toast";
 import * as api from "../lib/api";
 import type { City, Race } from "../types";
+import { RailCard, RailStack } from "../components/RailCard";
 
 function RaceCard({ race, featured = false, pinned = false, capabilities = [], onAction }: { race: Race; featured?: boolean; pinned?: boolean; capabilities?: string[]; onAction?: (key: ActionKey) => void }) {
   const actionItems = actionMenuItems(capabilities);
@@ -214,21 +215,17 @@ export function RacesPage({ city }: { city: City }) {
         Sample seed listings plus approved community submissions — always confirm details on the organizer's site.
       </p>
       </div>
-      <aside className="desktop-races-rail" aria-label="Race listings guidance">
-        <section>
-          <p className="desktop-rail-kicker">Race listings</p>
-          <h2>Upcoming in {city.name}</h2>
-          <p>{races.length} approved listing{races.length === 1 ? "" : "s"} visible here. Check each organizer's site for current details.</p>
-        </section>
-        <section>
-          <p className="desktop-rail-kicker">Registration</p>
-          <p>Registration and event details are handled by each race organizer. Use the link on a listing to confirm availability and requirements.</p>
-        </section>
-        <section>
-          <p className="desktop-rail-kicker">Community submissions</p>
-          <p>Verified runners can submit a race for review using the Submit a race button above.</p>
-        </section>
-      </aside>
+      <RailStack ariaLabel="Race listings guidance">
+        <RailCard kicker="Race listings" title={`Upcoming in ${city.name}`}>
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{races.length} approved listing{races.length === 1 ? "" : "s"} visible here. Check each organizer's site for current details.</p>
+        </RailCard>
+        <RailCard kicker="Registration">
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-600">Registration and event details are handled by each race organizer. Use the link on a listing to confirm availability and requirements.</p>
+        </RailCard>
+        <RailCard kicker="Community submissions">
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-600">Verified runners can submit a race for review using the Submit a race button above.</p>
+        </RailCard>
+      </RailStack>
     </div>
 
     <RaceSubmissionSheet open={sheetOpen} onClose={() => setSheetOpen(false)} cityId={city.id} />

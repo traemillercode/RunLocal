@@ -14,6 +14,10 @@ import { actionMenuItems, type ActionKey } from "../lib/actionModel";
 import { PostTags, TagRunnerSheet } from "../components/Tagging";
 import * as api from "../lib/api";
 import { FORUM_SECTIONS, type City, type ForumSection, type QaSort } from "../types";
+import { RailCard, RailItemLink, RailSeeAll, RailStack } from "../components/RailCard";
+import { WEEKDAY_LABELS } from "../lib/calendar";
+import { formatRaceDate } from "../lib/dates";
+import { isPastCalendarDate } from "../lib/activityDates";
 
 /**
  * Reply-button intent. Verified members are past the verification gate: they
@@ -562,6 +566,63 @@ type ConfirmAction =
   | { kind: "unpin_post"; postId: string; title: string }
   | { kind: "delete_own_reply"; postId: string; replyId: string; author: string }
   | { kind: "report_reply"; postId: string; replyId: string; author: string };
+
+/**
+ * Desktop forum rail — guidance card + cross links to the week's group runs
+ * and upcoming races, using the shared rail primitives (hidden below lg).
+ */
+export function upcomingGroupRunRows(city: City, now = new Date(), limit = 3): { id: string; title: string; meta: string }[] {
+  const todayIdx = (now.getDay() + 6) % 7;
+  return city.events
+    .map((e) => ({ e, days: (e.dayOfWeek - todayIdx + 7) % 7 }))
+    .sort((a, b) => a.days - b.days)
+    .slice(0, limit)
+    .map(({ e, days }) => {
+      const when = days === 0 ? "Today" : days === 1 ? "Tomorrow" : WEEKDAY_LABELS[e.dayOfWeek];
+      return { id: e.id, title: e.title, meta: `${when} · ${e.time}` };
+    });
+}
+
+export function ForumRailCrossLinks({ city }: { city: City }) {
+  const runs = upcomingGroupRunRows(city);
+  const races = city.races
+    .filter((r) => !isPastCalendarDate(r.date))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 2);
+  return (
+    <>
+      <RailCard kicker="Upcoming group runs" footer={<RailSeeAll to="/events">See all →</RailSeeAll>}>
+        {runs.length === 0 ? (
+          <p className="mt-2 text-[13px] text-slate-500">No upcoming group runs listed yet.</p>
+        ) : (
+          runs.map((r) => <RailItemLink key={r.id} to="/events" title={r.title} meta={r.meta} />)
+        )}
+      </RailCard>
+      <RailCard kicker="Upcoming races" footer={<RailSeeAll to="/races">See all →</RailSeeAll>}>
+        {races.length === 0 ? (
+          <p className="mt-2 text-[13px] text-slate-500">No upcoming races listed yet.</p>
+        ) : (
+          races.map((r) => <RailItemLink key={r.id} to="/races" title={r.name} meta={`${formatRaceDate(r.date)} · ${r.distance}`} />)
+        )}
+      </RailCard>
+      <RailCard kicker="Your city" title={`${city.name}, ${city.state}`}>
+        <p className="mt-1 text-[13px] leading-relaxed text-slate-500">Local runs, races, and community — everything here is scoped to {city.name}.</p>
+      </RailCard>
+    </>
+  );
+}
+
+export function ForumRail({ city }: { city: City }) {
+  return (
+    <RailStack ariaLabel="Forum guidance">
+      <RailCard kicker="Community guidelines" title="A useful local forum">
+        <p className="mt-1 text-[13px] leading-relaxed text-slate-600">Browse announcements, community notes, and runner questions. Posting and replying are open to verified members.</p>
+        <div className="mt-4 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-500"><strong className="text-slate-700">Keep it local.</strong> Share route details and event context that help fellow runners.</div>
+      </RailCard>
+      <ForumRailCrossLinks city={city} />
+    </RailStack>
+  );
+}
 
 export function ForumPage({ city }: { city: City }) {
   const toast = useToast();
@@ -1169,12 +1230,7 @@ export function ForumPage({ city }: { city: City }) {
       ) : null}
 
       </div>
-      <aside className="desktop-forum-context" aria-label="Forum guidance">
-        <p className="text-[11px] font-extrabold uppercase tracking-[.12em] text-[#FF5741]">Community guidelines</p>
-        <h2 className="mt-2 text-lg font-extrabold tracking-tight text-slate-900">A useful local forum</h2>
-        <p className="mt-2 text-[13px] leading-relaxed text-slate-600">Browse announcements, community notes, and runner questions. Posting and replying are open to verified members.</p>
-        <div className="mt-4 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-500"><strong className="text-slate-700">Keep it local.</strong> Share route details and event context that help fellow runners.</div>
-      </aside>
+      <ForumRail city={city} />
       </div>
       <VerifiedGateSheet
         open={gateOpen}

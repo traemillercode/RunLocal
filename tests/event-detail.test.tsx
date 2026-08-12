@@ -97,7 +97,9 @@ describe("EventCard primary navigation (UI)", () => {
 describe("EventDetailView (UI)", () => {
   it("shows the full existing event model info", () => {
     const html = renderToStaticMarkup(
-      <EventDetailView event={EVENT} city={CITY} rsvped={false} canRsvp onRsvp={noop} onBack={noop} />,
+      <MemoryRouter>
+        <EventDetailView event={EVENT} city={CITY} rsvped={false} canRsvp onRsvp={noop} onBack={noop} />
+      </MemoryRouter>,
     );
     expect(html).toContain("Monday Evening Social Run"); // title
     expect(html).toContain("RunCoMO"); // host group
@@ -108,19 +110,23 @@ describe("EventDetailView (UI)", () => {
     expect(html).toContain("Add to My Runs"); // My Runs action
     expect(html).toContain("External details"); // external link action
     expect(html).toContain('href="https://www.facebook.com/runcomo/"');
-    expect(html).toContain("Back to this week");
+    expect(html).toContain("Back to Events");
   });
 
   it("renders verified-only gating and RSVP state on the action button", () => {
     const gated = renderToStaticMarkup(
-      <EventDetailView event={EVENT} city={CITY} rsvped={false} canRsvp={false} onRsvp={noop} onBack={noop} />,
+      <MemoryRouter>
+        <EventDetailView event={EVENT} city={CITY} rsvped={false} canRsvp={false} onRsvp={noop} onBack={noop} />
+      </MemoryRouter>,
     );
     // Ineligible users keep the same action-first CTA; tapping it opens the gate sheet.
     expect(gated).toContain("Add to My Runs");
     expect(gated).not.toContain("Verified runners only");
     expect(gated).not.toContain("RSVP for this run");
     const rsvped = renderToStaticMarkup(
-      <EventDetailView event={EVENT} city={CITY} rsvped canRsvp onRsvp={noop} onBack={noop} />,
+      <MemoryRouter>
+        <EventDetailView event={EVENT} city={CITY} rsvped canRsvp onRsvp={noop} onBack={noop} />
+      </MemoryRouter>,
     );
     expect(rsvped).toContain("Remove from My Runs");
   });

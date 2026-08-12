@@ -1,15 +1,16 @@
-import { NavLink } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Icon } from "./ui";
+import { activeForPath, entriesForSurface } from "../lib/nav";
 
-const TABS = [
-  { to: "/", label: "Events", icon: "home" },
-  { to: "/races", label: "Races", icon: "trophy" },
-  { to: "/forum", label: "Forum", icon: "chat" },
-  { to: "/connections", label: "Connections", icon: "users" },
-  { to: "/my-runs", label: "My Runs", icon: "rsvp" },
-] as const;
-
+/**
+ * Mobile bottom tab bar — five tabs derived from the single nav model
+ * (src/lib/nav.ts). Active state uses the SAME activeForPath helper as the
+ * desktop sidebar, so detail routes (e.g. /events/:id) keep the tab
+ * highlighted consistently.
+ */
 export function BottomNav() {
+  const { pathname } = useLocation();
+  const tabs = entriesForSurface("bottom");
   return (
     <nav
       aria-label="Primary"
@@ -20,29 +21,26 @@ export function BottomNav() {
         className="mx-auto grid w-full max-w-md grid-cols-5 px-1"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        {TABS.map((t) => (
-          <NavLink
-            key={t.to}
-            to={t.to}
-            end={t.to === "/"}
-            className={({ isActive }) =>
-              `flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-semibold transition-colors ${
-                isActive ? "text-[#14171C]" : "text-slate-400 active:text-slate-600"
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <span
-                  className={`grid h-7 w-12 place-items-center rounded-full ${isActive ? "bg-[#FF5741] shadow-sm" : ""}`}
-                >
-                  <Icon name={t.icon} className="h-5 w-5" />
-                </span>
-                {t.label}
-              </>
-            )}
-          </NavLink>
-        ))}
+        {tabs.map((t) => {
+          const active = activeForPath(t, pathname);
+          return (
+            <Link
+              key={t.id}
+              to={t.route}
+              aria-current={active ? "page" : undefined}
+              className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                active ? "text-[#14171C]" : "text-slate-400 active:text-slate-600"
+              }`}
+            >
+              <span
+                className={`grid h-7 w-12 place-items-center rounded-full ${active ? "bg-[#FF5741] shadow-sm" : ""}`}
+              >
+                <Icon name={t.icon} className="h-5 w-5" />
+              </span>
+              {t.label}
+            </Link>
+          );
+        })}
       </div>
     </nav>
   );

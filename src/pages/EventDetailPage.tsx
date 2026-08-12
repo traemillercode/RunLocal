@@ -11,6 +11,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Chip, Icon } from "../components/ui";
+import { BackLink } from "../components/BackLink";
+import { RailCard, RailStack } from "../components/RailCard";
 import { ActionMenu } from "../components/ActionMenu";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
@@ -94,7 +96,6 @@ export function EventDetailView({
   rsvped,
   canRsvp,
   onRsvp,
-  onBack,
   featured = false,
   pinned = false,
   groupBadge,
@@ -124,9 +125,7 @@ export function EventDetailView({
   const actionItems = actionMenuItems(capabilities);
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
-      <button type="button" onClick={onBack} className="mb-3 flex items-center gap-1 text-[13px] font-semibold text-slate-500">
-        <Icon name="chevronRight" className="h-4 w-4 rotate-180" /> Back to this week
-      </button>
+      <BackLink to="/events">Back to Events</BackLink>
 
       <article className="desktop-detail-card rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
         <div className="rounded-t-2xl bg-[#14171C] p-5 text-white">
@@ -372,7 +371,7 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
         <h1 className="mt-3 text-xl font-extrabold">Run not found</h1>
         <p className="mt-1 text-sm text-slate-500">This run isn't in the current week, or it's no longer listed.</p>
         <Link to="/" className="mt-4 inline-block rounded-[10px] bg-[#14171C] px-5 py-3 text-sm font-semibold text-white">
-          Back to this week
+          Back to Events
         </Link>
       </div>
     );
@@ -481,12 +480,12 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
       ) : null}
       <DiscussionPanel eventId={event.id} occurrenceId={occurrenceId} canView={canRsvp} refreshKey={discussionRefresh} />
       </div>
-      <aside className="desktop-detail-panel" aria-label="Run details summary">
-        <p className="text-[11px] font-extrabold uppercase tracking-[.12em] text-[#FF5741]">Run details</p>
-        <h2 className="mt-2 text-lg font-extrabold tracking-tight text-slate-900">Plan your arrival</h2>
-        <p className="mt-2 text-[13px] leading-relaxed text-slate-600">Review the start time, location, and distance before adding this run to My Runs.</p>
-        <div className="mt-4 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-500"><strong className="text-slate-700">Local note:</strong> Details come from the community listing.</div>
-      </aside>
+      <RailStack ariaLabel="Run details summary">
+        <RailCard kicker="Run details" title="Plan your arrival">
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-600">Review the start time, location, and distance before adding this run to My Runs.</p>
+          <div className="mt-4 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-500"><strong className="text-slate-700">Local note:</strong> Details come from the community listing.</div>
+        </RailCard>
+      </RailStack>
       </div>
       <VerifiedGateSheet open={gateOpen} onClose={() => setGateOpen(false)} role={role} actionLabel="adding this run to My Runs" pendingLabel="Your profile is still in review." rejectionReason={me?.status === "signed_in" ? me.account.rejectionReason ?? null : null} />
       <ModerationConfirmSheet

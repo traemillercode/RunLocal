@@ -20,7 +20,7 @@ import { seedContentRegistry } from "../src/server/contentSeed";
 import { DEFAULT_OWNER_EMAIL } from "../src/server/owner";
 import { CITIES } from "../src/data/cities";
 import { actionMenuItems } from "../src/lib/actionModel";
-import type { AccountRecord, RunEventRecord, SubmissionRecord } from "../src/server/types";
+import type { AccountRecord, SubmissionRecord } from "../src/server/types";
 
 function req(method: string, path: string, opts: { body?: unknown; cookie?: string; adminReason?: string } = {}): any {
   const input = opts.body === undefined ? "" : JSON.stringify(opts.body);
@@ -47,18 +47,6 @@ function account(db: Db, email: string, cityId = "columbia-mo", patch: Partial<A
 }
 function leadGroup(db: Db, id: string, ownerId: string) {
   db.updateGroup(id, { ownerId, leaderIds: [] });
-}
-function makeEvent(db: Db, id: string, patch: Partial<RunEventRecord> = {}): RunEventRecord {
-  const rec: RunEventRecord = {
-    id, seedRefId: null, cityId: "columbia-mo", groupId: "", title: id, dayOfWeek: 3,
-    time: "6:00 PM", location: "Test location", distanceLabel: "3 mi", invite: "Open to all",
-    externalUrl: null, provenance: "seed", status: "published", hidden: false,
-    createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
-    createdBy: "seed", updatedBy: "seed", archivedAt: null,
-    ...patch,
-  };
-  db.setEvent(rec);
-  return rec;
 }
 function setup() {
   const db = createMemoryStore();
