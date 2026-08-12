@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { TrustedBadge } from "../components/TrustedBadge";
 import { Chip, Icon, PillButton } from "../components/ui";
@@ -84,6 +84,94 @@ export function MySubmissions({ signedIn }: { signedIn: boolean }) {
   );
 }
 
+/**
+ * Presentational body of the Profile "Groups & clubs" entry — exported so
+ * SSR/no-jsdom tests can assert the directory + My Groups rows and the
+ * pending badge without the fetch effects (which never run in SSR).
+ */
+export function ProfileGroupsCardContent({
+  membershipCount,
+  pendingRequests,
+  loading,
+}: {
+  membershipCount: number | null;
+  pendingRequests: number;
+  loading: boolean;
+}) {
+  const pending = Math.max(0, pendingRequests);
+  return (
+    <section
+      className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70"
+      data-tour-target="profile-my-groups"
+    >
+      <h2 className="text-[15px] font-bold text-slate-900">Groups &amp; clubs</h2>
+      <p className="mt-0.5 text-xs text-slate-500">Find local running communities and manage your memberships.</p>
+      <ul className="mt-3 divide-y divide-slate-100 rounded-xl ring-1 ring-slate-200">
+        <li>
+          <Link to="/groups" className="flex min-h-12 items-center gap-3 px-4 py-3 active:bg-slate-50">
+            <Icon name="users" className="h-5 w-5 shrink-0 text-[#FF5741]" />
+            <span className="flex-1 text-[14px] font-semibold text-slate-800">Browse the public directory</span>
+            <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-slate-400" />
+          </Link>
+        </li>
+        <li>
+          <Link to="/my-groups" className="flex min-h-12 items-center gap-3 px-4 py-3 active:bg-slate-50">
+            <Icon name="rsvp" className="h-5 w-5 shrink-0 text-[#FF5741]" />
+            <span className="flex-1 text-[14px] font-semibold text-slate-800">My Groups</span>
+            {loading ? (
+              <span className="text-xs font-semibold text-slate-400">…</span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                {membershipCount != null && membershipCount > 0 ? (
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+                    {membershipCount} {membershipCount === 1 ? "membership" : "memberships"}
+                  </span>
+                ) : null}
+                {pending > 0 ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                    {pending} pending
+                  </span>
+                ) : null}
+              </span>
+            )}
+            <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-slate-400" />
+          </Link>
+        </li>
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * Signed-in-only wrapper that fetches this account's memberships and the
+ * pending-request counts of groups it leads, then renders the entry card.
+ */
+export function ProfileGroupsCard({ signedIn }: { signedIn: boolean }) {
+  const [membershipCount, setMembershipCount] = useState<number | null>(null);
+  const [pendingRequests, setPendingRequests] = useState(0);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!signedIn) return;
+    let alive = true;
+    void api.getMyGroups().then((r) => {
+      if (!alive) return;
+      if (r.ok) {
+        setMembershipCount(r.data.memberships.filter((m) => m.status === "active" || m.status === "pending").length);
+      }
+      if (!r.ok) setMembershipCount(0);
+    });
+    void api.getMyLedGroups().then((r) => {
+      if (!alive) return;
+      if (r.ok) setPendingRequests(r.data.groups.reduce((n, g) => n + (g.pendingCount ?? 0), 0));
+    });
+    setLoading(false);
+    return () => {
+      alive = false;
+    };
+  }, [signedIn]);
+  return <ProfileGroupsCardContent membershipCount={membershipCount} pendingRequests={pendingRequests} loading={loading} />;
+}
+
 export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
   const navigate = useNavigate();
   const { me, backendAvailable } = useAccount();
@@ -112,7 +200,7 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
       ) : null}
 
       {/* Identity card */}
-      <section className="mt-4 overflow-hidden rounded-2xl bg-[#14171C] text-white shadow-sm">
+      <section className="mt-4 overflow-hidden rounded-2xl bg-[#14171C] text-white shadow-sm" data-tour-target="profile-header">
         <div className="flex items-center gap-4 p-5">
           {photo ? (
             <img src={photo} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover ring-2 ring-white/20" />
@@ -198,6 +286,8 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
         <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70"><h2 className="text-[15px] font-bold text-slate-900">Profile settings</h2><p className="mt-1 text-[13px] text-slate-600">Manage your username and notification preferences in Settings.</p><PillButton variant="secondary" onClick={() => navigate("/settings")} className="mt-3 w-full">Open Settings</PillButton></section>
       )}
 
+      {/* Groups & clubs — directory entry + My Groups with pending counts */}
+      {signedIn ? <ProfileGroupsCard signedIn={!!signedIn} /> : null}
       {/* My submissions — this account's own submissions only */}
       <MySubmissions signedIn={!!signedIn} />
 

@@ -13,6 +13,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
+      data-tour-target="bottom-nav"
       className="app-shell-nav fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
     >
       <div
