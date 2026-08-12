@@ -14,9 +14,10 @@
  *    may rate a reviewee only for an event both of them RSVP'd to or hosted
  *    (see AttendanceRecord). Nothing is ever client-claimed.
  */
-import { newId } from "./store";
+import { isSuspended, newId } from "./store";
 import type { Db } from "./store";
 import { ALLOWED_TRUST_TAGS, type AccountRecord, type CredentialType, type TrustTag } from "./types";
+import { getCityById } from "../data/cities";
 import type { AdminResult } from "./admin";
 
 const MAX_PROOF = 8 * 1024 * 1024;
@@ -175,6 +176,36 @@ export function publicTrust(db: Db, accountId: string, viewerId: string | null =
     view.restrictions = trustRestrictions(rec);
   }
   return view;
+}
+/**
+ * Public-safe profile identity of any account — the ONLY fields a third party
+ * (or guest) may see. Never email, phone, suspended state, rejection reason,
+ * under-review state, or any admin/verification history. Deleted and
+ * suspended accounts return null (the API layer maps that to 404).
+ */
+export interface PublicRunnerProfile {
+  id: string;
+  name: string;
+  username: string | null;
+  profilePhotoUrl: string | null;
+  /** Display name of the runner's home city (from the known city list). */
+  cityName: string | null;
+  isVerified: boolean;
+  isTrustedMember: boolean;
+  isLeader: boolean;
+}
+export function publicRunnerProfile(rec: AccountRecord, now = new Date()): PublicRunnerProfile | null {
+  if (rec.deletedAt || isSuspended(rec, now)) return null;
+  return {
+    id: rec.id,
+    name: rec.name,
+    username: rec.username ?? null,
+    profilePhotoUrl: rec.profilePhotoRef ? `/uploads/public/${rec.profilePhotoRef}` : null,
+    cityName: rec.cityId ? (getCityById(rec.cityId)?.name ?? null) : null,
+    isVerified: rec.status === "verified",
+    isTrustedMember: rec.trustedMember === true,
+    isLeader: rec.role === "group_leader",
+  };
 }
 
 /**

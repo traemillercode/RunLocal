@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { HomeCityBanner } from "../components/HomeCityBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { ActionMenu } from "../components/ActionMenu";
@@ -376,7 +377,14 @@ export function ForumThread({
               <div className="min-w-0 flex-1 rounded-xl bg-white p-3 ring-1 ring-slate-200/70">
                 <div className="flex items-start justify-between gap-2">
                   <p className="min-w-0 text-xs font-semibold text-slate-700">
-                    {r.author} <span className="font-normal text-slate-400">· {r.createdAt}</span>
+                    {r.authorId ? (
+                      <Link to={`/runners/${r.authorId}`} className="font-semibold text-slate-700 hover:underline underline-offset-2">
+                        {r.author}
+                      </Link>
+                    ) : (
+                      r.author
+                    )}{" "}
+                    <span className="font-normal text-slate-400">· {r.createdAt}</span>
                   </p>
                   <ActionMenu
                     entityTitle={`Reply by ${r.author}`}
@@ -476,7 +484,13 @@ export function PostCard({
       </div>
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-4 py-2.5">
         <p className="min-w-0 truncate text-xs text-slate-500">
-          <span className="font-semibold text-slate-700">{post.author}</span>
+          {post.authorId ? (
+            <Link to={`/runners/${post.authorId}`} className="font-semibold text-slate-700 hover:underline underline-offset-2">
+              {post.author}
+            </Link>
+          ) : (
+            <span className="font-semibold text-slate-700">{post.author}</span>
+          )}
           {post.authorNote ? <span className="ml-1.5 text-slate-400">· {post.authorNote}</span> : null}
           <span className="text-slate-300"> · </span>
           {post.createdAt}
@@ -519,6 +533,8 @@ export interface ForumPostRow {
   body: string;
   author: string;
   authorNote?: string;
+  /** Author account id — null/absent for seed posts (no profile link). */
+  authorId?: string | null;
   createdAt: string;
   answered?: boolean;
   pinned?: boolean;
@@ -626,6 +642,7 @@ export function ForumPage({ city }: { city: City }) {
         body: p.body,
         author: p.author,
         authorNote: p.authorNote ?? undefined,
+        authorId: p.authorId,
         createdAt: p.createdAt,
         answered: false,
         pinned: p.pinned,

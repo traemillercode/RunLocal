@@ -105,6 +105,7 @@ import {
   expireCredentials,
   parseProof,
   publicRecognitions,
+  publicRunnerProfile,
   publicTrust,
   ratingEligibility,
   reconcileTrustStatus,
@@ -1409,6 +1410,21 @@ async function handleApi(
     return ok(res, publicTrust(db, id, viewerId)), true;
   }
 
+  // ---- public runner profile (public-safe; guests OK; no private fields) --
+  // The ONLY identity fields a third party may see. Deleted/suspended
+  // accounts are indistinguishable from unknown ids (404). Even the account
+  // owner gets the same public-safe view here — underReview/restrictions
+  // belong to /api/profile/trust, never to this route.
+  const runnerMatch = /^\/api\/runners\/([a-f0-9]{32})\/?$/.exec(url.pathname);
+  if (runnerMatch && method === "GET") {
+    const rec = db.getAccount(runnerMatch[1]);
+    if (!rec || !publicRunnerProfile(rec, now)) return err(res, { status: 404, error: "not_found" }), true;
+    return ok(res, {
+      profile: publicRunnerProfile(rec, now),
+      trust: publicTrust(db, runnerMatch[1], null),
+      recognitions: publicRecognitions(db, rec.cityId ?? ""),
+    }), true;
+  }
   // ---- public recognitions: NON-RANKED qualitative list for a city --------
   if (url.pathname === "/api/recognitions" && method === "GET") {
     const cityId = url.searchParams.get("city") ?? "";

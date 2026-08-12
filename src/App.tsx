@@ -19,6 +19,7 @@ import { EventDetailPage } from "./pages/EventDetailPage";
 import { ForumPage } from "./pages/ForumPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { RunnerProfilePage } from "./pages/RunnerProfilePage";
 import { RacesPage } from "./pages/RacesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { VerifyPage } from "./pages/VerifyPage";
@@ -44,6 +45,7 @@ import { TourHost } from "./components/TourHost";
 const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login", "/recovery", "/confirmation", "/callback", "/checkin"]);
 
 function GroupRoute() { const location = useLocation(); const id = location.pathname.split("/").pop() ?? ""; return <GroupDetailPage id={id} />; }
+function RunnerRoute() { const location = useLocation(); const id = location.pathname.split("/").pop() ?? ""; return <RunnerProfilePage id={id} />; }
 
 function Shell() {
   const store = useAppState();
@@ -100,6 +102,7 @@ function Shell() {
             <Route path="/my-runs" element={<MyRunsPage />} />
             <Route path="/personal-runs" element={<PersonalRunsPage />} />
             <Route path="/profile" element={<ProfilePage city={city} store={store} />} />
+            <Route path="/runners/:id" element={<RunnerRoute />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/login" element={<LoginPage />} />
