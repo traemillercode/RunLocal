@@ -985,6 +985,9 @@ export class Db {
     return next;
   }
   // ---------------------------------------------------------------------- tags
+  getTag(id: string): import("./types").TagRecord | undefined {
+    return this.tags.get(id);
+  }
   getTagsForContent(contentType: import("./types").TagContentType, contentId: string): import("./types").TagRecord[] {
     return [...this.tags.values()].filter((t) => t.contentType === contentType && t.contentId === contentId);
   }

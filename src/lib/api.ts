@@ -806,6 +806,12 @@ export interface RunnerProfileView {
   isVerified: boolean;
   isTrustedMember: boolean;
   isLeader: boolean;
+  /** Relationship of the signed-in viewer to this runner (null for guests). */
+  connectionState?: ConnectionState | null;
+  /** Shared accepted connections; meaningful only when mutualVisible is true. */
+  mutualConnectionsCount?: number;
+  /** Whether the runner's show_connections_list lets this viewer see the count. */
+  mutualVisible?: boolean;
 }
 /** GET /api/runners/:id — guest-accessible public runner profile. */
 export interface RunnerProfileResponse {
@@ -831,6 +837,136 @@ export interface SharedEventView {
 /** GET /api/runners/:id/shared-events — verified signed-in runners only. */
 export function getRunnerSharedEvents(runnerId: string): Promise<ApiResult<{ events: SharedEventView[] }>> {
   return request(`/api/runners/${encodeURIComponent(runnerId)}/shared-events`);
+}
+
+// ------------------------------------------------- connections & privacy
+/** Relationship of the signed-in viewer to another runner (null for guests). */
+export type ConnectionState = "none" | "requested_by_me" | "requested_to_me" | "connected" | "removed";
+/** One incoming pending request row (from = the requester's public profile). */
+export interface ConnectionRequestView {
+  requestId: string;
+  from: RunnerProfileView;
+  createdAt: string;
+}
+/** An accepted connection entry: public profile + "connected". */
+export type ConnectionView = RunnerProfileView & { connectionState: ConnectionState };
+export interface ConnectionsView {
+  requests: ConnectionRequestView[];
+  connections: ConnectionView[];
+  pendingCount: number;
+}
+/** GET /api/connections — signed-in only. Optional ?q= filters the list. */
+export function getConnections(q?: string): Promise<ApiResult<ConnectionsView>> {
+  return request(`/api/connections${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+}
+/** POST /api/connections/:id/request — :id is the TARGET ACCOUNT id. */
+export function requestConnection(targetId: string): Promise<ApiResult<{ status: string; resolved?: boolean }>> {
+  return request(`/api/connections/${encodeURIComponent(targetId)}/request`, { method: "POST" });
+}
+/** POST /api/connections/:id/accept|decline — :id is the REQUEST id. */
+export function acceptConnection(requestId: string): Promise<ApiResult<{ status: string }>> {
+  return request(`/api/connections/${encodeURIComponent(requestId)}/accept`, { method: "POST" });
+}
+export function declineConnection(requestId: string): Promise<ApiResult<{ status: string }>> {
+  return request(`/api/connections/${encodeURIComponent(requestId)}/decline`, { method: "POST" });
+}
+/** POST /api/connections/:id/remove — :id is the OTHER ACCOUNT id (soft delete). */
+export function removeConnection(accountId: string): Promise<ApiResult<{ status: string }>> {
+  return request(`/api/connections/${encodeURIComponent(accountId)}/remove`, { method: "POST" });
+}
+/** POST /api/connections/:id/block — writes a block + removes any active row. */
+export function blockConnection(accountId: string): Promise<ApiResult<{ status: string }>> {
+  return request(`/api/connections/${encodeURIComponent(accountId)}/block`, { method: "POST" });
+}
+/** Unblock via the EXISTING single block system (POST /api/blocks DELETE). */
+export function unblockConnection(accountId: string): Promise<ApiResult<{ removed: boolean }>> {
+  return request("/api/blocks", { method: "DELETE", body: JSON.stringify({ accountId }) });
+}
+/** GET /api/people/search?q= — verified accounts only; searchable_by_name enforced server-side. */
+export interface PeopleSearchResult extends RunnerProfileView {
+  connectionState: ConnectionState | null;
+}
+export function searchPeople(q: string): Promise<ApiResult<{ people: PeopleSearchResult[] }>> {
+  return request(`/api/people/search?q=${encodeURIComponent(q)}`);
+}
+/** One attendee row of the connections-going strip (canView-filtered server-side). */
+export interface ConnectionGoingRow {
+  accountId: string;
+  name: string;
+  username: string | null;
+  profilePhotoUrl: string | null;
+}
+/** GET /api/events/:eventId/occurrences/:occurrenceId/connections-going — verified signed-in only. */
+export function getConnectionsGoing(eventId: string, occurrenceId: string): Promise<ApiResult<ConnectionGoingRow[]>> {
+  return request(`/api/events/${encodeURIComponent(eventId)}/occurrences/${encodeURIComponent(occurrenceId)}/connections-going`);
+}
+
+// ------------------------------------------------------------ privacy settings
+export type ProfileVisibilitySetting = "public" | "connections_only";
+export type ContentVisibilitySetting = "public" | "connections_only" | "private";
+export type SavedEventsVisibilitySetting = "connections_only" | "private";
+export interface PrivacySettings {
+  profile_visibility: ProfileVisibilitySetting;
+  show_upcoming_events: ContentVisibilitySetting;
+  show_saved_events: SavedEventsVisibilitySetting;
+  show_past_activity: ContentVisibilitySetting;
+  show_connections_list: ContentVisibilitySetting;
+  show_tagged_content: ContentVisibilitySetting;
+  searchable_by_name: boolean;
+}
+export function getPrivacy(): Promise<ApiResult<{ settings: PrivacySettings }>> {
+  return request("/api/profile/privacy");
+}
+/** Partial update merges server-side; response is the full settings record. */
+export function putPrivacy(patch: Partial<PrivacySettings>): Promise<ApiResult<{ settings: PrivacySettings }>> {
+  return request("/api/profile/privacy", { method: "PUT", body: JSON.stringify(patch) });
+}
+
+// ------------------------------------------------------------------- tags
+export type TagContentType = "run" | "post" | "event";
+export interface TagView {
+  id: string;
+  contentType: TagContentType;
+  contentId: string;
+  taggedUserId: string;
+  taggedByUserId: string;
+  hiddenByTaggedUser: boolean;
+  createdAt: string;
+  /** Tagged runner's public profile — present on GET /api/tags rows. */
+  taggedUser?: RunnerProfileView;
+}
+/** POST /api/tags — verified actor; no approval needed. */
+export function createTag(input: { contentType: TagContentType; contentId: string; taggedUserId: string }): Promise<ApiResult<{ tag: TagView }>> {
+  return request("/api/tags", { method: "POST", body: JSON.stringify(input) });
+}
+/** GET /api/tags?contentType=&contentId= — hidden rows drop unless you are the tagged user. */
+export function getTags(contentType: TagContentType, contentId: string): Promise<ApiResult<{ tags: TagView[] }>> {
+  return request(`/api/tags?contentType=${encodeURIComponent(contentType)}&contentId=${encodeURIComponent(contentId)}`);
+}
+/** PATCH /api/tags/:id/self — ONLY the tagged user may set their own flag. */
+export function selfHideTag(tagId: string, hiddenByTaggedUser: boolean): Promise<ApiResult<{ tag: TagView }>> {
+  return request(`/api/tags/${encodeURIComponent(tagId)}/self`, { method: "PATCH", body: JSON.stringify({ hiddenByTaggedUser }) });
+}
+/** One row of the runner's Tagged tab: the tag + its public content title. */
+export interface RunnerTaggedRow {
+  tag: { id: string; contentType: TagContentType; contentId: string; hiddenByTaggedUser: boolean; createdAt: string };
+  content: { kind: "post" | "event"; id: string; title: string };
+}
+/** GET /api/runners/:id/tagged — gated by show_tagged_content server-side. */
+export function getRunnerTagged(runnerId: string): Promise<ApiResult<{ tagged: RunnerTaggedRow[] }>> {
+  return request(`/api/runners/${encodeURIComponent(runnerId)}/tagged`);
+}
+/** One row of the runner's public Activity tab (forum posts). */
+export interface RunnerActivityRow {
+  id: string;
+  title: string;
+  excerpt: string;
+  section: string;
+  createdAt: string;
+}
+/** GET /api/runners/:id/activity — gated by show_past_activity server-side. */
+export function getRunnerActivity(runnerId: string): Promise<ApiResult<{ activity: RunnerActivityRow[] }>> {
+  return request(`/api/runners/${encodeURIComponent(runnerId)}/activity`);
 }
 
 /** One row of the runner's own private My Runs list. `kind` distinguishes an
