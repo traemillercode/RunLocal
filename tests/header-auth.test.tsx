@@ -120,6 +120,32 @@ describe("guest account menu (UI)", () => {
     expect(connections?.to).toBe("/connections");
     expect(connections?.icon).toBe("users");
   });
+
+  it("shows the My submissions entry in the signed-in menu, between profile and settings", () => {
+    const html = renderToStaticMarkup(
+      <AccountMenuContent me={{ status: "signed_in", account: verifiedAccount() }} backendAvailable onNavigate={noop} onLogout={noop} />,
+    );
+    expect(html).toContain(">My submissions<");
+    const { entries } = profileMenuEntries({ status: "signed_in", account: verifiedAccount() });
+    const submissions = entries.find((e) => e.key === "submissions");
+    expect(submissions).toEqual({
+      key: "submissions",
+      label: "My submissions",
+      icon: "document",
+      to: "/profile?section=submissions",
+    });
+    const keys = entries.map((e) => e.key);
+    expect(keys.indexOf("submissions")).toBeGreaterThan(keys.indexOf("profile"));
+    expect(keys.indexOf("submissions")).toBeLessThan(keys.indexOf("settings"));
+  });
+
+  it("keeps My submissions out of the guest menu", () => {
+    const html = renderToStaticMarkup(
+      <AccountMenuContent me={null} backendAvailable onNavigate={noop} onLogout={noop} />,
+    );
+    expect(html).not.toContain("My submissions");
+    expect(profileMenuEntries({ status: "guest" }).entries.find((e) => e.key === "submissions")).toBeUndefined();
+  });
 });
 
 describe("account popup menu (UI)", () => {

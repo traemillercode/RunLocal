@@ -4,7 +4,7 @@ import { NAV_ENTRIES, entriesForSurface, activeForPath, NO_NAV_PATHS } from "../
 describe("single nav model (src/lib/nav.ts)", () => {
   it("defines all entries in canonical order", () => {
     expect(NAV_ENTRIES.map((e) => e.id)).toEqual([
-      "events", "races", "forum", "groups", "connections", "my-runs", "profile", "settings",
+      "events", "races", "forum", "groups", "connections", "my-runs", "profile", "settings", "submissions",
     ]);
     for (const e of NAV_ENTRIES) {
       expect(typeof e.route).toBe("string");
@@ -22,6 +22,15 @@ describe("single nav model (src/lib/nav.ts)", () => {
     expect(entriesForSurface("bottom").find((e) => e.id === "settings")).toBeUndefined();
     const settings = NAV_ENTRIES.find((e) => e.id === "settings")!;
     expect(settings.surfaces).toEqual(["sidebar", "menu"]);
+  });
+  it("keeps the My submissions entry in the account-menu surface only (no bottom/sidebar)", () => {
+    expect(entriesForSurface("bottom").find((e) => e.id === "submissions")).toBeUndefined();
+    expect(entriesForSurface("sidebar").find((e) => e.id === "submissions")).toBeUndefined();
+    const submissions = NAV_ENTRIES.find((e) => e.id === "submissions")!;
+    expect(submissions.label).toBe("My submissions");
+    expect(submissions.route).toBe("/profile?section=submissions");
+    expect(submissions.icon).toBe("document");
+    expect(submissions.surfaces).toEqual(["menu"]);
   });
   it("matches Events on / exactly and on /events* detail routes", () => {
     const events = NAV_ENTRIES.find((e) => e.id === "events")!;

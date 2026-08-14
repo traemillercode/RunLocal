@@ -11,6 +11,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { MySubmissionsContent } from "../src/pages/ProfilePage";
+import { submissionDateLabel } from "../src/lib/dates";
 import type { MySubmissionView } from "../src/lib/api";
 
 const noop = () => {};
@@ -61,5 +62,50 @@ describe("MySubmissionsContent — status chips and pending-only actions", () =>
     );
     expect(html).toContain("Why it was rejected:");
     expect(html).toContain("Photo did not match ID");
+  });
+});
+
+describe("MySubmissionsContent — per-status date lines", () => {
+  // Noon-UTC timestamps keep the rendered local date stable across timezones.
+  const submittedAt = "2026-07-01T12:00:00.000Z";
+  const decidedAt = "2026-08-04T12:00:00.000Z";
+
+  it("pending rows show 'Submitted <date>' from submittedAt", () => {
+    const html = renderToStaticMarkup(
+      <MySubmissionsContent rows={[row({ status: "pending", submittedAt })]} onWithdraw={noop} />,
+    );
+    expect(html).toContain(`Submitted ${submissionDateLabel(submittedAt)}`);
+    expect(html).not.toContain("Approved ");
+  });
+
+  it("approved rows show 'Approved <date>' from decidedAt", () => {
+    const html = renderToStaticMarkup(
+      <MySubmissionsContent rows={[row({ status: "approved", submittedAt, decidedAt })]} onWithdraw={noop} />,
+    );
+    expect(html).toContain(`Approved ${submissionDateLabel(decidedAt)}`);
+    expect(html).not.toContain("Submitted ");
+  });
+
+  it("rejected rows show 'Rejected <date>' from decidedAt alongside the reason", () => {
+    const html = renderToStaticMarkup(
+      <MySubmissionsContent rows={[row({ status: "rejected", submittedAt, decidedAt, rejectionReason: "Photo did not match ID" })]} onWithdraw={noop} />,
+    );
+    expect(html).toContain(`Rejected ${submissionDateLabel(decidedAt)}`);
+    expect(html).toContain("Why it was rejected:");
+  });
+
+  it("withdrawn rows show 'Withdrawn <date>' from decidedAt", () => {
+    const html = renderToStaticMarkup(
+      <MySubmissionsContent rows={[row({ status: "withdrawn", submittedAt, decidedAt })]} onWithdraw={noop} />,
+    );
+    expect(html).toContain(`Withdrawn ${submissionDateLabel(decidedAt)}`);
+  });
+
+  it("renders NO date line when decidedAt is null on a decided row", () => {
+    const html = renderToStaticMarkup(
+      <MySubmissionsContent rows={[row({ status: "approved", submittedAt, decidedAt: null })]} onWithdraw={noop} />,
+    );
+    expect(html).toContain("Approved"); // chip still renders
+    expect(html.match(/Approved\s+\w+ \d+, \d{4}/)).toBeNull();
   });
 });

@@ -5,6 +5,7 @@ import {
   formatRaceDate,
   resolveWeekEvents,
   startOfWeek,
+  submissionDateLabel,
   weekRangeLabel,
 } from "../src/lib/dates";
 import type { RunEvent } from "../src/types";
@@ -73,5 +74,22 @@ describe("dayLabel", () => {
 describe("formatRaceDate", () => {
   it("formats ISO dates", () => {
     expect(formatRaceDate("2026-10-04")).toBe("Sun, Oct 4, 2026");
+  });
+});
+describe("submissionDateLabel", () => {
+  it("formats a valid ISO timestamp as 'Mon D, YYYY' in the viewer's local timezone", () => {
+    // Noon UTC renders as the same calendar date in every timezone.
+    const iso = "2026-08-04T12:00:00.000Z";
+    const d = new Date(iso);
+    const expected = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+    expect(submissionDateLabel(iso)).toBe(expected);
+    expect(submissionDateLabel(iso)).toMatch(/^[A-Z][a-z]{2} \d{1,2}, \d{4}$/);
+  });
+  it("returns an empty string for null and undefined", () => {
+    expect(submissionDateLabel(null)).toBe("");
+    expect(submissionDateLabel(undefined)).toBe("");
+  });
+  it("returns an empty string for an unparseable value", () => {
+    expect(submissionDateLabel("not-a-date")).toBe("");
   });
 });

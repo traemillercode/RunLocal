@@ -16,10 +16,12 @@
  * honest: tests assert what guests / verified runners / group leaders SEE,
  * never client-side role powers — the server enforces every permission.
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import { GroupSubmissionSheet, IndependentEventSheet, RaceSubmissionSheet } from "../src/components/SubmissionSheets";
+import { GroupSubmissionSheet, IndependentEventSheet, RaceSubmissionSheet, SubmissionSuccessStep } from "../src/components/SubmissionSheets";
 import { CITIES } from "../src/data/cities";
 import type { Me, PublicAccount } from "../src/lib/accounts";
 import type { AppStore } from "../src/lib/store";
@@ -139,7 +141,9 @@ const APPROVED_GROUP: PublicUserGroup = {
 describe("submission sheets (UI)", () => {
   it("race sheet collects name, distances, date, location, and registration URL", () => {
     const html = renderToStaticMarkup(
-      <RaceSubmissionSheet open onClose={noop} cityId={CITY.id} />,
+      <MemoryRouter>
+        <RaceSubmissionSheet open onClose={noop} cityId={CITY.id} />
+      </MemoryRouter>,
     );
     expect(html).toContain("Submit a race");
     expect(html).toContain("Race name");
@@ -154,7 +158,9 @@ describe("submission sheets (UI)", () => {
 
   it("group sheet defaults to community and labels the RRCA option as a request, not a claim", () => {
     const html = renderToStaticMarkup(
-      <GroupSubmissionSheet open onClose={noop} cityId={CITY.id} />,
+      <MemoryRouter>
+        <GroupSubmissionSheet open onClose={noop} cityId={CITY.id} />
+      </MemoryRouter>,
     );
     expect(html).toContain("Start a group");
     expect(html).toContain("Group name");
@@ -169,7 +175,9 @@ describe("submission sheets (UI)", () => {
   it("independent event sheet defaults to recurring and hides the one-time date until toggled", () => {
     guestAuth();
     const html = renderToStaticMarkup(
-      <IndependentEventSheet open onClose={noop} cityId={CITY.id} />,
+      <MemoryRouter>
+        <IndependentEventSheet open onClose={noop} cityId={CITY.id} />
+      </MemoryRouter>,
     );
     expect(html).toContain("Host an independent run");
     expect(html).toContain("Recurring (weekly)");
@@ -184,10 +192,33 @@ describe("submission sheets (UI)", () => {
   it("group leaders see the independent-run restriction and a disabled submit button", () => {
     verifiedAuth(verifiedAccount({ role: "group_leader" }));
     const html = renderToStaticMarkup(
-      <IndependentEventSheet open onClose={noop} cityId={CITY.id} />,
+      <MemoryRouter>
+        <IndependentEventSheet open onClose={noop} cityId={CITY.id} />
+      </MemoryRouter>,
     );
     expect(html).toContain("Group Leaders submit runs through their group");
     expect(html).toContain("disabled");
+  });
+});
+
+describe("SubmissionSuccessStep (UI)", () => {
+  it("renders the success title, honest body copy, and both buttons", () => {
+    const html = renderToStaticMarkup(<SubmissionSuccessStep onTrack={noop} onDone={noop} />);
+    expect(html).toContain("Submission received");
+    // React escapes apostrophes in rendered text (&#x27;), so assert in pieces.
+    expect(html).toContain("It&#x27;s in the review queue — only you can see it until it");
+    expect(html).toContain("approved. You can edit or withdraw it while it");
+    expect(html).toContain("Track submission");
+    expect(html).toContain(">Done<");
+  });
+});
+
+describe("submit confirmation (source-level)", () => {
+  it("replaces the old success toast with the in-sheet success panel", () => {
+    const src = readFileSync(resolve(process.cwd(), "src/components/SubmissionSheets.tsx"), "utf8");
+    // The old message-only toast is gone — the panel is the single confirmation.
+    expect(src).not.toContain("Submitted! It's pending approval and will appear publicly once approved.");
+    expect(src).toContain("SubmissionSuccessStep");
   });
 });
 

@@ -3,10 +3,10 @@
  * submits to the server-side pending queue — the server is authoritative for
  * every permission and validation. The UI only surfaces server verdicts.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import * as api from "../lib/api";
 import { Icon, PillButton, Sheet } from "./ui";
-import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
 
 const inputCls =
@@ -28,7 +28,6 @@ function Err({ msg }: { msg: string | null }) {
 }
 
 function useSubmit() {
-  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submit = async (fn: () => Promise<api.ApiResult<unknown>>) => {
@@ -45,7 +44,6 @@ function useSubmit() {
       setBusy(false);
     }
     if (r.ok) {
-      toast("Submitted! It's pending approval and will appear publicly once approved.", "success");
       return true;
     }
     setError(r.error.message ?? "Couldn't submit. Check the highlighted fields.");
@@ -54,21 +52,55 @@ function useSubmit() {
   return { busy, error, setError, submit };
 }
 
+/**
+ * Kind-agnostic post-submit success panel — the single confirmation that
+ * replaces the old success toast (a message-only toast can't carry a reliable
+ * "Track submission" action). onTrack navigates to the profile's My
+ * submissions section; onDone just closes the sheet.
+ */
+export function SubmissionSuccessStep({ onTrack, onDone }: { onTrack: () => void; onDone: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-4 text-center">
+      <span className="grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+        <Icon name="check" className="h-7 w-7" />
+      </span>
+      <div>
+        <h3 className="text-lg font-bold text-slate-900">Submission received</h3>
+        <p className="mt-1 text-sm leading-relaxed text-slate-600">
+          It's in the review queue — only you can see it until it's approved. You can edit or withdraw it while it's pending.
+        </p>
+      </div>
+      <div className="mt-2 w-full space-y-2">
+        <PillButton variant="primary" className="w-full" onClick={onTrack}>
+          <Icon name="chevronRight" className="h-4 w-4 rotate-180" /> Track submission
+        </PillButton>
+        <PillButton variant="ghost" className="w-full" onClick={onDone}>Done</PillButton>
+      </div>
+    </div>
+  );
+}
+
 /** Race submission: verified runners / race directors. */
 export function RaceSubmissionSheet({ open, onClose, onSubmitted, cityId }: { open: boolean; onClose: () => void; onSubmitted?: () => void; cityId: string }) {
   const { busy, error, submit } = useSubmit();
+  const navigate = useNavigate();
+  const [done, setDone] = useState(false);
+  useEffect(() => { if (open) setDone(false); }, [open]);
   const [f, setF] = useState({ name: "", distances: "", date: "", location: "", registrationUrl: "", description: "" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   const save = async () => {
     const ok = await submit(() => api.submitRace({ ...f, cityId }));
     if (ok) {
       setF({ name: "", distances: "", date: "", location: "", registrationUrl: "", description: "" });
-      onClose();
+      setDone(true);
       onSubmitted?.();
     }
   };
   return (
     <Sheet open={open} onClose={onClose} title="Submit a race" subtitle="Verified runners & race directors — pending approval before it's public">
+      {done ? (
+        <SubmissionSuccessStep onTrack={() => { onClose(); navigate("/profile?section=submissions"); }} onDone={onClose} />
+      ) : (
       <div className="space-y-4">
         <Field label="Race name"><input className={inputCls} placeholder="e.g. River 5K" value={f.name} onChange={set("name")} /></Field>
         <Field label="Distances"><input className={inputCls} placeholder="e.g. 5K / 10K" value={f.distances} onChange={set("distances")} /></Field>
@@ -82,6 +114,7 @@ export function RaceSubmissionSheet({ open, onClose, onSubmitted, cityId }: { op
         </PillButton>
         <p className="text-center text-xs text-slate-400">Approved listings appear on the public Races page. Only your own submissions are visible to you.</p>
       </div>
+      )}
     </Sheet>
   );
 }
@@ -89,6 +122,9 @@ export function RaceSubmissionSheet({ open, onClose, onSubmitted, cityId }: { op
 /** Group submission: verified runners. RRCA option is a request, not a claim. */
 export function GroupSubmissionSheet({ open, onClose, onSubmitted, cityId }: { open: boolean; onClose: () => void; onSubmitted?: () => void; cityId: string }) {
   const { busy, error, setError, submit } = useSubmit();
+  const navigate = useNavigate();
+  const [done, setDone] = useState(false);
+  useEffect(() => { if (open) setDone(false); }, [open]);
   const [uploading, setUploading] = useState(false);
   const [f, setF] = useState({ name: "", description: "", groupType: "community", groupmeUrl: "", facebookUrl: "", instagramUrl: "", websiteUrl: "", coverPhoto: "", logoPhoto: "", membershipMode: "request" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
@@ -120,7 +156,7 @@ export function GroupSubmissionSheet({ open, onClose, onSubmitted, cityId }: { o
       );
       if (ok) {
         setF({ name: "", description: "", groupType: "community", groupmeUrl: "", facebookUrl: "", instagramUrl: "", websiteUrl: "", coverPhoto: "", logoPhoto: "", membershipMode: "request" });
-        onClose();
+        setDone(true);
         onSubmitted?.();
       }
     } catch (err) {
@@ -132,6 +168,9 @@ export function GroupSubmissionSheet({ open, onClose, onSubmitted, cityId }: { o
   };
   return (
     <Sheet open={open} onClose={onClose} title="Start a group" subtitle="Verified runners — pending approval before it's public">
+      {done ? (
+        <SubmissionSuccessStep onTrack={() => { onClose(); navigate("/profile?section=submissions"); }} onDone={onClose} />
+      ) : (
       <div className="space-y-4">
         <Field label="Group name"><input className={inputCls} placeholder="e.g. Downtown Runners" value={f.name} onChange={set("name")} /></Field>
         <Field label="Description"><textarea rows={2} className={`${inputCls} h-auto py-2.5`} placeholder="Who you are and what you run" value={f.description} onChange={set("description")} /></Field>
@@ -163,6 +202,7 @@ export function GroupSubmissionSheet({ open, onClose, onSubmitted, cityId }: { o
         </PillButton>
         <p className="text-center text-xs text-slate-400">Once approved, you're granted the Group Leader role for this group.</p>
       </div>
+      )}
     </Sheet>
   );
 }
@@ -171,6 +211,9 @@ export function GroupSubmissionSheet({ open, onClose, onSubmitted, cityId }: { o
 export function IndependentEventSheet({ open, onClose, onSubmitted, cityId }: { open: boolean; onClose: () => void; onSubmitted?: () => void; cityId: string }) {
   const { me } = useAccount();
   const { busy, error, submit } = useSubmit();
+  const navigate = useNavigate();
+  const [done, setDone] = useState(false);
+  useEffect(() => { if (open) setDone(false); }, [open]);
   const [f, setF] = useState({ type: "recurring", title: "", date: "", dayOfWeek: "0", time: "6:00 PM", location: "", distanceLabel: "", invite: "Open to all", externalUrl: "", description: "" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const isGroupLeader = me?.status === "signed_in" && me.account.role === "group_leader";
@@ -186,12 +229,15 @@ export function IndependentEventSheet({ open, onClose, onSubmitted, cityId }: { 
     );
     if (ok) {
       setF({ type: "recurring", title: "", date: "", dayOfWeek: "0", time: "6:00 PM", location: "", distanceLabel: "", invite: "Open to all", externalUrl: "", description: "" });
-      onClose();
+      setDone(true);
       onSubmitted?.();
     }
   };
   return (
     <Sheet open={open} onClose={onClose} title="Host an independent run" subtitle="Not tied to a group — host shows as Independent Runner">
+      {done ? (
+        <SubmissionSuccessStep onTrack={() => { onClose(); navigate("/profile?section=submissions"); }} onDone={onClose} />
+      ) : (
       <div className="space-y-4">
         {isGroupLeader ? (
           <p className="flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-[12px] leading-relaxed text-amber-900">
@@ -233,6 +279,7 @@ export function IndependentEventSheet({ open, onClose, onSubmitted, cityId }: { 
         </PillButton>
         <p className="text-center text-xs text-slate-400">Pending approval — approved runs appear on the public events list.</p>
       </div>
+      )}
     </Sheet>
   );
 }

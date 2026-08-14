@@ -39,6 +39,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   { id: "my-runs", route: "/my-runs", label: "My Runs", icon: "rsvp", surfaces: ["bottom", "sidebar"], match: "prefix" },
   { id: "profile", route: "/profile", label: "Profile", icon: "user", surfaces: ["sidebar", "menu"], match: "prefix" },
   { id: "settings", route: "/settings", label: "Settings", icon: "settings", surfaces: ["sidebar", "menu"], match: "prefix" },
+  { id: "submissions", route: "/profile?section=submissions", label: "My submissions", icon: "document", surfaces: ["menu"], match: "prefix" },
 ] as const;
 
 /** Entries rendered by a given surface, in canonical order. */
