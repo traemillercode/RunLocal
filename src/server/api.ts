@@ -2374,8 +2374,10 @@ async function handleAdmin(
 
   // POST /api/admin/submissions/:id/approve|reject — decide a submission.
   // Approve publishes the record (and grants the Group Leader role for
-  // groups); reject stores the audit reason as the submitter-visible
-  // rejection reason. Both require the audited reason header.
+  // groups) and is routine: the audit entry carries the admin identity with a
+  // system label when no operator reason header is sent. Reject REQUIRES the
+  // audited reason header, which is stored as the submitter-visible rejection
+  // reason.
   const submissionMatch = /^\/api\/admin\/submissions\/([a-f0-9]{32})\/(approve|reject)\/?$/.exec(url.pathname);
   if (submissionMatch && method === "POST") {
     const result = decideSubmission(db, ctx, submissionMatch[1], submissionMatch[2] as "approve" | "reject", now);

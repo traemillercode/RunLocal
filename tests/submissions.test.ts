@@ -238,7 +238,7 @@ describe("approve / reject transitions", () => {
     if (!missing.ok) expect(missing.error).toBe("not_found");
   });
 
-  it("approve without a reason header is rejected", async () => {
+  it("approve is routine without a reason header; reject still requires one", async () => {
     const db = createMemoryStore();
     const { adminLogin } = await import("../src/server/admin");
     const login = adminLogin(db, KEY, "198.51.100.7", T0);
@@ -246,9 +246,21 @@ describe("approve / reject transitions", () => {
     const rec = verified(db, "r@x.com");
     const sub = submitRace(db, rec.id, RACE_INPUT, T0);
     if (!sub.ok) throw new Error("submit failed");
+    // Approve without any reason header succeeds and is audited with the system label.
     const res = decideSubmission(db, asKeyAdmin(login.data.sessionId, undefined), sub.data.id, "approve", T0);
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error).toBe("reason_required");
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(db.getSubmission(sub.data.id)!.status).toBe("approved");
+      const audit = db.listAudit(20).find((a) => a.action === "admin.submission_approve");
+      expect(audit).toBeDefined();
+      expect(audit!.reason).toBe("Routine submission approval");
+    }
+    // Reject without a reason header is still refused.
+    const sub2 = submitRace(db, rec.id, RACE_INPUT, T0);
+    if (!sub2.ok) throw new Error("submit failed");
+    const rejected = decideSubmission(db, asKeyAdmin(login.data.sessionId, undefined), sub2.data.id, "reject", T0);
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) expect(rejected.error).toBe("reason_required");
   });
 });
 

@@ -209,12 +209,24 @@ describe("admin submission queue + decisions over HTTP", () => {
     expect(fake2.body).not.toContain("example.com");
     // the routine read is still audited with the server-generated reason
     expect(db.listAudit(10).some((a) => a.action === "admin.submission_list")).toBe(true);
-    // but a decision without a reason is still rejected
+    // approve is routine too: no reason header needed, still audited
     const id = rows[0]!.id;
     const { res: res3, fake: fake3 } = makeRes();
     await apiHandler(makeReq("POST", `/api/admin/submissions/${id}/approve`, { cookie: `runlocal_admin=${adminSession.id}` }), res3, db);
-    expect(fake3.status).toBe(400);
-    expect(JSON.parse(fake3.body).error).toBe("reason_required");
+    expect(fake3.status).toBe(200);
+    expect((JSON.parse(fake3.body) as { ok: boolean }).ok).toBe(true);
+    const approveAudit = db.listAudit(20).find((a) => a.action === "admin.submission_approve" && a.targetId === id);
+    expect(approveAudit).toBeDefined();
+    expect(approveAudit!.reason).toBe("Routine submission approval");
+    // ...but a REJECT decision without a reason is still rejected
+    const { cookie: cookie2 } = verifiedUser(db, "runner2@example.com");
+    const { res: res0, fake: fake0 } = makeRes();
+    await apiHandler(makeReq("POST", "/api/submissions/race", { body: RACE_BODY, cookie: cookie2 }), res0, db);
+    const id2 = (JSON.parse(fake0.body) as { submission: { id: string } }).submission.id;
+    const { res: res4, fake: fake4 } = makeRes();
+    await apiHandler(makeReq("POST", `/api/admin/submissions/${id2}/reject`, { cookie: `runlocal_admin=${adminSession.id}` }), res4, db);
+    expect(fake4.status).toBe(400);
+    expect(JSON.parse(fake4.body).error).toBe("reason_required");
   });
 
   it("reject without a reason header is rejected", async () => {

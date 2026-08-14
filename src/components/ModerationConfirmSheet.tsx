@@ -31,6 +31,8 @@ export function ModerationConfirmSheet({
   confirmLabel,
   cancelLabel = "Cancel",
   requireReason = false,
+  reasonLabel = "Reason",
+  reasonPlaceholder = "Explain what's wrong and what you did to check",
   note,
   busy = false,
   error = null,
@@ -50,6 +52,10 @@ export function ModerationConfirmSheet({
   cancelLabel?: string;
   /** Variant A: require a 5–500 character reason before confirming. */
   requireReason?: boolean;
+  /** Applicant-facing reason label, e.g. "Rejection reason (the submitter will see this)". */
+  reasonLabel?: string;
+  /** Placeholder for the Variant A reason field. */
+  reasonPlaceholder?: string;
   /** Optional privacy/trust note shown under the buttons (variant B, report flow). */
   note?: string;
   /** In-flight state: buttons and the reason field are disabled. */
@@ -81,7 +87,7 @@ export function ModerationConfirmSheet({
         {requireReason ? (
           <div className="space-y-1.5">
             <label htmlFor="moderation-reason" className="block text-[13px] font-semibold text-slate-800">
-              Reason <span className="font-normal text-slate-400">(required)</span>
+              {reasonLabel} <span className="font-normal text-slate-400">(required)</span>
             </label>
             <textarea
               id="moderation-reason"
@@ -89,7 +95,7 @@ export function ModerationConfirmSheet({
               onChange={(e) => setReason(e.target.value)}
               maxLength={REASON_MAX}
               disabled={busy}
-              placeholder="Explain what's wrong and what you did to check"
+              placeholder={reasonPlaceholder}
               rows={3}
               className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[14px] text-slate-900 placeholder:text-slate-400 focus:border-[#FF5741] focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
             />
