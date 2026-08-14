@@ -66,7 +66,7 @@ import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent 
 import { eventCapabilities, moderateEvent, editEventPublic } from "./eventModeration";
 import { publicRaces, editRacePublic } from "./races";
 import { listMyRuns, setMyRunKept, publicOccurrenceId, parseTzOffsetMinutes } from "./myRuns";
-import { buildMyRunsIcs } from "./ical";
+import { buildMyRunsIcs, myRunsIcsFilename } from "./ical";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import { validateImageBytes } from "./image-validation";
 import {
@@ -187,10 +187,10 @@ function ok(res: ServerResponse, body: unknown): void {
   json(res, 200, body);
 }
 /** Private iCalendar download (auth handled by the route; never cached). */
-function ical(res: ServerResponse, body: string): void {
+function ical(res: ServerResponse, body: string, filename: string): void {
   res.writeHead(200, {
     "content-type": "text/calendar; charset=utf-8",
-    "content-disposition": 'attachment; filename="run-local-my-runs.ics"',
+    "content-disposition": `attachment; filename="${filename}"`,
     "cache-control": "no-store",
   });
   res.end(body);
@@ -1420,7 +1420,7 @@ async function handleApi(
     if (rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
     const rows = listMyRuns(db, sess.accountId, rec.cityId ?? "", now, parseTzOffsetMinutes(url.searchParams.get("tzOffsetMinutes")));
     const runs = rows.filter((r) => r.upcoming).map((r) => ({ id: r.id, kind: r.kind, title: r.title, startsAt: r.startsAt, location: r.location }));
-    return ical(res, buildMyRunsIcs(runs, now)), true;
+    return ical(res, buildMyRunsIcs(runs, now), myRunsIcsFilename(now)), true;
   }
   // ---- keep on My Runs (opt-in indefinite history; caller-scoped) ----------
   if (method === "POST" && url.pathname === "/api/my/runs/keep") {

@@ -41,6 +41,18 @@ export function escapeIcalText(value: string): string {
 }
 
 /**
+ * Date-stamped, ASCII-safe download filename (`runlocal-my-runs-YYYY-MM-DD.ics`)
+ * built from the LOCAL wall-clock date, so re-exports never collide on import
+ * and the file is identifiable in a downloads folder. The server uses it for
+ * `Content-Disposition`; the client mirrors the same name in the `download`
+ * attribute (some browsers prefer one over the other, so both carry it).
+ */
+export function myRunsIcsFilename(now = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `runlocal-my-runs-${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}.ics`;
+}
+
+/**
  * Format an ISO instant as a floating (timezone-less) `YYYYMMDDTHHMMSS` local
  * time, using the UTC wall-clock fields exactly as the app's display labels do.
  * Returns "" for unparseable input.
@@ -103,6 +115,7 @@ export function buildMyRunsIcs(runs: IcsRun[], now = new Date()): string {
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//Run Local//My Runs//EN",
+    "CALSCALE:GREGORIAN",
     "X-WR-CALNAME:Run Local — My Runs",
   ];
   for (const run of runs) {

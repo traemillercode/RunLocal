@@ -7,7 +7,7 @@ import { materializeSeedEvents } from "../src/server/events";
 import { CITIES } from "../src/data/cities";
 import type { PersonalRunRecord } from "../src/server/types";
 import { PERSONAL_RUN_CONSENT_VERSION } from "../src/server/types";
-import { buildMyRunsIcs, escapeIcalText, foldIcalText, toIcalDateTime } from "../src/server/ical";
+import { buildMyRunsIcs, escapeIcalText, foldIcalText, myRunsIcsFilename, toIcalDateTime } from "../src/server/ical";
 
 /**
  * TIMEZONE ASSUMPTION (test-locked): Run Local stores run start times as the
@@ -69,6 +69,7 @@ describe("iCalendar generation (RFC 5545)", () => {
     expect(ics).toContain("BEGIN:VCALENDAR\r\n");
     expect(ics).toContain("VERSION:2.0\r\n");
     expect(ics).toContain("PRODID:-//Run Local//My Runs//EN\r\n");
+    expect(ics).toContain("CALSCALE:GREGORIAN\r\n");
     expect(ics).toContain("X-WR-CALNAME:Run Local — My Runs\r\n");
     expect(ics).toContain("BEGIN:VEVENT\r\n");
     expect(ics).toContain("UID:myrun-row-1@runlocal\r\n");
@@ -121,6 +122,14 @@ describe("iCalendar generation (RFC 5545)", () => {
     expect(ics).toContain("DTSTART:20260811T060500\r\n");
     expect(ics).toContain("DTEND:20260811T070500\r\n");
   });
+
+  it("derives a date-stamped, ASCII-safe download filename from the LOCAL wall-clock date", () => {
+    // Local-time constructor so the expectation is timezone-independent.
+    expect(myRunsIcsFilename(new Date(2026, 7, 9, 12, 0, 0))).toBe("runlocal-my-runs-2026-08-09.ics");
+    expect(myRunsIcsFilename(new Date(2026, 0, 5, 23, 59, 59))).toBe("runlocal-my-runs-2026-01-05.ics");
+    // Matches the pattern the API's Content-Disposition and the UI download name use.
+    expect(myRunsIcsFilename()).toMatch(/^runlocal-my-runs-\d{4}-\d{2}-\d{2}\.ics$/);
+  });
 });
 
 describe("private My Runs ICS API", () => {
@@ -144,7 +153,7 @@ describe("private My Runs ICS API", () => {
     expect(out.status).toBe(200);
     expect(out.contentType).toContain("text/calendar");
     expect(out.disposition).toContain("attachment");
-    expect(out.disposition).toContain("run-local-my-runs.ics");
+    expect(out.disposition).toMatch(/filename="runlocal-my-runs-\d{4}-\d{2}-\d{2}\.ics"/);
   });
 
   it("exports only the caller's UPCOMING occurrences — never past rows, even when kept/checked in", async () => {
