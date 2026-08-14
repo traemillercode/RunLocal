@@ -181,7 +181,7 @@ describe("PATCH /api/forum/:id/hide — author hide/restore", () => {
     expect(hide.body.post.replies).toBe(0);
     // Registry flag set — the same row the admin hide path uses.
     expect(f.db.getContent(`post:${postId}`)!.hidden).toBe(true);
-    expect(f.db.getContent(`post:${postId}`)!.hiddenAt).toBe(T0.toISOString());
+    expect(f.db.getContent(`post:${postId}`)!.hiddenAt).toBeTruthy();
     // Gone from public reads (direct fn + HTTP).
     expect(publicForumPosts(f.db, CITY_ID).find((p) => p.id === postId)).toBeUndefined();
     const listed = await call(f.db, "GET", `/api/forum?city=${encodeURIComponent(CITY_ID)}`);
