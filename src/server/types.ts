@@ -270,6 +270,8 @@ export type AdminAction =
   | "forum.reply_delete"
   | "forum.pin"
   | "forum.unpin"
+  | "forum.hide_own"
+  | "forum.restore_own"
   | "discussion.edit"
   | "content.flag"
   | "group_lead.event_hide"

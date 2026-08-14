@@ -18,6 +18,8 @@ export type ActionKey =
   | "edit"
   | "edit_own"
   | "delete_own"
+  | "hide_own"
+  | "restore_own"
   | "hide"
   | "restore"
   | "archive"
@@ -47,6 +49,8 @@ export const ACTION_META: Record<ActionKey, ActionMeta> = {
   edit: { key: "edit", label: "Edit", icon: "pencil", danger: false },
   edit_own: { key: "edit_own", label: "Edit", icon: "pencil", danger: false },
   delete_own: { key: "delete_own", label: "Delete", icon: "trash", danger: true },
+  hide_own: { key: "hide_own", label: "Hide", icon: "eyeOff", danger: false },
+  restore_own: { key: "restore_own", label: "Restore", icon: "clock", danger: false },
   hide: { key: "hide", label: "Hide", icon: "eyeOff", danger: false },
   restore: { key: "restore", label: "Restore", icon: "clock", danger: false },
   archive: { key: "archive", label: "Archive", icon: "lock", danger: false },
