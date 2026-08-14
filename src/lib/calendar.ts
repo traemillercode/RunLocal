@@ -53,3 +53,47 @@ export function defaultCalendarDay(dates: ReadonlyArray<{ date: string }>, now: 
   if (today.startsWith(month) && inMonth.includes(today)) return today;
   return inMonth[0] ?? null;
 }
+
+/** Arrow/Home/End keys handled by the calendar day grid. */
+export type NavKey = "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" | "Home" | "End";
+
+/** `YYYY-MM-DD` shifted by `days` (positive forward), via Date.UTC. */
+export function shiftDate(date: string, days: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const out = new Date(Date.UTC(y, m - 1, d + days));
+  return `${out.getUTCFullYear()}-${pad(out.getUTCMonth() + 1)}-${pad(out.getUTCDate())}`;
+}
+
+/** First or last day of `date`'s month as `YYYY-MM-DD` (leap-safe via Date.UTC). */
+export function monthBoundary(date: string, boundary: "first" | "last"): string {
+  const month = date.slice(0, 7);
+  if (boundary === "first") return `${month}-01`;
+  const [y, m] = date.split("-").map(Number);
+  return `${month}-${pad(new Date(Date.UTC(y, m, 0)).getUTCDate())}`;
+}
+
+/** Move one day/week within the month, or Home/End to the month boundary. */
+export function navigateDay(date: string, key: NavKey): { date: string; monthChanged: boolean } {
+  const out = key === "ArrowLeft" ? shiftDate(date, -1)
+    : key === "ArrowRight" ? shiftDate(date, 1)
+    : key === "ArrowUp" ? shiftDate(date, -7)
+    : key === "ArrowDown" ? shiftDate(date, 7)
+    : monthBoundary(date, key === "Home" ? "first" : "last");
+  return { date: out, monthChanged: out.slice(0, 7) !== date.slice(0, 7) };
+}
+
+/** First calendar day of a `YYYY-MM` month key. */
+export function firstInMonthDay(monthKey: string): string {
+  return `${monthKey}-01`;
+}
+
+/**
+ * Initial grid month: the earliest month containing an upcoming run; the
+ * current month when none (an upcoming-only grid must never open on an empty
+ * past month). Deterministic (SSR-safe).
+ */
+export function defaultCalendarMonth(dates: ReadonlyArray<{ date: string }>, now: Date): string {
+  const thisMonth = now.toISOString().slice(0, 7);
+  const months = [...new Set(dates.map((r) => r.date.slice(0, 7)))].filter((m) => m >= thisMonth).sort();
+  return months[0] ?? thisMonth;
+}
