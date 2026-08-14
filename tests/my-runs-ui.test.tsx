@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { BottomNav } from "../src/components/BottomNav";
-import { MyRunsPage } from "../src/pages/MyRunsPage";
+import { MyRunsHeader, MyRunsPage } from "../src/pages/MyRunsPage";
 import type { Me, PublicAccount } from "../src/lib/accounts";
 import type { MyRunView } from "../src/lib/api";
 import { groupRunsByMonth, monthKey, orderMyRuns } from "../src/lib/myRuns";
@@ -163,16 +163,36 @@ describe("My Runs SSR UI", () => {
     expect(html).not.toContain("Later run");
   });
 
-  it("locks the calendar-view wiring: the grid gets only upcoming runs, plus the private ICS export link", async () => {
+  it("locks the page wiring: the grid gets only upcoming runs; the header hosts the private ICS export link", async () => {
     const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/pages/MyRunsPage.tsx", import.meta.url), "utf8"));
     const gridUsage = source.match(/<CalendarGrid[^>]*>/)?.[0] ?? "";
     expect(gridUsage).toContain("upcoming={sections.upcoming}");
     expect(gridUsage).not.toContain("past"); // past history never enters the grid
-    // The private ICS export link carries the caller's browser offset so the
-    // export's upcoming set matches the list view (see my-runs-eleventh tests).
+    // The header (visible on both List and Calendar views) hosts the private ICS
+    // export link; it carries the caller's browser offset so the export's
+    // upcoming set matches the list view (see my-runs-eleventh tests).
+    expect(source).toContain("<MyRunsHeader view={view} onViewChange={setView} />");
     expect(source).toContain('href={`/api/my/runs/ical?tzOffsetMinutes=${new Date().getTimezoneOffset()}`}');
-    expect(source).toContain('download="run-local-my-runs.ics"');
+    expect(source).toContain('aria-label="Export calendar (.ics)"');
+    expect(source).toContain("runlocal-my-runs-"); // date-stamped download name
     expect(source).toContain("Upcoming runs only");
+  });
+  it("renders the header export affordance with an accessible, date-stamped download in both views", () => {
+    const list = renderToStaticMarkup(<MyRunsHeader view="list" onViewChange={() => {}} />);
+    expect(list).toContain('data-tour-target="my-runs-header"');
+    expect(list).toContain("Your private RSVP list. Only you can see it.");
+    expect(list).toContain('href="/api/my/runs/ical?tzOffsetMinutes=');
+    expect(list).toMatch(/download="runlocal-my-runs-\d{4}-\d{2}-\d{2}\.ics"/);
+    expect(list).toContain('aria-label="Export calendar (.ics)"');
+    expect(list).toContain(">Export calendar (.ics)</a>");
+    expect(list).toContain("Google, Outlook, Apple"); // tooltip names target calendars
+    expect(list).toContain('aria-label="My Runs view"');
+    // Exactly one pressed view toggle at a time — List is active by default.
+    expect((list.match(/aria-pressed="true"/g) ?? []).length).toBe(1);
+    expect(list).toMatch(/<button type="button" aria-pressed="true"[^>]*>List<\/button>/);
+    const calendar = renderToStaticMarkup(<MyRunsHeader view="calendar" onViewChange={() => {}} />);
+    expect((calendar.match(/aria-pressed="true"/g) ?? []).length).toBe(1);
+    expect(calendar).toMatch(/<button type="button" aria-pressed="true"[^>]*>Calendar<\/button>/);
   });
   it("locks the keep-toggle wiring contract: server call, optimistic label, and error fallback", async () => {
     const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/pages/MyRunsPage.tsx", import.meta.url), "utf8"));

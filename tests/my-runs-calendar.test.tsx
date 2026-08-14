@@ -65,15 +65,12 @@ describe("calendar grid helpers (UTC, Monday-first)", () => {
 describe("My Runs CalendarGrid SSR", () => {
   const now = new Date("2026-08-09T12:00:00Z");
 
-  it("renders month title, nav buttons, export link, and a 42-cell grid", async () => {
+  it("renders month title, nav buttons, and a 42-cell grid", async () => {
     const { CalendarGrid } = await import("../src/pages/MyRunsPage");
     const html = renderToStaticMarkup(<MemoryRouter><CalendarGrid upcoming={[]} onRemove={() => {}} now={now} /></MemoryRouter>);
     expect(html).toContain('aria-label="Previous month"');
     expect(html).toContain('aria-label="Next month"');
     expect(html).toContain('aria-live="polite"');
-    expect(html).toContain('href="/api/my/runs/ical?tzOffsetMinutes=');
-    expect(html).toContain('download="run-local-my-runs.ics"');
-    expect(html).toContain("Export .ics");
     // 33 buttons: 2 month nav + 31 in-month day buttons (fillers are spans).
     expect((html.match(/<button /g) ?? []).length).toBe(33);
     // 11 filler cells are aria-hidden placeholders, never buttons (5 lead + 6 trail).
