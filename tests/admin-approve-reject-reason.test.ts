@@ -150,9 +150,15 @@ describe("pending-user approve is routine; reject keeps the applicant-facing rea
     const refused = adminSetStatus(db, c, rec.id, "rejected", T0, "runner", null);
     expect(refused.ok).toBe(false);
     if (!refused.ok) expect(refused.error).toBe("reason_required");
-    const ok = adminSetStatus(db, c, rec.id, "rejected", T0, "runner", "Duplicate account");
+    // The operator's reason flows through BOTH channels, exactly like the HTTP
+    // layer: the audited ctx reason (x-audit-reason header) and the applicant-
+    // facing rejectionReason stored on the account (body reason).
+    const ok = adminSetStatus(db, { ...c, reason: "Duplicate account" }, rec.id, "rejected", T0, "runner", "Duplicate account");
     expect(ok.ok).toBe(true);
     expect(db.getAccount(rec.id)!.rejectionReason).toBe("Duplicate account");
+    const audit = db.listAudit(20).find((a) => a.action === "admin.reject" && a.targetId === rec.id);
+    expect(audit).toBeDefined();
+    expect(audit!.reason).toBe("Duplicate account");
   });
 });
 

@@ -205,14 +205,36 @@ describe("admin authorization", () => {
     expect(db.listAudit(20).some((a) => a.action === "admin.view_selfie" && a.targetId === rec.id)).toBe(true);
   });
 
-  it("approve without a reason is rejected", () => {
+  it("approve is routine — no typed reason forced; reject still requires one", () => {
     const db = createMemoryStore();
-    const rec = db.createAccount({ name: "A", email: "a@x.com" });
     const login = adminLogin(db, KEY, "198.51.100.7", T0);
     if (!login.ok) throw new Error("login failed");
-    const r = adminSetStatus(db, ctx(login.data.sessionId), rec.id, "verified", T0);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe("reason_required");
+    // Routine approve: succeeds WITHOUT any typed reason and is audited with
+    // the system label — the audit trail still records the admin identity.
+    const rec = db.createAccount({ name: "A", email: "a@x.com" });
+    db.updateAccount(rec.id, { phase: "pending_review", selfieRef: `${rec.id}_selfie.jpg` });
+    const approve = adminSetStatus(db, ctx(login.data.sessionId), rec.id, "verified", T0);
+    expect(approve.ok).toBe(true);
+    if (approve.ok) {
+      expect(db.getAccount(rec.id)!.status).toBe("verified");
+      const audit = db.listAudit(20).find((a) => a.action === "admin.approve" && a.targetId === rec.id);
+      expect(audit).toBeDefined();
+      expect(audit!.reason).toBe("Routine approval");
+    }
+    // An operator-entered reason is kept on the audit entry.
+    const rec2 = db.createAccount({ name: "B", email: "b@x.com" });
+    db.updateAccount(rec2.id, { phase: "pending_review", selfieRef: `${rec2.id}_selfie.jpg` });
+    const withReason = adminSetStatus(db, ctx(login.data.sessionId, "identity docs match"), rec2.id, "verified", T0);
+    expect(withReason.ok).toBe(true);
+    if (withReason.ok) {
+      const audit = db.listAudit(20).find((a) => a.action === "admin.approve" && a.targetId === rec2.id);
+      expect(audit!.reason).toBe("identity docs match");
+    }
+    // Reject without a reason is still refused.
+    const rec3 = db.createAccount({ name: "C", email: "c@x.com" });
+    const rejected = adminSetStatus(db, ctx(login.data.sessionId), rec3.id, "rejected", T0);
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) expect(rejected.error).toBe("reason_required");
   });
 
   it("delete requires authorization and removes the account", () => {
