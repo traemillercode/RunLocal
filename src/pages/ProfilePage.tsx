@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { TrustedBadge } from "../components/TrustedBadge";
 import { ActionMenu } from "../components/ActionMenu";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { Chip, Icon, PillButton, Sheet } from "../components/ui";
 import type { City } from "../types";
-import { resolveWeekEvents } from "../lib/dates";
+import { resolveWeekEvents, submissionDateLabel } from "../lib/dates";
 import { roleLabel } from "../lib/accounts";
 import { actionMenuItems, type ActionKey } from "../lib/actionModel";
 import { useToast } from "../lib/toast";
@@ -39,6 +39,24 @@ const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   rejected: { label: "Rejected", cls: "bg-red-100 text-red-700" },
   withdrawn: { label: "Withdrawn", cls: "bg-slate-100 text-slate-600" },
 };
+
+/**
+ * One-line "Submitted Aug 4, 2025" style history label per status. Pending uses
+ * submittedAt; decided statuses use the server's decidedAt. Empty when the
+ * relevant timestamp is missing — dates only, never times.
+ */
+function submissionDateLine(r: api.MySubmissionView): string {
+  const iso = r.status === "pending" ? r.submittedAt : r.decidedAt;
+  const label = submissionDateLabel(iso);
+  if (!label) return "";
+  return r.status === "pending"
+    ? `Submitted ${label}`
+    : r.status === "approved"
+      ? `Approved ${label}`
+      : r.status === "rejected"
+        ? `Rejected ${label}`
+        : `Withdrawn ${label}`;
+}
 
 /**
  * "Edit pending submission" sheet — presentational, kind-conditional fields
@@ -152,12 +170,14 @@ export function MySubmissionsContent({
       {rows.map((r) => {
         const st = STATUS_LABELS[r.status] ?? STATUS_LABELS.pending;
         const items = actionMenuItems(r.capabilities);
+        const dateLine = submissionDateLine(r);
         return (
           <li key={r.id} className="rounded-xl border border-slate-200 p-3">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="truncate text-[13px] font-semibold text-slate-800">{r.title}</p>
                 <p className="text-xs text-slate-500">{KIND_LABELS[r.kind] ?? r.kind}</p>
+                {dateLine ? <p className="text-[11px] text-slate-400">{dateLine}</p> : null}
               </div>
               <span className="flex shrink-0 items-center gap-1.5">
                 {items.length > 0 && (onAction || onWithdraw) ? (
@@ -260,16 +280,38 @@ export function MySubmissions({ signedIn }: { signedIn: boolean }) {
     });
   };
   if (!signedIn) return null;
+  const pendingCount = rows ? rows.filter((r) => r.status === "pending").length : 0;
   return (
-    <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
-      <h2 className="text-[15px] font-bold text-slate-900">My submissions</h2>
+    <section id="my-submissions" data-tour-target="profile-submissions" className="mt-4 scroll-mt-20 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[15px] font-bold text-slate-900" tabIndex={-1}>My submissions</h2>
+        {!loading && rows && rows.length > 0 ? (
+          pendingCount > 0 ? (
+            <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">{pendingCount} pending</span>
+          ) : (
+            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">{rows.length}</span>
+          )
+        ) : null}
+      </div>
       <p className="mt-0.5 text-xs text-slate-500">Your race, group, and independent-run submissions — only you can see these.</p>
       {loading ? (
         <p className="mt-3 text-[13px] text-slate-400">Loading…</p>
       ) : error ? (
         <div className="mt-3 rounded-xl bg-red-50 p-3 text-[13px] text-red-700"><p>{error}</p><button type="button" className="mt-2 font-semibold underline" onClick={load}>Retry</button></div>
       ) : !rows || rows.length === 0 ? (
-        <p className="mt-3 text-[13px] text-slate-500">Nothing submitted yet. Submit a race, group, or independent run from the Races and Events pages.</p>
+        <div className="mt-3">
+          <p className="text-[13px] leading-relaxed text-slate-500">
+            Nothing submitted yet. Races, groups, and independent runs you submit for review will show up here.
+          </p>
+          <div className="mt-3 space-y-2">
+            <Link to="/races" className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-[#FF5741] text-sm font-semibold text-[#14171C] active:bg-[#e94735]">
+              <Icon name="plus" className="h-4 w-4" /> Submit a race
+            </Link>
+            <Link to="/" className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-white text-sm font-semibold text-slate-700 ring-1 ring-slate-200 active:bg-slate-100">
+              <Icon name="plus" className="h-4 w-4" /> Host a run or start a group
+            </Link>
+          </div>
+        </div>
       ) : (
         <MySubmissionsContent rows={rows} onAction={openRowAction} />
       )}
@@ -421,6 +463,22 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
     void api.getRunnerTagged(accountId).then((r) => { if (alive) setTagged(r.ok ? r.data.tagged : []); });
     return () => { alive = false; };
   }, [accountId]);
+
+  // Deep link from the account menu ("My submissions") and the submission
+  // success panel: /profile?section=submissions scrolls to the section. Keyed
+  // on the search string (not just mount) because App.tsx remounts <main> only
+  // on pathname change — this also covers tapping the menu while already on
+  // /profile. The section renders synchronously, so one rAF defer is enough.
+  const location = useLocation();
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("section") !== "submissions") return;
+    requestAnimationFrame(() => {
+      const el = document.getElementById("my-submissions");
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Land screen-reader users on the section heading (tabIndex -1 above).
+      el?.querySelector("h2")?.focus({ preventScroll: true });
+    });
+  }, [location.search]);
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">

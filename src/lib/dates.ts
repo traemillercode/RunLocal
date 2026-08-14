@@ -205,6 +205,14 @@ export function formatRaceDate(iso: string): string {
   return `${DAY_ABBREV[dow]}, ${MONTHS[date.getMonth()]} ${date.getDate()}, ${y}`;
 }
 
+/** "Aug 4, 2025" label for an ISO submission timestamp, rendered in the viewer's local timezone. */
+export function submissionDateLabel(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
 /** Whether a resolved occurrence has started, including time on today's date. */
 export function occurrenceHasStarted(event: Pick<DatedRunEvent, "date" | "time">, now = new Date()): boolean {
   const day = new Date(now.getFullYear(), now.getMonth(), now.getDate());
