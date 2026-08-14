@@ -22,6 +22,7 @@ import type { AdminRecordView, AdminSearchRow, AuditEntryView, DashboardView, Pe
 import { ALL_OP_ROLES, roleLabel, type OpRole } from "../lib/accounts";
 import { CITIES } from "../data/cities";
 import { ContentManagementSection } from "../components/ContentManagementSection";
+import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { useAccount } from "../state/account";
 
 const inputCls =
@@ -103,11 +104,25 @@ export function AdminPage() {
   /** Per-flag suspension-days input (blank = indefinite). */
   const [suspendDays, setSuspendDays] = useState<Record<string, string>>({});
   const [subRows, setSubRows] = useState<api.SubmissionQueueRow[] | null>(null);
-  const [subReason, setSubReason] = useState("");
   const [subStatus, setSubStatus] = useState<"pending" | "approved" | "rejected">("pending");
   const [subError, setSubError] = useState<string | null>(null);
   const [subBusy, setSubBusy] = useState(false);
   const [subAction, setSubAction] = useState<string | null>(null);
+  /**
+   * Decision sheet for the queues and the record detail. Approve uses the
+   * plain-confirm variant (Variant B): the audit log records the action with
+   * the admin identity, no typed reason is forced. Reject uses Variant A with
+   * an applicant-facing required reason. Authorization stays server-side —
+   * this only controls the prompt.
+   */
+  const [sheet, setSheet] = useState<null | {
+    kind: "submission" | "pending" | "record";
+    id?: string;
+    action: "approve" | "reject";
+    entity: string;
+  }>(null);
+  const [sheetBusy, setSheetBusy] = useState(false);
+  const [sheetError, setSheetError] = useState<string | null>(null);
   const isCityAdmin = me?.status === "signed_in" && me.account.role === "city_admin";
   const cityScope = me?.status === "signed_in" ? me.account.adminCityId : null;
   // Loading the queue is a routine read: audited server-side with the
@@ -121,19 +136,72 @@ export function AdminPage() {
     if (r.ok) setSubRows(r.data.results);
     else setSubError(r.error.message ?? "Couldn't load the queue.");
   };
-  const decideSubmission = async (id: string, action: "approve" | "reject") => {
+  /** Decide a submission; returns false (with an error surfaced) when the server refuses. */
+  const decideSubmission = async (id: string, action: "approve" | "reject", reason: string): Promise<boolean> => {
     setSubError(null);
-    if (!subReason.trim() || subReason.trim().length < 5) {
-      setSubError(action === "reject" ? "Enter the rejection reason (min 5 chars) — the submitter will see it." : "Enter a reason (min 5 chars).");
-      return;
-    }
     setSubAction(id);
-    const r = isCityAdmin ? await api.cityAdminDecideSubmission(id, action, subReason.trim()) : await api.adminDecideSubmission(id, action, subReason.trim());
+    const r = isCityAdmin ? await api.cityAdminDecideSubmission(id, action, reason) : await api.adminDecideSubmission(id, action, reason);
     setSubAction(null);
     if (r.ok) {
       setSubRows((rows) => (rows ? rows.filter((row) => row.id !== id) : rows));
-    } else {
-      setSubError(r.error.message ?? "Action failed.");
+      return true;
+    }
+    setSheetError(r.error.message ?? "Action failed.");
+    return false;
+  };
+
+  /** Run the sheet-confirmed decision. `reason` is "" for plain approvals. */
+  const confirmSheet = async (reason: string) => {
+    if (!sheet) return;
+    setSheetError(null);
+    setSheetBusy(true);
+    try {
+      if (sheet.kind === "submission" && sheet.id) {
+        if (!(await decideSubmission(sheet.id, sheet.action, reason))) return;
+      } else if (sheet.kind === "pending" && sheet.id) {
+        if (sheet.action === "approve") {
+          const row = pending?.find((r) => r.id === sheet.id);
+          if (!row) return;
+          if (row.phase !== "pending_review") {
+            setSheetError("This user hasn't completed email + selfie verification yet — approval isn't allowed before the pending_review state.");
+            return;
+          }
+          const role = roleSel[row.id] ?? row.requestedRole ?? "runner";
+          const r = await api.adminSetStatus(row.id, "approve", reason, role);
+          if (!r.ok) {
+            setSheetError(
+              r.error.code === "verification_incomplete"
+                ? "Approval blocked: the required verification state (email + selfie, pending_review) isn't complete."
+                : r.error.status === 401
+                  ? "Your admin session expired — sign in again."
+                  : r.error.message ?? "Approval failed.",
+            );
+            return;
+          }
+          await refreshAccount();
+          void loadQueue();
+        } else {
+          const r = await api.adminSetStatus(sheet.id, "reject", reason);
+          if (!r.ok) {
+            setSheetError(r.error.status === 401 ? "Your admin session expired — sign in again." : r.error.message ?? "Rejection failed.");
+            return;
+          }
+          void loadQueue();
+        }
+      } else if (sheet.kind === "record" && record) {
+        const r = sheet.action === "approve" ? await api.adminSetStatus(record.id, "approve", reason) : await api.adminSetStatus(record.id, "reject", reason);
+        if (!r.ok) {
+          setSheetError(r.error.message ?? (sheet.action === "approve" ? "Approval failed." : "Rejection failed."));
+          return;
+        }
+        setRecord(null);
+        setResults(null);
+        setDetailError(null);
+        void doSearch();
+      }
+      setSheet(null);
+    } finally {
+      setSheetBusy(false);
     }
   };
 
@@ -159,6 +227,21 @@ export function AdminPage() {
           // Owner/super-admin: authorized via the signed-in user session.
           setAuthed(true);
           setAdminName(me?.status === "signed_in" ? me.account.name : "Super Admin");
+          return;
+        }
+        if (isCityAdmin) {
+          // City Admin: authorized via their signed-in user session against a
+          // scoped routine endpoint (the server enforces the exact city scope;
+          // the audit log records the routine read with the generated reason).
+          void api.adminGetOverview().then((probe) => {
+            if (!alive) return;
+            if (probe.ok) {
+              setAuthed(true);
+              setAdminName(me?.status === "signed_in" ? me.account.name : "City Admin");
+            } else {
+              setAuthed(false);
+            }
+          });
           return;
         }
         // Probe admin session with a benign action that audits nothing? Use audit list with a generic reason.
@@ -233,47 +316,16 @@ export function AdminPage() {
     }
   };
 
-  const approvePending = async (row: PendingQueueRow) => {
+  /** Open the approve (plain confirm) / reject (required reason) sheet for a pending user. */
+  const openPendingDecision = (row: PendingQueueRow, action: "approve" | "reject") => {
     setQueueError(null);
-    if (!reason.trim() || reason.trim().length < 5) {
-      setQueueError("Enter a reason (min 5 characters) for this approval.");
-      return;
-    }
-    // Honesty gate, mirrored server-side: no approval without a submitted
-    // selfie in review (phase pending_review).
-    if (row.phase !== "pending_review") {
+    if (action === "approve" && row.phase !== "pending_review") {
+      // Honesty gate, mirrored server-side: no approval without a submitted
+      // selfie in review (phase pending_review).
       setQueueError("This user hasn't completed email + selfie verification yet — approval isn't allowed before the pending_review state.");
       return;
     }
-    const role = roleSel[row.id] ?? row.requestedRole ?? "runner";
-    const roleName = role === "group_leader" ? "Group Leader" : "Verified Runner";
-    if (!window.confirm(`Approve ${row.name} as ${roleName}? This is audited.`)) return;
-    const r = await api.adminSetStatus(row.id, "approve", reason.trim(), role);
-    if (r.ok) {
-      setQueueError(null);
-      await refreshAccount();
-      void loadQueue();
-    } else if (r.error.code === "verification_incomplete") {
-      setQueueError("Approval blocked: the required verification state (email + selfie, pending_review) isn't complete.");
-    } else {
-      setQueueError(r.error.status === 401 ? "Your admin session expired — sign in again." : r.error.message ?? "Approval failed.");
-    }
-  };
-
-  const rejectPending = async (row: PendingQueueRow) => {
-    setQueueError(null);
-    if (!reason.trim() || reason.trim().length < 5) {
-      setQueueError("Enter a reason (min 5 characters) for this rejection.");
-      return;
-    }
-    if (!window.confirm(`Reject ${row.name}'s pending verification? This is audited.`)) return;
-    const r = await api.adminSetStatus(row.id, "reject", reason.trim());
-    if (r.ok) {
-      setQueueError(null);
-      void loadQueue();
-    } else {
-      setQueueError(r.error.status === 401 ? "Your admin session expired — sign in again." : r.error.message ?? "Rejection failed.");
-    }
+    setSheet({ kind: "pending", id: row.id, action, entity: row.name });
   };
 
   const doSearch = async () => {
@@ -310,12 +362,19 @@ export function AdminPage() {
   const doAction = async (action: "approve" | "reject" | "delete") => {
     if (!record) return;
     setDetailError(null);
+    if (action === "approve" || action === "reject") {
+      // Approve is a plain confirmation (audited with the admin identity, no
+      // typed reason forced); reject requires an applicant-facing reason
+      // entered in the sheet.
+      setSheet({ kind: "record", action, entity: record.name });
+      return;
+    }
     if (!reason.trim() || reason.trim().length < 5) {
       setDetailError("Enter a reason (min 5 characters) for this action.");
       return;
     }
-    if (action === "delete" && !window.confirm("Delete this account permanently (scrubs phone, selfie, photo, IP history)? This is audited.")) return;
-    const r = action === "delete" ? await api.adminDeleteRecord(record.id, reason.trim()) : await api.adminSetStatus(record.id, action, reason.trim());
+    if (!window.confirm("Delete this account permanently (scrubs phone, selfie, photo, IP history)? This is audited.")) return;
+    const r = await api.adminDeleteRecord(record.id, reason.trim());
     if (r.ok) {
       setRecord(null);
       setResults(null);
@@ -459,7 +518,7 @@ export function AdminPage() {
     );
   }
 
-  if (!health?.adminConfigured && !isOwner) {
+  if (!health?.adminConfigured && !isOwner && !isCityAdmin) {
     return (
       <div className="mx-auto w-full max-w-md px-4 pb-32 pt-6 desktop-reading">
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
@@ -503,8 +562,12 @@ export function AdminPage() {
             {isOwner ? <span className="ml-1.5 font-semibold text-[#14171C]">(Super Admin)</span> : null}
           </p>
         </div>
-        <button type="button" onClick={() => void doLogout()} className="min-h-11 rounded-full px-4 text-sm font-semibold text-slate-600 active:bg-slate-100">
-          Sign out
+        <button
+          type="button"
+          onClick={() => (isCityAdmin ? navigate("/") : void doLogout())}
+          className="min-h-11 rounded-full px-4 text-sm font-semibold text-slate-600 active:bg-slate-100"
+        >
+          {isCityAdmin ? "Back to the app" : "Sign out"}
         </button>
       </div>
 
@@ -525,11 +588,10 @@ export function AdminPage() {
         <section id="pending-users" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <h2 className="text-[15px] font-bold text-slate-900">Pending users</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            Read-only queue access for Super Admin. Approve and reject actions require an audited reason below. Accounts awaiting verification, newest first. Rows are redacted — no phone, selfie, or IP data here.
+            Read-only queue access for Super Admin. Approve is a plain confirmation — the audit log records it with your identity. Reject requires a rejection reason (min 5 characters) the applicant will see. Accounts awaiting verification, newest first. Rows are redacted — no phone, selfie, or IP data here.
             Approve only after the user reached the "Under review" state (email + selfie submitted).
           </p>
           <div className="mt-3 space-y-3">
-            <textarea rows={2} placeholder="Reason for approval or rejection (required, audited)" value={reason} onChange={(e) => setReason(e.target.value)} className={reasonCls} />
             <PillButton variant="primary" className="w-full" onClick={() => void loadQueue()}>
               <Icon name="search" className="h-4 w-4" /> Load pending queue
             </PillButton>
@@ -562,10 +624,10 @@ export function AdminPage() {
                       </select>
                       {row.requestedRole ? <span className="text-slate-400">(requested {row.requestedRole})</span> : null}
                     </label>
-                    <PillButton variant="secondary" className="ml-auto px-4" onClick={() => void approvePending(row)}>
+                    <PillButton variant="secondary" className="ml-auto px-4" onClick={() => openPendingDecision(row, "approve")}>
                       Approve
                     </PillButton>
-                    <PillButton variant="ghost" className="px-4" onClick={() => void rejectPending(row)}>
+                    <PillButton variant="ghost" className="px-4" onClick={() => openPendingDecision(row, "reject")}>
                       Reject
                     </PillButton>
                   </div>
@@ -581,16 +643,14 @@ export function AdminPage() {
         </section>
       ) : null}
 
-      {/* Admin submission queue — owner OR key admin; audited with a reason */}
+      {/* Admin submission queue — owner, key admin, or scoped City Admin */}
       <section id="submissions" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
         <h2 className="text-[15px] font-bold text-slate-900">{isCityAdmin ? "City submission queue" : "Submission queue"}</h2>
         <p className="mt-0.5 text-xs text-slate-500">
-          Community-submitted races, groups, and independent events awaiting review. {isCityAdmin ? `Your enforced city scope: ${cityScope ?? "unavailable"}.` : ""} Pending items are not public; approve publishes them (groups grant the submitter the Group
-          Leader role), while reject requires a reason the submitter will see. Every action is audited with the reason above.
+          Community-submitted races, groups, and independent events awaiting review. {isCityAdmin ? `Your enforced city scope: ${cityScope ?? "unavailable"}.` : ""} Pending items are not public. Approve publishes the item (groups grant the submitter the Group
+          Leader role) as a plain confirmation — the audit log records it with your identity. Reject requires a rejection reason (min 5 characters) the submitter will see; every decision is audited.
         </p>
         <div className="mt-3 space-y-3">
-          <label className="block text-[13px] font-semibold text-slate-700">Rejection reason — the submitter will see this</label>
-<textarea rows={2} placeholder={isCityAdmin ? "Rejection reason — the submitter will see this (min 5 characters)" : "Approval: internal audit note. Rejection: the reason the submitter will see (min 5 characters)"} value={subReason} onChange={(e) => setSubReason(e.target.value)} className={reasonCls} />
           <PillButton variant="primary" className="w-full" disabled={subBusy} onClick={() => void loadSubmissions()}>
             <Icon name="search" className="h-4 w-4" /> {subBusy ? "Loading…" : "Load submission queue"}
           </PillButton>
@@ -618,10 +678,10 @@ export function AdminPage() {
                   <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">Pending</span>
                 </div>
                 <div className="mt-2 flex gap-2">
-                  <PillButton variant="secondary" className="flex-1 px-3" disabled={subAction === row.id} onClick={() => void decideSubmission(row.id, "approve")}>
+                  <PillButton variant="secondary" className="flex-1 px-3" disabled={subAction === row.id} onClick={() => setSheet({ kind: "submission", id: row.id, action: "approve", entity: row.title })}>
                     Approve
                   </PillButton>
-                  <PillButton variant="ghost" className="flex-1 px-3" disabled={subAction === row.id} onClick={() => void decideSubmission(row.id, "reject")}>
+                  <PillButton variant="ghost" className="flex-1 px-3" disabled={subAction === row.id} onClick={() => setSheet({ kind: "submission", id: row.id, action: "reject", entity: row.title })}>
                     Reject
                   </PillButton>
                 </div>
@@ -899,15 +959,19 @@ export function AdminPage() {
         </>
       ) : null}
 
-      {/* Global Admin — site settings & CMS (key admin or owner; audited) */}
-      <EventCmsSection />
-      <GlobalAdminSection />
+      {/* Global Admin — site settings & CMS (key admin or owner; audited).
+          Hidden for City Admins: these surfaces are server-restricted to
+          Global Admins (authorizeAdmin), so a City Admin would only see errors. */}
+      {authed && !isCityAdmin && <EventCmsSection />}
+      {authed && !isCityAdmin && <GlobalAdminSection />}
       {/* Global Admin — community trust & credentials (audited) */}
-      <AdminTrustSection />
+      {authed && !isCityAdmin && <AdminTrustSection />}
       {/* Trusted Member (manual trust / blue-check) - Global or scoped City Admin */}
       <TrustedMembersSection isCityAdmin={isCityAdmin} />
 
-      {/* Search */}
+      {/* Search — Global Admin only (records carry phone/selfie/IP data and
+          the server restricts lookup to key-admin/owner sessions). */}
+      {!isCityAdmin && (
       <section id="lookup" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
         <h2 className="text-[15px] font-bold text-slate-900">Lookup by username or email</h2>
         <p className="mt-0.5 text-xs text-slate-500">Phone-number search is intentionally not available — no discovery by phone.</p>
@@ -950,9 +1014,10 @@ export function AdminPage() {
           </ul>
         )}
       </section>
+      )}
 
-      {/* Record detail */}
-      {record && (
+      {/* Record detail — Global Admin only (same server restriction as search). */}
+      {!isCityAdmin && record && (
         <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <div className="flex items-start justify-between gap-2">
             <h2 className="text-[15px] font-bold text-slate-900">Record — {record.name}</h2>
@@ -1004,11 +1069,12 @@ export function AdminPage() {
               Delete
             </PillButton>
           </div>
-          <p className="mt-2 text-center text-[11px] text-slate-400">All actions use the reason above and are audited.</p>
+          <p className="mt-2 text-center text-[11px] text-slate-400">Approve is a plain confirmation (audited). Reject shows the applicant your reason. Delete uses the reason above.</p>
         </section>
       )}
 
-      {/* Audit + purge */}
+      {/* Audit + purge — Global Admin only (records + retention policy) */}
+      {!isCityAdmin && (
       <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
         <h2 className="text-[15px] font-bold text-slate-900">Audit log & retention</h2>
         <p className="mt-0.5 text-xs text-slate-500">
@@ -1034,10 +1100,41 @@ export function AdminPage() {
           </ul>
         )}
       </section>
+      )}
 
       <button type="button" onClick={() => navigate("/")} className="mt-4 w-full text-center text-sm font-semibold text-slate-500 underline underline-offset-2">
         Back to the app
       </button>
+
+      {/* Queue / record decision sheet. Approve = Variant B (plain confirm,
+          audited with the admin identity; no typed reason forced). Reject =
+          Variant A with an applicant-facing required reason. */}
+      <ModerationConfirmSheet
+        open={sheet !== null}
+        onClose={() => {
+          if (!sheetBusy) {
+            setSheet(null);
+            setSheetError(null);
+          }
+        }}
+        title={sheet?.action === "approve" ? "Approve this?" : "Reject this?"}
+        entity={sheet?.entity ?? ""}
+        impact={
+          sheet?.action === "approve"
+            ? "This is a routine approval — the audit log records it with your identity. No typed reason is required."
+            : sheet?.kind === "pending"
+              ? "The applicant will see your reason on their verification status. This cannot be undone."
+              : "The submitter will see your reason on their submission. This cannot be undone."
+        }
+        confirmLabel={sheet?.action === "approve" ? "Approve" : "Reject"}
+        requireReason={sheet?.action === "reject"}
+        reasonLabel="Rejection reason — the submitter will see this"
+        reasonPlaceholder="Why was this rejected? The submitter will see this (min 5 characters)"
+        tone={sheet?.action === "approve" ? "neutral" : "danger"}
+        busy={sheetBusy}
+        error={sheetError}
+        onConfirm={(reason) => void confirmSheet(reason)}
+      />
     </div>
   );
 }

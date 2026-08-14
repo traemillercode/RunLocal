@@ -561,8 +561,11 @@ export type DecideAction = "approve" | "reject";
  * Admin approve/reject of a pending submission (owner or key-based admin).
  *  - approve: creates the public record. For a group, ALSO grants the
  *    submitter the Group Leader role. The RRCA badge is never granted here.
- *  - reject: stores the admin's reason (the audit reason) as the rejection
- *    reason, visible to the submitter.
+ *    Approve is a routine action: no operator-entered reason is forced (the
+ *    audit entry carries the admin identity + a system label when none is
+ *    given).
+ *  - reject: REQUIRES the operator's reason, which is stored as the rejection
+ *    reason and visible to the submitter.
  * Every action is audited with the admin identity.
  */
 export function decideSubmission(
@@ -572,9 +575,13 @@ export function decideSubmission(
   action: DecideAction,
   now = new Date(),
 ): AdminResult<SubmissionRecord> {
-  const auth = authorizeAdmin(db, ctx, action === "approve" ? "admin.submission_approve" : "admin.submission_reject", submissionId, now);
+  // Approve is a routine super-admin action (audited with the admin identity +
+  // a system label when no operator reason is supplied); reject keeps the
+  // required operator reason, which becomes the applicant-visible rejection.
+  const authCtx = action === "approve" ? routineAdminCtx(ctx, "Routine submission approval") : ctx;
+  const auth = authorizeAdmin(db, authCtx, action === "approve" ? "admin.submission_approve" : "admin.submission_reject", submissionId, now);
   if (!auth.ok) return auth;
-  return decideSubmissionCore(db, auth.data.admin, ctx.reason, submissionId, action, now);
+  return decideSubmissionCore(db, auth.data.admin, authCtx.reason, submissionId, action, now);
 }
 
 /**
@@ -592,16 +599,19 @@ export function cityDecideSubmission(
   // Look up the record first so we can bind the authorization to its city.
   const rec = db.getSubmission(submissionId);
   if (!rec) return { ok: false, status: 404, error: "not_found" };
+  // Approve is routine (audited with a system label when no operator reason);
+  // reject keeps the required applicant-facing reason.
+  const authCtx = action === "approve" ? routineAdminCtx(ctx, "Routine city approval") : ctx;
   const auth = authorizeScoped(
     db,
-    ctx,
+    authCtx,
     action === "approve" ? "cityadmin.submission_approve" : "cityadmin.submission_reject",
     submissionId,
     now,
     { enforceCity: rec.cityId, auditCity: rec.cityId },
   );
   if (!auth.ok) return auth;
-  return decideSubmissionCore(db, auth.data.admin, ctx.reason, submissionId, action, now);
+  return decideSubmissionCore(db, auth.data.admin, authCtx.reason, submissionId, action, now);
 }
 
 function decideSubmissionCore(

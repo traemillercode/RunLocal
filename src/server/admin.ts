@@ -66,9 +66,11 @@ export function validReason(reason: string | undefined): boolean {
   return Boolean(reason && reason.trim().length >= REASON_MIN && reason.trim().length <= REASON_MAX);
 }
 
-/** Routine reads remain audited, but do not require an operator-entered reason. */
-export function routineAdminCtx(ctx: AdminCtx): AdminCtx {
-  return { ...ctx, reason: ctx.reason?.trim() || "Routine admin read" };
+/** Routine reads remain audited, but do not require an operator-entered reason.
+ * The audit entry uses the given system label when the operator supplied none
+ * (an operator-entered reason, when present, is always kept). */
+export function routineAdminCtx(ctx: AdminCtx, label = "Routine admin read"): AdminCtx {
+  return { ...ctx, reason: ctx.reason?.trim() || label };
 }
 
 export function keyMatches(input: string, expected: string): boolean {
@@ -714,7 +716,12 @@ export function adminSetStatus(
   role: AccountRole = "runner",
   rejectionReason: string | null = null,
 ): AdminResult<AccountRecord> {
-  const auth = authorizeAdmin(db, ctx, status === "verified" ? "admin.approve" : "admin.reject", id, now);
+  // Approving is a routine super-admin action: the audit log still records the
+  // action with the admin identity + timestamp, but no typed reason is forced —
+  // when the operator supplies none, the audit entry carries the system label.
+  // Rejection keeps a REQUIRED operator reason, which is applicant-facing.
+  const authCtx = status === "verified" ? routineAdminCtx(ctx, "Routine approval") : ctx;
+  const auth = authorizeAdmin(db, authCtx, status === "verified" ? "admin.approve" : "admin.reject", id, now);
   if (!auth.ok) return auth;
   const rec = db.getAccount(id);
   if (!rec) return { ok: false, status: 404, error: "not_found" };
