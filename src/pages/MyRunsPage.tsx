@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import * as api from "../lib/api";
 import { Icon } from "../components/ui";
 import { useAccount } from "../state/account";
 import { useToast } from "../lib/toast";
 import { formatRunDate, groupRunsByMonth, monthKey, monthLabel, orderMyRuns, runStartMs } from "../lib/myRuns";
-import { WEEKDAY_LABELS, calendarGridDays, dayAriaLabel, defaultCalendarDay } from "../lib/calendar";
+import { WEEKDAY_LABELS, calendarGridDays, dayAriaLabel, defaultCalendarDay, defaultCalendarMonth, firstInMonthDay, navigateDay } from "../lib/calendar";
+import type { NavKey } from "../lib/calendar";
 
 type View = "list" | "calendar";
 
@@ -37,7 +38,7 @@ export function MyRunsPage() {
     // confused with a sibling occurrence of the same event. The server stays
     // authoritative: it resolves the row from the session, never from input.
     void api.rsvpEvent(run.eventId, false, run.date, run.id).then((r) => {
-      if (r.ok) { toast(`RSVP removed for "${run.title}".`); load(); }
+      if (r.ok) { toast(`RSVP removed for "${run.title}" on ${formatRunDate(run.date)}.`); load(); }
       else setActionError(r.error.message ?? "Couldn't remove this RSVP. Try again.");
       setRemovingId(null);
     });
@@ -99,11 +100,18 @@ export function MyRunsHeader({ view, onViewChange }: { view: View; onViewChange:
  * its own entry, linked to its own occurrence discussion. Past history stays in
  * the List view — the grid never renders past runs. */
 export function CalendarGrid({ upcoming, onRemove, removingId, onToggleKeep, keepingId, now = new Date() }: { upcoming: api.MyRunView[]; onRemove: (r: api.MyRunView) => void; removingId?: string | null; onToggleKeep?: (r: api.MyRunView) => void; keepingId?: string | null; now?: Date }) {
-  const [cursor, setCursor] = useState(monthKey(now.toISOString().slice(0, 10)));
+  const upcomingOnly = useMemo(() => upcoming.filter((r) => runStartMs(r) >= now.getTime()), [upcoming, now]);
+  // Open on the month of the earliest upcoming run (current month when none),
+  // so an upcoming-only grid never starts on an empty dead-end month.
+  const [cursor, setCursor] = useState(() => defaultCalendarMonth(upcomingOnly, now));
   const [selected, setSelected] = useState<string | null>(null);
+  // Single pending-focus channel: "YYYY-MM-DD" (a day button) or "#day-panel"
+  // (the day-panel heading/message). Month changes, keyboard day nav, and the
+  // post-removal auto-advance all route focus here after render.
+  const pendingFocusRef = useRef<string | null>(null);
+  const lastRunDayRef = useRef<string | null>(null);
   const year = Number(cursor.slice(0, 4));
   const monthIndex = Number(cursor.slice(5, 7)) - 1;
-  const upcomingOnly = useMemo(() => upcoming.filter((r) => runStartMs(r) >= now.getTime()), [upcoming, now]);
   const runsByDate = useMemo(() => {
     const map = new Map<string, api.MyRunView[]>();
     for (const run of upcomingOnly) {
@@ -119,8 +127,52 @@ export function CalendarGrid({ upcoming, onRemove, removingId, onToggleKeep, kee
   const today = now.toISOString().slice(0, 10);
   const activeDate = selected ?? defaultCalendarDay(upcomingOnly, now, cursor);
   const dayRuns = activeDate ? (runsByDate.get(activeDate) ?? []) : [];
-  const changeMonth = (delta: number) => { const d = new Date(Date.UTC(year, monthIndex + delta, 1)); setCursor(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`); setSelected(null); };
-  return <div className="mt-6" aria-label="My Runs calendar"><div className="flex items-center gap-3"><div className="flex items-center gap-1"><button type="button" aria-label="Previous month" onClick={() => changeMonth(-1)} className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-lg font-bold text-slate-600 shadow-sm ring-1 ring-slate-200 hover:ring-slate-400">‹</button><button type="button" aria-label="Next month" onClick={() => changeMonth(1)} className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-lg font-bold text-slate-600 shadow-sm ring-1 ring-slate-200 hover:ring-slate-400">›</button></div><h2 aria-live="polite" className="text-sm font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(cursor)}</h2></div><p className="mt-2 text-xs text-slate-400">Upcoming runs only — past history stays in the List view.</p><div className="mt-3 grid grid-cols-7 gap-1">{WEEKDAY_LABELS.map((label) => <div key={label} aria-hidden="true" className="pb-1 text-center text-[10px] font-extrabold uppercase tracking-wide text-slate-400">{label}</div>)}{days.map((cell, i) => cell.inMonth ? (() => { const count = runsByDate.get(cell.date)?.length ?? 0; const isToday = cell.date === today; const isActive = activeDate === cell.date; return <button key={cell.date} type="button" onClick={() => setSelected(cell.date)} aria-pressed={isActive} aria-current={isToday ? "date" : undefined} aria-label={dayAriaLabel(cell.date, count)} className={`flex min-h-11 flex-col items-center justify-center rounded-xl text-sm font-bold shadow-sm ring-1 ring-slate-200 ${isActive ? "bg-emerald-700 text-white ring-emerald-700" : isToday ? "bg-emerald-50 text-emerald-900 ring-2 ring-emerald-500" : "bg-white text-slate-700 hover:ring-slate-400"}`}><span>{cell.dayOfMonth}</span>{count > 0 ? <span aria-hidden="true" className={`mt-0.5 text-[9px] font-extrabold leading-none ${isActive ? "text-emerald-100" : "text-emerald-700"}`}>{count}</span> : null}{isToday ? <span className="sr-only">Today</span> : null}</button>; })() : <span key={`fill-${i}`} aria-hidden="true" className="min-h-11 rounded-xl" />)}</div><section aria-label="Runs on the selected day" className="mt-5">{activeDate ? <><h3 className="text-sm font-extrabold uppercase tracking-wide text-slate-500">{formatRunDate(activeDate)}{activeDate === today ? <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold uppercase text-emerald-800">Today</span> : null}</h3>{dayRuns.length > 0 ? <div className="mt-3 space-y-3">{dayRuns.map((run) => <RunCard key={run.id} run={run} onRemove={onRemove} removing={removingId === run.id} upcoming onToggleKeep={onToggleKeep} keeping={keepingId === run.id} />)}</div> : <p className="mt-3 text-sm text-slate-500">No runs on this day.</p>}</> : <p className="text-sm text-slate-500">No upcoming runs this month. Past runs you kept or checked in to stay in the List view.</p>}</section></div>;
+  // When the displayed month has no runs, point forward at the next month with one.
+  const nextRun = upcomingOnly.find((r) => r.date.slice(0, 7) > cursor);
+  // Roving tabindex: the active day, else today's cell when in month, else the
+  // first in-month day — exactly one day button is tabbable at all times.
+  const focusableDate = activeDate ?? days.find((d) => d.inMonth && d.date === today)?.date ?? days.find((d) => d.inMonth)!.date;
+  // Auto-advance: removing the selected day's LAST run re-derives the panel to
+  // the next meaningful day instead of stranding the user on an empty one. The
+  // identity guard (lastRunDayRef) keeps exploration of an already-empty day
+  // from resetting the selection; removing one of several runs stays put.
+  useEffect(() => {
+    if (dayRuns.length > 0) {
+      lastRunDayRef.current = selected;
+    } else if (selected && lastRunDayRef.current === selected) {
+      lastRunDayRef.current = null;
+      setSelected(null); // activeDate falls back to defaultCalendarDay → next run day, or null → empty-month message
+      pendingFocusRef.current = defaultCalendarDay(upcomingOnly, now, cursor) ?? "#day-panel";
+    }
+  }, [dayRuns, selected]);
+  useEffect(() => {
+    const target = pendingFocusRef.current;
+    if (!target) return;
+    pendingFocusRef.current = null;
+    requestAnimationFrame(() => {
+      const el = target === "#day-panel"
+        ? document.querySelector('[data-day-panel-focus]')
+        : document.querySelector(`[data-date="${target}"]`);
+      (el as HTMLElement | null)?.focus();
+    });
+  }, [cursor, selected]);
+  const changeMonth = (delta: number) => {
+    const d = new Date(Date.UTC(year, monthIndex + delta, 1));
+    const nextCursor = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    setCursor(nextCursor);
+    setSelected(null);
+    // Focus lands on the new month's active day (or its first day when empty).
+    pendingFocusRef.current = defaultCalendarDay(upcomingOnly, now, nextCursor) ?? firstInMonthDay(nextCursor);
+  };
+  const handleDayKeyDown = (e: React.KeyboardEvent, date: string) => {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) return;
+    e.preventDefault();
+    const nav = navigateDay(date, e.key as NavKey);
+    if (nav.monthChanged) setCursor(nav.date.slice(0, 7));
+    setSelected(nav.date);
+    pendingFocusRef.current = nav.date;
+  };
+  return <div className="mt-6" role="group" aria-label="My Runs calendar"><div className="flex items-center gap-3"><div className="flex items-center gap-1"><button type="button" aria-label="Previous month" onClick={() => changeMonth(-1)} disabled={cursor <= monthKey(now.toISOString().slice(0, 10))} className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-lg font-bold text-slate-600 shadow-sm ring-1 ring-slate-200 hover:ring-slate-400 disabled:cursor-default disabled:text-slate-300 disabled:ring-slate-100">‹</button><button type="button" aria-label="Next month" onClick={() => changeMonth(1)} className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-lg font-bold text-slate-600 shadow-sm ring-1 ring-slate-200 hover:ring-slate-400">›</button></div><h2 aria-live="polite" className="text-sm font-extrabold uppercase tracking-wide text-slate-500">{monthLabel(cursor)}</h2></div><p className="mt-2 text-xs text-slate-400">Upcoming runs only — past history stays in the List view.</p><div className="mt-3 grid grid-cols-7 gap-1">{WEEKDAY_LABELS.map((label) => <div key={label} aria-hidden="true" className="pb-1 text-center text-[10px] font-extrabold uppercase tracking-wide text-slate-400">{label}</div>)}{days.map((cell, i) => cell.inMonth ? (() => { const count = runsByDate.get(cell.date)?.length ?? 0; const isToday = cell.date === today; const isActive = activeDate === cell.date; return <button key={cell.date} type="button" data-date={cell.date} onClick={() => setSelected(cell.date)} aria-pressed={isActive} aria-current={isToday ? "date" : undefined} aria-label={dayAriaLabel(cell.date, count)} tabIndex={cell.date === focusableDate ? 0 : -1} onKeyDown={(e) => handleDayKeyDown(e, cell.date)} className={`flex min-h-11 flex-col items-center justify-center rounded-xl text-sm font-bold shadow-sm ring-1 ring-slate-200 ${isActive ? "bg-emerald-700 text-white ring-emerald-700" : isToday ? "bg-emerald-50 text-emerald-900 ring-2 ring-emerald-500" : "bg-white text-slate-700 hover:ring-slate-400"}`}><span>{cell.dayOfMonth}</span>{count > 0 ? <span aria-hidden="true" className={`mt-0.5 text-[9px] font-extrabold leading-none ${isActive ? "text-emerald-100" : "text-emerald-700"}`}>{count}</span> : null}{isToday ? <span className="sr-only">Today</span> : null}</button>; })() : <span key={`fill-${i}`} aria-hidden="true" className="min-h-11 rounded-xl" />)}</div><section aria-label="Runs on the selected day" className="mt-5">{activeDate ? <><h3 tabIndex={-1} data-day-panel-focus className="text-sm font-extrabold uppercase tracking-wide text-slate-500 focus:outline-none">{formatRunDate(activeDate)}{activeDate === today ? <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold uppercase text-emerald-800">Today</span> : null}</h3>{dayRuns.length > 0 ? <div className="mt-3 space-y-3">{dayRuns.map((run) => <RunCard key={run.id} run={run} onRemove={onRemove} removing={removingId === run.id} upcoming onToggleKeep={onToggleKeep} keeping={keepingId === run.id} />)}</div> : <p tabIndex={-1} data-day-panel-focus className="mt-3 text-sm text-slate-500 focus:outline-none">No runs on this day.</p>}</> : <p tabIndex={-1} data-day-panel-focus className="mt-3 text-sm text-slate-500 focus:outline-none">No upcoming runs this month. Past runs you kept or checked in to stay in the List view.{nextRun ? ` Your next RSVP is in ${monthLabel(nextRun.date.slice(0, 7))}.` : ""}</p>}</section></div>;
 }
 function Empty() { return <div className="mt-10 text-center"><Icon name="calendar" className="mx-auto h-10 w-10 text-slate-300"/><p className="mt-3 font-semibold">No RSVPs yet</p><p className="mt-1 text-sm text-slate-500">Runs you RSVP to will appear here, with past history kept private.</p><Link className="mt-4 inline-flex min-h-11 items-center rounded-lg px-4 py-2 text-sm font-bold text-emerald-800 ring-1 ring-emerald-200" to="/">Browse this week's runs</Link></div>; }
 function Page({ children }: { children: React.ReactNode }) { return <div className="my-runs-page mx-auto w-full max-w-[42rem] px-4 pb-32 pt-8 md:px-6"><div className="mb-5 flex items-center gap-2"><Icon name="rsvp" className="h-5 w-5 text-emerald-700"/><span className="text-xs font-bold uppercase tracking-widest text-slate-400">Private</span></div>{children}</div>; }
