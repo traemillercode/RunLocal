@@ -241,6 +241,23 @@ describe("profile menu states", () => {
     expect(admin).toBeDefined();
     expect(admin?.label).toBe("Admin control center");
     expect(admin?.hint).toBe("Super Admin");
+    expect(admin?.to).toBe("/admin");
+  });
+
+  it("city admin sees the Admin entry scoped to their city", () => {
+    const { entries } = profileMenuEntries(me({ status: "verified", phase: null, badge: "verified", role: "city_admin", roles: ["city_admin"], adminCityId: "columbia-mo" }));
+    const admin = entries.find((e) => e.to === "/admin");
+    expect(admin).toBeDefined();
+    expect(admin?.label).toBe("City admin");
+    expect(admin?.hint).toBe("Columbia");
+    expect(admin?.key).toBe("city-admin");
+  });
+
+  it("verified non-admin runners never see an admin entry", () => {
+    const { entries } = profileMenuEntries(me({ status: "verified", phase: null, badge: "verified" }));
+    expect(entries.some((e) => e.to === "/admin")).toBe(false);
+    expect(entries.map((e) => e.label)).not.toContain("Admin control center");
+    expect(entries.map((e) => e.label)).not.toContain("City admin");
   });
 
   it("signedInLabel carries the account name", () => {
