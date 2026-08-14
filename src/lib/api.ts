@@ -512,6 +512,10 @@ export function deleteForumPost(id: string): Promise<ApiResult<{ post: ForumPost
 export function pinForumPost(id: string, pinned: boolean): Promise<ApiResult<{ post: ForumPostView }>> {
   return request(`/api/forum/${encodeURIComponent(id)}/pin`, { method: "PATCH", body: JSON.stringify({ pinned }) });
 }
+/** Author hide/restore of an own forum post (PATCH /api/forum/:id/hide — server re-validates). */
+export function setForumPostHidden(id: string, hidden: boolean): Promise<ApiResult<{ post: ForumPostView }>> {
+  return request(`/api/forum/${encodeURIComponent(id)}/hide`, { method: "PATCH", body: JSON.stringify({ hidden }) });
+}
 
 // --------------------------------------------------- public forum replies
 /** A user-created reply to a forum post, as served by /api/forum/replies. */

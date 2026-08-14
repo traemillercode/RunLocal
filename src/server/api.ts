@@ -126,7 +126,7 @@ import {
   listTrustedMembers,
   revokeTrustedMember,
 } from "./verification";
-import { publicForumPosts, createForumPost, publicForumReplies, createForumReply, forumReplyCounts, forumPostPublic, editForumPost, deleteForumPost, editForumReply, deleteForumReply, setForumPostPinned, editForumPostAdmin } from "./forum";
+import { publicForumPosts, createForumPost, publicForumReplies, createForumReply, forumReplyCounts, forumPostPublic, editForumPost, deleteForumPost, editForumReply, deleteForumReply, setForumPostPinned, setForumPostHidden, editForumPostAdmin } from "./forum";
 import { createContentFlag } from "./contentFlags";
 import { withdrawSubmission } from "./submissions";
 import {
@@ -780,6 +780,30 @@ async function handleApi(
       return err(res, { status: 400, error: "invalid_pinned", message: "pinned must be true or false." }), true;
     }
     const result = setForumPostPinned(db, sess.accountId, id, body.pinned, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, { post: result.data.post }), true;
+  }
+  // ---- author hide/restore of their own forum post -------------------------
+  // PATCH /api/forum/:id/hide with { hidden: boolean } — the verified author of
+  // a user-created post may hide it from public rendering and restore it. Same
+  // author gate as edit/delete: author-only (non-authors 404, never leaked),
+  // same-city, post must exist and not be deleted (seed posts have no record,
+  // so 404). Writes the SAME `post:<id>` moderation-registry flag the admin
+  // hide path uses, so public reads, reply counts, replies rendering, and new
+  // replies all stop while hidden (existing filters). Audited (forum.hide_own /
+  // forum.restore_own) with the author identity. Guests 401, non-authors 404,
+  // unknown/seed/deleted posts 404, same-state requests 400.
+  const forumPostHide = /^\/api\/forum\/([^/]+)\/hide\/?$/.exec(url.pathname);
+  if (forumPostHide && method === "PATCH") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const id = decodeURIComponent(forumPostHide[1]);
+    const body = (await readJson(req)) as { hidden?: unknown };
+    if (typeof body.hidden !== "boolean") {
+      return err(res, { status: 400, error: "invalid_hidden", message: "hidden must be true or false." }), true;
+    }
+    const result = setForumPostHidden(db, sess.accountId, id, body.hidden, now);
     if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
     await db.persist();
     return ok(res, { post: result.data.post }), true;

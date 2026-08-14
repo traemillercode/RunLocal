@@ -558,6 +558,8 @@ export interface ForumPostRow {
 /** A moderation/author action awaiting confirmation in the sheet. */
 type ConfirmAction =
   | { kind: "delete_own_post"; postId: string; title: string }
+  | { kind: "hide_own_post"; postId: string; title: string }
+  | { kind: "restore_own_post"; postId: string; title: string }
   | { kind: "hide_post"; postId: string; title: string }
   | { kind: "restore_post"; postId: string; title: string }
   | { kind: "delete_post"; postId: string; title: string }
@@ -810,6 +812,14 @@ export function ForumPage({ city }: { city: City }) {
       case "delete_own":
         setConfirm({ kind: "delete_own_post", postId: post.id, title: post.title });
         break;
+      case "hide_own":
+        // Author self-service hide — reversible, audited with the author
+        // identity; the server re-validates the same author gate.
+        setConfirm({ kind: "hide_own_post", postId: post.id, title: post.title });
+        break;
+      case "restore_own":
+        setConfirm({ kind: "restore_own_post", postId: post.id, title: post.title });
+        break;
       case "hide":
         setConfirm({ kind: "hide_post", postId: post.id, title: post.title });
         break;
@@ -867,6 +877,26 @@ export function ForumPage({ city }: { city: City }) {
           impact: "Your post and its replies will be removed from the forum. This can't be undone.",
           confirmLabel: "Delete post",
           requireReason: false,
+        };
+      case "hide_own_post":
+        // Author self-service: plain confirm, no reason — the audit trail
+        // records the author identity. Reversible by the author anytime.
+        return {
+          title: "Hide your post?",
+          entity: confirm.title,
+          impact: "Your post will disappear from the forum for everyone else. You can restore it anytime — this isn't a delete.",
+          confirmLabel: "Hide post",
+          requireReason: false,
+          tone: "neutral",
+        };
+      case "restore_own_post":
+        return {
+          title: "Restore your post?",
+          entity: confirm.title,
+          impact: "Your post will be visible in the forum again, replies included.",
+          confirmLabel: "Restore post",
+          requireReason: false,
+          tone: "neutral",
         };
       case "hide_post":
         return {
@@ -953,6 +983,8 @@ export function ForumPage({ city }: { city: City }) {
     setConfirmError(null);
     const call: Promise<api.ApiResult<unknown>> =
       action.kind === "delete_own_post" ? api.deleteForumPost(action.postId)
+      : action.kind === "hide_own_post" ? api.setForumPostHidden(action.postId, true)
+      : action.kind === "restore_own_post" ? api.setForumPostHidden(action.postId, false)
       : action.kind === "hide_post" ? api.adminTransitionContent(`post:${action.postId}`, "hide", reason)
       : action.kind === "restore_post" ? api.adminTransitionContent(`post:${action.postId}`, "restore", reason)
       : action.kind === "delete_post" ? api.adminTransitionContent(`post:${action.postId}`, "delete", reason)
@@ -984,6 +1016,25 @@ export function ForumPage({ city }: { city: City }) {
           if (updated) {
             setServerPosts((cur) => cur.map((p) => (p.id === updated.id ? { ...p, pinned: updated.pinned, capabilities: updated.capabilities } : p)));
           }
+        }
+        // Author hide/restore: keep the post in the author's list with the
+        // server's flipped capability (hide_own <-> restore_own) and reply
+        // count (0 while hidden), so the restore affordance stays reachable
+        // in-session. Everyone else's reads already exclude it server-side.
+        if (action.kind === "hide_own_post" || action.kind === "restore_own_post") {
+          const updated = (r.data as { post?: api.ForumPostView } | undefined)?.post;
+          if (updated) {
+            setServerPosts((cur) => cur.map((p) => (p.id === updated.id ? { ...p, pinned: updated.pinned, capabilities: updated.capabilities, replies: updated.replies } : p)));
+          }
+          // Drop any open thread state so hidden replies stop rendering locally
+          // too; reopening refetches from the server (404 while hidden).
+          setOpenThreadId((cur) => (cur === action.postId ? null : cur));
+          setRepliesByPost((prev) => {
+            if (!(action.postId in prev)) return prev;
+            const n = { ...prev };
+            delete n[action.postId];
+            return n;
+          });
         }
         toast(
           action.kind === "report_post" || action.kind === "report_reply"

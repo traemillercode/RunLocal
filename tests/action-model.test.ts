@@ -70,6 +70,8 @@ describe("ACTION_META — metadata integrity", () => {
         "edit",
         "edit_own",
         "delete_own",
+        "hide_own",
+        "restore_own",
         "hide",
         "restore",
         "archive",
@@ -96,6 +98,8 @@ describe("ACTION_META — metadata integrity", () => {
   it("keeps reversible/management actions non-dangerous", () => {
     expect(ACTION_META.hide.danger).toBe(false);
     expect(ACTION_META.restore.danger).toBe(false);
+    expect(ACTION_META.hide_own.danger).toBe(false);
+    expect(ACTION_META.restore_own.danger).toBe(false);
     expect(ACTION_META.archive.danger).toBe(false);
     expect(ACTION_META.report.danger).toBe(false);
     expect(ACTION_META.withdraw.danger).toBe(false);

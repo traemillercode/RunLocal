@@ -53,7 +53,7 @@ const MAX_REPLY = 1000;
  * exactly these lists, and every listed action maps to an endpoint that
  * re-validates the same rules server-side.
  */
-export type ForumCapability = "edit" | "edit_own" | "delete_own" | "hide" | "restore" | "delete" | "report" | "tag" | "pin" | "unpin";
+export type ForumCapability = "edit" | "edit_own" | "delete_own" | "hide_own" | "restore_own" | "hide" | "restore" | "delete" | "report" | "tag" | "pin" | "unpin";
 
 /** Verified + not deleted + not suspended — the gate for author and report actions. */
 function verifiedActive(actor: AccountRecord | null | undefined, now: Date): boolean {
@@ -62,7 +62,9 @@ function verifiedActive(actor: AccountRecord | null | undefined, now: Date): boo
 
 /**
  * Capability list for a forum POST as seen by `actor`:
- *  - the author (verified, active) may Edit / Delete their own post;
+ *  - the author (verified, active) may Edit / Delete their own post, and may
+ *    self-service Hide / Restore it (`hide_own` while visible, `restore_own`
+ *    while hidden — reversible by the author, audited with their identity);
  *  - Global Admins, and City Admins scoped to the post's city, may
  *    Hide / Restore / Delete via the existing contentAdmin routes
  *    (`/api/admin/content/post:<id>/…`), and may Pin / Unpin the post
@@ -72,13 +74,19 @@ function verifiedActive(actor: AccountRecord | null | undefined, now: Date): boo
  *    (POST /api/content/post/:id/flag — self-report is blocked server-side).
  * Guests, pending/rejected accounts, and deleted/suspended accounts get [].
  */
-export function forumPostCapabilities(actor: AccountRecord | null | undefined, post: { authorAccountId: string; cityId: string; pinned?: boolean }, now = new Date()): ForumCapability[] {
+export function forumPostCapabilities(actor: AccountRecord | null | undefined, post: { authorAccountId: string; cityId: string; pinned?: boolean; hidden?: boolean }, now = new Date()): ForumCapability[] {
   if (!actor || actor.deletedAt) return [];
   const caps: ForumCapability[] = [];
   const isAuthor = post.authorAccountId === actor.id;
   // Verified authors may tag runners on their own posts (lightweight, no
   // approval — the tagged runner can self-hide; PATCH /api/tags/:id/self).
-  if (isAuthor && verifiedActive(actor, now)) caps.push("edit_own", "delete_own", "tag");
+  if (isAuthor && verifiedActive(actor, now)) {
+    caps.push("edit_own", "delete_own", "tag");
+    // Self-service hide/restore: hide_own shows while the post is publicly
+    // visible; restore_own shows while it is hidden (author-hide or
+    // admin-hide — the registry flag is the single source of truth).
+    caps.push(post.hidden === true ? "restore_own" : "hide_own");
+  }
   if (isGlobalAdmin(actor) || isCityAdminForCity(actor, post.cityId)) {
     // Admins can edit ANY post in their scope (published content is never
     // submitter-editable once approved — the admin is the edit authority).
@@ -162,6 +170,7 @@ export function publicForumPosts(db: Db, cityId: string, actor?: AccountRecord |
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map((f) => {
       const author = db.getAccount(f.authorAccountId);
+      const mod = db.getContent(`post:${f.id}`);
       return {
         id: f.id,
         section: f.section,
@@ -173,7 +182,7 @@ export function publicForumPosts(db: Db, cityId: string, actor?: AccountRecord |
         replies: visibleReplyCount(db, f.id),
         pinned: f.pinned === true,
         authorId: f.authorAccountId,
-        capabilities: forumPostCapabilities(actor, f, now),
+        capabilities: forumPostCapabilities(actor, { ...f, hidden: mod?.hidden === true }, now),
       };
     });
 }
@@ -732,6 +741,117 @@ export function setForumPostPinned(
         capabilities: forumPostCapabilities(rec, updated, now),
       },
       record: updated,
+    },
+  };
+}
+
+export type ForumHideResult =
+  | { ok: true; data: { post: PublicForumPost; record: ForumPostRecord } }
+  | { ok: false; status: number; error: string; message?: string };
+
+/**
+ * Author hide/restore of their OWN user-created forum post
+ * (PATCH /api/forum/:id/hide with { hidden: boolean }).
+ *
+ * Authorization mirrors the author gate shared by edit/delete: verified,
+ * non-suspended, same-city, author-only (non-authors get 404 — the post is
+ * never leaked), and the post must still exist in state "visible" (a deleted
+ * post has no hide/restore path; seed posts resolve to 404 because they have
+ * no server record and thus no authorAccountId). Archived (admin-deleted)
+ * posts are unavailable too — same 404, no leak.
+ *
+ * The mutation writes the SAME `post:<id>` moderation-registry flag the admin
+ * hide path uses, so the existing filters hold unchanged: while hidden, the
+ * post drops out of public reads, its visible reply count returns 0, its
+ * replies stop rendering, and new replies are rejected (post_unavailable).
+ * Restoring flips the flag back. Same-state requests are 400. Every mutation
+ * is audited (forum.hide_own / forum.restore_own) with the author identity.
+ */
+export function setForumPostHidden(
+  db: Db,
+  accountId: string,
+  postId: string,
+  hidden: boolean,
+  now = new Date(),
+): ForumHideResult {
+  const auth = authorizeForumAuthor(db, accountId, now);
+  if (!auth.ok) return auth;
+  const post = db.getForumPost(postId);
+  if (!post || post.state !== "visible") {
+    return { ok: false, status: 404, error: "post_not_found", message: "That post isn't available." };
+  }
+  if (post.authorAccountId !== auth.rec.id) {
+    return { ok: false, status: 404, error: "post_not_found", message: "That post isn't available." };
+  }
+  if (post.cityId !== auth.rec.cityId) {
+    return {
+      ok: false,
+      status: 403,
+      error: "cross_city_denied",
+      message: "This stays within your home city's forum — switch cities to hide there.",
+    };
+  }
+  const content = db.getContent(`post:${postId}`);
+  if (content?.archived) {
+    return { ok: false, status: 404, error: "post_not_found", message: "That post isn't available." };
+  }
+  if ((content?.hidden === true) === hidden) {
+    return {
+      ok: false,
+      status: 400,
+      error: "already_in_state",
+      message: hidden ? "This post is already hidden." : "This post isn't hidden.",
+    };
+  }
+  db.upsertContent(
+    content
+      ? { ...content, hidden, hiddenAt: hidden ? now.toISOString() : null }
+      : {
+          id: `post:${postId}`,
+          cityId: post.cityId,
+          kind: "post",
+          refId: postId,
+          title: post.title,
+          authorLabel: auth.rec.name,
+          authorAccountId: post.authorAccountId,
+          featured: false,
+          pinned: false,
+          hidden,
+          hiddenAt: hidden ? now.toISOString() : null,
+          archived: false,
+          archivedAt: null,
+        },
+  );
+  db.appendAudit(
+    {
+      admin: auth.rec.email,
+      action: hidden ? "forum.hide_own" : "forum.restore_own",
+      reason: hidden ? "Author hid their forum post" : "Author restored their forum post",
+      targetId: postId,
+      ip: "author-action",
+      cityId: post.cityId,
+      owner: auth.rec.email,
+      change: `${hidden ? "hidden" : "restored"} by author: "${post.title.slice(0, 60)}"`,
+    },
+    now,
+  );
+  return {
+    ok: true,
+    data: {
+      post: {
+        id: post.id,
+        section: post.section,
+        title: post.title,
+        body: post.body,
+        author: auth.rec.name,
+        authorNote: null,
+        createdAt: forumDateLabel(post.createdAt, now),
+        replies: visibleReplyCount(db, post.id),
+        pinned: post.pinned === true,
+        authorId: post.authorAccountId,
+        capabilities: forumPostCapabilities(auth.rec, { ...post, hidden }, now),
+      },
+      record: post,
     },
   };
 }
