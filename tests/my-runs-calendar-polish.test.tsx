@@ -103,6 +103,19 @@ describe("My Runs calendar polish — CalendarGrid SSR", () => {
     expect(source).toContain("rsvpEvent(run.eventId, false, run.date, run.id)");
   });
 
+  it("locks the post-removal focus mechanism: the refetch keeps the grid mounted and routes focus to the advanced target", async () => {
+    const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/pages/MyRunsPage.tsx", import.meta.url), "utf8"));
+    // The full-page loading gate covers only the FIRST fetch, so a remove/keep
+    // refetch keeps CalendarGrid (and its pendingFocusRef) mounted instead of
+    // remounting it with a fresh null ref. The existing focus effect then fires
+    // after the removal's auto-advance and lands focus on the next run day or
+    // the day-panel message (interactive behavior — browser-verified per the
+    // manual QA recipe; these source contracts lock the mechanism itself).
+    expect(source).toContain("loading && runs.length === 0");
+    expect(source).toContain('pendingFocusRef.current = defaultCalendarDay(upcomingOnly, now, cursor) ?? "#day-panel"');
+    expect(source).toContain("document.querySelector('[data-day-panel-focus]')");
+  });
+
   it("locks the cursor initializer, data-date, and roving tabIndex wiring", async () => {
     const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/pages/MyRunsPage.tsx", import.meta.url), "utf8"));
     expect(source).toContain("defaultCalendarMonth(upcomingOnly, now)");

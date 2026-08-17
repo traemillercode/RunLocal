@@ -26,7 +26,11 @@ export function MyRunsPage() {
   const sections = useMemo(() => orderMyRuns(runs), [runs]);
   if (me?.status !== "signed_in") return <Page><h1>My Runs</h1><p className="mt-2 text-slate-600">Sign in to see your private RSVP list.</p><Link className="mt-5 inline-flex min-h-11 items-center rounded-[10px] bg-[#14171C] px-4 py-2 font-semibold text-white" to="/login">Sign in</Link></Page>;
   if (me.account.status !== "verified") return <Page><h1>My Runs</h1><p className="mt-2 text-slate-600">Email verification is required to view your private RSVPs.</p><Link className="mt-5 inline-flex min-h-11 items-center rounded-[10px] bg-[#14171C] px-4 py-2 font-semibold text-white" to="/verify">Verify your account</Link></Page>;
-  if (loading) return <Page><h1>My Runs</h1><p className="mt-8 text-center text-slate-500">Loading your RSVPs…</p></Page>;
+  // Full-page loading covers only the FIRST fetch. Refetches after remove/keep
+  // keep the current content mounted (stale rows persist until the response
+  // lands — no grid spinner by design) so CalendarGrid's internal post-removal
+  // focus restoration survives instead of being wiped by a remount.
+  if (loading && runs.length === 0) return <Page><h1>My Runs</h1><p className="mt-8 text-center text-slate-500">Loading your RSVPs…</p></Page>;
   if (errorCode === "verified_runner_required") return <Page><h1>My Runs</h1><p className="mt-3 text-slate-600">Verification is required to view your private RSVPs.</p><Link className="mt-5 inline-flex min-h-11 items-center rounded-[10px] bg-[#14171C] px-4 py-2 font-semibold text-white" to="/verify">Verify your account</Link></Page>;
   if (error) return <Page><h1>My Runs</h1><p className="mt-3 text-slate-600">We couldn’t load your runs.</p><button onClick={load} className="mt-5 inline-flex min-h-11 items-center rounded-[10px] bg-[#14171C] px-4 py-2 font-semibold text-white">Try again</button></Page>;
   const hasRuns = sections.upcoming.length + sections.past.length > 0;
