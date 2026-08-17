@@ -22,7 +22,8 @@ import { EventEditSheet } from "../src/pages/EventsPage";
 import { EventDetailView } from "../src/pages/EventDetailPage";
 import { actionMenuItems } from "../src/lib/actionModel";
 import { CITIES } from "../src/data/cities";
-import type { DatedRunEvent } from "../src/lib/dates";
+import { preferCanonicalFields, resolveWeekEvents, type DatedRunEvent, type WeekCanonicalSource } from "../src/lib/dates";
+import type { RunEvent } from "../src/types";
 
 const city = CITIES[0];
 const noop = () => {};
@@ -152,5 +153,174 @@ describe("EventEditSheet — shared edit form still renders its fields (SSR)", (
     expect(html).toContain("Who can join?");
     expect(html).toContain("Save changes");
     expect(html).toContain("Cancel");
+  });
+});
+
+// ---- G1.1: the visible detail card must reflect a saved edit immediately ----
+// QA (#135) found the card kept showing the old title/location after Save: the
+// page resolved the event by id from [...city.events, ...canonical, ...recurring]
+// and the client seed copy / weekly model shadowed the canonical record the
+// edit replaces. The fix prefers the canonical registry record for the same
+// logical run (seedRefId / bare refId) BEFORE date resolution, so the fields
+// the card renders come from the server-authoritative post-edit source while
+// ids (URL, RSVP, moderation index) stay untouched.
+
+/** The server-materialized canonical row for the `sun-recovery` seed slot,
+ *  as /api/events returns it AFTER a successful group-lead edit. */
+const editedSunRecovery: WeekCanonicalSource = {
+  id: "canon-sun-recovery",
+  seedRefId: "sun-recovery",
+  groupId: "runcomo",
+  title: "Sunday Recovery Run (edited)",
+  dayOfWeek: 6,
+  time: "8:00 AM",
+  location: "Stephens Lake Park — east beach lot (edited)",
+  distanceLabel: "3–4 mi, easy",
+  invite: "Open to all",
+  externalUrl: null,
+  status: "published",
+  hidden: false,
+  archivedAt: null,
+};
+
+/** The /api/content copy of an approved community event (bare refId). */
+const communityRecurring: RunEvent = {
+  id: "user-comm1",
+  groupId: "",
+  title: "Thursday Twilight Loop",
+  dayOfWeek: 3,
+  time: "5:30 PM",
+  location: "Cosmo Park",
+  distanceLabel: "3–5 mi",
+  invite: "Open to all",
+};
+const editedCommunityCanonical: WeekCanonicalSource = {
+  id: "event:user-comm1",
+  seedRefId: null,
+  groupId: "user-comm1",
+  title: "Thursday Twilight Loop (edited)",
+  dayOfWeek: 3,
+  time: "5:30 PM",
+  location: "Cosmo Park (edited)",
+  distanceLabel: "3–5 mi",
+  invite: "Open to all",
+  externalUrl: null,
+  status: "published",
+  hidden: false,
+  archivedAt: null,
+};
+
+/** The exact page pipeline: seed + canonical copy + /api/content weekly copy,
+ *  canonical preference applied, then date resolution. */
+function resolveLikePage(canonical: WeekCanonicalSource[], recurring: RunEvent[], now = new Date(2026, 7, 12, 10, 0, 0)) {
+  const canonicalList: WeekCanonicalSource[] = canonical;
+  const canonicalEntries = canonicalList
+    .filter((e) => e.status === "published" && !e.hidden && !e.archivedAt)
+    .map((e) => ({ id: e.id, groupId: e.groupId, title: e.title, dayOfWeek: e.dayOfWeek, time: e.time, location: e.location, distanceLabel: e.distanceLabel, invite: e.invite, externalUrl: e.externalUrl ?? undefined }));
+  return resolveWeekEvents(
+    [...city.events, ...canonicalEntries, ...recurring].map((e) => preferCanonicalFields(e, canonicalList)),
+    now,
+  );
+}
+
+describe("preferCanonicalFields — post-edit resolution source (G1.1)", () => {
+  it("overlays the edited canonical fields onto the matching seed entry, keeping the seed id", () => {
+    const seedEntry = city.events.find((e) => e.id === "sun-recovery")!;
+    const out = preferCanonicalFields(seedEntry, [editedSunRecovery]);
+    expect(out.id).toBe("sun-recovery"); // URL/RSVP identity unchanged
+    expect(out.title).toBe("Sunday Recovery Run (edited)");
+    expect(out.location).toBe("Stephens Lake Park — east beach lot (edited)");
+    expect(out.groupId).toBe("runcomo");
+  });
+
+  it("overlays the edited canonical record onto the /api/content copy of a community event (bare refId)", () => {
+    const out = preferCanonicalFields(communityRecurring, [editedCommunityCanonical]);
+    expect(out.id).toBe("user-comm1");
+    expect(out.title).toBe("Thursday Twilight Loop (edited)");
+    expect(out.location).toBe("Cosmo Park (edited)");
+  });
+
+  it("passes seed-only events through unchanged when no canonical row exists", () => {
+    const seedEntry = city.events.find((e) => e.id === "sun-recovery")!;
+    expect(preferCanonicalFields(seedEntry, [])).toBe(seedEntry);
+  });
+
+  it("never overlays hidden, non-published, or archived canonical records", () => {
+    const seedEntry = city.events.find((e) => e.id === "sun-recovery")!;
+    for (const variant of [
+      { ...editedSunRecovery, hidden: true },
+      { ...editedSunRecovery, status: "archived" as const },
+      { ...editedSunRecovery, archivedAt: "2026-08-01T00:00:00.000Z" },
+      { ...editedSunRecovery, status: "draft" as const },
+    ]) {
+      expect(preferCanonicalFields(seedEntry, [variant]).title).toBe("Sunday Recovery Run");
+    }
+  });
+
+  it("is a no-op for the canonical entry itself (identity match)", () => {
+    const canonicalEntry: RunEvent = {
+      id: "canon-sun-recovery",
+      groupId: "runcomo",
+      title: "Sunday Recovery Run (edited)",
+      dayOfWeek: 6,
+      time: "8:00 AM",
+      location: "Stephens Lake Park — east beach lot (edited)",
+      distanceLabel: "3–4 mi, easy",
+      invite: "Open to all",
+    };
+    const out = preferCanonicalFields(canonicalEntry, [editedSunRecovery]);
+    expect(out).toEqual(canonicalEntry);
+  });
+});
+
+describe("EventDetailPage — the visible card renders the saved server record after an edit (G1.1)", () => {
+  it("resolves the seed URL to the EDITED canonical fields (no reload needed)", () => {
+    const resolved = resolveLikePage([editedSunRecovery], []);
+    const event = resolved.find((e) => e.id === "sun-recovery")!;
+    expect(event.title).toBe("Sunday Recovery Run (edited)");
+    expect(event.location).toBe("Stephens Lake Park — east beach lot (edited)");
+  });
+
+  it("moves the resolved date when the edit changes the weekday", () => {
+    const moved = { ...editedSunRecovery, dayOfWeek: 5, title: "Saturday Recovery Run (edited)" };
+    const resolved = resolveLikePage([moved], []);
+    const event = resolved.find((e) => e.id === "sun-recovery")!;
+    expect(event.title).toBe("Saturday Recovery Run (edited)");
+    // Week of Wed Aug 12 2026: Saturday = Aug 15 (seed Sunday would be Aug 16).
+    expect(event.date.getDate()).toBe(15);
+    expect(event.dayAbbrev).toBe("Sat");
+  });
+
+  it("renders the edited title/location in the detail card markup (SSR)", () => {
+    const resolved = resolveLikePage([editedSunRecovery], [communityRecurring]);
+    const event = resolved.find((e) => e.id === "sun-recovery")!;
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <EventDetailView event={event} city={city} rsvped={false} canRsvp onRsvp={noop} onBack={noop} capabilities={[]} onAction={noop} />
+      </MemoryRouter>,
+    );
+    expect(html).toContain("Sunday Recovery Run (edited)");
+    expect(html).toContain("Stephens Lake Park — east beach lot (edited)");
+    expect(html).not.toContain("Sunday Recovery Run</h1>");
+  });
+
+  it("keeps non-edited community events on the /api/content copy (no canonical record → unchanged)", () => {
+    const resolved = resolveLikePage([], [communityRecurring]);
+    const event = resolved.find((e) => e.id === "user-comm1")!;
+    expect(event.title).toBe("Thursday Twilight Loop");
+    expect(event.location).toBe("Cosmo Park");
+  });
+});
+
+describe("EventDetailPage — post-save refresh wiring (source contract, G1.1)", () => {
+  it("applies preferCanonicalFields to the merged list BEFORE date resolution", async () => {
+    const s = await source();
+    expect(s).toContain("preferCanonicalFields");
+    expect(s).toContain("resolveWeekEvents([...city.events, ...canonical, ...recurring].map((e) => preferCanonicalFields(e, canonicalEvents)), new Date())");
+  });
+
+  it("success still replaces the saved record in canonicalEvents (re-render source)", async () => {
+    const s = await source();
+    expect(s).toContain("setCanonicalEvents((cur) => (cur ? cur.map((e) => (e.id === r.data.event.id ? r.data.event : e)) : cur));");
   });
 });

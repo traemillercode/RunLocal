@@ -146,6 +146,37 @@ export function canonicalEventActions(events: readonly (WeekCanonicalSource & { 
   }
   return map;
 }
+/**
+ * Detail-page canonical preference: when a canonical registry record exists for
+ * the same logical run as a weekly entry (seedRefId match for seed slots, bare
+ * refId for community events), overlay the canonical fields onto the entry so
+ * the visible card renders the server-authoritative record — the source a
+ * successful edit (PUT /api/events/:id) replaces. The entry's own id is kept
+ * (the feed/URL already resolve by it); only the displayed fields change, and
+ * only from PUBLISHED, visible canonical rows (hidden/archived rows never
+ * overlay). Entries with no matching canonical row (seed-only slots,
+ * admin-created runs) pass through unchanged. For canonical entries themselves
+ * the match is identity, so the overlay is a no-op.
+ */
+export function preferCanonicalFields<T extends RunEvent>(entry: T, canonical: readonly WeekCanonicalSource[]): T {
+  const key = bareEventId(entry.id);
+  const rec = canonical.find(
+    (c) => c.status === "published" && !c.hidden && !c.archivedAt && (c.seedRefId === key || bareEventId(c.id) === key),
+  );
+  if (!rec) return entry;
+  return {
+    ...entry,
+    groupId: rec.groupId,
+    title: rec.title,
+    dayOfWeek: rec.dayOfWeek,
+    time: rec.time,
+    location: rec.location,
+    distanceLabel: rec.distanceLabel,
+    invite: rec.invite,
+    externalUrl: rec.externalUrl ?? undefined,
+  };
+}
+
 /** Resolve recurring weekly events to concrete dates and sort chronologically. */
 export function resolveWeekEvents(events: RunEvent[], now: Date): DatedRunEvent[] {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();

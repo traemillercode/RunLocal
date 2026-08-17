@@ -17,7 +17,7 @@ import { ActionMenu } from "../components/ActionMenu";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import * as api from "../lib/api";
-import { dayLabel, monthDayLabel, resolveWeekEvents, bareEventId, occurrenceIdFor, localDateLabel, canonicalEventActions, type DatedRunEvent } from "../lib/dates";
+import { dayLabel, monthDayLabel, resolveWeekEvents, bareEventId, occurrenceIdFor, localDateLabel, canonicalEventActions, preferCanonicalFields, type DatedRunEvent } from "../lib/dates";
 import { actionMenuItems, type ActionKey } from "../lib/actionModel";
 import { eventConfirmMeta, EventEditSheet, type EventEditDraft, type EventConfirmAction, type EventConfirmKind } from "./EventsPage";
 import { isOccurrenceRsvped } from "../lib/myRuns";
@@ -339,7 +339,14 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
         externalUrl: e.externalUrl ?? undefined,
       }));
     const canonical = canonicalEvents.filter((e) => e.status === "published" && !e.hidden && !e.archivedAt).map((e) => ({ id:e.id, groupId:e.groupId, title:e.title, dayOfWeek:e.dayOfWeek, time:e.time, location:e.location, distanceLabel:e.distanceLabel, invite:e.invite, externalUrl:e.externalUrl ?? undefined }));
-    return resolveWeekEvents([...city.events, ...canonical, ...recurring], new Date()).filter((e) => !hidden.has(`event:${bareEventId(e.id)}`) && !localHidden.has(`event:${bareEventId(e.id)}`));
+    // Canonical records are the server-authoritative post-edit source. When a
+    // canonical record exists for a logical run (seed slot via seedRefId,
+    // community event via bare refId), its fields win over the seed / weekly
+    // copy — so a successful save (which replaces the record in
+    // canonicalEvents) re-renders the visible card immediately, and a reload
+    // shows the saved values. Ids are untouched, so URLs, RSVPs, and the
+    // moderation capability index keep resolving exactly as before.
+    return resolveWeekEvents([...city.events, ...canonical, ...recurring].map((e) => preferCanonicalFields(e, canonicalEvents)), new Date()).filter((e) => !hidden.has(`event:${bareEventId(e.id)}`) && !localHidden.has(`event:${bareEventId(e.id)}`));
   }, [city, hidden, userEvents, canonicalEvents, localHidden]);
 
   const event = events.find((e) => e.id === eventId) ?? null;
