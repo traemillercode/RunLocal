@@ -10,7 +10,7 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { Chip, Icon } from "../components/ui";
+import { Chip, Icon, Sheet } from "../components/ui";
 import { BackLink } from "../components/BackLink";
 import { RailCard, RailStack } from "../components/RailCard";
 import { ActionMenu } from "../components/ActionMenu";
@@ -19,7 +19,7 @@ import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import * as api from "../lib/api";
 import { dayLabel, monthDayLabel, resolveWeekEvents, bareEventId, occurrenceIdFor, localDateLabel, canonicalEventActions, type DatedRunEvent } from "../lib/dates";
 import { actionMenuItems, type ActionKey } from "../lib/actionModel";
-import { eventConfirmMeta, type EventConfirmAction, type EventConfirmKind } from "./EventsPage";
+import { eventConfirmMeta, EventEditSheet, type EventEditDraft, type EventConfirmAction, type EventConfirmKind } from "./EventsPage";
 import { isOccurrenceRsvped } from "../lib/myRuns";
 import { canDo } from "../lib/accounts";
 import type { AppStore } from "../lib/store";
@@ -316,6 +316,10 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
   const [confirm, setConfirm] = useState<EventConfirmAction | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  // Scoped edit (group lead / admin): pre-filled EventEditSheet → PUT /api/events/:id.
+  const [editTarget, setEditTarget] = useState<EventEditDraft | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Same weekly resolution as the home/Events feed so an EventCard link always
   // resolves here. Only recurring events render as EventCards; independent
@@ -415,9 +419,65 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
   // Scoped moderation: same server-driven capability lookup as the Events feed.
   const eventCaps = canonicalActions.get(event.id) ?? canonicalActions.get(bareEventId(event.id));
   const openConfirm = (key: ActionKey) => {
+    // Edit: pre-fill the shared EventEditSheet from the canonical record. The
+    // menu already filters by the server capability list; this branch just
+    // mirrors the Events feed — no action without a server copy (eventCaps).
+    if (key === "edit") {
+      if (!eventCaps) return;
+      const rec = canonicalEvents.find((e) => e.id === eventCaps.id || (e.seedRefId !== null && e.seedRefId === bareEventId(event.id)));
+      if (!rec) return;
+      setEditTarget({
+        eventId: eventCaps.id,
+        title: rec.title,
+        time: rec.time,
+        location: rec.location,
+        distanceLabel: rec.distanceLabel,
+        invite: rec.invite,
+        externalUrl: rec.externalUrl ?? "",
+        dayOfWeek: rec.scheduleDate ? null : rec.dayOfWeek,
+        scheduleDate: rec.scheduleDate ?? null,
+      });
+      setEditError(null);
+      return;
+    }
     const kind: EventConfirmKind | null = key === "hide" ? "hide" : key === "restore" ? "restore" : key === "delete" ? "delete" : null;
     if (!kind || !eventCaps) return;
     setConfirm({ kind, eventId: eventCaps.id, displayId: event.id, title: event.title });
+  };
+  /** PUT /api/events/:id — the server re-validates scope + fields and audits. */
+  const saveEdit = () => {
+    if (!editTarget || editBusy) return;
+    const t = editTarget;
+    setEditBusy(true);
+    setEditError(null);
+    void api.updateEvent(t.eventId, {
+      title: t.title.trim(),
+      time: t.time.trim(),
+      location: t.location.trim(),
+      distanceLabel: t.distanceLabel.trim(),
+      invite: t.invite,
+      externalUrl: t.externalUrl.trim() || null,
+      ...(t.dayOfWeek !== null ? { dayOfWeek: t.dayOfWeek } : { scheduleDate: t.scheduleDate }),
+    }).then((r) => {
+      setEditBusy(false);
+      if (r.ok) {
+        setEditTarget(null);
+        setEditError(null);
+        // Reflect the server's updated canonical record so the visible detail
+        // (title/time/location/distance/schedule) re-renders from the source
+        // this page resolves the event from — same approach as the Events feed.
+        setCanonicalEvents((cur) => (cur ? cur.map((e) => (e.id === r.data.event.id ? r.data.event : e)) : cur));
+        toast("Run updated.", "success");
+      } else {
+        setEditError(r.error.message ?? "Couldn't save — try again.");
+      }
+    });
+  };
+  /** Close the edit sheet — blocked while the save is in flight (same guard as the feed). */
+  const closeEdit = () => {
+    if (editBusy) return;
+    setEditTarget(null);
+    setEditError(null);
   };
   const closeConfirm = () => {
     if (confirmBusy) return;
@@ -496,6 +556,18 @@ export function EventDetailPage({ city }: { city: City; store: AppStore }) {
         error={confirmError}
         onConfirm={runConfirm}
       />
+      <Sheet open={editTarget !== null} onClose={closeEdit} title="Edit run" subtitle="Changes are reviewed against the same rules as new runs.">
+        {editTarget ? (
+          <EventEditSheet
+            draft={editTarget}
+            submitting={editBusy}
+            error={editError}
+            onDraftChange={(patch) => setEditTarget((cur) => (cur ? { ...cur, ...patch } : cur))}
+            onSubmit={saveEdit}
+            onClose={closeEdit}
+          />
+        ) : null}
+      </Sheet>
     </>
   );
 }
