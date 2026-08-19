@@ -202,4 +202,19 @@ describe("profile photo — file-backed persistence and serving", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+  it("serves public uploads without referencing unimported path helpers (HTTP 404 regression)", async () => {
+    const serve = await readFile(new URL("../serve.ts", import.meta.url), "utf8");
+    // Regression: serve.ts called extname(upFile) inside the /uploads/public
+    // handler without importing it, so every public upload request threw inside
+    // the try and 404'd at runtime even though the file existed on disk. tsc
+    // never caught it because serve.ts is not in the tsconfig include (src and
+    // tests only). Keep a source-level invariant: any extname( call must come
+    // with a matching node:path import, and the uploads handler must stay wired
+    // to the disk-backed public dir.
+    const usesExtname = /extname\(/.test(serve);
+    const importsExtname = /import \{[^}]*\bextname\b[^}]*\} from "node:path"/.test(serve);
+    expect(usesExtname).toBe(importsExtname);
+    expect(serve).toMatch(/import \{ join, normalize \} from "node:path"/);
+    expect(serve).toMatch(/pathname\.startsWith\("\/uploads\/"\)/);
+  });
 });

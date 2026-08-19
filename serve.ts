@@ -99,7 +99,6 @@ const server = createServer(async (req, res) => {
       }
       try {
         const upData = await readFile(upFile);
-        const upExt = extname(upFile);
         res.writeHead(200, { ...staticHeaders(upFile), "cache-control": "public, max-age=3600" });
         res.end(upData);
         return;
