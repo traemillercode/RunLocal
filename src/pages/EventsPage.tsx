@@ -4,14 +4,14 @@ import { ActionMenu } from "../components/ActionMenu";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { HomeCityBanner } from "../components/HomeCityBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
-import { GroupSubmissionSheet, IndependentEventSheet } from "../components/SubmissionSheets";
+import { GroupSubmissionSheet, IndependentEventSheet, SoloRunSheet } from "../components/SubmissionSheets";
 import { Chip, Icon, PillButton, Sheet } from "../components/ui";
 import * as api from "../lib/api";
 import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS, occurrenceHasStarted, mergeWeekEventSources, bareEventId, canonicalEventActions, type DatedRunEvent } from "../lib/dates";
 import { actionMenuItems, type ActionKey } from "../lib/actionModel";
 import { rsvpedEventIds } from "../lib/myRuns";
 import { filterOneTimeEvents } from "../lib/activityDates";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { canDo, roleLabel } from "../lib/accounts";
 import type { AppStore } from "../lib/store";
 import { useToast } from "../lib/toast";
@@ -229,6 +229,7 @@ export function EventFeedRow({
 
 export function EventsPage({ city }: { city: City; store: AppStore }) {
   const toast = useToast();
+  const navigate = useNavigate();
   const { role, me } = useAccount();
   const { hidden, highlights, groupBadges } = useModerated();
   const { events: userEvents, groups: userGroups } = usePublicContent();
@@ -237,6 +238,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
   const [feedSegment, setFeedSegment] = useState<"all" | "group" | "independent">("all");
   const [eventSheetOpen, setEventSheetOpen] = useState(false);
   const [groupSheetOpen, setGroupSheetOpen] = useState(false);
+  const [soloSheetOpen, setSoloSheetOpen] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
   const [myRunIds, setMyRunIds] = useState<Set<string>>(new Set());
   const [canonicalEvents, setCanonicalEvents] = useState<api.CanonicalEvent[] | null>(null);
@@ -446,6 +448,12 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
     else setGateOpen(true);
   };
 
+  /** "Schedule my own run" — a private solo run, not a community submission. */
+  const openSolo = () => {
+    if (role === "verified") setSoloSheetOpen(true);
+    else setGateOpen(true);
+  };
+
   return (
     <div className="desktop-browse-layout mx-auto w-full max-w-md px-4 pb-32 pt-4">
       <div className="desktop-two-column"><div>
@@ -493,6 +501,22 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
           <Icon name="users" className="h-3.5 w-3.5" /> Start a group
         </PillButton>
       </div>
+      <button
+        type="button"
+        onClick={openSolo}
+        className="mt-2 flex w-full items-center justify-between gap-3 rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-200 transition-colors hover:ring-slate-400"
+      >
+        <span className="flex items-center gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+            <Icon name="lock" className="h-5 w-5" />
+          </span>
+          <span>
+            <span className="block text-sm font-bold text-slate-900">Schedule my own run</span>
+            <span className="mt-0.5 block text-xs text-slate-500">Private · just you</span>
+          </span>
+        </span>
+        <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-slate-400" />
+      </button>
       <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[#14171C] p-3.5 text-white shadow-sm">
         <img src="/app/icons/icon-192.png" alt="" className="h-11 w-11 shrink-0 rounded-xl" />
         <div className="min-w-0">
@@ -648,6 +672,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
       </div><HomeRightRail city={city} /></div>
       <IndependentEventSheet open={eventSheetOpen} onClose={() => setEventSheetOpen(false)} cityId={city.id} />
       <GroupSubmissionSheet open={groupSheetOpen} onClose={() => setGroupSheetOpen(false)} cityId={city.id} />
+      <SoloRunSheet open={soloSheetOpen} onClose={() => setSoloSheetOpen(false)} cityId={city.id} onScheduled={() => navigate("/my-runs")} />
 
       <VerifiedGateSheet
         open={gateOpen}

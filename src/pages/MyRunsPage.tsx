@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import * as api from "../lib/api";
 import { Icon } from "../components/ui";
+import { SoloRunSheet } from "../components/SubmissionSheets";
 import { useAccount } from "../state/account";
 import { useToast } from "../lib/toast";
 import { formatRunDate, groupRunsByMonth, monthKey, monthLabel, orderMyRuns, runStartMs } from "../lib/myRuns";
@@ -21,6 +22,11 @@ export function MyRunsPage() {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [keepingId, setKeepingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [soloOpen, setSoloOpen] = useState(false);
+  // The runner's own home city (same source useSelectedCity resolves for
+  // signed-in accounts) — never a hardcoded city. Guests/legacy accounts pass
+  // "" and the server verdict surfaces in the sheet.
+  const cityId = me?.status === "signed_in" ? me.account.cityId ?? "" : "";
   const load = () => { setLoading(true); setError(null); setErrorCode(null); void api.getMyRuns().then((r) => { if (r.ok) setRuns(r.data.runs); else { setError(r.error.message); setErrorCode(r.error.code); } setLoading(false); }); };
   useEffect(() => { if (me?.status === "signed_in") load(); else setLoading(false); }, [me?.status]);
   const sections = useMemo(() => orderMyRuns(runs), [runs]);
@@ -34,10 +40,21 @@ export function MyRunsPage() {
   if (errorCode === "verified_runner_required") return <Page><h1>My Runs</h1><p className="mt-3 text-slate-600">Verification is required to view your private RSVPs.</p><Link className="mt-5 inline-flex min-h-11 items-center rounded-[10px] bg-[#14171C] px-4 py-2 font-semibold text-white" to="/verify">Verify your account</Link></Page>;
   if (error) return <Page><h1>My Runs</h1><p className="mt-3 text-slate-600">We couldn’t load your runs.</p><button onClick={load} className="mt-5 inline-flex min-h-11 items-center rounded-[10px] bg-[#14171C] px-4 py-2 font-semibold text-white">Try again</button></Page>;
   const hasRuns = sections.upcoming.length + sections.past.length > 0;
-  return <Page><MyRunsHeader view={view} onViewChange={setView} />{actionError ? <div role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-800 ring-1 ring-rose-200">{actionError}</div> : null}{!hasRuns ? <Empty /> : view === "calendar" ? <CalendarGrid upcoming={sections.upcoming} onRemove={remove} removingId={removingId} onToggleKeep={toggleKeep} keepingId={keepingId} /> : <div className="mt-6 space-y-8">{sections.upcoming.length > 0 && <RunSection title="Upcoming" runs={sections.upcoming} onRemove={remove} removingId={removingId} onToggleKeep={toggleKeep} keepingId={keepingId} upcoming />}{sections.past.length > 0 && <PastSection runs={sections.past} onRemove={remove} removingId={removingId} onToggleKeep={toggleKeep} keepingId={keepingId} />}</div>}</Page>;
+  return <Page><MyRunsHeader view={view} onViewChange={setView} onAddSolo={() => setSoloOpen(true)} />{actionError ? <div role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-800 ring-1 ring-rose-200">{actionError}</div> : null}{!hasRuns ? <Empty /> : view === "calendar" ? <CalendarGrid upcoming={sections.upcoming} onRemove={remove} removingId={removingId} onToggleKeep={toggleKeep} keepingId={keepingId} /> : <div className="mt-6 space-y-8">{sections.upcoming.length > 0 && <RunSection title="Upcoming" runs={sections.upcoming} onRemove={remove} removingId={removingId} onToggleKeep={toggleKeep} keepingId={keepingId} upcoming />}{sections.past.length > 0 && <PastSection runs={sections.past} onRemove={remove} removingId={removingId} onToggleKeep={toggleKeep} keepingId={keepingId} />}</div>}<SoloRunSheet open={soloOpen} onClose={() => setSoloOpen(false)} cityId={cityId} onScheduled={load} /></Page>;
   function remove(run: api.MyRunView) {
     if (removingId) return;
     setRemovingId(run.id); setActionError(null);
+    if (run.kind === "solo") {
+      // Solo rows are the runner's own private PersonalRun records — DELETE
+      // /api/personal-runs/:id. The server resolves the row from the session;
+      // nothing here names another caller's record.
+      void api.deletePersonalRun(run.id).then((r) => {
+        if (r.ok) { toast(`Solo run removed for "${run.title}" on ${formatRunDate(run.date)}.`); load(); }
+        else setActionError(r.error.message ?? "Couldn't remove this solo run. Try again.");
+        setRemovingId(null);
+      });
+      return;
+    }
     // Remove by the exact attendance row (runId) so one occurrence is never
     // confused with a sibling occurrence of the same event. The server stays
     // authoritative: it resolves the row from the session, never from input.
@@ -67,17 +84,19 @@ function RunSection({ title, runs, onRemove, removingId, onToggleKeep, keepingId
 export function PastSection({ runs, onRemove, removingId, onToggleKeep, keepingId }: { runs: api.MyRunView[]; onRemove: (r: api.MyRunView) => void; removingId?: string | null; onToggleKeep: (r: api.MyRunView) => void; keepingId?: string | null }) { const groups = groupRunsByMonth(runs); return <section aria-labelledby="my-runs-past"><h2 id="my-runs-past" className="text-lg font-extrabold">Past</h2><p className="mt-1 text-sm text-slate-500">Runs you checked in to or kept on My Runs. Past runs you didn’t keep stay off this list.</p><div className="mt-3 space-y-2">{groups.map(({ key, label, runs: monthRuns }) => <details key={key} data-month={key} className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200"><summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm font-extrabold [&::-webkit-details-marker]:hidden"><span>{label}</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500">{monthRuns.length} {monthRuns.length === 1 ? "run" : "runs"}</span></summary><div className="space-y-3 p-4 pt-1">{monthRuns.map((run) => <RunCard key={run.id} run={run} onRemove={onRemove} removing={removingId === run.id} onToggleKeep={onToggleKeep} keeping={keepingId === run.id} />)}</div></details>)}</div></section>; }
 export function RunCard({ run, onRemove, removing = false, upcoming = false, onToggleKeep, keeping = false }: { run: api.MyRunView; onRemove: (r: api.MyRunView) => void; removing?: boolean; upcoming?: boolean; onToggleKeep?: (r: api.MyRunView) => void; keeping?: boolean }) {
   const kind = run.kind ?? "rsvp"; const kept = run.kept === true; const checkedIn = run.checkedIn === true; const isSolo = kind === "solo";
+  const removeLabel = isSolo ? `Remove solo run for ${run.title}` : `Remove RSVP for ${run.title}`;
   const meta = <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{formatRunDate(run.date)} · {run.time}</p>;
   const body = upcoming ? (isSolo ? <><p className="text-xs font-bold uppercase tracking-wide text-emerald-700">{formatRunDate(run.date)} · {run.time}</p><h3 className="mt-1 break-words font-extrabold">{run.title}</h3><p className="mt-1 text-sm text-slate-500">{run.location || "No location set"}{run.distanceLabel ? ` · ${run.distanceLabel}` : ""}</p><p className="mt-2 text-xs text-slate-500">Your private solo run. Nobody else sees it.</p></> : <><Link to={`/events/${run.eventId}`} className="block rounded-lg focus-visible:outline-none"><p className="text-xs font-bold uppercase tracking-wide text-emerald-700">{formatRunDate(run.date)} · {run.time}</p><h3 className="mt-1 break-words font-extrabold">{run.title}</h3><p className="mt-1 text-sm text-slate-500">{run.location}</p><span className="mt-3 inline-block text-xs font-bold text-emerald-800">View run details →</span></Link><Link to={`/events/${run.eventId}?discussion=${encodeURIComponent(run.occurrenceId ?? "")}`} className="mt-2 block text-xs font-bold text-sky-800">Run-day discussion →</Link></>) : <>{meta}<h3 className="mt-1 break-words font-extrabold">{run.title}</h3><p className="mt-1 text-sm text-slate-500">{run.location || "Location unavailable"}{run.distanceLabel ? ` · ${run.distanceLabel}` : ""}</p>{checkedIn ? <p className="mt-2 text-xs font-bold text-emerald-700">Checked in</p> : null}<p className="mt-2 text-xs text-slate-500">{isSolo ? "This solo run is preserved in your history." : "This RSVP is preserved in your history. Public event details are no longer available."}</p></>;
-  return <article className={`rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 ${upcoming ? "hover:ring-slate-400" : ""}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1">{body}<label className="mt-3 flex items-center gap-2 text-xs font-bold text-slate-600"><input type="checkbox" role="switch" aria-label={`Keep ${run.title} on My Runs`} checked={kept} disabled={keeping} onChange={() => onToggleKeep?.(run)} className="h-4 w-4 accent-emerald-700" />Keep on My Runs</label></div>{!isSolo ? <button aria-label={`Remove RSVP for ${run.title}`} onClick={() => onRemove(run)} disabled={removing} className={`min-h-11 shrink-0 rounded-[10px] bg-slate-100 px-4 py-2 text-xs font-bold ${removing ? "cursor-default text-slate-400" : "text-slate-700"}`}>{removing ? "Removing…" : "Remove"}</button> : null}</div></article>;
+  return <article className={`rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 ${upcoming ? "hover:ring-slate-400" : ""}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1">{body}<label className="mt-3 flex items-center gap-2 text-xs font-bold text-slate-600"><input type="checkbox" role="switch" aria-label={`Keep ${run.title} on My Runs`} checked={kept} disabled={keeping} onChange={() => onToggleKeep?.(run)} className="h-4 w-4 accent-emerald-700" />Keep on My Runs</label></div><button aria-label={removeLabel} onClick={() => onRemove(run)} disabled={removing} className={`min-h-11 shrink-0 rounded-[10px] bg-slate-100 px-4 py-2 text-xs font-bold ${removing ? "cursor-default text-slate-400" : "text-slate-700"}`}>{removing ? "Removing…" : "Remove"}</button></div></article>;
 }
-/** My Runs page header: title block, List/Calendar view toggle, and the private
- * ICS export link. The export is a same-origin download of the caller's OWN
- * upcoming rows (never past history) carrying the browser's UTC offset so the
- * exported "upcoming" set matches the List view (see my-runs-eleventh tests).
+/** My Runs page header: title block, the "Add solo run" scheduling entry,
+ * List/Calendar view toggle, and the private ICS export link. The export is a
+ * same-origin download of the caller's OWN upcoming rows (never past history)
+ * carrying the browser's UTC offset so the exported "upcoming" set matches the
+ * List view (see my-runs-eleventh tests).
  * The date-stamped download name mirrors the server's Content-Disposition so
  * re-exports never collide on import (ical.ts). */
-export function MyRunsHeader({ view, onViewChange }: { view: View; onViewChange: (v: View) => void }) {
+export function MyRunsHeader({ view, onViewChange, onAddSolo }: { view: View; onViewChange: (v: View) => void; onAddSolo: () => void }) {
   const now = new Date();
   const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   return (
@@ -87,6 +106,7 @@ export function MyRunsHeader({ view, onViewChange }: { view: View; onViewChange:
         <p className="mt-2 text-sm text-slate-500">Your private RSVP list. Only you can see it.</p>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <button type="button" onClick={onAddSolo} aria-label="Add solo run" title="Schedule a private run just for you — only you can see it" className="inline-flex min-h-11 items-center gap-1.5 rounded-[10px] bg-[#14171C] px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#252a31]"><Icon name="plus" className="h-3.5 w-3.5" />Add solo run</button>
         <a href={`/api/my/runs/ical?tzOffsetMinutes=${new Date().getTimezoneOffset()}`} download={`runlocal-my-runs-${stamp}.ics`} aria-label="Export calendar (.ics)" title="Download your upcoming runs as an .ics calendar file (Google, Outlook, Apple compatible)" className="inline-flex min-h-11 items-center rounded-[10px] bg-white px-3 py-2 text-xs font-bold text-emerald-800 shadow-sm ring-1 ring-emerald-200 hover:ring-emerald-400">Export calendar (.ics)</a>
         <div className="flex shrink-0 rounded-xl bg-slate-100 p-1" role="group" aria-label="My Runs view">
           <button type="button" aria-pressed={view === "list"} onClick={() => onViewChange("list")} className={`min-h-11 rounded-lg px-3 py-2 text-xs font-bold ${view === "list" ? "bg-white shadow-sm" : "text-slate-500"}`}>List</button>
