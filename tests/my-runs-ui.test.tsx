@@ -86,19 +86,24 @@ describe("My Runs SSR UI", () => {
     expect(keeping).toMatch(/role="switch"[^>]*disabled/);
   });
 
-  it("renders solo runs as private cards: no event link, no Remove button, distance shown", async () => {
+  it("renders solo runs as private cards: no event link, private-only copy, and a solo Remove control", async () => {
     const { RunCard } = await import("../src/pages/MyRunsPage");
     const solo = rsvpRun({ kind: "solo", id: "solo-1", eventId: "", occurrenceId: null, title: "Easy jog", distanceLabel: "3 miles", location: "Stephens Lake", kept: true });
     const html = renderToStaticMarkup(<MemoryRouter><RunCard run={solo} onRemove={() => {}} /></MemoryRouter>);
     expect(html).not.toContain('href="/events/');
     expect(html).not.toContain("Remove RSVP for");
-    expect(html).not.toContain(">Remove</button>");
+    // Solo rows now carry the same Remove affordance as RSVP rows, with a
+    // solo-specific accessible label (wired to deletePersonalRun — see
+    // solo-run-scheduling tests).
+    expect(html).toContain('aria-label="Remove solo run for Easy jog"');
+    expect(html).toContain(">Remove</button>");
     expect(html).toContain("3 miles");
     expect(html).toContain("Keep on My Runs");
     expect(html).toContain("This solo run is preserved in your history");
     // Upcoming solo cards carry the private-only framing instead of event links.
     const upcomingSolo = renderToStaticMarkup(<MemoryRouter><RunCard run={{ ...solo, upcoming: true, past: false }} onRemove={() => {}} upcoming /></MemoryRouter>);
     expect(upcomingSolo).toContain("Nobody else sees it");
+    expect(upcomingSolo).toContain('aria-label="Remove solo run for Easy jog"');
     expect(upcomingSolo).not.toContain("View run details");
   });
 
@@ -171,14 +176,14 @@ describe("My Runs SSR UI", () => {
     // The header (visible on both List and Calendar views) hosts the private ICS
     // export link; it carries the caller's browser offset so the export's
     // upcoming set matches the list view (see my-runs-eleventh tests).
-    expect(source).toContain("<MyRunsHeader view={view} onViewChange={setView} />");
+    expect(source).toContain("<MyRunsHeader view={view} onViewChange={setView} onAddSolo={() => setSoloOpen(true)} />");
     expect(source).toContain('href={`/api/my/runs/ical?tzOffsetMinutes=${new Date().getTimezoneOffset()}`}');
     expect(source).toContain('aria-label="Export calendar (.ics)"');
     expect(source).toContain("runlocal-my-runs-"); // date-stamped download name
     expect(source).toContain("Upcoming runs only");
   });
   it("renders the header export affordance with an accessible, date-stamped download in both views", () => {
-    const list = renderToStaticMarkup(<MyRunsHeader view="list" onViewChange={() => {}} />);
+    const list = renderToStaticMarkup(<MyRunsHeader view="list" onViewChange={() => {}} onAddSolo={() => {}} />);
     expect(list).toContain('data-tour-target="my-runs-header"');
     expect(list).toContain("Your private RSVP list. Only you can see it.");
     expect(list).toContain('href="/api/my/runs/ical?tzOffsetMinutes=');
@@ -190,7 +195,7 @@ describe("My Runs SSR UI", () => {
     // Exactly one pressed view toggle at a time — List is active by default.
     expect((list.match(/aria-pressed="true"/g) ?? []).length).toBe(1);
     expect(list).toMatch(/<button type="button" aria-pressed="true"[^>]*>List<\/button>/);
-    const calendar = renderToStaticMarkup(<MyRunsHeader view="calendar" onViewChange={() => {}} />);
+    const calendar = renderToStaticMarkup(<MyRunsHeader view="calendar" onViewChange={() => {}} onAddSolo={() => {}} />);
     expect((calendar.match(/aria-pressed="true"/g) ?? []).length).toBe(1);
     expect(calendar).toMatch(/<button type="button" aria-pressed="true"[^>]*>Calendar<\/button>/);
   });

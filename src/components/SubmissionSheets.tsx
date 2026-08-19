@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import * as api from "../lib/api";
 import { Icon, PillButton, Sheet } from "./ui";
 import { useAccount } from "../state/account";
+import { useToast } from "../lib/toast";
 
 const inputCls =
   "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
@@ -280,6 +281,113 @@ export function IndependentEventSheet({ open, onClose, onSubmitted, cityId }: { 
         <p className="text-center text-xs text-slate-400">Pending approval — approved runs appear on the public events list.</p>
       </div>
       )}
+    </Sheet>
+  );
+}
+
+/**
+ * Solo-run scheduling — the runner's own private runs (owner direction
+ * 2026-08-17: "schedule your own runs that are by yourself"). Distinct from
+ * community submissions: no moderation, no public listing, and `visibility`
+ * stays "private" (server-enforced). The server requires an explicit consent
+ * flag (PERSONAL_RUN_CONSENT_VERSION) on every create/update.
+ */
+
+/**
+ * Convert a `datetime-local` wall-clock value ("2026-08-20T18:00") into the
+ * app's UTC-encoded wall-clock label ("2026-08-20T18:00:00Z") — the same
+ * convention ical.ts documents for RSVP occurrences and solo runs. This makes
+ * My Runs display the exact time the runner picked and the ICS export emit a
+ * floating local time (see ical.ts TIMESTAMP / TIMEZONE ASSUMPTION). Returns
+ * "" for anything the server's startsAt regex would reject (the input only
+ * ever produces minute precision, so seconds + Z complete the label).
+ */
+export function toSoloRunStartsAt(local: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) return "";
+  return `${local}:00Z`;
+}
+
+export interface SoloRunFormFields {
+  title: string;
+  startsAt: string;
+  locationLabel: string;
+  distanceLabel: string;
+}
+
+/**
+ * Build the exact createPersonalRun payload. Consent is ALWAYS true here — the
+ * checkbox gates submission client-side and the server independently re-checks
+ * the flag and the consent version before persisting anything.
+ */
+export function buildSoloRunInput(cityId: string, f: SoloRunFormFields): Parameters<typeof api.createPersonalRun>[0] {
+  return {
+    cityId,
+    title: f.title.trim(),
+    startsAt: toSoloRunStartsAt(f.startsAt),
+    locationLabel: f.locationLabel.trim() || null,
+    distanceLabel: f.distanceLabel.trim() || null,
+    notes: null,
+    consent: true,
+  };
+}
+
+/**
+ * "Schedule my own run" bottom sheet — used from the EventsPage host section
+ * and the MyRunsHeader. Mirrors the PersonalRunsPage form fields (title, start
+ * time, optional location/distance) plus the mandatory privacy consent
+ * checkbox. On success it toasts, closes, and lets the parent decide what
+ * happens next (navigate to My Runs, or refresh the list in place).
+ */
+export function SoloRunSheet({ open, onClose, cityId, onScheduled }: { open: boolean; onClose: () => void; cityId: string; onScheduled?: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [consent, setConsent] = useState(false);
+  const [f, setF] = useState<SoloRunFormFields>({ title: "", startsAt: "", locationLabel: "", distanceLabel: "" });
+  useEffect(() => {
+    if (open) {
+      setF({ title: "", startsAt: "", locationLabel: "", distanceLabel: "" });
+      setConsent(false);
+      setError(null);
+      setBusy(false);
+    }
+  }, [open]);
+  const set = (k: keyof SoloRunFormFields) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  const save = async () => {
+    if (busy) return;
+    if (!consent) {
+      setError("Please confirm the privacy checkbox before scheduling.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const r = await api.createPersonalRun(buildSoloRunInput(cityId, f));
+    setBusy(false);
+    if (r.ok) {
+      toast("Solo run scheduled.", "success");
+      onClose();
+      onScheduled?.();
+      return;
+    }
+    setError(r.error.message ?? "Please check the title, date, and consent.");
+  };
+  return (
+    <Sheet open={open} onClose={onClose} title="Schedule my own run" subtitle="Private — only you can see it. It lands on My Runs and your calendar export.">
+      <div className="space-y-4">
+        <Field label="Run title"><input className={inputCls} placeholder="e.g. Easy morning run" maxLength={120} value={f.title} onChange={set("title")} /></Field>
+        <Field label="Start time"><input type="datetime-local" className={inputCls} value={f.startsAt} onChange={set("startsAt")} /></Field>
+        <Field label="Location (optional)"><input className={inputCls} placeholder="e.g. Stephens Lake" maxLength={160} value={f.locationLabel} onChange={set("locationLabel")} /></Field>
+        <Field label="Distance (optional)"><input className={inputCls} placeholder="e.g. 5 miles" maxLength={80} value={f.distanceLabel} onChange={set("distanceLabel")} /></Field>
+        <label className="flex items-start gap-2 text-sm text-slate-600">
+          <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 accent-emerald-700" />
+          <span>I understand this run is private to my account.</span>
+        </label>
+        <Err msg={error} />
+        <PillButton variant="primary" className="w-full" disabled={busy || !f.title.trim() || !f.startsAt || !consent} onClick={() => void save()}>
+          <Icon name="check" className="h-4 w-4" /> {busy ? "Saving…" : "Schedule solo run"}
+        </PillButton>
+        <p className="text-center text-xs text-slate-400">No moderation or public listing — this run is only in My Runs and your calendar export.</p>
+      </div>
     </Sheet>
   );
 }
