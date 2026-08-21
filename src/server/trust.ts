@@ -248,13 +248,13 @@ export interface PublicRunnerProfile {
   isTrustedMember: boolean;
   isLeader: boolean;
   /** Self-reported, optional — null when the runner hasn't set them. */
-  paceLabel: string | null;
-  runningGoal: string | null;
-  trainingBlock: string | null;
-  upcomingRaces: string | null;
-  bio: string | null;
+  paceLabel?: string | null;
+  runningGoal?: string | null;
+  trainingBlock?: string | null;
+  upcomingRaces?: string | null;
+  bio?: string | null;
   /** Optional override shown instead of the role label — display-only, grants no permissions. */
-  customTitle: string | null;
+  customTitle?: string | null;
 }
 export function publicRunnerProfile(rec: AccountRecord, now = new Date()): PublicRunnerProfile | null {
   if (rec.deletedAt || isSuspended(rec, now)) return null;

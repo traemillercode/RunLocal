@@ -130,12 +130,12 @@ export interface PublicAccount {
    * prompts them clearly). Public profile identity, never sensitive.
    */
   cityId: string | null;
-  bio: string | null;
-  customTitle: string | null;
-  paceLabel: string | null;
-  runningGoal: string | null;
-  trainingBlock: string | null;
-  upcomingRaces: string | null;
+  bio?: string | null;
+  customTitle?: string | null;
+  paceLabel?: string | null;
+  runningGoal?: string | null;
+  trainingBlock?: string | null;
+  upcomingRaces?: string | null;
   status: AccountRecord["status"];
   phase: VerifyPhase | null;
   badge: "verified" | null;

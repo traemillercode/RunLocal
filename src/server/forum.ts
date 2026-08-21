@@ -118,7 +118,7 @@ export function forumReplyCapabilities(actor: AccountRecord | null | undefined, 
 export interface PublicForumPost {
   id: string;
   section: ForumSection;
-  category: "training" | "races" | "gear" | "routes" | "general" | null;
+  category?: "training" | "races" | "gear" | "routes" | "general" | null;
   title: string;
   body: string;
   author: string;

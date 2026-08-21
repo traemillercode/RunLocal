@@ -64,12 +64,12 @@ export interface PublicAccount {
    * Public profile identity, never sensitive.
    */
   cityId: string | null;
-  bio: string | null;
-  customTitle: string | null;
-  paceLabel: string | null;
-  runningGoal: string | null;
-  trainingBlock: string | null;
-  upcomingRaces: string | null;
+  bio?: string | null;
+  customTitle?: string | null;
+  paceLabel?: string | null;
+  runningGoal?: string | null;
+  trainingBlock?: string | null;
+  upcomingRaces?: string | null;
   status: "pending" | "verified" | "rejected";
   /** Funnel stage for pending accounts: email | code | selfie | pending_review. */
   phase: "email" | "code" | "selfie" | "pending_review" | null;

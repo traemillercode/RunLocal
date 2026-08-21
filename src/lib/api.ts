@@ -851,13 +851,13 @@ export interface RunnerProfileView {
   isTrustedMember: boolean;
   isLeader: boolean;
   /** Self-reported, optional — null when the runner hasn't set them. */
-  paceLabel: string | null;
-  runningGoal: string | null;
-  trainingBlock: string | null;
-  upcomingRaces: string | null;
-  bio: string | null;
+  paceLabel?: string | null;
+  runningGoal?: string | null;
+  trainingBlock?: string | null;
+  upcomingRaces?: string | null;
+  bio?: string | null;
   /** Optional override shown instead of the role label (e.g. "Founder") — display-only. */
-  customTitle: string | null;
+  customTitle?: string | null;
   /** Relationship of the signed-in viewer to this runner (null for guests). */
   connectionState?: ConnectionState | null;
   /** Shared accepted connections; meaningful only when mutualVisible is true. */

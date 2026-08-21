@@ -59,14 +59,14 @@ export interface AccountRecord {
    */
   cityId: string | null;
   /** Free-text runner-facing stats, self-reported, shown on the public profile when set. All optional, all editable via PATCH /api/profile/details. */
-  paceLabel: string | null;
-  runningGoal: string | null;
-  trainingBlock: string | null;
-  upcomingRaces: string | null;
+  paceLabel?: string | null;
+  runningGoal?: string | null;
+  trainingBlock?: string | null;
+  upcomingRaces?: string | null;
   /** Free-text about-me, self-reported, optional. */
-  bio: string | null;
+  bio?: string | null;
   /** Optional override shown instead of the role label (e.g. "Founder"). Display-only — grants no permissions. */
-  customTitle: string | null;
+  customTitle?: string | null;
   status: AccountStatus;
   /** Funnel stage; only meaningful while status === "pending". */
   phase: VerifyPhase;
@@ -461,7 +461,7 @@ export interface ForumPostRecord {
   cityId: string;
   section: "announcements" | "community" | "qa";
   /** Topic, independent of section — null for older posts created before categories existed. */
-  category: "training" | "races" | "gear" | "routes" | "general" | null;
+  category?: "training" | "races" | "gear" | "routes" | "general" | null;
   title: string;
   body: string;
   authorAccountId: string;
