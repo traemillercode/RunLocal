@@ -58,6 +58,11 @@ export interface AccountRecord {
    * never sensitive data.
    */
   cityId: string | null;
+  /** Free-text runner-facing stats, self-reported, shown on the public profile when set. All optional, all editable via PATCH /api/profile/details. */
+  paceLabel: string | null;
+  runningGoal: string | null;
+  trainingBlock: string | null;
+  upcomingRaces: string | null;
   status: AccountStatus;
   /** Funnel stage; only meaningful while status === "pending". */
   phase: VerifyPhase;

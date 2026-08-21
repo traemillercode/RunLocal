@@ -247,6 +247,11 @@ export interface PublicRunnerProfile {
   isVerified: boolean;
   isTrustedMember: boolean;
   isLeader: boolean;
+  /** Self-reported, optional — null when the runner hasn't set them. */
+  paceLabel: string | null;
+  runningGoal: string | null;
+  trainingBlock: string | null;
+  upcomingRaces: string | null;
 }
 export function publicRunnerProfile(rec: AccountRecord, now = new Date()): PublicRunnerProfile | null {
   if (rec.deletedAt || isSuspended(rec, now)) return null;
@@ -259,6 +264,10 @@ export function publicRunnerProfile(rec: AccountRecord, now = new Date()): Publi
     isVerified: rec.status === "verified",
     isTrustedMember: rec.trustedMember === true,
     isLeader: rec.role === "group_leader",
+    paceLabel: rec.paceLabel ?? null,
+    runningGoal: rec.runningGoal ?? null,
+    trainingBlock: rec.trainingBlock ?? null,
+    upcomingRaces: rec.upcomingRaces ?? null,
   };
 }
 

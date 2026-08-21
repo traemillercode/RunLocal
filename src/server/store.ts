@@ -519,6 +519,10 @@ export class Db {
       // given — callers are expected to pass the normalized form.
       username: input.username ?? null,
       cityId: input.cityId ?? null,
+      paceLabel: null,
+      runningGoal: null,
+      trainingBlock: null,
+      upcomingRaces: null,
       status: isOwner ? "verified" : "pending",
       phase: "email",
       role: isOwner ? "site_admin" : "runner",

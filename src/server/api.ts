@@ -1826,6 +1826,27 @@ async function handleApi(
     return ok(res, { settings }), true;
   }
 
+  // ---- PUT /api/profile/details (own pace/goal/training-block/races) -------
+  // Free-text, self-reported, shown on the public profile via publicRunnerProfile.
+  // Same self-only pattern as /api/profile/privacy: session required, unknown
+  // fields rejected, each value length-capped, full record returned.
+  if (method === "PUT" && url.pathname === "/api/profile/details") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const allowed = ["paceLabel", "runningGoal", "trainingBlock", "upcomingRaces"];
+    const patch: Record<string, string | null> = {};
+    for (const [k, v] of Object.entries(body)) {
+      if (!allowed.includes(k)) return err(res, { status: 400, error: "invalid_field", message: `Unknown profile field: ${k}` }), true;
+      if (v !== null && typeof v !== "string") return err(res, { status: 400, error: "invalid_field", message: `${k} must be a string or null` }), true;
+      patch[k] = v === null ? null : v.trim().slice(0, 140) || null;
+    }
+    const updated = db.updateAccount(sess.accountId, patch);
+    if (!updated) return err(res, { status: 404, error: "not_found" }), true;
+    await db.persist();
+    return ok(res, { profile: publicRunnerProfile(updated) }), true;
+  }
+
   // ---- runner tags on content (posts/events/runs) --------------------------
   // POST /api/tags — verified actor, target must exist, self-tag rejected,
   // blocked pairs rejected. No approval needed. PATCH /api/tags/:id/self —

@@ -849,6 +849,11 @@ export interface RunnerProfileView {
   isVerified: boolean;
   isTrustedMember: boolean;
   isLeader: boolean;
+  /** Self-reported, optional — null when the runner hasn't set them. */
+  paceLabel: string | null;
+  runningGoal: string | null;
+  trainingBlock: string | null;
+  upcomingRaces: string | null;
   /** Relationship of the signed-in viewer to this runner (null for guests). */
   connectionState?: ConnectionState | null;
   /** Shared accepted connections; meaningful only when mutualVisible is true. */
@@ -963,6 +968,12 @@ export function getPrivacy(): Promise<ApiResult<{ settings: PrivacySettings }>> 
 /** Partial update merges server-side; response is the full settings record. */
 export function putPrivacy(patch: Partial<PrivacySettings>): Promise<ApiResult<{ settings: PrivacySettings }>> {
   return request("/api/profile/privacy", { method: "PUT", body: JSON.stringify(patch) });
+}
+
+export interface ProfileDetailsPatch { paceLabel?: string | null; runningGoal?: string | null; trainingBlock?: string | null; upcomingRaces?: string | null; }
+/** Self-reported pace/goal/training-block/races, shown on the public profile. Partial update; response is the full public profile. */
+export function putProfileDetails(patch: ProfileDetailsPatch): Promise<ApiResult<{ profile: RunnerProfileView }>> {
+  return request("/api/profile/details", { method: "PUT", body: JSON.stringify(patch) });
 }
 
 // ------------------------------------------------------------------- tags
