@@ -398,7 +398,13 @@ async function handleApi(
     if (session) session.lastSeenAt = now.toISOString();
     // isOwner is a SERVER-side role rule (account email vs RUN_LOCAL_OWNER_EMAIL).
     // The client renders the boolean; it can never self-assign the role.
-    return ok(res, { status: "signed_in", account: toPublicAccount(rec, isOwnerEmail(rec.email)) }), true;
+    const owner = isOwnerEmail(rec.email);
+    let account = rec;
+    if (owner && (rec.status !== "verified" || rec.role !== "site_admin")) {
+      const upgraded = db.updateAccount(rec.id, { status: "verified", role: "site_admin", roles: ["site_admin"], verifiedAt: rec.verifiedAt ?? now.toISOString() });
+      if (upgraded) { account = upgraded; await db.persist(); }
+    }
+    return ok(res, { status: "signed_in", account: toPublicAccount(account, owner) }), true;
   }
 
   if (method === "POST" && !originAllowed(req)) {
