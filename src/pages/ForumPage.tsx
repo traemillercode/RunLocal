@@ -13,7 +13,7 @@ import { canDo, type AccountRole } from "../lib/accounts";
 import { actionMenuItems, type ActionKey } from "../lib/actionModel";
 import { PostTags, TagRunnerSheet } from "../components/Tagging";
 import * as api from "../lib/api";
-import { FORUM_SECTIONS, type City, type ForumSection, type QaSort } from "../types";
+import { FORUM_SECTIONS, FORUM_CATEGORIES, type City, type ForumSection, type ForumCategory, type QaSort } from "../types";
 import { RailCard, RailItemLink, RailSeeAll, RailStack } from "../components/RailCard";
 import { WEEKDAY_LABELS } from "../lib/calendar";
 import { formatRaceDate } from "../lib/dates";
@@ -75,6 +75,7 @@ export function ForumSectionTabs({ section, onSelect }: { section: ForumSection;
 
 export interface ForumPostDraft {
   section: ForumSection;
+  category: ForumCategory;
   title: string;
   body: string;
 }
@@ -102,10 +103,11 @@ export function ForumCreateSheetBody({
 }) {
   const verified = role === "verified";
   const [section, setSection] = useState<ForumSection>("community");
+  const [category, setCategory] = useState<ForumCategory>("general");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const cta: { label: string; icon: string; onClick: () => void } = verified
-    ? { label: "Post to forum", icon: "check", onClick: () => onSubmit?.({ section, title, body }) }
+    ? { label: "Post to forum", icon: "check", onClick: () => onSubmit?.({ section, category, title, body }) }
     : role === "rejected"
       ? { label: "View my verification status", icon: "shield", onClick: onOpenGate }
       : role === "pending"
@@ -184,6 +186,25 @@ export function ForumCreateSheetBody({
               >
                 <Icon name={meta.icon} className="h-4 w-4" />
                 {s.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        <span className="mb-1.5 block text-sm font-semibold text-slate-700">Category</span>
+        <div className="flex flex-wrap gap-1.5">
+          {FORUM_CATEGORIES.map((c) => {
+            const active = category === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setCategory(c.id)}
+                className={`min-h-9 rounded-full px-3.5 text-[13px] font-semibold ${active ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-600"}`}
+              >
+                {c.label}
               </button>
             );
           })}
@@ -773,14 +794,14 @@ export function ForumPage({ city }: { city: City }) {
     });
   };
 
-  const onSubmitPost = (draft: { section: ForumSection; title: string; body: string }) => {
+  const onSubmitPost = (draft: { section: ForumSection; category: ForumCategory; title: string; body: string }) => {
     if (submitting) return;
     const title = draft.title.trim();
     const body = draft.body.trim();
     if (!title || !body) { setPostError("Add a title and some details before posting."); return; }
     setSubmitting(true);
     setPostError(null);
-    void api.createForumPost({ section: draft.section, title, body }).then((r) => {
+    void api.createForumPost({ section: draft.section, category: draft.category, title, body }).then((r) => {
       setSubmitting(false);
       if (r.ok) {
         setCreateOpen(false);
