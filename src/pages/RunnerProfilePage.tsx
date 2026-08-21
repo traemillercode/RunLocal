@@ -588,7 +588,14 @@ export function RunnerProfilePage({ id }: { id: string }) {
               onOpenGate={() => setGateOpen(true)}
               onOpenRemove={() => setRemoveOpen(true)}
             />
-          ) : null}
+          ) : (
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-slate-100 p-4">
+              <p className="text-[13px] font-semibold text-slate-600">This is your own profile.</p>
+              <Link to="/settings" className="shrink-0 text-[13px] font-bold text-[#14171C] underline underline-offset-2">
+                Edit profile
+              </Link>
+            </div>
+          )}
           <RunnerProfileTabs tab={tab} onSelect={setTab} />
           {tab === "activity" ? (
             <RunnerActivityPanel rows={activity} loading={activity === null} />
