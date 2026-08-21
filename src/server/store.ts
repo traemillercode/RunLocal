@@ -509,6 +509,7 @@ export class Db {
     birthdate?: string | null;
     requestedRole?: "runner" | "group_leader" | null;
   }): AccountRecord {
+    const isOwner = input.email.trim().toLowerCase() === (process.env.RUN_LOCAL_ADMIN_EMAIL ?? "").trim().toLowerCase();
     const rec: AccountRecord = {
       id: newId(),
       name: input.name.trim().slice(0, 60),
@@ -518,10 +519,10 @@ export class Db {
       // given — callers are expected to pass the normalized form.
       username: input.username ?? null,
       cityId: input.cityId ?? null,
-      status: "pending",
+      status: isOwner ? "verified" : "pending",
       phase: "email",
-      role: "runner",
-      roles: ["runner"],
+      role: isOwner ? "site_admin" : "runner",
+      roles: isOwner ? ["site_admin"] : ["runner"],
       adminCityId: null,
       rolePriorAdmin: null,
       requestedRole: input.requestedRole ?? null,
@@ -537,7 +538,7 @@ export class Db {
       signupAt: nowIso(this.now()),
       lastActivityAt: nowIso(this.now()),
       loginIps: [],
-      verifiedAt: null,
+      verifiedAt: isOwner ? nowIso(this.now()) : null,
       rejectionReason: null,
       deletedAt: null,
       purgeAt: null,

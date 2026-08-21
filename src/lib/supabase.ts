@@ -128,6 +128,15 @@ export async function setRecoverySession(accessToken: string, refreshToken: stri
   const c=cfg(opts.env); if(!c.configured) return {ok:false as const, code:"unconfigured", message:missingMessage};
   try { const {error}=await (opts.auth??authFor(c)).setSession!({access_token:accessToken, refresh_token:refreshToken}); return error ? {ok:false as const, code:"failed", message:"This recovery link is invalid or expired. Request a new one."}:{ok:true as const}; } catch { return {ok:false as const,code:"failed",message:"This recovery link is invalid or expired. Request a new one."}; }
 }
+export async function setRecoverySessionFromCode(code: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}) {
+  const c=cfg(opts.env); if(!c.configured) return {ok:false as const, code:"unconfigured", message:missingMessage};
+  try {
+    const auth = opts.auth ?? authFor(c);
+    if (!auth.exchangeCodeForSession) return {ok:false as const, code:"failed", message:"This recovery link is invalid or expired. Request a new one."};
+    const { error } = await auth.exchangeCodeForSession(code);
+    return error ? {ok:false as const, code:"failed", message:"This recovery link is invalid or expired. Request a new one."} : {ok:true as const};
+  } catch { return {ok:false as const,code:"failed",message:"This recovery link is invalid or expired. Request a new one."}; }
+}
 export async function updatePassword(password: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}) {
   const c=cfg(opts.env); if(!c.configured) return {ok:false as const, code:"unconfigured", message:missingMessage};
   try { const {error}=await (opts.auth??authFor(c)).updateUser!({password}); return error ? {ok:false as const,code:"failed",message:"Could not update your password. The recovery link may have expired."}:{ok:true as const}; } catch { return {ok:false as const,code:"failed",message:"Could not update your password. The recovery link may have expired."}; }

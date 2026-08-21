@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { BottomNav } from "./components/BottomNav";
 import { CitySheet, Header } from "./components/Header";
 import { DesktopSidebar } from "./components/DesktopSidebar";
@@ -72,7 +72,10 @@ function Shell() {
     }
     navigate(parsed.kind === "recovery" ? "/recovery" : "/confirmation?error=" + encodeURIComponent(parsed.error), { replace: true });
     if (parsed.kind === "error") { if (parsed.flow === "recovery") setRecoveryError(parsed.error); return; }
-    void supabase.setRecoverySession(parsed.accessToken, parsed.refreshToken).then((result) => { if (!result.ok) setRecoveryError(result.message); });
+    const recoveryPromise = parsed.code
+      ? supabase.setRecoverySessionFromCode(parsed.code)
+      : supabase.setRecoverySession(parsed.accessToken!, parsed.refreshToken!);
+    void recoveryPromise.then((result) => { if (!result.ok) setRecoveryError(result.message); });
   }, [navigate]);
   const [cityOpen, setCityOpen] = useState(false);
   const location = useLocation();
@@ -134,9 +137,9 @@ export default function App() {
     <ToastProvider>
       <AccountProvider>
         <NotificationsProvider>
-          <HashRouter>
+          <BrowserRouter>
             <Shell />
-          </HashRouter>
+          </BrowserRouter>
         </NotificationsProvider>
       </AccountProvider>
     </ToastProvider>

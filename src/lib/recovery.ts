@@ -1,6 +1,6 @@
 /** Parse Supabase callbacks before HashRouter consumes the URL. */
 export type AuthCallback =
-  | { kind: "recovery"; accessToken: string; refreshToken: string }
+  | { kind: "recovery"; accessToken?: string; refreshToken?: string; code?: string }
   | { kind: "confirmation"; accessToken?: string; refreshToken?: string; code?: string }
   | { kind: "error"; flow: "recovery" | "confirmation"; error: string };
 export function parseAuthCallback(url: string): AuthCallback | null {
@@ -13,7 +13,10 @@ export function parseAuthCallback(url: string): AuthCallback | null {
   if (err) return { kind: "error", flow, error: err };
   if (type === "recovery") {
     const accessToken = params.get("access_token"); const refreshToken = params.get("refresh_token");
-    return accessToken && refreshToken ? { kind: "recovery", accessToken, refreshToken } : { kind: "error", flow: "recovery", error: "This recovery link is incomplete or expired. Request a new one." };
+    const code = params.get("code") ?? parsed.searchParams.get("code");
+    if (accessToken && refreshToken) return { kind: "recovery", accessToken, refreshToken };
+    if (code) return { kind: "recovery", code };
+    return { kind: "error", flow: "recovery", error: "This recovery link is incomplete or expired. Request a new one." };
   }
   if (type === "signup" || parsed.searchParams.get("code")) {
     return {
