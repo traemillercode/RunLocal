@@ -1,4 +1,5 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";import type { City } from "../types";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import type { City } from "../types";
 import { AccountMenuButton } from "./AccountMenu";
 import { NotificationsBell } from "./NotificationsBell";
 import { useAccount } from "../state/account";
@@ -31,22 +32,24 @@ function GuestLoginCta() {
 
 export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet: () => void }) {
   const location = useLocation();
-  if (NO_NAV_PATHS.has(location.pathname)) return null;
+  const { me } = useAccount();
+  const showingMarketing = location.pathname === "/" && me?.status !== "signed_in";
+  if (NO_NAV_PATHS.has(location.pathname) || showingMarketing) return null;
   return (
     <header className="app-shell-header sticky top-0 z-40 border-b border-white/10 bg-[#14171C] text-white shadow-sm" data-tour-target="app-header">
       <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between gap-2 px-3">
         {/* Clickable logo / title — always returns to the city home feed. The
             wordmark is sized down on narrow screens (and hidden entirely only
-            below 360px, where the pin icon alone is the brand) so the full "Run
-            Local" mark never truncates to "Run L…" on a 390px phone. */}
+            below 360px, where the pin icon alone is the brand) so the full
+            mark never truncates on a 390px phone. */}
         <Link
           to="/"
-          aria-label="Run Local — home"
+          aria-label="Kimbio — home"
           className="flex min-w-0 items-center gap-2 rounded-lg active:opacity-80 min-[420px]:gap-2.5"
         >
           <img src="/icons/icon-192.png" alt="" className="h-8 w-8 shrink-0 rounded-lg shadow-sm min-[420px]:h-9 min-[420px]:w-9" />
           <span className="hidden whitespace-nowrap text-[15px] font-extrabold tracking-tight min-[360px]:inline min-[420px]:text-[16px] sm:text-[17px]">
-            Run <span className="text-[#FF5741]">Local</span>
+            Kim<span className="text-[#FF5741]">bio</span>
           </span>
         </Link>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -85,7 +88,7 @@ export function CitySheet({
 }) {
   const current = cities.find((c) => c.id === currentCityId);
   return (
-    <Sheet open={open} onClose={onClose} title="Choose your city" subtitle="Run Local is city-scoped — pick the community you run in.">
+    <Sheet open={open} onClose={onClose} title="Choose your city" subtitle="Kimbio is city-scoped — pick the community you run in.">
       <ul className="space-y-2">
         {cities.map((c) => {
           const active = c.id === currentCityId;
@@ -129,7 +132,7 @@ export function CitySheet({
       <p className="mt-4 flex items-start gap-2 rounded-xl bg-slate-50 p-3.5 text-xs leading-relaxed text-slate-500">
         <Icon name="spark" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
         More cities are on the roadmap — the app is built to add new cities without code changes. Request yours by emailing
-        hello@runlocal.app.
+        hello@getkimbio.com.
       </p>
       {current && !current.live ? null : null}
     </Sheet>
