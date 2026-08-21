@@ -5,9 +5,9 @@ const city = CITIES.find((item) => item.id === "columbia-mo");
 const previewEvents = city?.events.slice(0, 3) ?? [];
 
 const sections = [
-  { eyebrow: "Find your people", title: "Groups that feel local", body: "See the clubs and community run groups already moving Columbia. Listings are admin-seeded or approved community content—never invented social proof." },
-  { eyebrow: "Plan the big day", title: "Races, without the rabbit holes", body: "Browse local race listings, dates, distances, and organizer links in one place." },
-  { eyebrow: "Stay in the loop", title: "A better local running conversation", body: "Browse the local clubs directory and the public forum. Verified-member posting is the next step — identity review is already in place." },
+  { eyebrow: "Find your people", title: "Groups that feel local", body: "Real clubs and community run groups already moving in Columbia — no fake crowds, no empty listings, just who's actually out there." },
+  { eyebrow: "Plan the big day", title: "Races, without the rabbit holes", body: "Every local race in one place — dates, distances, and a straight link to sign up. No more ten open tabs." },
+  { eyebrow: "Stay in the loop", title: "A better local running conversation", body: "Ask a gear question, find a pace group, post a route — a running forum without the spam, because everyone here is a real, verified runner." },
 ];
 
 export function MarketingPage() {
