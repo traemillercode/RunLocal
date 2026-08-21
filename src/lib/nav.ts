@@ -75,5 +75,4 @@ export function activeForPath(entry: NavEntry, pathname: string): boolean {
 /**
  * Routes that get a chrome-free wizard layout — NO bottom nav AND NO desktop
  * sidebar (shared with App.tsx so the shell and the sidebar agree).
- */
-export const NO_NAV_PATHS = new Set(["/verify", "/admin", "/login", "/recovery", "/confirmation", "/callback", "/checkin"]);
+ */export const NO_NAV_PATHS = new Set(["/", "/landing", "/verify", "/admin", "/login", "/recovery", "/confirmation", "/callback", "/checkin"]);
