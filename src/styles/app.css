@@ -56,6 +56,7 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
   .desktop-compact-control { width: fit-content; max-width: 100%; }
   .desktop-main .desktop-compact-control.w-full { width: 100%; }
   .desktop-main { margin-left: 240px; min-height: 100dvh; min-width: 0; }
+  .desktop-main.full-bleed { margin-left: 0 !important; }
   .desktop-main > .desktop-browse-layout { max-width: 1240px !important; padding-left: clamp(24px, 4vw, 56px); padding-right: clamp(24px, 4vw, 56px); }
   .desktop-main > .desktop-reading { max-width: 1240px !important; }
   .app-shell-header, .app-shell-nav { display: none; }
