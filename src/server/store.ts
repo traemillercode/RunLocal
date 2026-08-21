@@ -130,6 +130,12 @@ export interface PublicAccount {
    * prompts them clearly). Public profile identity, never sensitive.
    */
   cityId: string | null;
+  bio: string | null;
+  customTitle: string | null;
+  paceLabel: string | null;
+  runningGoal: string | null;
+  trainingBlock: string | null;
+  upcomingRaces: string | null;
   status: AccountRecord["status"];
   phase: VerifyPhase | null;
   badge: "verified" | null;
@@ -193,6 +199,12 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new D
     email: rec.email,
     username: rec.username ?? null,
     cityId: rec.cityId ?? null,
+    bio: rec.bio ?? null,
+    customTitle: rec.customTitle ?? null,
+    paceLabel: rec.paceLabel ?? null,
+    runningGoal: rec.runningGoal ?? null,
+    trainingBlock: rec.trainingBlock ?? null,
+    upcomingRaces: rec.upcomingRaces ?? null,
     status: rec.status,
     phase: rec.status === "pending" ? rec.phase : null,
     badge: rec.status === "verified" ? "verified" : null,

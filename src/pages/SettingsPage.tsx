@@ -357,6 +357,87 @@ function PrivacyRadioRow({
 }
 
 /** Presentational Privacy section — props only so SSR tests render the real markup. */
+/** Self-reported profile fields shown on the public profile: name, bio, an optional custom title (e.g. "Founder"), pace, goal, training block, and upcoming races. All plain text, all optional except name. */
+export function ProfileDetailsSection({
+  account,
+  onSave,
+  saving = false,
+  error = null,
+}: {
+  account: PublicAccount;
+  onSave: (patch: api.ProfileDetailsPatch) => void;
+  saving?: boolean;
+  error?: string | null;
+}) {
+  const [draft, setDraft] = useState({
+    name: account.name,
+    bio: account.bio ?? "",
+    customTitle: account.customTitle ?? "",
+    paceLabel: account.paceLabel ?? "",
+    runningGoal: account.runningGoal ?? "",
+    trainingBlock: account.trainingBlock ?? "",
+    upcomingRaces: account.upcomingRaces ?? "",
+  });
+  const fieldCls = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
+  const rows: { key: keyof typeof draft; label: string; placeholder: string; textarea?: boolean }[] = [
+    { key: "name", label: "Display name", placeholder: "Your name" },
+    { key: "customTitle", label: "Custom title (optional)", placeholder: "e.g. Founder, Pacer, Coach" },
+    { key: "bio", label: "Bio", placeholder: "A few words about you", textarea: true },
+    { key: "paceLabel", label: "Pace", placeholder: "e.g. 8:30/mi easy, 7:15/mi tempo" },
+    { key: "runningGoal", label: "Goal", placeholder: "e.g. Sub-4 marathon by fall" },
+    { key: "trainingBlock", label: "Current training block", placeholder: "e.g. Week 6 of 16 — marathon block" },
+    { key: "upcomingRaces", label: "Upcoming races", placeholder: "e.g. Columbia Half — Oct 12" },
+  ];
+  return (
+    <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70 p-5" aria-busy={saving}>
+      <h2 className="mb-3 text-[15px] font-bold text-slate-900">Profile details</h2>
+      {error ? <p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-800">{error}</p> : null}
+      <div className="space-y-4">
+        {rows.map((row) => (
+          <label key={row.key} className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">{row.label}</span>
+            {row.textarea ? (
+              <textarea
+                value={draft[row.key]}
+                maxLength={280}
+                placeholder={row.placeholder}
+                onChange={(e) => setDraft((d) => ({ ...d, [row.key]: e.target.value }))}
+                className={`${fieldCls} h-20 resize-none py-2.5`}
+              />
+            ) : (
+              <input
+                type="text"
+                value={draft[row.key]}
+                maxLength={row.key === "name" ? 60 : 140}
+                placeholder={row.placeholder}
+                onChange={(e) => setDraft((d) => ({ ...d, [row.key]: e.target.value }))}
+                className={fieldCls}
+              />
+            )}
+          </label>
+        ))}
+      </div>
+      <button
+        type="button"
+        disabled={saving || !draft.name.trim()}
+        onClick={() =>
+          onSave({
+            name: draft.name,
+            bio: draft.bio || null,
+            customTitle: draft.customTitle || null,
+            paceLabel: draft.paceLabel || null,
+            runningGoal: draft.runningGoal || null,
+            trainingBlock: draft.trainingBlock || null,
+            upcomingRaces: draft.upcomingRaces || null,
+          })
+        }
+        className="mt-5 h-11 w-full rounded-full bg-[#14171C] text-sm font-bold text-white disabled:opacity-50"
+      >
+        {saving ? "Saving…" : "Save profile details"}
+      </button>
+    </section>
+  );
+}
 export function PrivacySettingsSection({
   settings,
   onSave,
@@ -470,6 +551,16 @@ export function SettingsPage() {
     setPrivacySaving(false);
     if (!r.ok) { setPrivacySettings(prev); setPrivacyError(r.error.message ?? "Couldn't save privacy settings. Try again."); }
   };
+  const [profileDetailsSaving, setProfileDetailsSaving] = useState(false);
+  const [profileDetailsError, setProfileDetailsError] = useState<string | null>(null);
+  const saveProfileDetails = async (patch: api.ProfileDetailsPatch) => {
+    setProfileDetailsSaving(true);
+    setProfileDetailsError(null);
+    const r = await api.putProfileDetails(patch);
+    setProfileDetailsSaving(false);
+    if (r.ok) { await refresh(); toast("Profile details saved.", "success"); }
+    else setProfileDetailsError(r.error.message ?? "Couldn't save profile details. Try again.");
+  };
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [health, setHealth] = useState<api.HealthInfo | null>(null);
   // In-progress home-city selection (null = not editing / unchanged).
@@ -556,6 +647,7 @@ export function SettingsPage() {
 
       {signedIn && account ? <UsernameEditor account={account} refresh={refresh} /> : null}
       {signedIn && account ? <ProfilePhotoSettings account={account} refresh={refresh} /> : null}
+      {signedIn && account ? <ProfileDetailsSection account={account} onSave={saveProfileDetails} saving={profileDetailsSaving} error={profileDetailsError} /> : null}
       {signedIn && account ? <ChangePasswordSettings account={account} /> : null}
       {signedIn && account ? <ActivityConnections /> : null}
       {signedIn && account?.status === "verified" ? <WelcomeTourSettings /> : null}
