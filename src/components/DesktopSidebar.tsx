@@ -4,7 +4,6 @@ import { Icon } from "./ui";
 import { useAccount } from "../state/account";
 import { useNotifications } from "../state/notifications";
 import { activeForPath, entriesForSurface, NO_NAV_PATHS } from "../lib/nav";
-
 /**
  * Desktop sidebar — entries derived from the single nav model (src/lib/nav.ts)
  * with the SAME activeForPath matcher as the bottom tab bar. Settings lives in
@@ -23,10 +22,10 @@ export function DesktopSidebar({ city, onOpenCitySheet }: { city: City; onOpenCi
   const settingsEntry = entriesForSurface("sidebar").find((e) => e.id === "settings");
   return (
     <aside className="desktop-sidebar" aria-label="Primary navigation">
-      <Link to="/" className="desktop-brand" aria-label="Run Local home">
-        <img src="/app/icons/icon-192.png" alt="" />
+      <Link to="/" className="desktop-brand" aria-label="Kimbio home">
+        <img src="/icons/icon-192.png" alt="" />
         <span>
-          Run <b>Local</b>
+          Kim<b>bio</b>
         </span>
       </Link>
       <button
