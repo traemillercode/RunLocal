@@ -4,7 +4,7 @@ import { BottomNav } from "./components/BottomNav";
 import { CitySheet, Header } from "./components/Header";
 import { DesktopSidebar } from "./components/DesktopSidebar";
 import { CITIES } from "./data/cities";
-import { ToastProvider } from "./lib/toast";
+import { ToastProvider, useToast } from "./lib/toast";
 import { useAppState } from "./lib/store";
 import { AccountProvider } from "./state/account";
 import { NotificationsProvider } from "./state/notifications";
@@ -51,6 +51,7 @@ function Shell() {
   const navigate = useNavigate();
   const { refresh, me } = useAccount();
   const { city, selectCity } = useSelectedCity();
+  const toast = useToast();
   const [recoveryError, setRecoveryError] = useState<string>();
   useEffect(() => {
     const parsed = parseAuthCallback(window.location.href);
@@ -126,7 +127,10 @@ function Shell() {
         cities={CITIES}
         currentCityId={city.id}
         onSelect={(c) => {
-          void selectCity(c.id).then(() => setCityOpen(false));
+          void selectCity(c.id).then((r) => {
+            if (r.ok) { setCityOpen(false); toast("Home city updated.", "success"); }
+            else toast(r.error.message ?? "Couldn't save that city. Try again.", "info");
+          });
         }}
       />
     </div>
