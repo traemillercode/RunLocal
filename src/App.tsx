@@ -49,7 +49,7 @@ function RunnerRoute() { const location = useLocation(); const id = location.pat
 function Shell() {
   const store = useAppState();
   const navigate = useNavigate();
-  const { refresh } = useAccount();
+  const { refresh, me } = useAccount();
   const { city, selectCity } = useSelectedCity();
   const [recoveryError, setRecoveryError] = useState<string>();
   useEffect(() => {
