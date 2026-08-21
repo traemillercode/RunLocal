@@ -42,7 +42,7 @@ export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet:
           aria-label="Run Local — home"
           className="flex min-w-0 items-center gap-2 rounded-lg active:opacity-80 min-[420px]:gap-2.5"
         >
-          <img src="/app/icons/icon-192.png" alt="" className="h-8 w-8 shrink-0 rounded-lg shadow-sm min-[420px]:h-9 min-[420px]:w-9" />
+          <img src="/icons/icon-192.png" alt="" className="h-8 w-8 shrink-0 rounded-lg shadow-sm min-[420px]:h-9 min-[420px]:w-9" />
           <span className="hidden whitespace-nowrap text-[15px] font-extrabold tracking-tight min-[360px]:inline min-[420px]:text-[16px] sm:text-[17px]">
             Run <span className="text-[#FF5741]">Local</span>
           </span>
