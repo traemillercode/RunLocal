@@ -4,6 +4,7 @@ import { NotificationsBell } from "./NotificationsBell";
 import { useAccount } from "../state/account";
 import { Chip, Icon } from "./ui";
 import { Sheet } from "./ui";
+import { NO_NAV_PATHS } from "../lib/nav";
 
 /**
  * Always-visible guest CTA in the header. Guests get a clear "Log in"
@@ -29,6 +30,8 @@ function GuestLoginCta() {
 }
 
 export function Header({ city, onOpenCitySheet }: { city: City; onOpenCitySheet: () => void }) {
+  const location = useLocation();
+  if (NO_NAV_PATHS.has(location.pathname)) return null;
   return (
     <header className="app-shell-header sticky top-0 z-40 border-b border-white/10 bg-[#14171C] text-white shadow-sm" data-tour-target="app-header">
       <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between gap-2 px-3">
