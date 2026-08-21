@@ -518,9 +518,9 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
         <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-slate-400" />
       </button>
       <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[#14171C] p-3.5 text-white shadow-sm">
-        <img src="/app/icons/icon-192.png" alt="" className="h-11 w-11 shrink-0 rounded-xl" />
+        <img src="/icons/icon-192.png" alt="" className="h-11 w-11 shrink-0 rounded-xl" />
         <div className="min-w-0">
-          <p className="text-sm font-extrabold tracking-tight">Run <span className="text-[#FF5741]">Local</span></p>
+          <p className="text-sm font-extrabold tracking-tight">Kim<span className="text-[#FF5741]">bio</span></p>
           <p className="mt-0.5 text-xs leading-relaxed text-white/70">Local runs, races, and community — starting in {city.name}.</p>
         </div>
       </div>
