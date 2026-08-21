@@ -17,7 +17,8 @@ export function DesktopSidebar({ city, onOpenCitySheet }: { city: City; onOpenCi
   const { unreadCount } = useNotifications();
   const signedIn = me?.status === "signed_in";
   const unread = unreadCount ?? 0;
-  if (NO_NAV_PATHS.has(location.pathname)) return null;
+const showingMarketing = location.pathname === "/" && me?.status !== "signed_in";
+if (NO_NAV_PATHS.has(location.pathname) || showingMarketing) return null;
   const navEntries = entriesForSurface("sidebar").filter((e) => e.id !== "settings");
   const settingsEntry = entriesForSurface("sidebar").find((e) => e.id === "settings");
   return (
