@@ -139,7 +139,12 @@ export async function setRecoverySessionFromCode(code: string, opts: { env?: Rec
 }
 export async function updatePassword(password: string, opts: { env?: Record<string,string|undefined>; auth?: SupabaseAuthLike } = {}) {
   const c=cfg(opts.env); if(!c.configured) return {ok:false as const, code:"unconfigured", message:missingMessage};
-  try { const {error}=await (opts.auth??authFor(c)).updateUser!({password}); return error ? {ok:false as const,code:"failed",message:"Could not update your password. The recovery link may have expired."}:{ok:true as const}; } catch { return {ok:false as const,code:"failed",message:"Could not update your password. The recovery link may have expired."}; }
+  try {
+    const {error}=await (opts.auth??authFor(c)).updateUser!({password});
+    if (!error) return {ok:true as const};
+    if (/same.*password|different from the old/i.test(error.message ?? "")) return {ok:false as const,code:"failed",message:"Your new password needs to be different from your current password."};
+    return {ok:false as const,code:"failed",message:"Could not update your password. The recovery link may have expired."};
+  } catch { return {ok:false as const,code:"failed",message:"Could not update your password. The recovery link may have expired."}; }
 }
 
 /** Email-code helpers remain for the separate identity-verification funnel; password is the primary auth UI. */
