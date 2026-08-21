@@ -61,14 +61,27 @@ export function RunnerProfileHeader({ profile }: { profile: RunnerProfileView })
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {profile.isVerified ? <VerifiedBadge /> : null}
             {profile.isTrustedMember ? <TrustedBadge size="sm" /> : null}
-            {profile.isLeader ? (
+            {profile.customTitle ? (
+              <Chip tone="outline">
+                <Icon name="flag" className="h-3 w-3" /> {profile.customTitle}
+              </Chip>
+            ) : profile.isLeader ? (
               <Chip tone="outline">
                 <Icon name="flag" className="h-3 w-3" /> Group Leader
               </Chip>
             ) : null}
           </div>
+          {profile.bio ? <p className="mt-2 text-[13px] leading-relaxed text-white/80">{profile.bio}</p> : null}
         </div>
       </div>
+      {(profile.paceLabel || profile.runningGoal || profile.trainingBlock || profile.upcomingRaces) ? (
+        <div className="mt-4 space-y-2 border-t border-white/10 pt-4 text-[13px]">
+          {profile.paceLabel ? <p><span className="font-semibold text-white/60">Pace</span> · {profile.paceLabel}</p> : null}
+          {profile.runningGoal ? <p><span className="font-semibold text-white/60">Goal</span> · {profile.runningGoal}</p> : null}
+          {profile.trainingBlock ? <p><span className="font-semibold text-white/60">Training block</span> · {profile.trainingBlock}</p> : null}
+          {profile.upcomingRaces ? <p><span className="font-semibold text-white/60">Upcoming races</span> · {profile.upcomingRaces}</p> : null}
+        </div>
+      ) : null}
     </section>
   );
 }
