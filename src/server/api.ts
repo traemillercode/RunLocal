@@ -1834,12 +1834,17 @@ async function handleApi(
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const body = (await readJson(req)) as Record<string, unknown>;
-    const allowed = ["paceLabel", "runningGoal", "trainingBlock", "upcomingRaces"];
+    const allowed = ["name", "bio", "customTitle", "paceLabel", "runningGoal", "trainingBlock", "upcomingRaces"];
     const patch: Record<string, string | null> = {};
     for (const [k, v] of Object.entries(body)) {
       if (!allowed.includes(k)) return err(res, { status: 400, error: "invalid_field", message: `Unknown profile field: ${k}` }), true;
+      if (k === "name") {
+        if (typeof v !== "string" || !v.trim()) return err(res, { status: 400, error: "invalid_field", message: "Name cannot be blank." }), true;
+        patch.name = v.trim().slice(0, 60);
+        continue;
+      }
       if (v !== null && typeof v !== "string") return err(res, { status: 400, error: "invalid_field", message: `${k} must be a string or null` }), true;
-      patch[k] = v === null ? null : v.trim().slice(0, 140) || null;
+      patch[k] = v === null ? null : v.trim().slice(0, k === "bio" ? 280 : 140) || null;
     }
     const updated = db.updateAccount(sess.accountId, patch);
     if (!updated) return err(res, { status: 404, error: "not_found" }), true;

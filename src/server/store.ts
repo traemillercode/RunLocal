@@ -523,6 +523,8 @@ export class Db {
       runningGoal: null,
       trainingBlock: null,
       upcomingRaces: null,
+      bio: null,
+      customTitle: null,
       status: isOwner ? "verified" : "pending",
       phase: "email",
       role: isOwner ? "site_admin" : "runner",

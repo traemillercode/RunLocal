@@ -63,6 +63,10 @@ export interface AccountRecord {
   runningGoal: string | null;
   trainingBlock: string | null;
   upcomingRaces: string | null;
+  /** Free-text about-me, self-reported, optional. */
+  bio: string | null;
+  /** Optional override shown instead of the role label (e.g. "Founder"). Display-only — grants no permissions. */
+  customTitle: string | null;
   status: AccountStatus;
   /** Funnel stage; only meaningful while status === "pending". */
   phase: VerifyPhase;

@@ -252,6 +252,9 @@ export interface PublicRunnerProfile {
   runningGoal: string | null;
   trainingBlock: string | null;
   upcomingRaces: string | null;
+  bio: string | null;
+  /** Optional override shown instead of the role label — display-only, grants no permissions. */
+  customTitle: string | null;
 }
 export function publicRunnerProfile(rec: AccountRecord, now = new Date()): PublicRunnerProfile | null {
   if (rec.deletedAt || isSuspended(rec, now)) return null;
@@ -268,6 +271,8 @@ export function publicRunnerProfile(rec: AccountRecord, now = new Date()): Publi
     runningGoal: rec.runningGoal ?? null,
     trainingBlock: rec.trainingBlock ?? null,
     upcomingRaces: rec.upcomingRaces ?? null,
+    bio: rec.bio ?? null,
+    customTitle: rec.customTitle ?? null,
   };
 }
 
