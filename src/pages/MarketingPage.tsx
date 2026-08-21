@@ -14,7 +14,7 @@ export function MarketingPage() {
   return (
     <div className="marketing-page">
       <header className="marketing-header">
-        <a href="#top" className="marketing-logo" aria-label="Run Local home"><span>RUN</span> LOCAL</a>
+        <a href="#top" className="marketing-logo" aria-label="Kimbio home"><span>KIM</span>BIO</a>
         <nav aria-label="Marketing navigation" className="marketing-nav">
           <a href="#preview">Explore</a><a href="#how-it-works">How it works</a><Link to="/login?mode=signup" className="marketing-nav-cta">Sign up</Link>
         </nav>
@@ -28,7 +28,7 @@ export function MarketingPage() {
           <p className="marketing-note">No login needed to look around.</p>
         </section>
 
-        <section className="marketing-hook" aria-label="Run Local mission"><p>Running is better when the route comes with a <strong>reason to show up.</strong></p><span aria-hidden="true">✳</span></section>
+        <section className="marketing-hook" aria-label="Kimbio mission"><p>Running is better when the route comes with a <strong>reason to show up.</strong></p><span aria-hidden="true">✳</span></section>
 
         <section id="preview" className="marketing-section marketing-preview" aria-labelledby="preview-title">
           <p className="marketing-kicker">This week</p><h2 id="preview-title">What’s happening in Columbia</h2>
@@ -43,10 +43,10 @@ export function MarketingPage() {
 
         <section className="marketing-trust" aria-labelledby="trust-title"><p className="marketing-kicker">Built with care</p><h2 id="trust-title">Useful, not noisy.</h2><p>Private My Runs, privacy-controlled Personal Runs, and identity verification are built for trust. Matching and discovery are planned—not quietly switched on.</p><div className="marketing-trust-tags"><span>Private by default</span><span>City-scoped</span><span>Human-reviewed</span></div></section>
 
-        <section className="marketing-multicity" aria-labelledby="cities-title"><p className="marketing-kicker">Starting in Columbia</p><h2 id="cities-title">More cities,<br /><em>same local feeling.</em></h2><p>Columbia is live. We’re building the foundation to bring Run Local to more running communities next.</p></section>
-        <section className="marketing-final" aria-labelledby="final-title"><h2 id="final-title">Make your next run<br /><em>a local one.</em></h2><Link to="/login?mode=signup" className="marketing-button marketing-button-primary">Join Run Local <span aria-hidden="true">↗</span></Link></section>
+        <section className="marketing-multicity" aria-labelledby="cities-title"><p className="marketing-kicker">Starting in Columbia</p><h2 id="cities-title">More cities,<br /><em>same local feeling.</em></h2><p>Columbia is live. We’re building the foundation to bring Kimbio to more running communities next.</p></section>
+        <section className="marketing-final" aria-labelledby="final-title"><h2 id="final-title">Make your next run<br /><em>a local one.</em></h2><Link to="/login?mode=signup" className="marketing-button marketing-button-primary">Join Kimbio <span aria-hidden="true">↗</span></Link></section>
       </main>
-      <footer className="marketing-footer"><span>RUN LOCAL</span><span>Columbia, MO · Launch city</span></footer>
+      <footer className="marketing-footer"><span>KIMBIO</span><span>Columbia, MO · Launch city</span></footer>
     </div>
   );
 }
