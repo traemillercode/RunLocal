@@ -72,6 +72,16 @@ export const FORUM_SECTIONS: { id: ForumSection; label: string; blurb: string }[
   { id: "qa", label: "Q&A", blurb: "Questions with answers you can sort" },
 ];
 
+/** Topic, independent of section — what a post is ABOUT, not what kind of post it is. */
+export type ForumCategory = "training" | "races" | "gear" | "routes" | "general";
+export const FORUM_CATEGORIES: { id: ForumCategory; label: string }[] = [
+  { id: "training", label: "Training" },
+  { id: "races", label: "Races" },
+  { id: "gear", label: "Gear" },
+  { id: "routes", label: "Routes" },
+  { id: "general", label: "General" },
+];
+
 export type QaSort = "newest" | "unanswered" | "top";
 
 export interface ForumPost {

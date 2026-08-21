@@ -41,6 +41,7 @@ import type { ForumSection } from "../types";
 import { CITIES } from "../data/cities";
 
 export const FORUM_SECTIONS = ["announcements", "community", "qa"] as const;
+export const FORUM_CATEGORIES = ["training", "races", "gear", "routes", "general"] as const;
 const MAX_TITLE = 120;
 const MAX_BODY = 2000;
 const MAX_REPLY = 1000;
@@ -117,6 +118,7 @@ export function forumReplyCapabilities(actor: AccountRecord | null | undefined, 
 export interface PublicForumPost {
   id: string;
   section: ForumSection;
+  category: "training" | "races" | "gear" | "routes" | "general" | null;
   title: string;
   body: string;
   author: string;
@@ -318,7 +320,7 @@ export type ForumCreateResult =
 export function createForumPost(
   db: Db,
   accountId: string,
-  input: { section?: unknown; title?: unknown; body?: unknown },
+  input: { section?: unknown; category?: unknown; title?: unknown; body?: unknown },
   now = new Date(),
 ): ForumCreateResult {
   const rec: AccountRecord | undefined = db.getAccount(accountId);
@@ -344,6 +346,7 @@ export function createForumPost(
     };
   }
   const section = typeof input.section === "string" && (FORUM_SECTIONS as readonly string[]).includes(input.section) ? (input.section as ForumSection) : null;
+  const category = typeof input.category === "string" && (FORUM_CATEGORIES as readonly string[]).includes(input.category) ? (input.category as ForumPostRecord["category"]) : null;
   const title = typeof input.title === "string" ? input.title.trim() : "";
   const body = typeof input.body === "string" ? input.body.trim() : "";
   if (!section) return { ok: false, status: 400, error: "invalid_section" };
@@ -360,6 +363,7 @@ export function createForumPost(
     id: newId(),
     cityId,
     section,
+    category,
     title: title.slice(0, MAX_TITLE),
     body: body.slice(0, MAX_BODY),
     authorAccountId: accountId,
@@ -393,6 +397,7 @@ export function createForumPost(
       post: {
         id: post.id,
         section: post.section,
+        category: post.category,
         title: post.title,
         body: post.body,
         author: author?.name ?? "Runner",
@@ -841,6 +846,7 @@ export function setForumPostHidden(
       post: {
         id: post.id,
         section: post.section,
+        category: post.category,
         title: post.title,
         body: post.body,
         author: auth.rec.name,

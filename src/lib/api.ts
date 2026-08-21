@@ -482,6 +482,7 @@ export function cityAdminDecideSubmission(id: string, action: "approve" | "rejec
 export interface ForumPostView {
   id: string;
   section: import("../types").ForumSection;
+  category: import("../types").ForumCategory | null;
   title: string;
   body: string;
   author: string;
@@ -497,7 +498,7 @@ export interface ForumPostView {
 export function getForumPosts(cityId: string): Promise<ApiResult<{ cityId: string; posts: ForumPostView[]; replyCounts: Record<string, number> }>> {
   return request(`/api/forum?city=${encodeURIComponent(cityId)}`);
 }
-export function createForumPost(input: { section: import("../types").ForumSection; title: string; body: string }): Promise<ApiResult<{ post: ForumPostView }>> {
+export function createForumPost(input: { section: import("../types").ForumSection; category: import("../types").ForumCategory; title: string; body: string }): Promise<ApiResult<{ post: ForumPostView }>> {
   return request("/api/forum", { method: "POST", body: JSON.stringify(input) });
 }
 /** Author edit of an own forum post (PATCH /api/forum/:id — server re-validates). */

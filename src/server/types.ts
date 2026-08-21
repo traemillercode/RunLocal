@@ -460,6 +460,8 @@ export interface ForumPostRecord {
   id: string;
   cityId: string;
   section: "announcements" | "community" | "qa";
+  /** Topic, independent of section — null for older posts created before categories existed. */
+  category: "training" | "races" | "gear" | "routes" | "general" | null;
   title: string;
   body: string;
   authorAccountId: string;
