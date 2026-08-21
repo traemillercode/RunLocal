@@ -64,6 +64,10 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
     void video.play().catch(() => {});
   }, []);
 
+  const handleLoadedData = useCallback(() => {
+    setStatus((prev) => (prev === "requesting" ? "ready" : prev));
+  }, []);
+
   const startCamera = useCallback(async () => {
     stopTracks();
     setStatus("requesting");
@@ -80,7 +84,6 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
         return;
       }
       attachStream(stream);
-      setStatus("ready");
     } catch (err) {
       if (err instanceof DOMException && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")) {
         setStatus("denied");
@@ -106,7 +109,7 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
 
   const capture = useCallback(() => {
     const video = videoRef.current;
-    if (!video || video.videoWidth === 0) {
+    if (!video || video.videoWidth === 0 || video.readyState < 2) {
       setErrorDetail("The camera preview is not ready yet. Please wait a moment and try again.");
       return;
     }
@@ -139,6 +142,7 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
           className={`h-full w-full object-cover ${status === "ready" ? "" : "invisible"}`}
           style={{ transform: "scaleX(-1)" }}
           aria-label="Live selfie preview"
+          onLoadedData={handleLoadedData}
         />
 
         {status === "captured" && capturedUrl && (
@@ -207,7 +211,7 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
         </button>
       )}
       <p className="text-center text-[11px] leading-relaxed text-slate-400">
-        Captured live with your camera — no gallery upload. The image is sent to Run Local's server for manual review only.
+        Captured live with your camera — no gallery upload. The image is sent to Kimbio's server for manual review only.
       </p>
     </div>
   );
