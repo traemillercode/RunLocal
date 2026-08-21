@@ -81,8 +81,7 @@ function Shell() {
     <div className="min-h-dvh bg-[#f7f7f5] text-slate-900">
       <Header city={city} onOpenCitySheet={() => setCityOpen(true)} />
       <DesktopSidebar city={city} onOpenCitySheet={() => setCityOpen(true)} />
-      <main key={location.pathname} className="desktop-main">
-        <ModeratedProvider cityId={city.id}>
+<main key={location.pathname} className={`desktop-main${location.pathname === "/" && me?.status !== "signed_in" ? " full-bleed" : ""}`}>        <ModeratedProvider cityId={city.id}>
           <PublicContentProvider cityId={city.id}>
             <Routes>
             <Route path="/" element={me?.status === "signed_in" ? <EventsPage city={city} store={store} /> : <MarketingPage />} />
