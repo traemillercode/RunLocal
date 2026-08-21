@@ -85,7 +85,7 @@ function Shell() {
         <ModeratedProvider cityId={city.id}>
           <PublicContentProvider cityId={city.id}>
             <Routes>
-            <Route path="/" element={<MarketingPage />} />
+            <Route path="/" element={me?.status === "signed_in" ? <EventsPage city={city} store={store} /> : <MarketingPage />} />
             <Route path="/landing" element={<MarketingPage />} />
             <Route path="/events" element={<EventsPage city={city} store={store} />} />
             <Route path="/events/:eventId" element={<EventDetailPage city={city} store={store} />} />
