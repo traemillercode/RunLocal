@@ -1,5 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
-import type { City } from "../types";
+import { Link, useLocation, useNavigate } from "react-router-dom";import type { City } from "../types";
 import { AccountMenuButton } from "./AccountMenu";
 import { NotificationsBell } from "./NotificationsBell";
 import { useAccount } from "../state/account";
