@@ -617,6 +617,8 @@ export interface MessageRecord {
   deletedAt: string | null;
   /** accountId -> emoji, one reaction per person per message (re-reacting overwrites). */
   reactions: Record<string, string>;
+  /** Set when this message carries a photo — filename under /uploads/public/. A message can be image-only (body can be empty) or image + caption. */
+  mediaRef?: string | null;
 }
 
 /**

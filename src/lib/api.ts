@@ -998,6 +998,7 @@ export interface MessageView {
   createdAt: string;
   deletedAt: string | null;
   reactions: Record<string, string>;
+  mediaUrl?: string | null;
 }
 export function getConversations(): Promise<ApiResult<{ conversations: ConversationSummary[] }>> {
   return request("/api/conversations");
@@ -1011,8 +1012,8 @@ export function createGroupConversation(name: string, participantIds: string[]):
 export function getMessages(conversationId: string): Promise<ApiResult<{ conversation: ConversationSummary; messages: MessageView[] }>> {
   return request(`/api/conversations/${encodeURIComponent(conversationId)}/messages`);
 }
-export function sendMessage(conversationId: string, body: string): Promise<ApiResult<{ message: MessageView }>> {
-  return request(`/api/conversations/${encodeURIComponent(conversationId)}/messages`, { method: "POST", body: JSON.stringify({ body }) });
+export function sendMessage(conversationId: string, body: string, photoDataUrl?: string | null): Promise<ApiResult<{ message: MessageView }>> {
+  return request(`/api/conversations/${encodeURIComponent(conversationId)}/messages`, { method: "POST", body: JSON.stringify({ body, ...(photoDataUrl ? { photo: photoDataUrl } : {}) }) });
 }
 export function setMessageReaction(messageId: string, emoji: string | null): Promise<ApiResult<{ message: MessageView }>> {
   return request(`/api/messages/${encodeURIComponent(messageId)}/reaction`, { method: "PUT", body: JSON.stringify({ emoji }) });

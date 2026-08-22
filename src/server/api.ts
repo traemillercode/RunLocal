@@ -1800,6 +1800,7 @@ async function handleApi(
       createdAt: m.createdAt,
       deletedAt: m.deletedAt,
       reactions: m.reactions,
+      mediaUrl: !m.deletedAt && m.mediaRef ? `/uploads/public/${m.mediaRef}` : null,
     }));
     // Opening a thread marks it read — same convention as every mainstream
     // chat app. No separate "mark read" action needed from the client.
@@ -1815,10 +1816,17 @@ async function handleApi(
     if (!convo || !convo.participantIds.includes(sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
     const body = (await readJson(req)) as Record<string, unknown>;
     const text = typeof body.body === "string" ? body.body.trim().slice(0, 2000) : "";
-    if (!text) return err(res, { status: 400, error: "empty_message", message: "Write something before sending." }), true;
-    const msg = db.addMessage({ conversationId: convo.id, senderId: sess.accountId, body: text }, now);
+    let mediaRef: string | null = null;
+    if (typeof body.photo === "string" && body.photo) {
+      const img = decodeImage(body.photo);
+      if (!img.ok) return err(res, { status: 400, error: img.error }), true;
+      mediaRef = `msg_${newId()}.${img.ext}`;
+      await db.writePublicUpload(mediaRef, img.bytes);
+    }
+    if (!text && !mediaRef) return err(res, { status: 400, error: "empty_message", message: "Write something or attach a photo before sending." }), true;
+    const msg = db.addMessage({ conversationId: convo.id, senderId: sess.accountId, body: text, mediaRef }, now);
     await db.persist();
-    return ok(res, { message: msg }), true;
+    return ok(res, { message: { ...msg, mediaUrl: msg.mediaRef ? `/uploads/public/${msg.mediaRef}` : null } }), true;
   }
 
   if (method === "PUT" && reactionRoute) {

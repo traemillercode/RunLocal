@@ -422,7 +422,7 @@ export class Db {
         this.connections.set(connectionKey(c.requesterId, c.addresseeId), { ...c, respondedAt: c.respondedAt ?? null, removedAt: c.removedAt ?? null });
       }
       for (const c of parsed.conversations ?? []) this.conversations.set(c.id, { ...c, runCreatedId: c.runCreatedId ?? null, readBy: c.readBy ?? {} });
-      for (const m of parsed.messages ?? []) this.messages.set(m.id, { ...m, deletedAt: m.deletedAt ?? null, reactions: m.reactions ?? {} });
+      for (const m of parsed.messages ?? []) this.messages.set(m.id, { ...m, deletedAt: m.deletedAt ?? null, reactions: m.reactions ?? {}, mediaRef: m.mediaRef ?? null });
       for (const t of parsed.trainingPlans ?? []) this.trainingPlans.set(t.accountId, t);
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
       // Privacy: records persisted before a field existed are merged over the
@@ -1100,8 +1100,8 @@ export class Db {
     this.conversations.set(id, next);
     return next;
   }
-  addMessage(input: { conversationId: string; senderId: string; body: string }, now: Date): import("./types").MessageRecord {
-    const rec: import("./types").MessageRecord = { id: newId(), conversationId: input.conversationId, senderId: input.senderId, body: input.body, createdAt: now.toISOString(), deletedAt: null, reactions: {} };
+  addMessage(input: { conversationId: string; senderId: string; body: string; mediaRef?: string | null }, now: Date): import("./types").MessageRecord {
+    const rec: import("./types").MessageRecord = { id: newId(), conversationId: input.conversationId, senderId: input.senderId, body: input.body, createdAt: now.toISOString(), deletedAt: null, reactions: {}, mediaRef: input.mediaRef ?? null };
     this.messages.set(rec.id, rec);
     this.updateConversation(input.conversationId, { lastMessageAt: rec.createdAt });
     return rec;

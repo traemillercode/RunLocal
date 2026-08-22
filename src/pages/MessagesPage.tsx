@@ -18,6 +18,8 @@ import { useAccount } from "../state/account";
 import { useToast } from "../lib/toast";
 
 const QUICK_REACTIONS = ["❤️", "😂", "👍", "😮", "😢", "🔥", "🙏", "🎉"];
+const PHOTO_MAX_BYTES = 4 * 1024 * 1024;
+const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function initials(name: string): string {
   return name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
@@ -193,11 +195,22 @@ function MessageBubble({
         <button
           type="button"
           onClick={() => !msg.deletedAt && setPickerOpen((v) => !v)}
-          className={`max-w-[78%] rounded-3xl px-4 py-2.5 text-left text-[14px] leading-relaxed shadow-sm ${
-            mine ? "bg-[#FF5741] text-white" : "bg-slate-100 text-slate-900"
+          className={`max-w-[78%] overflow-hidden rounded-3xl text-left shadow-sm ${
+            msg.mediaUrl && !msg.body ? "" : mine ? "bg-[#FF5741] text-white" : "bg-slate-100 text-slate-900"
           } ${msg.deletedAt ? "italic opacity-60" : ""}`}
         >
-          {msg.deletedAt ? "Message removed" : msg.body}
+          {msg.deletedAt ? (
+            <span className="block px-4 py-2.5 text-[14px] leading-relaxed">Message removed</span>
+          ) : (
+            <>
+              {msg.mediaUrl ? <img src={msg.mediaUrl} alt="" className="block max-h-72 w-full object-cover" /> : null}
+              {msg.body ? (
+                <span className={`block px-4 py-2.5 text-[14px] leading-relaxed ${msg.mediaUrl ? (mine ? "bg-[#FF5741] text-white" : "bg-slate-100 text-slate-900") : ""}`}>
+                  {msg.body}
+                </span>
+              ) : null}
+            </>
+          )}
         </button>
       </div>
       {/* Inline, not an absolute overlay — a popover here would get silently
@@ -385,13 +398,28 @@ function Thread({ conversationId }: { conversationId: string }) {
   useEffect(() => { load(); }, [conversationId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length]);
 
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const onPickPhoto = (file: File | undefined) => {
+    if (!file) return;
+    if (!PHOTO_TYPES.has(file.type)) { setPhotoError("Choose a JPG, PNG, or WebP image."); return; }
+    if (file.size > PHOTO_MAX_BYTES) { setPhotoError("That image is too large — under 4 MB please."); return; }
+    setPhotoError(null);
+    const reader = new FileReader();
+    reader.onload = () => { if (typeof reader.result === "string") setPhotoDataUrl(reader.result); };
+    reader.onerror = () => setPhotoError("Couldn't read that image. Try another.");
+    reader.readAsDataURL(file);
+  };
+
   const send = () => {
     const body = draft.trim();
-    if (!body || sending) return;
+    if ((!body && !photoDataUrl) || sending) return;
     setSending(true);
-    void api.sendMessage(conversationId, body).then((r) => {
+    void api.sendMessage(conversationId, body, photoDataUrl).then((r) => {
       setSending(false);
-      if (r.ok) { setDraft(""); setMessages((prev) => [...prev, r.data.message]); }
+      if (r.ok) { setDraft(""); setPhotoDataUrl(null); setMessages((prev) => [...prev, r.data.message]); }
       else toast(r.error.message ?? "Couldn't send. Try again.", "info");
     });
   };
@@ -481,24 +509,48 @@ function Thread({ conversationId }: { conversationId: string }) {
         <div ref={bottomRef} />
       </div>
 
-      <div className="flex items-center gap-2 border-t border-slate-100 pt-3">
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") send(); }}
-          placeholder="Message…"
-          maxLength={2000}
-          className="h-11 flex-1 rounded-full border border-slate-200 bg-white px-4 text-[15px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
-        />
-        <button
-          type="button"
-          disabled={!draft.trim() || sending}
-          onClick={send}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#14171C] text-white disabled:opacity-40"
-        >
-          <Icon name="chevronRight" className="h-5 w-5" />
-        </button>
+      <div className="border-t border-slate-100 pt-3">
+        {photoError ? <p role="alert" className="mb-2 text-[12px] font-semibold text-red-700">{photoError}</p> : null}
+        {photoDataUrl ? (
+          <div className="mb-2 flex items-center gap-2">
+            <img src={photoDataUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />
+            <button type="button" onClick={() => setPhotoDataUrl(null)} className="text-[13px] font-bold text-slate-500 underline underline-offset-2">Remove</button>
+          </div>
+        ) : null}
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => { onPickPhoto(e.target.files?.[0]); e.target.value = ""; }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            aria-label="Attach a photo"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2"><path d="M4 8h3l2-2h6l2 2h3v11H4z" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="13.5" r="3.5"/></svg>
+          </button>
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+            placeholder="Message…"
+            maxLength={2000}
+            className="h-11 flex-1 rounded-full border border-slate-200 bg-white px-4 text-[15px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
+          />
+          <button
+            type="button"
+            disabled={(!draft.trim() && !photoDataUrl) || sending}
+            onClick={send}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#14171C] text-white disabled:opacity-40"
+          >
+            <Icon name="chevronRight" className="h-5 w-5" />
+          </button>
+        </div>
       </div>
     </div>
   );
