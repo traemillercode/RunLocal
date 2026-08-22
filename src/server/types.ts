@@ -435,6 +435,8 @@ export interface PersistedDb {
   checkinQrSessions?: import("./checkins").CheckInQrSession[];
   /** Runner connections — one row per pair, keyed by the sorted pair. */
   connections?: ConnectionRecord[];
+  conversations?: ConversationRecord[];
+  messages?: MessageRecord[];
   /** Per-account privacy settings (keyed by accountId; defaults when absent). */
   privacy?: PrivacySettingsRecord[];
   /** Runner tags on content ("run"|"post"|"event"). */
