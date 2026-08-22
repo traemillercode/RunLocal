@@ -1750,25 +1750,32 @@ async function handleApi(
     return m ? m[1] : null;
   })();
 
+  // Shared by both the list and single-conversation endpoints so they can
+  // never drift out of sync — the bug this fixes was exactly that: the
+  // detail endpoint used to return the raw DB record (name: null for every
+  // 1:1 thread, no otherProfile at all), while only the list endpoint built
+  // the enriched shape the UI actually needs.
+  const enrichConversation = (c: import("./types").ConversationRecord, viewerId: string) => {
+    const otherId = !c.isGroup ? c.participantIds.find((id) => id !== viewerId) ?? null : null;
+    const other = otherId ? db.getAccount(otherId) : null;
+    const msgs = db.getMessages(c.id);
+    const last = msgs[msgs.length - 1] ?? null;
+    return {
+      id: c.id,
+      isGroup: c.isGroup,
+      name: c.isGroup ? c.name : (other ? publicRunnerProfile(other, now)?.name ?? other.name : "Deleted account"),
+      participantIds: c.participantIds,
+      otherProfile: other ? publicRunnerProfile(other, now) : null,
+      lastMessage: last ? { body: last.deletedAt ? null : last.body, senderId: last.senderId, createdAt: last.createdAt } : null,
+      lastMessageAt: c.lastMessageAt,
+      runCreatedId: c.runCreatedId,
+    };
+  };
+
   if (method === "GET" && url.pathname === "/api/conversations") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
-    const list = db.getConversationsForAccount(sess.accountId).map((c) => {
-      const otherId = !c.isGroup ? c.participantIds.find((id) => id !== sess.accountId) ?? null : null;
-      const other = otherId ? db.getAccount(otherId) : null;
-      const msgs = db.getMessages(c.id);
-      const last = msgs[msgs.length - 1] ?? null;
-      return {
-        id: c.id,
-        isGroup: c.isGroup,
-        name: c.isGroup ? c.name : (other ? publicRunnerProfile(other, now)?.name ?? other.name : "Deleted account"),
-        participantIds: c.participantIds,
-        otherProfile: other ? publicRunnerProfile(other, now) : null,
-        lastMessage: last ? { body: last.deletedAt ? null : last.body, senderId: last.senderId, createdAt: last.createdAt } : null,
-        lastMessageAt: c.lastMessageAt,
-        runCreatedId: c.runCreatedId,
-      };
-    });
+    const list = db.getConversationsForAccount(sess.accountId).map((c) => enrichConversation(c, sess.accountId));
     return ok(res, { conversations: list }), true;
   }
 
@@ -1813,7 +1820,7 @@ async function handleApi(
       deletedAt: m.deletedAt,
       reactions: m.reactions,
     }));
-    return ok(res, { conversation: convo, messages }), true;
+    return ok(res, { conversation: enrichConversation(convo, sess.accountId), messages }), true;
   }
 
   if (method === "POST" && messageRoute) {
