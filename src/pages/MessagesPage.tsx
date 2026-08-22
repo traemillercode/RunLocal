@@ -16,6 +16,7 @@ import * as api from "../lib/api";
 import { Icon, PillButton } from "../components/ui";
 import { useAccount } from "../state/account";
 import { useToast } from "../lib/toast";
+import { CameraCapture } from "../components/CameraCapture";
 
 const QUICK_REACTIONS = ["❤️", "😂", "👍", "😮", "😢", "🔥", "🙏", "🎉"];
 const PHOTO_MAX_BYTES = 4 * 1024 * 1024;
@@ -520,7 +521,7 @@ function Thread({ conversationId }: { conversationId: string }) {
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const onPickPhoto = (file: File | undefined) => {
     if (!file) return;
@@ -574,6 +575,20 @@ function Thread({ conversationId }: { conversationId: string }) {
   };
 
   if (!convo) return <div className="mx-auto max-w-lg px-4 py-6 text-sm text-slate-500">Loading…</div>;
+
+  if (cameraOpen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black">
+        <CameraCapture
+          confirmLabel="Use photo"
+          facingMode="environment"
+          mirror={false}
+          onCapture={(dataUrl) => { setPhotoDataUrl(dataUrl); setCameraOpen(false); }}
+          onCancel={() => setCameraOpen(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex h-[calc(100dvh-4rem)] max-w-lg flex-col px-4 py-4">
@@ -685,14 +700,6 @@ function Thread({ conversationId }: { conversationId: string }) {
             className="hidden"
             onChange={(e) => { onPickPhoto(e.target.files?.[0]); e.target.value = ""; }}
           />
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => { onPickPhoto(e.target.files?.[0]); e.target.value = ""; }}
-          />
           <button
             type="button"
             onClick={() => libraryInputRef.current?.click()}
@@ -703,7 +710,7 @@ function Thread({ conversationId }: { conversationId: string }) {
           </button>
           <button
             type="button"
-            onClick={() => cameraInputRef.current?.click()}
+            onClick={() => setCameraOpen(true)}
             aria-label="Take a photo"
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
           >

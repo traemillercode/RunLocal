@@ -20,9 +20,13 @@ export interface CameraCaptureProps {
   onCancel: () => void;
   /** Label for the final submit button (default "Use photo"). */
   confirmLabel?: string;
+  /** "user" (front/selfie) or "environment" (rear) — default "user" preserves the original selfie-verification behavior exactly. */
+  facingMode?: "user" | "environment";
+  /** Mirror the preview and capture, matching what a front camera shows you. Defaults to true for "user" facing, should be false for "environment" (a rear photo should never be mirrored). */
+  mirror?: boolean;
 }
 
-function downscaleToDataUrl(video: HTMLVideoElement): string {
+function downscaleToDataUrl(video: HTMLVideoElement, mirror: boolean): string {
   const maxEdge = SELFIE_MAX_EDGE;
   const scale = Math.min(1, maxEdge / Math.max(video.videoWidth, video.videoHeight));
   const w = Math.max(1, Math.round(video.videoWidth * scale));
@@ -33,14 +37,15 @@ function downscaleToDataUrl(video: HTMLVideoElement): string {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("canvas unsupported");
   // Mirror the preview (front camera) so the captured image matches what the
-  // user saw; the preview video element is mirrored with CSS too.
-  ctx.translate(w, 0);
-  ctx.scale(-1, 1);
+  // user saw; the preview video element is mirrored with CSS too. Only
+  // applies to front-facing capture — a rear-camera photo should never be
+  // mirrored, that would flip any text or scene backwards.
+  if (mirror) { ctx.translate(w, 0); ctx.scale(-1, 1); }
   ctx.drawImage(video, 0, 0, w, h);
   return canvas.toDataURL("image/jpeg", SELFIE_JPEG_QUALITY);
 }
 
-export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" }: CameraCaptureProps) {
+export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo", facingMode = "user", mirror = facingMode === "user" }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [status, setStatus] = useState<CameraStatus>("requesting");
@@ -74,7 +79,7 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
     setErrorDetail("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
       streamRef.current = stream;
@@ -114,7 +119,7 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
       return;
     }
     try {
-      const dataUrl = downscaleToDataUrl(video);
+      const dataUrl = downscaleToDataUrl(video, mirror);
       setCapturedUrl(dataUrl);
       setStatus("captured");
       stopTracks();
@@ -140,7 +145,7 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo" 
           muted
           autoPlay
           className={`h-full w-full object-cover ${status === "ready" ? "" : "invisible"}`}
-          style={{ transform: "scaleX(-1)" }}
+          style={mirror ? { transform: "scaleX(-1)" } : undefined}
           aria-label="Live selfie preview"
           onLoadedData={handleLoadedData}
         />
