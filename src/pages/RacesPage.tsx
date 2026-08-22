@@ -3,6 +3,7 @@ import { Chip, Icon, PillButton, Sheet } from "../components/ui";
 import { ActionMenu } from "../components/ActionMenu";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { HomeCityBanner } from "../components/HomeCityBanner";
+import { ProfileCompletionBanner } from "../components/ProfileCompletionBanner";
 import { RaceSubmissionSheet } from "../components/SubmissionSheets";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { formatRaceDate } from "../lib/dates";
@@ -194,6 +195,7 @@ export function RacesPage({ city }: { city: City }) {
         </PillButton>
       </div>
       <HomeCityBanner />
+      <ProfileCompletionBanner />
 
       <ul className="mt-4 space-y-3">
         {races.map((r) => {

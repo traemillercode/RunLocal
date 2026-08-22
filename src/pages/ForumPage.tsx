@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { HomeCityBanner } from "../components/HomeCityBanner";
+import { ProfileCompletionBanner } from "../components/ProfileCompletionBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { ActionMenu } from "../components/ActionMenu";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
@@ -1162,6 +1163,7 @@ export function ForumPage({ city }: { city: City }) {
       </div>
 
       <HomeCityBanner />
+      <ProfileCompletionBanner />
       {activityCards.length > 0 ? <section aria-label="Community activity" className="mt-4 space-y-2">
         <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Community activity</h2>
         {activityCards.map((card) => <article key={card.id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70"><div className="flex items-center justify-between"><strong className="text-slate-900">{card.type} · {(card.distanceMeters / 1000).toFixed(1)} km</strong><span className="text-xs font-semibold text-slate-500">{card.attribution}</span></div><p className="mt-1 text-xs text-slate-500">{Math.round(card.durationSeconds / 60)} min · shared activity</p></article>)}

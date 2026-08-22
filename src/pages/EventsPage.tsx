@@ -3,6 +3,7 @@ import { EventCard } from "../components/EventCard";
 import { ActionMenu } from "../components/ActionMenu";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { HomeCityBanner } from "../components/HomeCityBanner";
+import { ProfileCompletionBanner } from "../components/ProfileCompletionBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { GroupSubmissionSheet, IndependentEventSheet, SoloRunSheet } from "../components/SubmissionSheets";
 import { Chip, Icon, PillButton, Sheet } from "../components/ui";
@@ -525,6 +526,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
         </div>
       </div>
       <HomeCityBanner />
+      <ProfileCompletionBanner />
       <Link to="/past-events" className="mt-3 inline-flex min-h-10 items-center gap-1 rounded-full bg-slate-100 px-3 text-xs font-bold text-slate-700">View past events <Icon name="chevronRight" className="h-4 w-4" /></Link>
       <div className="relative mt-4">
         <Icon name="search" className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
