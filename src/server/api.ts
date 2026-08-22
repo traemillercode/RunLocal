@@ -895,6 +895,29 @@ async function handleApi(
     const cards = db.listActivities().filter(a => a.shareMode !== "private").flatMap(a => { const owner=db.getAccount(a.accountId); return owner?.cityId===cityId ? [publicActivityCard(a)] : []; });
     return ok(res, { cards }), true;
   }
+  // ---- OAuth callback — completes the connection Strava redirects back to.
+  // This is the actual STRAVA_REDIRECT_URI target: a server route, not the
+  // client /callback page (that page is a deliberate stub for deployments
+  // where this route isn't wired — see its own comment). State is bound to
+  // the initiating account at authorizeUrl() time and re-checked here so a
+  // stolen/replayed code from another session can't attach to this account.
+  if (method === "GET" && url.pathname === "/api/connections/strava/callback") {
+    const sess = requireSession(db, cookies);
+    const settingsUrl = (q: string) => { res.writeHead(302, { Location: `/settings${q}` }); res.end(); return true; };
+    if (!sess) return settingsUrl("?strava=error");
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    if (url.searchParams.get("error") || !code || !state || !stateValid(state, sess.accountId, "strava")) return settingsUrl("?strava=error");
+    try {
+      const tokens = await adapters.strava.exchange(code);
+      db.setToken({ accountId: sess.accountId, provider: "strava", accessToken: tokens.accessToken, refreshToken: tokens.refreshToken ?? null, expiresAt: tokens.expiresAt ?? null, providerUserId: tokens.providerUserId ?? null });
+      await db.persist();
+      return settingsUrl("?strava=connected");
+    } catch {
+      return settingsUrl("?strava=error");
+    }
+  }
+
   if ((method === "GET" || method === "POST") && provider && validProvider(provider) && url.pathname === `/api/connections/${provider}`) {
     const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
     const account=db.getAccount(sess.accountId); if (!account || account.status!=="verified") return err(res,{status:403,error:"verified_runner_required"}),true;
