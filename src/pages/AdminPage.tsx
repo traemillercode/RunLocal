@@ -24,6 +24,7 @@ import { CITIES } from "../data/cities";
 import { ContentManagementSection } from "../components/ContentManagementSection";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { useAccount } from "../state/account";
+import { useToast } from "../lib/toast";
 
 const inputCls =
   "h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
@@ -51,6 +52,7 @@ function maskIp(ip: string | null): string {
 
 export function AdminPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const { me, refresh: refreshAccount } = useAccount();
   // The owner/super-admin (server-derived isOwner flag from /api/me) gets the
   // control center through their normal signed-in session — no key needed.
@@ -180,13 +182,16 @@ export function AdminPage() {
           }
           await refreshAccount();
           void loadQueue();
+          toast(`${row.name} is now Verified.`, "success");
         } else {
+          const row = pending?.find((r) => r.id === sheet.id);
           const r = await api.adminSetStatus(sheet.id, "reject", reason);
           if (!r.ok) {
             setSheetError(r.error.status === 401 ? "Your admin session expired — sign in again." : r.error.message ?? "Rejection failed.");
             return;
           }
           void loadQueue();
+          toast(`${row?.name ?? "Applicant"} was rejected.`, "info");
         }
       } else if (sheet.kind === "record" && record) {
         const r = sheet.action === "approve" ? await api.adminSetStatus(record.id, "approve", reason) : await api.adminSetStatus(record.id, "reject", reason);
@@ -198,6 +203,7 @@ export function AdminPage() {
         setResults(null);
         setDetailError(null);
         void doSearch();
+        toast(sheet.action === "approve" ? `${record.name} is now Verified.` : `${record.name} was rejected.`, sheet.action === "approve" ? "success" : "info");
       }
       setSheet(null);
     } finally {
