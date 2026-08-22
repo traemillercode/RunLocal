@@ -585,7 +585,7 @@ export function SettingsPage() {
    */
   const saveHomeCity = async () => {
     const target = pendingCityId;
-    if (!target || target === cityId) {
+    if (!target || (hasHomeCity && target === cityId)) {
       setPendingCityId(null);
       setCitySaveError(null);
       return;
