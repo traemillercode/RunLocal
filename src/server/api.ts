@@ -1750,6 +1750,7 @@ async function handleApi(
       lastMessageAt: c.lastMessageAt,
       runCreatedId: c.runCreatedId,
       readBy: c.readBy,
+      photoUrl: c.photoRef ? `/uploads/public/${c.photoRef}` : null,
     };
   };
 
@@ -1806,7 +1807,34 @@ async function handleApi(
     // chat app. No separate "mark read" action needed from the client.
     const updatedConvo = db.updateConversation(convo.id, { readBy: { ...convo.readBy, [sess.accountId]: now.toISOString() } }) ?? convo;
     await db.persist();
-    return ok(res, { conversation: enrichConversation(updatedConvo, sess.accountId), messages }), true;
+    const typingProfiles = db.getTypingAccountIds(convo.id, sess.accountId, now).flatMap((id) => { const rec = db.getAccount(id); return rec ? [rec.name] : []; });
+    return ok(res, { conversation: enrichConversation(updatedConvo, sess.accountId), messages, typingNames: typingProfiles }), true;
+  }
+
+  // GET /api/conversations/:id/typing — lightweight poll target (every 2-3s
+  // while a thread is open) so the client isn't re-fetching the whole
+  // message list just to check who's typing.
+  if (method === "GET" && url.pathname.startsWith("/api/conversations/") && url.pathname.endsWith("/typing")) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const convoId = url.pathname.split("/").at(-2)!;
+    const convo = db.getConversation(convoId);
+    if (!convo || !convo.participantIds.includes(sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
+    const names = db.getTypingAccountIds(convo.id, sess.accountId, now).flatMap((id) => { const rec = db.getAccount(id); return rec ? [rec.name] : []; });
+    return ok(res, { typingNames: names }), true;
+  }
+
+  // POST /api/conversations/:id/typing — client calls this on a debounce
+  // while the user is actively typing (a couple times a second at most, not
+  // per keystroke). Ephemeral, in-memory, never persisted — see setTyping.
+  if (method === "POST" && url.pathname.startsWith("/api/conversations/") && url.pathname.endsWith("/typing")) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const convoId = url.pathname.split("/").at(-2)!;
+    const convo = db.getConversation(convoId);
+    if (!convo || !convo.participantIds.includes(sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
+    db.setTyping(convo.id, sess.accountId, now);
+    return ok(res, { ok: true }), true;
   }
 
   if (method === "POST" && messageRoute) {
@@ -1883,6 +1911,29 @@ async function handleApi(
     const updated = db.updateConversation(convo.id, { name });
     await db.persist();
     return ok(res, { conversation: updated }), true;
+  }
+
+  // POST /api/conversations/:id/photo — set the group's photo. Any member can
+  // set it (unlike rename, which is creator-only) — same convention as
+  // WhatsApp/IG group photos, low-stakes enough not to gate.
+  if (method === "POST" && url.pathname.startsWith("/api/conversations/") && url.pathname.endsWith("/photo")) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const convoId = url.pathname.split("/").at(-2)!;
+    const convo = db.getConversation(convoId);
+    if (!convo || !convo.participantIds.includes(sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
+    if (!convo.isGroup) return err(res, { status: 400, error: "not_a_group" }), true;
+    const body = (await readJson(req)) as { photo?: unknown };
+    if (typeof body.photo !== "string") return err(res, { status: 400, error: "invalid_image" }), true;
+    const img = decodeImage(body.photo, 128);
+    if (!img.ok) return err(res, { status: 400, error: img.error }), true;
+    const filename = `convo_${convo.id}_${newId()}.${img.ext}`;
+    await db.writePublicUpload(filename, img.bytes);
+    const prev = convo.photoRef;
+    const updated = db.updateConversation(convo.id, { photoRef: filename });
+    if (prev) void db.deletePublicUpload(prev);
+    await db.persist();
+    return ok(res, { photoUrl: `/uploads/public/${filename}`, conversation: updated }), true;
   }
 
   // POST /api/conversations/:id/leave — removes the caller from a group

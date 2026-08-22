@@ -302,6 +302,8 @@ export class Db {
   private messages = new Map<string, import("./types").MessageRecord>();
   private trainingPlans = new Map<string, import("./types").TrainingPlanRecord>();
   private forumVotes = new Map<string, import("./types").ForumVoteRecord>();
+  /** Ephemeral typing state — accountId -> expiry timestamp, per conversation. Deliberately NOT part of load/persist: it's a live-only signal, meaningless across a restart, and would just be stale noise if saved. */
+  private typing = new Map<string, Map<string, number>>();
   /** Per-account privacy settings — keyed by accountId (defaults when absent). */
   private privacy = new Map<string, import("./types").PrivacySettingsRecord>();
   /** Runner tags on content — keyed by tag id. */
@@ -421,7 +423,7 @@ export class Db {
       for (const c of parsed.connections ?? []) {
         this.connections.set(connectionKey(c.requesterId, c.addresseeId), { ...c, respondedAt: c.respondedAt ?? null, removedAt: c.removedAt ?? null });
       }
-      for (const c of parsed.conversations ?? []) this.conversations.set(c.id, { ...c, runCreatedId: c.runCreatedId ?? null, readBy: c.readBy ?? {} });
+      for (const c of parsed.conversations ?? []) this.conversations.set(c.id, { ...c, runCreatedId: c.runCreatedId ?? null, readBy: c.readBy ?? {}, photoRef: c.photoRef ?? null });
       for (const m of parsed.messages ?? []) this.messages.set(m.id, { ...m, deletedAt: m.deletedAt ?? null, reactions: m.reactions ?? {}, mediaRef: m.mediaRef ?? null });
       for (const t of parsed.trainingPlans ?? []) this.trainingPlans.set(t.accountId, t);
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
@@ -1147,6 +1149,24 @@ export class Db {
   }
   hasForumVote(accountId: string, postId: string): boolean {
     return this.forumVotes.has(`${accountId}:${postId}`);
+  }
+  /** Called on each keystroke (client-debounced) — marks this person as typing for a few seconds. */
+  setTyping(conversationId: string, accountId: string, now: Date, ttlMs = 5000): void {
+    let m = this.typing.get(conversationId);
+    if (!m) { m = new Map(); this.typing.set(conversationId, m); }
+    m.set(accountId, now.getTime() + ttlMs);
+  }
+  /** Everyone currently typing in this conversation, excluding the caller and anyone whose signal has expired. */
+  getTypingAccountIds(conversationId: string, excludeAccountId: string, now: Date): string[] {
+    const m = this.typing.get(conversationId);
+    if (!m) return [];
+    const nowMs = now.getTime();
+    const active: string[] = [];
+    for (const [accountId, expiresAt] of m) {
+      if (expiresAt < nowMs) m.delete(accountId);
+      else if (accountId !== excludeAccountId) active.push(accountId);
+    }
+    return active;
   }
   getPrivacy(accountId: string): import("./types").PrivacySettingsRecord {
     return this.privacy.get(accountId) ?? { accountId, ...PRIVACY_DEFAULTS };

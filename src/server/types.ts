@@ -605,6 +605,8 @@ export interface ConversationRecord {
   runCreatedId: string | null;
   /** accountId -> ISO timestamp of that person's last-read moment in this thread. A message is "seen" once every other participant's readBy timestamp is >= its createdAt. */
   readBy: Record<string, string>;
+  /** Group photo — filename under /uploads/public/. Null/absent shows the default group icon. 1:1 threads never set this (they show the other person's profile photo instead). */
+  photoRef?: string | null;
 }
 
 export interface MessageRecord {

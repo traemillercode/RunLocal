@@ -400,7 +400,8 @@ function Thread({ conversationId }: { conversationId: string }) {
 
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const onPickPhoto = (file: File | undefined) => {
     if (!file) return;
@@ -519,16 +520,32 @@ function Thread({ conversationId }: { conversationId: string }) {
         ) : null}
         <div className="flex items-center gap-2">
           <input
-            ref={fileInputRef}
+            ref={libraryInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
             className="hidden"
             onChange={(e) => { onPickPhoto(e.target.files?.[0]); e.target.value = ""; }}
           />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => { onPickPhoto(e.target.files?.[0]); e.target.value = ""; }}
+          />
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            aria-label="Attach a photo"
+            onClick={() => libraryInputRef.current?.click()}
+            aria-label="Choose a photo from your library"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5-4 4-2-2-5 5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            aria-label="Take a photo"
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2"><path d="M4 8h3l2-2h6l2 2h3v11H4z" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="13.5" r="3.5"/></svg>
