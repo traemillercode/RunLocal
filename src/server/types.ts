@@ -621,6 +621,8 @@ export interface MessageRecord {
   reactions: Record<string, string>;
   /** Set when this message carries a photo — filename under /uploads/public/. A message can be image-only (body can be empty) or image + caption. */
   mediaRef?: string | null;
+  /** Set when the sender edits the message — editing is only allowed within 10 minutes of createdAt (enforced server-side, not just in the UI). */
+  editedAt?: string | null;
 }
 
 /**

@@ -424,7 +424,7 @@ export class Db {
         this.connections.set(connectionKey(c.requesterId, c.addresseeId), { ...c, respondedAt: c.respondedAt ?? null, removedAt: c.removedAt ?? null });
       }
       for (const c of parsed.conversations ?? []) this.conversations.set(c.id, { ...c, runCreatedId: c.runCreatedId ?? null, readBy: c.readBy ?? {}, photoRef: c.photoRef ?? null });
-      for (const m of parsed.messages ?? []) this.messages.set(m.id, { ...m, deletedAt: m.deletedAt ?? null, reactions: m.reactions ?? {}, mediaRef: m.mediaRef ?? null });
+      for (const m of parsed.messages ?? []) this.messages.set(m.id, { ...m, deletedAt: m.deletedAt ?? null, reactions: m.reactions ?? {}, mediaRef: m.mediaRef ?? null, editedAt: m.editedAt ?? null });
       for (const t of parsed.trainingPlans ?? []) this.trainingPlans.set(t.accountId, t);
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
       // Privacy: records persisted before a field existed are merged over the
@@ -1122,6 +1122,20 @@ export class Db {
     const reactions = { ...m.reactions };
     if (emoji) reactions[accountId] = emoji; else delete reactions[accountId];
     const next = { ...m, reactions };
+    this.messages.set(messageId, next);
+    return next;
+  }
+  editMessage(messageId: string, body: string, now: Date): import("./types").MessageRecord | undefined {
+    const m = this.messages.get(messageId);
+    if (!m) return undefined;
+    const next = { ...m, body, editedAt: now.toISOString() };
+    this.messages.set(messageId, next);
+    return next;
+  }
+  deleteMessage(messageId: string, now: Date): import("./types").MessageRecord | undefined {
+    const m = this.messages.get(messageId);
+    if (!m) return undefined;
+    const next = { ...m, deletedAt: now.toISOString() };
     this.messages.set(messageId, next);
     return next;
   }

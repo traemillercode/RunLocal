@@ -1802,6 +1802,7 @@ async function handleApi(
       deletedAt: m.deletedAt,
       reactions: m.reactions,
       mediaUrl: !m.deletedAt && m.mediaRef ? `/uploads/public/${m.mediaRef}` : null,
+      editedAt: m.editedAt ?? null,
     }));
     // Opening a thread marks it read — same convention as every mainstream
     // chat app. No separate "mark read" action needed from the client.
@@ -1871,8 +1872,38 @@ async function handleApi(
     return ok(res, { message: updated }), true;
   }
 
-  // POST /api/conversations/:id/create-run — spins up a run from a group
-  // thread; every participant becomes an invitee. :id is the conversation id.
+  // PUT /api/messages/:id — edit your own message's text. Sender only, and
+  // only within 10 minutes of sending — enforced here server-side, not just
+  // hidden in the UI, so it can't be bypassed by calling the API directly.
+  const messageEditPath = /^\/api\/messages\/([^/]+)$/.exec(url.pathname);
+  if (method === "PUT" && messageEditPath) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const msg = db.getMessage(messageEditPath[1]);
+    if (!msg || msg.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
+    if (msg.senderId !== sess.accountId) return err(res, { status: 403, error: "forbidden" }), true;
+    const ageMs = now.getTime() - new Date(msg.createdAt).getTime();
+    if (ageMs > 10 * 60 * 1000) return err(res, { status: 403, error: "edit_window_expired", message: "This message can no longer be edited — the 10-minute window has passed." }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const text = typeof body.body === "string" ? body.body.trim().slice(0, 2000) : "";
+    if (!text) return err(res, { status: 400, error: "empty_message", message: "A message can't be edited to be empty — delete it instead." }), true;
+    const updated = db.editMessage(msg.id, text, now)!;
+    await db.persist();
+    return ok(res, { message: { ...updated, mediaUrl: updated.mediaRef ? `/uploads/public/${updated.mediaRef}` : null } }), true;
+  }
+
+  // DELETE /api/messages/:id — sender only, no time limit. Soft-delete
+  // (keeps the row so ordering/counts stay stable, renders as "removed").
+  if (method === "DELETE" && messageEditPath) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const msg = db.getMessage(messageEditPath[1]);
+    if (!msg) return err(res, { status: 404, error: "not_found" }), true;
+    if (msg.senderId !== sess.accountId) return err(res, { status: 403, error: "forbidden" }), true;
+    const updated = db.deleteMessage(msg.id, now)!;
+    await db.persist();
+    return ok(res, { message: updated }), true;
+  }
   if (method === "POST" && url.pathname.startsWith("/api/conversations/") && url.pathname.endsWith("/create-run")) {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;

@@ -572,7 +572,18 @@ function Thread({ conversationId }: { conversationId: string }) {
           const others = convo.participantIds.filter((id) => id !== myId);
           const seenByAll = others.length > 0 && others.every((id) => convo.readBy[id] && convo.readBy[id] >= last.createdAt);
           if (!seenByAll) return null;
-          return <p className="text-right text-[11px] text-slate-400">{convo.isGroup ? "Seen by everyone" : "Seen"}</p>;
+          if (!convo.isGroup && convo.otherProfile) {
+            return (
+              <div className="flex items-center justify-end gap-1">
+                {convo.otherProfile.profilePhotoUrl ? (
+                  <img src={convo.otherProfile.profilePhotoUrl} alt="" className="h-4 w-4 rounded-full object-cover" />
+                ) : (
+                  <span className="grid h-4 w-4 place-items-center rounded-full bg-slate-300 text-[8px] font-bold text-white">{initials(convo.name)}</span>
+                )}
+              </div>
+            );
+          }
+          return <p className="text-right text-[11px] text-slate-400">Seen by everyone</p>;
         })()}
         {typingNames.length > 0 ? (
           <div className="flex items-center gap-2 text-[13px] text-slate-400">
