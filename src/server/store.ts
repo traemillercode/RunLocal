@@ -273,6 +273,8 @@ export class Db {
   private checkinQrSessions = new Map<string, import("./checkins").CheckInQrSession>();
   /** Runner connections — keyed by the SORTED pair (least/greatest id), so one row per pair. */
   private connections = new Map<string, import("./types").ConnectionRecord>();
+  private conversations = new Map<string, import("./types").ConversationRecord>();
+  private messages = new Map<string, import("./types").MessageRecord>();
   /** Per-account privacy settings — keyed by accountId (defaults when absent). */
   private privacy = new Map<string, import("./types").PrivacySettingsRecord>();
   /** Runner tags on content — keyed by tag id. */
@@ -392,6 +394,8 @@ export class Db {
       for (const c of parsed.connections ?? []) {
         this.connections.set(connectionKey(c.requesterId, c.addresseeId), { ...c, respondedAt: c.respondedAt ?? null, removedAt: c.removedAt ?? null });
       }
+      for (const c of parsed.conversations ?? []) this.conversations.set(c.id, { ...c, runCreatedId: c.runCreatedId ?? null });
+      for (const m of parsed.messages ?? []) this.messages.set(m.id, { ...m, deletedAt: m.deletedAt ?? null, reactions: m.reactions ?? {} });
       // Privacy: records persisted before a field existed are merged over the
       // verbatim owner-spec defaults so they keep working.
       for (const p of parsed.privacy ?? []) this.privacy.set(p.accountId, { ...PRIVACY_DEFAULTS, ...p, accountId: p.accountId });
@@ -446,6 +450,8 @@ export class Db {
       checkins: [...this.checkins.values()],
       checkinQrSessions: [...this.checkinQrSessions.values()],
       connections: [...this.connections.values()],
+      conversations: [...this.conversations.values()],
+      messages: [...this.messages.values()],
       privacy: [...this.privacy.values()],
       tags: [...this.tags.values()],
     };
@@ -999,7 +1005,57 @@ export class Db {
     }
     return undefined;
   }
-  /** The account's privacy settings — verbatim owner-spec defaults when no record exists. */
+  /** Finds the existing 1:1 thread between two accounts, or creates one. Never duplicates — the pair is looked up by membership, not a derived key, so it's stable regardless of who messages first. */
+  findOrCreateDirectConversation(a: string, b: string, now: Date): import("./types").ConversationRecord {
+    for (const c of this.conversations.values()) {
+      if (!c.isGroup && c.participantIds.length === 2 && c.participantIds.includes(a) && c.participantIds.includes(b)) return c;
+    }
+    const rec: import("./types").ConversationRecord = { id: newId(), isGroup: false, name: null, participantIds: [a, b], createdBy: a, createdAt: now.toISOString(), lastMessageAt: now.toISOString(), runCreatedId: null };
+    this.conversations.set(rec.id, rec);
+    return rec;
+  }
+  createGroupConversation(input: { name: string; participantIds: string[]; createdBy: string }, now: Date): import("./types").ConversationRecord {
+    const rec: import("./types").ConversationRecord = { id: newId(), isGroup: true, name: input.name, participantIds: [...new Set(input.participantIds)], createdBy: input.createdBy, createdAt: now.toISOString(), lastMessageAt: now.toISOString(), runCreatedId: null };
+    this.conversations.set(rec.id, rec);
+    return rec;
+  }
+  getConversation(id: string): import("./types").ConversationRecord | undefined {
+    return this.conversations.get(id);
+  }
+  /** Newest-first by last activity — the natural inbox order. */
+  getConversationsForAccount(accountId: string): import("./types").ConversationRecord[] {
+    return [...this.conversations.values()].filter((c) => c.participantIds.includes(accountId)).sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+  }
+  updateConversation(id: string, patch: Partial<import("./types").ConversationRecord>): import("./types").ConversationRecord | undefined {
+    const c = this.conversations.get(id);
+    if (!c) return undefined;
+    const next = { ...c, ...patch };
+    this.conversations.set(id, next);
+    return next;
+  }
+  addMessage(input: { conversationId: string; senderId: string; body: string }, now: Date): import("./types").MessageRecord {
+    const rec: import("./types").MessageRecord = { id: newId(), conversationId: input.conversationId, senderId: input.senderId, body: input.body, createdAt: now.toISOString(), deletedAt: null, reactions: {} };
+    this.messages.set(rec.id, rec);
+    this.updateConversation(input.conversationId, { lastMessageAt: rec.createdAt });
+    return rec;
+  }
+  /** Oldest-first — natural reading order for a thread. */
+  getMessages(conversationId: string): import("./types").MessageRecord[] {
+    return [...this.messages.values()].filter((m) => m.conversationId === conversationId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+  getMessage(id: string): import("./types").MessageRecord | undefined {
+    return this.messages.get(id);
+  }
+  /** One reaction per person per message — setting again overwrites, passing null removes it. */
+  setReaction(messageId: string, accountId: string, emoji: string | null): import("./types").MessageRecord | undefined {
+    const m = this.messages.get(messageId);
+    if (!m) return undefined;
+    const reactions = { ...m.reactions };
+    if (emoji) reactions[accountId] = emoji; else delete reactions[accountId];
+    const next = { ...m, reactions };
+    this.messages.set(messageId, next);
+    return next;
+  }
   getPrivacy(accountId: string): import("./types").PrivacySettingsRecord {
     return this.privacy.get(accountId) ?? { accountId, ...PRIVACY_DEFAULTS };
   }

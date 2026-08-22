@@ -545,6 +545,36 @@ export interface ConnectionRecord {
 }
 
 /**
+ * A message thread — either a 1:1 between two connected accounts, or a group
+ * with a name and 3+ participants. 1:1 threads are found/reused by sorted
+ * participant-pair lookup (never duplicated); groups are always created fresh.
+ */
+export interface ConversationRecord {
+  id: string;
+  isGroup: boolean;
+  /** Group display name — null for 1:1 threads (shown as the other person's name instead). */
+  name: string | null;
+  participantIds: string[];
+  createdBy: string;
+  createdAt: string;
+  lastMessageAt: string;
+  /** Set once a run has been created from this thread — prevents creating a second one from the same chat. */
+  runCreatedId: string | null;
+}
+
+export interface MessageRecord {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  body: string;
+  createdAt: string;
+  /** Soft-delete — deleted messages keep their row (so ordering/counts stay stable) but render as removed. */
+  deletedAt: string | null;
+  /** accountId -> emoji, one reaction per person per message (re-reacting overwrites). */
+  reactions: Record<string, string>;
+}
+
+/**
  * Per-account privacy settings. When no record exists the store applies
  * `PRIVACY_DEFAULTS` (verbatim owner spec). `show_saved_events` can NEVER be
  * "public" — enforced by `setPrivacy` validation and by the canView guard.

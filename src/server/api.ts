@@ -1685,6 +1685,125 @@ async function handleApi(
     return ok(res, { requests, connections, pendingCount: requests.length }), true;
   }
 
+  // ---- Messaging -------------------------------------------------------
+  // 1:1 threads require an accepted connection (messaging is for people who've
+  // opted into contact, not open DMs). Groups are created directly by their
+  // creator and can include anyone the creator is connected to. Every route
+  // re-checks participantIds server-side — the client's view is never trusted.
+  const messageRoute = (() => {
+    const m = url.pathname.match(/^\/api\/conversations\/([^/]+)\/messages$/);
+    return m ? m[1] : null;
+  })();
+  const reactionRoute = (() => {
+    const m = url.pathname.match(/^\/api\/messages\/([^/]+)\/reaction$/);
+    return m ? m[1] : null;
+  })();
+
+  if (method === "GET" && url.pathname === "/api/conversations") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const list = db.getConversationsForAccount(sess.accountId).map((c) => {
+      const otherId = !c.isGroup ? c.participantIds.find((id) => id !== sess.accountId) ?? null : null;
+      const other = otherId ? db.getAccount(otherId) : null;
+      const msgs = db.getMessages(c.id);
+      const last = msgs[msgs.length - 1] ?? null;
+      return {
+        id: c.id,
+        isGroup: c.isGroup,
+        name: c.isGroup ? c.name : (other ? publicRunnerProfile(other, now)?.name ?? other.name : "Deleted account"),
+        participantIds: c.participantIds,
+        otherProfile: other ? publicRunnerProfile(other, now) : null,
+        lastMessage: last ? { body: last.deletedAt ? null : last.body, senderId: last.senderId, createdAt: last.createdAt } : null,
+        lastMessageAt: c.lastMessageAt,
+        runCreatedId: c.runCreatedId,
+      };
+    });
+    return ok(res, { conversations: list }), true;
+  }
+
+  if (method === "POST" && url.pathname === "/api/conversations") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    if (typeof body.accountId === "string") {
+      // 1:1 — target must be an accepted connection.
+      const target = body.accountId;
+      if (target === sess.accountId) return err(res, { status: 400, error: "invalid_target", message: "You can't message yourself." }), true;
+      const pair = db.getConnectionPair(sess.accountId, target);
+      if (!pair || pair.status !== "accepted") return err(res, { status: 403, error: "not_connected", message: "You can only message accepted connections." }), true;
+      const convo = db.findOrCreateDirectConversation(sess.accountId, target, now);
+      await db.persist();
+      return ok(res, { conversation: convo }), true;
+    }
+    // Group — every invited participant must be an accepted connection of the creator.
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 60) : "";
+    const participantIds = Array.isArray(body.participantIds) ? body.participantIds.filter((x): x is string => typeof x === "string") : [];
+    if (!name) return err(res, { status: 400, error: "invalid_name", message: "Give the group a name." }), true;
+    if (participantIds.length < 2) return err(res, { status: 400, error: "invalid_participants", message: "Add at least two other people." }), true;
+    for (const pid of participantIds) {
+      const pair = db.getConnectionPair(sess.accountId, pid);
+      if (!pair || pair.status !== "accepted") return err(res, { status: 403, error: "not_connected", message: "You can only add accepted connections to a group." }), true;
+    }
+    const convo = db.createGroupConversation({ name, participantIds: [sess.accountId, ...participantIds], createdBy: sess.accountId }, now);
+    await db.persist();
+    return ok(res, { conversation: convo }), true;
+  }
+
+  if (method === "GET" && messageRoute) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const convo = db.getConversation(messageRoute);
+    if (!convo || !convo.participantIds.includes(sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
+    const messages = db.getMessages(convo.id).map((m) => ({
+      id: m.id,
+      senderId: m.senderId,
+      body: m.deletedAt ? null : m.body,
+      createdAt: m.createdAt,
+      deletedAt: m.deletedAt,
+      reactions: m.reactions,
+    }));
+    return ok(res, { conversation: convo, messages }), true;
+  }
+
+  if (method === "POST" && messageRoute) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const convo = db.getConversation(messageRoute);
+    if (!convo || !convo.participantIds.includes(sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const text = typeof body.body === "string" ? body.body.trim().slice(0, 2000) : "";
+    if (!text) return err(res, { status: 400, error: "empty_message", message: "Write something before sending." }), true;
+    const msg = db.addMessage({ conversationId: convo.id, senderId: sess.accountId, body: text }, now);
+    await db.persist();
+    return ok(res, { message: msg }), true;
+  }
+
+  if (method === "PUT" && reactionRoute) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const msg = db.getMessage(reactionRoute);
+    if (!msg) return err(res, { status: 404, error: "not_found" }), true;
+    const convo = db.getConversation(msg.conversationId);
+    if (!convo || !convo.participantIds.includes(sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const emoji = typeof body.emoji === "string" ? body.emoji.slice(0, 8) : null;
+    const updated = db.setReaction(reactionRoute, sess.accountId, emoji || null);
+    await db.persist();
+    return ok(res, { message: updated }), true;
+  }
+
+  // POST /api/conversations/:id/create-run — spins up a run from a group
+  // thread; every participant becomes an invitee. :id is the conversation id.
+  if (method === "POST" && url.pathname.startsWith("/api/conversations/") && url.pathname.endsWith("/create-run")) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const convoId = url.pathname.split("/").at(-2)!;
+    const convo = db.getConversation(convoId);
+    if (!convo || !convo.participantIds.includes(sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
+    if (convo.runCreatedId) return err(res, { status: 409, error: "already_created", message: "A run was already created from this chat." }), true;
+    return ok(res, { conversationId: convo.id, participantIds: convo.participantIds, prefillTitle: convo.isGroup ? convo.name : "Group run" }), true;
+  }
+
   // ---- connection lifecycle mutations --------------------------------------
   // POST /api/connections/:id/request — :id is the TARGET ACCOUNT id.
   // POST /api/connections/:id/accept|decline — :id is the REQUEST id; the
