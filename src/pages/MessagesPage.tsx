@@ -32,9 +32,13 @@ function ConversationRow({ convo, active }: { convo: api.ConversationSummary; ac
       to={`/messages/${convo.id}`}
       className={`flex items-center gap-3 rounded-2xl p-3 ${active ? "bg-slate-100" : "hover:bg-slate-50"}`}
     >
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#14171C] text-sm font-bold text-white">
-        {convo.isGroup ? <Icon name="users" className="h-5 w-5" /> : initials(convo.name)}
-      </div>
+      {convo.isGroup && convo.photoUrl ? (
+        <img src={convo.photoUrl} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />
+      ) : (
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#14171C] text-sm font-bold text-white">
+          {convo.isGroup ? <Icon name="users" className="h-5 w-5" /> : initials(convo.name)}
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <p className="truncate text-[14px] font-bold text-slate-900">{convo.name}</p>
         <p className="truncate text-[13px] text-slate-500">{preview}</p>
@@ -257,12 +261,14 @@ function GroupSettingsSheet({
   convo,
   onClose,
   onRenamed,
+  onPhotoChanged,
   onLeft,
 }: {
   conversationId: string;
   convo: api.ConversationSummary;
   onClose: () => void;
   onRenamed: (name: string) => void;
+  onPhotoChanged: (photoUrl: string) => void;
   onLeft: () => void;
 }) {
   const toast = useToast();
@@ -272,13 +278,32 @@ function GroupSettingsSheet({
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(convo.name);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const isCreator = members?.find((m) => m.id === myId)?.isCreator ?? false;
 
   useEffect(() => {
     void api.getConversationMembers(conversationId).then((r) => { if (r.ok) setMembers(r.data.members); });
   }, [conversationId]);
+
+  const pickGroupPhoto = (file: File | undefined) => {
+    if (!file) return;
+    if (!PHOTO_TYPES.has(file.type)) { toast("Choose a JPG, PNG, or WebP image.", "info"); return; }
+    if (file.size > PHOTO_MAX_BYTES) { toast("That image is too large — under 4 MB please.", "info"); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") return;
+      setUploadingPhoto(true);
+      void api.uploadGroupChatPhoto(conversationId, reader.result).then((r) => {
+        setUploadingPhoto(false);
+        if (r.ok) { onPhotoChanged(r.data.photoUrl); toast("Group photo updated.", "success"); }
+        else toast(r.error.message ?? "Couldn't update the group photo.", "info");
+      });
+    };
+    reader.readAsDataURL(file);
+  };
 
   const saveName = () => {
     const trimmed = name.trim();
@@ -306,6 +331,20 @@ function GroupSettingsSheet({
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-extrabold text-slate-900">Group settings</h2>
           <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-5 w-5" /></button>
+        </div>
+
+        <div className="mt-5 flex justify-center">
+          <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { pickGroupPhoto(e.target.files?.[0]); e.target.value = ""; }} />
+          <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto} className="relative">
+            {convo.photoUrl ? (
+              <img src={convo.photoUrl} alt="" className="h-20 w-20 rounded-full object-cover" />
+            ) : (
+              <span className="grid h-20 w-20 place-items-center rounded-full bg-[#14171C] text-white"><Icon name="users" className="h-8 w-8" /></span>
+            )}
+            <span className="absolute bottom-0 right-0 grid h-7 w-7 place-items-center rounded-full bg-[#FF5741] text-white ring-2 ring-white">
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="2.5"><path d="M4 8h3l2-2h6l2 2h3v11H4z" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="13.5" r="3"/></svg>
+            </span>
+          </button>
         </div>
 
         <div className="mt-5">
@@ -387,16 +426,39 @@ function Thread({ conversationId }: { conversationId: string }) {
   const [sending, setSending] = useState(false);
   const [creatingRun, setCreatingRun] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [typingNames, setTypingNames] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastTypingSentRef = useRef(0);
 
   const load = () => {
     void api.getMessages(conversationId).then((r) => {
-      if (r.ok) { setConvo(r.data.conversation); setMessages(r.data.messages); }
+      if (r.ok) { setConvo(r.data.conversation); setMessages(r.data.messages); setTypingNames(r.data.typingNames ?? []); }
       else toast(r.error.message ?? "Couldn't load that conversation.", "info");
     });
   };
   useEffect(() => { load(); }, [conversationId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length]);
+
+  // Typing indicator: polling-based (no push layer here), so "live" means a
+  // few seconds of latency, not instant keystroke-by-keystroke. Poll while
+  // the thread is open; stop the moment it closes.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void api.getTyping(conversationId).then((r) => { if (r.ok) setTypingNames(r.data.typingNames); });
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [conversationId]);
+
+  const onDraftChange = (value: string) => {
+    setDraft(value);
+    // Throttled, not per-keystroke — the server signal already has its own
+    // few-second expiry, so re-sending every ~2s is enough to keep it alive.
+    const nowMs = Date.now();
+    if (value.trim() && nowMs - lastTypingSentRef.current > 2000) {
+      lastTypingSentRef.current = nowMs;
+      void api.sendTyping(conversationId);
+    }
+  };
 
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -465,7 +527,11 @@ function Thread({ conversationId }: { conversationId: string }) {
           </Link>
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#14171C] text-white"><Icon name="users" className="h-4 w-4" /></span>
+            {convo.photoUrl ? (
+              <img src={convo.photoUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+            ) : (
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#14171C] text-white"><Icon name="users" className="h-4 w-4" /></span>
+            )}
             <div className="min-w-0">
               <p className="truncate text-[15px] font-bold text-slate-900">{convo.name}</p>
               <p className="text-[11px] text-slate-400">{convo.participantIds.length} members</p>
@@ -491,6 +557,7 @@ function Thread({ conversationId }: { conversationId: string }) {
           convo={convo}
           onClose={() => setSettingsOpen(false)}
           onRenamed={(name) => setConvo((c) => (c ? { ...c, name } : c))}
+          onPhotoChanged={(photoUrl) => setConvo((c) => (c ? { ...c, photoUrl } : c))}
           onLeft={() => navigate("/messages")}
         />
       ) : null}
@@ -507,6 +574,16 @@ function Thread({ conversationId }: { conversationId: string }) {
           if (!seenByAll) return null;
           return <p className="text-right text-[11px] text-slate-400">{convo.isGroup ? "Seen by everyone" : "Seen"}</p>;
         })()}
+        {typingNames.length > 0 ? (
+          <div className="flex items-center gap-2 text-[13px] text-slate-400">
+            <span className="flex gap-0.5">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300 [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300 [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300" />
+            </span>
+            {typingNames.length === 1 ? `${typingNames[0]} is typing…` : `${typingNames.join(", ")} are typing…`}
+          </div>
+        ) : null}
         <div ref={bottomRef} />
       </div>
 
@@ -553,7 +630,7 @@ function Thread({ conversationId }: { conversationId: string }) {
           <input
             type="text"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => onDraftChange(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") send(); }}
             placeholder="Message…"
             maxLength={2000}

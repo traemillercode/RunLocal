@@ -990,6 +990,8 @@ export interface ConversationSummary {
   runCreatedId: string | null;
   /** accountId -> ISO timestamp of that person's last-read moment — the basis for "Seen" under your own messages. */
   readBy: Record<string, string>;
+  /** Group photo — null shows the default group icon. Never set for 1:1 threads. */
+  photoUrl?: string | null;
 }
 export interface MessageView {
   id: string;
@@ -1009,7 +1011,7 @@ export function createDirectConversation(accountId: string): Promise<ApiResult<{
 export function createGroupConversation(name: string, participantIds: string[]): Promise<ApiResult<{ conversation: ConversationSummary }>> {
   return request("/api/conversations", { method: "POST", body: JSON.stringify({ name, participantIds }) });
 }
-export function getMessages(conversationId: string): Promise<ApiResult<{ conversation: ConversationSummary; messages: MessageView[] }>> {
+export function getMessages(conversationId: string): Promise<ApiResult<{ conversation: ConversationSummary; messages: MessageView[]; typingNames?: string[] }>> {
   return request(`/api/conversations/${encodeURIComponent(conversationId)}/messages`);
 }
 export function sendMessage(conversationId: string, body: string, photoDataUrl?: string | null): Promise<ApiResult<{ message: MessageView }>> {
@@ -1030,6 +1032,16 @@ export function renameConversation(conversationId: string, name: string): Promis
 }
 export function leaveConversation(conversationId: string): Promise<ApiResult<{ left: boolean }>> {
   return request(`/api/conversations/${encodeURIComponent(conversationId)}/leave`, { method: "POST" });
+}
+export function uploadGroupChatPhoto(conversationId: string, photoDataUrl: string): Promise<ApiResult<{ photoUrl: string; conversation: ConversationSummary }>> {
+  return request(`/api/conversations/${encodeURIComponent(conversationId)}/photo`, { method: "POST", body: JSON.stringify({ photo: photoDataUrl }) });
+}
+/** Call on a debounce while the user is actively typing — not per keystroke. */
+export function sendTyping(conversationId: string): Promise<ApiResult<{ ok: boolean }>> {
+  return request(`/api/conversations/${encodeURIComponent(conversationId)}/typing`, { method: "POST" });
+}
+export function getTyping(conversationId: string): Promise<ApiResult<{ typingNames: string[] }>> {
+  return request(`/api/conversations/${encodeURIComponent(conversationId)}/typing`);
 }
 
 export type TrainingPlanType = "5k" | "10k" | "half_marathon" | "marathon" | "ultra" | "other";
