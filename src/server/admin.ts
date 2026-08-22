@@ -757,19 +757,24 @@ export function adminSetStatus(
     rejectionReason: status === "rejected" ? rejectionReason : null,
     lastActivityAt: now.toISOString(),
   })!;
-  if (db.getNotificationPreferences(updated.id).account_alerts) {
-    db.addNotification({
-      id: newId(),
-      accountId: updated.id,
-      category: "account_alerts",
-      title: status === "verified" ? "You're verified!" : "Verification update",
-      body: status === "verified" ? "Your identity is verified — you're all set to join runs and connect with other runners." : (rejectionReason ?? "Your verification submission was not approved."),
-      createdAt: now.toISOString(),
-      readAt: null,
-    });
-  }
-  if (status === "verified") {
-    void sendEmail({ to: updated.email, subject: "You're verified on Kimbio!", html: verifiedEmailHtml(updated.name) });
+  try {
+    if (db.getNotificationPreferences(updated.id).account_alerts) {
+      db.addNotification({
+        id: newId(),
+        accountId: updated.id,
+        category: "account_alerts",
+        title: status === "verified" ? "You're verified!" : "Verification update",
+        body: status === "verified" ? "Your identity is verified — you're all set to join runs and connect with other runners." : (rejectionReason ?? "Your verification submission was not approved."),
+        createdAt: now.toISOString(),
+        readAt: null,
+      });
+    }
+    if (status === "verified") {
+      void sendEmail({ to: updated.email, subject: "You're verified on Kimbio!", html: verifiedEmailHtml(updated.name) }).catch(() => {});
+    }
+  } catch {
+    // Notification/email side-effects must never fail the approval itself —
+    // the account status change above already succeeded and is what matters.
   }
   void db.persist();
   return { ok: true, data: updated };
