@@ -52,8 +52,8 @@ export function LegalPage() {
         </div>
 
         <div>
-          <h3 className="font-bold text-slate-900">6. Third-party integrations</h3>
-          <p>Kimbio offers optional integration with Strava and similar services. If you connect one, you're authorizing Kimbio to access the specific data that service's permission screen describes (for example, your activity data). You can disconnect at any time from Settings. Kimbio isn't responsible for how those third-party services handle your data on their end.</p>
+          <h3 className="font-bold text-slate-900">6. Manual logging, by design</h3>
+          <p>Kimbio does not sync automatically with Strava, Garmin, or any other fitness service. Every run you log — distance, pace, surface, photos, voice notes — is entered intentionally by you. This is a deliberate product choice, not a missing feature.</p>
         </div>
 
         <div>
@@ -77,7 +77,7 @@ export function LegalPage() {
             <li><strong>Identity verification:</strong> a selfie photo, submitted once for manual admin review.</li>
             <li><strong>Profile content you choose to add:</strong> bio, pace, goals, training notes, upcoming races, linked social accounts (only shown publicly if you turn that on).</li>
             <li><strong>Activity:</strong> RSVPs, forum posts and replies, messages you send, connections you make.</li>
-            <li><strong>Third-party data:</strong> if you connect Strava or a similar service, the activity data that service's permission screen describes.</li>
+            <li><strong>What you log manually:</strong> distance, pace, surface, photos, and voice notes you choose to add — Kimbio does not sync automatically with any fitness service.</li>
             <li><strong>Technical data:</strong> IP address at signup and login (used for safety and abuse prevention), device/browser info standard to any web app.</li>
           </ul>
         </div>

@@ -816,7 +816,6 @@ export function SettingsPage() {
       {signedIn && account ? <ProfileDetailsSection account={account} onSave={saveProfileDetails} saving={profileDetailsSaving} error={profileDetailsError} /> : null}
       {signedIn ? <TrainingPlanSection cityId={cityId} /> : null}
       {signedIn && account ? <ChangePasswordSettings account={account} /> : null}
-      {signedIn && account ? <ActivityConnections /> : null}
       {signedIn && account?.status === "verified" ? <WelcomeTourSettings /> : null}
       {/* Account */}
       <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
@@ -1078,23 +1077,4 @@ export function SettingsPage() {
   );
 }
 
-function ActivityConnections() {
-  const providers = [{ id: "strava", label: "Strava" }, { id: "garmin", label: "Garmin" }, { id: "coros", label: "COROS" }, { id: "suunto", label: "Suunto" }] as const;
-  const [providerState, setProviderState] = useState<Partial<Record<api.ActivityProvider, api.ProviderStatus>>>({});
-  const [mode, setMode] = useState("manual");
 
-  useEffect(() => {
-    void Promise.all(providers.map(async (p) => {
-      const result = await api.getProviderStatus(p.id);
-      if (result.ok) setProviderState((current) => ({ ...current, [p.id]: result.data }));
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70"><h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Activity connections</h2><p className="px-5 py-3 text-xs leading-relaxed text-slate-500">Manual sharing is the default. Auto sharing is opt-in; Private keeps activities off the community feed.</p>{providers.map((p) => {
-    const state = providerState[p.id];
-    const value = state?.state ?? "unavailable";
-    const copy = value === "coming_soon" ? "Coming soon" : value === "not_configured" ? "Not configured" : value === "connected" ? "Connected" : value === "available" ? "Available" : "Unavailable";
-    const canConnect = p.id === "strava" && value === "available";
-    return <div key={p.id} className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-3"><div><strong className="text-sm text-slate-800">{p.label}</strong><p className="text-xs text-slate-500">{copy}</p></div><PillButton variant="ghost" disabled={!canConnect} onClick={() => { if (canConnect && state?.authorizeUrl) window.location.assign(state.authorizeUrl); }}>{canConnect ? "Connect" : value === "coming_soon" ? "Coming soon" : copy}</PillButton></div>;
-  })}<label className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-sm font-medium">Share mode<select aria-label="Activity share mode" className="rounded-lg border border-slate-300 px-2 py-1" value={mode} onChange={(e) => setMode(e.target.value)}><option value="manual">Manual</option><option value="auto">Auto</option><option value="private">Private</option></select></label></section>;
-}
