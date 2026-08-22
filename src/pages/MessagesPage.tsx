@@ -163,25 +163,63 @@ function tallyReactions(reactions: Record<string, string>): { emoji: string; cou
   return Object.entries(counts).map(([emoji, count]) => ({ emoji, count }));
 }
 
+const EDIT_WINDOW_MS = 10 * 60 * 1000;
+
 function MessageBubble({
   msg,
   mine,
   myId,
   onReact,
+  onEdit,
+  onDelete,
 }: {
   msg: api.MessageView;
   mine: boolean;
   myId: string | null;
   /** null removes the caller's reaction — same emoji tapped twice toggles off. */
   onReact: (emoji: string | null) => void;
+  onEdit: (body: string) => void;
+  onDelete: () => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState(msg.body ?? "");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const myReaction = myId ? msg.reactions[myId] ?? null : null;
   const tally = tallyReactions(msg.reactions);
+  const canEdit = mine && !msg.mediaUrl && Date.now() - new Date(msg.createdAt).getTime() < EDIT_WINDOW_MS;
   const pick = (emoji: string) => {
     onReact(myReaction === emoji ? null : emoji);
     setPickerOpen(false);
   };
+  const saveEdit = () => {
+    const trimmed = editDraft.trim();
+    if (!trimmed) return;
+    onEdit(trimmed);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
+        <div className="w-full max-w-[78%]">
+          <textarea
+            value={editDraft}
+            onChange={(e) => setEditDraft(e.target.value)}
+            maxLength={2000}
+            autoFocus
+            className="w-full rounded-2xl border border-slate-200 p-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
+          />
+          <div className="mt-1.5 flex justify-end gap-2">
+            <button type="button" onClick={() => { setEditing(false); setEditDraft(msg.body ?? ""); }} className="h-8 rounded-full bg-slate-100 px-3 text-[12px] font-bold text-slate-700">Cancel</button>
+            <button type="button" onClick={saveEdit} disabled={!editDraft.trim()} className="h-8 rounded-full bg-[#14171C] px-3 text-[12px] font-bold text-white disabled:opacity-50">Save</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
       <div className="flex items-end gap-1">
@@ -216,7 +254,24 @@ function MessageBubble({
             </>
           )}
         </button>
+        {mine && !msg.deletedAt ? (
+          <button type="button" onClick={() => setMenuOpen((v) => !v)} aria-label="Message options" className="order-last shrink-0 rounded-full p-1.5 text-slate-300 hover:bg-slate-100 hover:text-slate-500">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+          </button>
+        ) : null}
       </div>
+      {menuOpen ? (
+        <div className="mt-1.5 flex gap-1 rounded-2xl bg-white px-2 py-1.5 shadow-md ring-1 ring-slate-200">
+          {canEdit ? (
+            <button type="button" onClick={() => { setEditing(true); setMenuOpen(false); }} className="rounded-full px-3 py-1 text-[13px] font-bold text-slate-700 hover:bg-slate-100">Edit</button>
+          ) : null}
+          {confirmDelete ? (
+            <button type="button" onClick={() => { onDelete(); setMenuOpen(false); }} className="rounded-full px-3 py-1 text-[13px] font-bold text-red-600 hover:bg-red-50">Confirm delete</button>
+          ) : (
+            <button type="button" onClick={() => setConfirmDelete(true)} className="rounded-full px-3 py-1 text-[13px] font-bold text-red-600 hover:bg-red-50">Delete</button>
+          )}
+        </div>
+      ) : null}
       {/* Inline, not an absolute overlay — a popover here would get silently
           clipped by the message list's overflow-y-auto and never be seen. */}
       {pickerOpen ? (
@@ -234,7 +289,9 @@ function MessageBubble({
           ))}
         </div>
       ) : null}
-      <span className="mt-0.5 px-1 text-[11px] text-slate-400">{formatMessageTime(msg.createdAt)}</span>
+      <span className="mt-0.5 px-1 text-[11px] text-slate-400">
+        {formatMessageTime(msg.createdAt)}{msg.editedAt ? " · Edited" : ""}
+      </span>
       {tally.length > 0 ? (
         <div className="mt-1 flex flex-wrap gap-1">
           {tally.map(({ emoji, count }) => (
@@ -493,6 +550,20 @@ function Thread({ conversationId }: { conversationId: string }) {
     });
   };
 
+  const editMsg = (messageId: string, body: string) => {
+    void api.editMessage(messageId, body).then((r) => {
+      if (r.ok) setMessages((prev) => prev.map((m) => (m.id === messageId ? r.data.message : m)));
+      else toast(r.error.message ?? "Couldn't edit that message.", "info");
+    });
+  };
+
+  const deleteMsg = (messageId: string) => {
+    void api.deleteMessage(messageId).then((r) => {
+      if (r.ok) setMessages((prev) => prev.map((m) => (m.id === messageId ? r.data.message : m)));
+      else toast(r.error.message ?? "Couldn't delete that message.", "info");
+    });
+  };
+
   const createRun = () => {
     setCreatingRun(true);
     void api.createRunFromConversation(conversationId).then((r) => {
@@ -564,7 +635,7 @@ function Thread({ conversationId }: { conversationId: string }) {
 
       <div className="flex-1 space-y-3 overflow-y-auto py-4">
         {messages.map((m) => (
-          <MessageBubble key={m.id} msg={m} mine={m.senderId === myId} myId={myId} onReact={(emoji) => react(m.id, emoji)} />
+          <MessageBubble key={m.id} msg={m} mine={m.senderId === myId} myId={myId} onReact={(emoji) => react(m.id, emoji)} onEdit={(body) => editMsg(m.id, body)} onDelete={() => deleteMsg(m.id)} />
         ))}
         {(() => {
           const last = messages[messages.length - 1];

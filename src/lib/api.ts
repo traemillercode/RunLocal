@@ -1001,6 +1001,7 @@ export interface MessageView {
   deletedAt: string | null;
   reactions: Record<string, string>;
   mediaUrl?: string | null;
+  editedAt?: string | null;
 }
 export function getConversations(): Promise<ApiResult<{ conversations: ConversationSummary[] }>> {
   return request("/api/conversations");
@@ -1019,6 +1020,14 @@ export function sendMessage(conversationId: string, body: string, photoDataUrl?:
 }
 export function setMessageReaction(messageId: string, emoji: string | null): Promise<ApiResult<{ message: MessageView }>> {
   return request(`/api/messages/${encodeURIComponent(messageId)}/reaction`, { method: "PUT", body: JSON.stringify({ emoji }) });
+}
+/** Sender only, and only within 10 minutes of sending — the server enforces the window regardless of what the client shows. */
+export function editMessage(messageId: string, body: string): Promise<ApiResult<{ message: MessageView }>> {
+  return request(`/api/messages/${encodeURIComponent(messageId)}`, { method: "PUT", body: JSON.stringify({ body }) });
+}
+/** Sender only, no time limit. */
+export function deleteMessage(messageId: string): Promise<ApiResult<{ message: MessageView }>> {
+  return request(`/api/messages/${encodeURIComponent(messageId)}`, { method: "DELETE" });
 }
 export function createRunFromConversation(conversationId: string): Promise<ApiResult<{ conversationId: string; participantIds: string[]; prefillTitle: string }>> {
   return request(`/api/conversations/${encodeURIComponent(conversationId)}/create-run`, { method: "POST" });
