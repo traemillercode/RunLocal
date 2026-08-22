@@ -981,7 +981,7 @@ async function handleApi(
   if (url.pathname.startsWith("/api/notifications")) {
     const sess=requireSession(db,cookies); if(!sess) return err(res,{status:401,error:"sign_in_required"}),true;
     if (method === "GET" && url.pathname === "/api/notifications/preferences") return ok(res,{preferences:db.getNotificationPreferences(sess.accountId)}),true;
-    if (method === "PATCH" && url.pathname === "/api/notifications/preferences") { const b=await readJson(req) as Record<string,unknown>; const allowed=["run_reminders","community_updates","account_alerts"] as const; const patch: Record<string,boolean>={}; for(const k of allowed) if(b[k]!==undefined){if(typeof b[k]!=="boolean") return err(res,{status:400,error:"invalid_preferences"}),true; patch[k]=b[k] as boolean;} const preferences=db.setNotificationPreferences(sess.accountId,patch); await db.persist(); return ok(res,{preferences}),true; }
+    if (method === "PATCH" && url.pathname === "/api/notifications/preferences") { const b=await readJson(req) as Record<string,unknown>; const allowed=["run_reminders","community_updates","account_alerts","messages"] as const; const patch: Record<string,boolean>={}; for(const k of allowed) if(b[k]!==undefined){if(typeof b[k]!=="boolean") return err(res,{status:400,error:"invalid_preferences"}),true; patch[k]=b[k] as boolean;} const preferences=db.setNotificationPreferences(sess.accountId,patch); await db.persist(); return ok(res,{preferences}),true; }
     if (method === "GET" && url.pathname === "/api/notifications") { const items=db.listNotifications(sess.accountId); return ok(res,{notifications:items,unreadCount:items.filter(n=>!n.readAt).length}),true; }
     if (method === "POST" && url.pathname === "/api/notifications/read-all") { db.markAllNotificationsRead(sess.accountId); await db.persist(); return ok(res,{status:"ok"}),true; }
     const m=/^\/api\/notifications\/([^/]+)\/read$/.exec(url.pathname); if(method==="POST"&&m){ if(!db.updateNotification(m[1],sess.accountId,{readAt:new Date().toISOString()})) return err(res,{status:404,error:"not_found"}),true; await db.persist(); return ok(res,{status:"ok"}),true; }
@@ -1854,6 +1854,21 @@ async function handleApi(
     }
     if (!text && !mediaRef) return err(res, { status: 400, error: "empty_message", message: "Write something or attach a photo before sending." }), true;
     const msg = db.addMessage({ conversationId: convo.id, senderId: sess.accountId, body: text, mediaRef }, now);
+    const sender = db.getAccount(sess.accountId);
+    const preview = mediaRef ? (text ? `📷 ${text}` : "📷 Sent a photo") : text;
+    for (const recipientId of convo.participantIds) {
+      if (recipientId === sess.accountId) continue;
+      if (!db.getNotificationPreferences(recipientId).messages) continue;
+      db.addNotification({
+        id: newId(),
+        accountId: recipientId,
+        category: "messages",
+        title: convo.isGroup ? `${sender?.name ?? "Someone"} in ${convo.name}` : sender?.name ?? "New message",
+        body: preview.slice(0, 140),
+        createdAt: now.toISOString(),
+        readAt: null,
+      });
+    }
     await db.persist();
     return ok(res, { message: { ...msg, mediaUrl: msg.mediaRef ? `/uploads/public/${msg.mediaRef}` : null } }), true;
   }

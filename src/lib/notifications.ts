@@ -3,10 +3,7 @@
  * inbox helpers.
  *
  * Honesty contract: every category is labeled with whether it has a REAL
- * producer today. Only `community_updates` is produced server-side right now
- * (run-day discussion activity and group membership requests); the other two
- * categories are persisted preferences with NO delivery, so UI labels them
- * "Coming soon" rather than implying notifications exist.
+ * producer today. All four categories are now genuinely produced server-side.
  */
 import type { InAppNotification, NotificationPreferences } from "./api";
 
@@ -20,6 +17,12 @@ export interface NotificationCategoryMeta {
 
 export const NOTIFICATION_CATEGORY_META: NotificationCategoryMeta[] = [
   {
+    key: "messages",
+    label: "Messages",
+    description: "A new message in any of your conversations or group chats.",
+    available: true,
+  },
+  {
     key: "community_updates",
     label: "Community updates",
     description: "New discussion activity on runs you joined, plus group membership requests for leaders.",
@@ -28,14 +31,14 @@ export const NOTIFICATION_CATEGORY_META: NotificationCategoryMeta[] = [
   {
     key: "run_reminders",
     label: "Run reminders",
-    description: "Reminders before your RSVP'd group runs.",
-    available: false,
+    description: "A reminder shortly before an RSVP'd group run starts.",
+    available: true,
   },
   {
     key: "account_alerts",
     label: "Account alerts",
-    description: "Security and account-status notices.",
-    available: false,
+    description: "Verification decisions, credential/appeal decisions, and connected-service notices.",
+    available: true,
   },
 ];
 

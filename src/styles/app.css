@@ -32,6 +32,14 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
 .animate-fade-in { animation: fade-in 180ms ease-out; }
 .animate-pop-in { animation: pop-in 160ms ease-out; }
 .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+/* The bottom tab bar is `position: fixed`, so it sits ON TOP of page content
+   rather than pushing it up — without this, the last bit of every page's
+   content renders underneath the nav and becomes unclickable. Reserve real
+   space for it (its own height plus the safe-area inset for notched
+   devices) on every mobile view, and reset to 0 once the desktop layout
+   hides the bar entirely (see the `.app-shell-nav { display: none }` rule
+   below at the 1024px breakpoint). */
+.desktop-main { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
 
 /* Desktop navigation is opt-in at the desktop breakpoint; never let the
@@ -55,7 +63,7 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
      Full-width actions retain their composition at every viewport. */
   .desktop-compact-control { width: fit-content; max-width: 100%; }
   .desktop-main .desktop-compact-control.w-full { width: 100%; }
-  .desktop-main { margin-left: 240px; min-height: 100dvh; min-width: 0; }
+  .desktop-main { margin-left: 240px; min-height: 100dvh; min-width: 0; padding-bottom: 0; }
   .desktop-main.full-bleed { margin-left: 0 !important; }
   .desktop-main > .desktop-browse-layout { max-width: 1240px !important; padding-left: clamp(24px, 4vw, 56px); padding-right: clamp(24px, 4vw, 56px); }
   .desktop-main > .desktop-reading { max-width: 1240px !important; }

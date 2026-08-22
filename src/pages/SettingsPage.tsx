@@ -286,8 +286,8 @@ export function NotificationPreferencesSection({
         </li>
       </ul>
       <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
-        Category preferences are saved to your account and default to off. Only Community updates delivers in-app
-        notifications today; Account alerts and Run reminders are now real too. In-app notifications are private to your
+        Category preferences are saved to your account. Messages default to on since they're core to using the app;
+        everything else defaults to off until you turn it on. In-app notifications are private to your
         account. Browser permission is foreground-only; Run Local does not claim background push.
       </p>
     </section>
@@ -694,7 +694,7 @@ export function SettingsPage() {
   const toast = useToast();
   const { me, backendAvailable, signOut, deleteMyAccount, refresh } = useAccount();
   const { city, cityId, signedIn, hasHomeCity, selectCity } = useSelectedCity();
-  const [notificationPrefs, setNotificationPrefs] = useState<api.NotificationPreferences>({run_reminders:false,community_updates:false,account_alerts:false});
+  const [notificationPrefs, setNotificationPrefs] = useState<api.NotificationPreferences>({run_reminders:false,community_updates:false,account_alerts:false,messages:true});
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [privacySettings, setPrivacySettings] = useState<api.PrivacySettings | null>(null);
   const [privacyError, setPrivacyError] = useState<string | null>(null);

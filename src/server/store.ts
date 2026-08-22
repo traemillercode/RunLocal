@@ -403,7 +403,7 @@ export class Db {
       for (const j of parsed.joinRequests ?? []) this.joinRequests.set(j.id, { ...j, requesterAccepted: j.requesterAccepted ?? false, recipientAccepted: j.recipientAccepted ?? false });
       for (const b of parsed.blocks ?? []) this.blocks.set(`${b.blockerId}:${b.blockedId}`, b);
       for (const r of parsed.safetyReports ?? []) this.safetyReports.set(r.id, r);
-      for (const p of parsed.notificationPreferences ?? []) this.notificationPreferences.set(p.accountId, p);
+      for (const p of parsed.notificationPreferences ?? []) this.notificationPreferences.set(p.accountId, { ...p, messages: p.messages ?? true });
       for (const n of parsed.notifications ?? []) this.notifications.set(n.id, n);
       for (const d of parsed.discussions ?? []) this.discussions.set(d.id, d);
       for (const [accountId, timestamps] of Object.entries(parsed.discussionRate ?? {})) this.discussionRate.set(accountId, timestamps.filter((t) => Number.isFinite(t)));
@@ -494,8 +494,8 @@ export class Db {
     await rename(tmp, file);
   }
 
-  getNotificationPreferences(accountId: string) { return this.notificationPreferences.get(accountId) ?? { accountId, run_reminders:false, community_updates:false, account_alerts:false, updatedAt:this.now().toISOString() }; }
-  setNotificationPreferences(accountId: string, patch: Partial<Pick<import("./types").NotificationPreferenceRecord,"run_reminders"|"community_updates"|"account_alerts">>) { const next={...this.getNotificationPreferences(accountId),...patch,accountId,updatedAt:this.now().toISOString()}; this.notificationPreferences.set(accountId,next); return next; }
+  getNotificationPreferences(accountId: string) { return this.notificationPreferences.get(accountId) ?? { accountId, run_reminders:false, community_updates:false, account_alerts:false, messages:true, updatedAt:this.now().toISOString() }; }
+  setNotificationPreferences(accountId: string, patch: Partial<Pick<import("./types").NotificationPreferenceRecord,"run_reminders"|"community_updates"|"account_alerts"|"messages">>) { const next={...this.getNotificationPreferences(accountId),...patch,accountId,updatedAt:this.now().toISOString()}; this.notificationPreferences.set(accountId,next); return next; }
   addNotification(notification: import("./types").NotificationRecord) { this.notifications.set(notification.id, notification); return notification; }
   listNotifications(accountId: string) { return [...this.notifications.values()].filter(n=>n.accountId===accountId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
   updateNotification(id: string, accountId: string, patch: {readAt:string|null}) { const n=this.notifications.get(id); if(!n||n.accountId!==accountId)return undefined; n.readAt=patch.readAt; return n; }

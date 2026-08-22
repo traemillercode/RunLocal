@@ -504,9 +504,9 @@ export interface ForumReplyRecord {
   updatedAt: string;
 }
 
-export const NOTIFICATION_CATEGORIES = ["run_reminders", "community_updates", "account_alerts"] as const;
+export const NOTIFICATION_CATEGORIES = ["run_reminders", "community_updates", "account_alerts", "messages"] as const;
 export type NotificationCategory = typeof NOTIFICATION_CATEGORIES[number];
-export interface NotificationPreferenceRecord { accountId: string; run_reminders: boolean; community_updates: boolean; account_alerts: boolean; updatedAt: string; }
+export interface NotificationPreferenceRecord { accountId: string; run_reminders: boolean; community_updates: boolean; account_alerts: boolean; messages: boolean; updatedAt: string; }
 export interface NotificationRecord { id: string; accountId: string; category: NotificationCategory; title: string; body: string; createdAt: string; readAt: string | null; }
 export interface MatchingPreferencesRecord {
   accountId: string;
