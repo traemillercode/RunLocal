@@ -17,7 +17,7 @@ import { Icon, PillButton } from "../components/ui";
 import { useAccount } from "../state/account";
 import { useToast } from "../lib/toast";
 
-const QUICK_REACTIONS = ["👍", "🎉", "😂", "🔥", "❤️"];
+const QUICK_REACTIONS = ["❤️", "😂", "👍", "😮", "😢", "🔥", "🙏", "🎉"];
 
 function initials(name: string): string {
   return name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
@@ -150,49 +150,85 @@ function formatMessageTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
+/** Groups raw {accountId: emoji} reactions into {emoji: count}, since a group chat can have several people react with the same emoji. */
+function tallyReactions(reactions: Record<string, string>): { emoji: string; count: number }[] {
+  const counts: Record<string, number> = {};
+  for (const emoji of Object.values(reactions)) counts[emoji] = (counts[emoji] ?? 0) + 1;
+  return Object.entries(counts).map(([emoji, count]) => ({ emoji, count }));
+}
+
 function MessageBubble({
   msg,
   mine,
+  myId,
   onReact,
 }: {
   msg: api.MessageView;
   mine: boolean;
-  onReact: (emoji: string) => void;
+  myId: string | null;
+  /** null removes the caller's reaction — same emoji tapped twice toggles off. */
+  onReact: (emoji: string | null) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const reactionEntries = Object.entries(msg.reactions);
+  const myReaction = myId ? msg.reactions[myId] ?? null : null;
+  const tally = tallyReactions(msg.reactions);
+  const pick = (emoji: string) => {
+    onReact(myReaction === emoji ? null : emoji);
+    setPickerOpen(false);
+  };
   return (
     <div className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
-      <div className={`flex items-end gap-1.5 ${mine ? "flex-row-reverse" : ""}`}>
-        <div
-          className={`max-w-[78%] rounded-3xl px-4 py-2.5 text-[14px] leading-relaxed shadow-sm ${
-            mine ? "bg-[#FF5741] text-white" : "bg-slate-100 text-slate-900"
-          } ${msg.deletedAt ? "italic opacity-60" : ""}`}
-        >
-          {msg.deletedAt ? "Message removed" : msg.body}
-        </div>
+      <div className="relative flex items-end gap-1">
         {!msg.deletedAt ? (
           <button
             type="button"
             onClick={() => setPickerOpen((v) => !v)}
-            aria-label="React to this message"
-            className="shrink-0 rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            aria-label={myReaction ? `You reacted ${myReaction} — tap to change` : "React to this message"}
+            aria-expanded={pickerOpen}
+            className={`order-first shrink-0 rounded-full p-1.5 ${mine ? "order-last" : ""} ${myReaction ? "text-[#FF5741]" : "text-slate-300 hover:text-slate-500"}`}
           >
             <Icon name="spark" className="h-4 w-4" />
           </button>
         ) : null}
+        <button
+          type="button"
+          onClick={() => !msg.deletedAt && setPickerOpen((v) => !v)}
+          className={`max-w-[78%] rounded-3xl px-4 py-2.5 text-left text-[14px] leading-relaxed shadow-sm ${
+            mine ? "bg-[#FF5741] text-white" : "bg-slate-100 text-slate-900"
+          } ${msg.deletedAt ? "italic opacity-60" : ""}`}
+        >
+          {msg.deletedAt ? "Message removed" : msg.body}
+        </button>
+        {pickerOpen ? (
+          <div className={`absolute bottom-full z-10 mb-1.5 flex gap-1 rounded-full bg-white px-2 py-1.5 shadow-lg ring-1 ring-slate-200 ${mine ? "right-0" : "left-0"}`}>
+            {QUICK_REACTIONS.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => pick(e)}
+                aria-pressed={myReaction === e}
+                className={`grid h-8 w-8 place-items-center rounded-full text-[18px] ${myReaction === e ? "bg-[#FF5741]/15 ring-2 ring-[#FF5741]" : "hover:bg-slate-100"}`}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
       <span className="mt-0.5 px-1 text-[11px] text-slate-400">{formatMessageTime(msg.createdAt)}</span>
-      {reactionEntries.length > 0 ? (
-        <div className="mt-1 flex gap-0.5 rounded-full bg-white px-1.5 py-0.5 text-[12px] shadow-sm ring-1 ring-slate-200">
-          {reactionEntries.map(([accountId, emoji]) => <span key={accountId}>{emoji}</span>)}
-        </div>
-      ) : null}
-      {pickerOpen ? (
-        <div className="mt-1 flex gap-1 rounded-full bg-white px-2 py-1 shadow-sm ring-1 ring-slate-200">
-          {QUICK_REACTIONS.map((e) => (
-            <button key={e} type="button" onClick={() => { onReact(e); setPickerOpen(false); }} className="text-[16px]">
-              {e}
+      {tally.length > 0 ? (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {tally.map(({ emoji, count }) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => pick(emoji)}
+              className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] shadow-sm ring-1 ${
+                myReaction === emoji ? "bg-[#FF5741]/10 ring-[#FF5741]" : "bg-white ring-slate-200"
+              }`}
+            >
+              <span>{emoji}</span>
+              {count > 1 ? <span className="font-semibold text-slate-500">{count}</span> : null}
             </button>
           ))}
         </div>
@@ -233,7 +269,7 @@ function Thread({ conversationId }: { conversationId: string }) {
     });
   };
 
-  const react = (messageId: string, emoji: string) => {
+  const react = (messageId: string, emoji: string | null) => {
     void api.setMessageReaction(messageId, emoji).then((r) => {
       if (r.ok) setMessages((prev) => prev.map((m) => (m.id === messageId ? r.data.message : m)));
     });
@@ -283,7 +319,7 @@ function Thread({ conversationId }: { conversationId: string }) {
 
       <div className="flex-1 space-y-3 overflow-y-auto py-4">
         {messages.map((m) => (
-          <MessageBubble key={m.id} msg={m} mine={m.senderId === myId} onReact={(emoji) => react(m.id, emoji)} />
+          <MessageBubble key={m.id} msg={m} mine={m.senderId === myId} myId={myId} onReact={(emoji) => react(m.id, emoji)} />
         ))}
         <div ref={bottomRef} />
       </div>
