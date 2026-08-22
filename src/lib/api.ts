@@ -1009,6 +1009,29 @@ export function createRunFromConversation(conversationId: string): Promise<ApiRe
   return request(`/api/conversations/${encodeURIComponent(conversationId)}/create-run`, { method: "POST" });
 }
 
+export type TrainingPlanType = "5k" | "10k" | "half_marathon" | "marathon" | "ultra" | "other";
+export interface TrainingPlanView {
+  accountId: string;
+  planType: TrainingPlanType;
+  customLabel: string | null;
+  totalWeeks: number;
+  startDate: string;
+  linkedRaceId: string | null;
+  linkedRaceName: string | null;
+  currentWeek: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export function getTrainingPlan(): Promise<ApiResult<{ plan: TrainingPlanView | null }>> {
+  return request("/api/profile/training-plan");
+}
+export function setTrainingPlan(input: { planType: TrainingPlanType; customLabel?: string | null; totalWeeks: number; startDate: string; linkedRaceId?: string | null }): Promise<ApiResult<{ plan: TrainingPlanView }>> {
+  return request("/api/profile/training-plan", { method: "PUT", body: JSON.stringify(input) });
+}
+export function deleteTrainingPlan(): Promise<ApiResult<{ deleted: boolean }>> {
+  return request("/api/profile/training-plan", { method: "DELETE" });
+}
+
 export function getPrivacy(): Promise<ApiResult<{ settings: PrivacySettings }>> {
   return request("/api/profile/privacy");
 }

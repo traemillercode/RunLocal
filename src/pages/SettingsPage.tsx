@@ -478,6 +478,132 @@ export function ProfileDetailsSection({
     </section>
   );
 }
+const TRAINING_PLAN_LABELS: Record<api.TrainingPlanType, string> = {
+  "5k": "5K", "10k": "10K", half_marathon: "Half marathon", marathon: "Marathon", ultra: "Ultra", other: "Other",
+};
+
+/**
+ * Structured training plan: type, length, start date, optional race link.
+ * Separate from the free-text profile fields — "current week" is computed
+ * server-side from startDate, never entered manually, so it can't go stale.
+ */
+export function TrainingPlanSection({ cityId }: { cityId: string }) {
+  const toast = useToast();
+  const [plan, setPlan] = useState<api.TrainingPlanView | null | undefined>(undefined);
+  const [races, setRaces] = useState<api.PublicRaceView[]>([]);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [planType, setPlanType] = useState<api.TrainingPlanType>("marathon");
+  const [customLabel, setCustomLabel] = useState("");
+  const [totalWeeks, setTotalWeeks] = useState("16");
+  const [startDate, setStartDate] = useState("");
+  const [linkedRaceId, setLinkedRaceId] = useState("");
+
+  useEffect(() => {
+    void api.getTrainingPlan().then((r) => { if (r.ok) setPlan(r.data.plan); });
+    void api.getRaces(cityId).then((r) => { if (r.ok) setRaces(r.data.races); });
+  }, [cityId]);
+
+  const startEditing = () => {
+    if (plan) {
+      setPlanType(plan.planType);
+      setCustomLabel(plan.customLabel ?? "");
+      setTotalWeeks(String(plan.totalWeeks));
+      setStartDate(plan.startDate);
+      setLinkedRaceId(plan.linkedRaceId ?? "");
+    }
+    setError(null);
+    setEditing(true);
+  };
+
+  const save = () => {
+    const weeks = Number(totalWeeks);
+    if (!startDate) { setError("Pick a start date."); return; }
+    if (!Number.isFinite(weeks) || weeks < 1 || weeks > 52) { setError("Plan length must be between 1 and 52 weeks."); return; }
+    setSaving(true);
+    setError(null);
+    void api.setTrainingPlan({ planType, customLabel: planType === "other" ? customLabel : null, totalWeeks: weeks, startDate, linkedRaceId: linkedRaceId || null }).then((r) => {
+      setSaving(false);
+      if (r.ok) { setPlan(r.data.plan); setEditing(false); toast("Training plan saved.", "success"); }
+      else setError(r.error.message ?? "Couldn't save your plan.");
+    });
+  };
+
+  const clear = () => {
+    setSaving(true);
+    void api.deleteTrainingPlan().then((r) => {
+      setSaving(false);
+      if (r.ok) { setPlan(null); setEditing(false); toast("Training plan removed.", "success"); }
+    });
+  };
+
+  const fieldCls = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-[15px] text-slate-900 outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
+
+  if (plan === undefined) return null;
+
+  return (
+    <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70 p-5">
+      <h2 className="mb-3 text-[15px] font-bold text-slate-900">Training plan</h2>
+      {error ? <p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-800">{error}</p> : null}
+
+      {!editing && plan ? (
+        <div>
+          <p className="text-[15px] font-bold text-slate-900">
+            Week {plan.currentWeek} of {plan.totalWeeks} — {plan.planType === "other" ? plan.customLabel || "Custom" : TRAINING_PLAN_LABELS[plan.planType]}
+          </p>
+          {plan.linkedRaceName ? <p className="mt-1 text-[13px] text-slate-500">Training for {plan.linkedRaceName}</p> : null}
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={startEditing} className="h-10 rounded-full bg-slate-100 px-4 text-[13px] font-bold text-slate-700">Edit</button>
+            <button type="button" onClick={clear} disabled={saving} className="h-10 rounded-full px-4 text-[13px] font-bold text-red-600">Remove plan</button>
+          </div>
+        </div>
+      ) : !editing ? (
+        <div>
+          <p className="text-[13px] text-slate-500">No training plan set. Add one to track your week automatically.</p>
+          <button type="button" onClick={startEditing} className="mt-3 h-10 rounded-full bg-[#14171C] px-4 text-[13px] font-bold text-white">Set up a plan</button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">Plan type</span>
+            <select value={planType} onChange={(e) => setPlanType(e.target.value as api.TrainingPlanType)} className={fieldCls}>
+              {(Object.keys(TRAINING_PLAN_LABELS) as api.TrainingPlanType[]).map((t) => <option key={t} value={t}>{TRAINING_PLAN_LABELS[t]}</option>)}
+            </select>
+          </label>
+          {planType === "other" ? (
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-semibold text-slate-700">Plan name</span>
+              <input type="text" value={customLabel} maxLength={40} onChange={(e) => setCustomLabel(e.target.value)} placeholder="e.g. Trail 50K" className={fieldCls} />
+            </label>
+          ) : null}
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">Length (weeks)</span>
+            <input type="number" min={1} max={52} value={totalWeeks} onChange={(e) => setTotalWeeks(e.target.value)} className={fieldCls} />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">Start date (week 1 begins this day)</span>
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={fieldCls} />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">Training for a specific race? (optional)</span>
+            <select value={linkedRaceId} onChange={(e) => setLinkedRaceId(e.target.value)} className={fieldCls}>
+              <option value="">No specific race</option>
+              {races.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+          </label>
+          <div className="flex gap-2 pt-1">
+            <button type="button" disabled={saving} onClick={save} className="h-11 flex-1 rounded-full bg-[#14171C] text-sm font-bold text-white disabled:opacity-50">
+              {saving ? "Saving…" : "Save plan"}
+            </button>
+            <button type="button" onClick={() => setEditing(false)} className="h-11 rounded-full bg-slate-100 px-5 text-sm font-bold text-slate-700">Cancel</button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function PrivacySettingsSection({
   settings,
   onSave,
@@ -688,6 +814,7 @@ export function SettingsPage() {
       {signedIn && account ? <UsernameEditor account={account} refresh={refresh} /> : null}
       {signedIn && account ? <ProfilePhotoSettings account={account} refresh={refresh} /> : null}
       {signedIn && account ? <ProfileDetailsSection account={account} onSave={saveProfileDetails} saving={profileDetailsSaving} error={profileDetailsError} /> : null}
+      {signedIn ? <TrainingPlanSection cityId={cityId} /> : null}
       {signedIn && account ? <ChangePasswordSettings account={account} /> : null}
       {signedIn && account ? <ActivityConnections /> : null}
       {signedIn && account?.status === "verified" ? <WelcomeTourSettings /> : null}
