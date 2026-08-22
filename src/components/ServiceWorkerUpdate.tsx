@@ -8,7 +8,14 @@ export function ServiceWorkerUpdate() {
     const onControllerChange = () => window.location.reload();
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
     const onLoad = async () => {
-      registration = await navigator.serviceWorker.register(`${new URL("/app/", window.location.origin).pathname}sw.js`, { updateViaCache: "none" });
+      // Self-heal: anyone who registered the old /app/-scoped worker before
+      // this fix has it stuck in their browser forever otherwise — a new
+      // registration at a different scope doesn't replace it, both would
+      // just run side by side. Unregister anything at the defunct scope
+      // before registering the real one.
+      const existing = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(existing.filter((r) => r.scope.includes("/app/")).map((r) => r.unregister()));
+      registration = await navigator.serviceWorker.register(`${new URL("/", window.location.origin).pathname}sw.js`, { updateViaCache: "none" });
       const controllerExists = Boolean(navigator.serviceWorker.controller);
       const inspect = () => { if (controllerExists && registration?.installing) setWaiting(registration.installing); };
       registration.addEventListener("updatefound", inspect);

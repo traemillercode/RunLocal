@@ -1,7 +1,7 @@
 /* Run Local service worker. BUILD_ID is replaced by publish.sh. */
 const BUILD_ID = "__BUILD_ID__";
 const CACHE = `runlocal-shell-${BUILD_ID}`;
-const BASE = new URL("/app/", self.location.origin).pathname;
+const BASE = new URL("/", self.location.origin).pathname;
 const SHELL = [BASE, `${BASE}index.html`, `${BASE}manifest.webmanifest`, `${BASE}favicon.svg`];
 
 self.addEventListener("install", (event) => {
