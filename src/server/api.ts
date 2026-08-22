@@ -8,7 +8,7 @@
  * IP) is ever included in a public payload or written to logs.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { Db, newId, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPublicAccount, MIN_AGE } from "./store";
+import { Db, newId, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPublicAccount, MIN_AGE, currentTrainingWeek } from "./store";
 import type { AccountRecord } from "./types";
 import { PERSONAL_RUN_CONSENT_VERSION, MATCHING_CONSENT_VERSION } from "./types";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
@@ -2041,6 +2041,60 @@ async function handleApi(
     if (!updated) return err(res, { status: 404, error: "not_found" }), true;
     await db.persist();
     return ok(res, { profile: publicRunnerProfile(updated) }), true;
+  }
+
+  // ---- Training plan (GET/PUT/DELETE /api/profile/training-plan) -----------
+  // Structured version of the free-text trainingBlock field: a plan type,
+  // length, and start date. "currentWeek" is computed fresh on every GET
+  // (see currentTrainingWeek in store.ts) — never stored, so it can't drift
+  // stale. Optional link to a specific race in Races for context.
+  const TRAINING_PLAN_TYPES = ["5k", "10k", "half_marathon", "marathon", "ultra", "other"] as const;
+  if (url.pathname === "/api/profile/training-plan") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+
+    if (method === "GET") {
+      const plan = db.getTrainingPlan(sess.accountId);
+      if (!plan) return ok(res, { plan: null }), true;
+      const race = plan.linkedRaceId ? db.getRace(plan.linkedRaceId) : undefined;
+      return ok(res, { plan: { ...plan, currentWeek: currentTrainingWeek(plan, now), linkedRaceName: race?.name ?? null } }), true;
+    }
+
+    if (method === "PUT") {
+      const body = (await readJson(req)) as Record<string, unknown>;
+      const planType = typeof body.planType === "string" && (TRAINING_PLAN_TYPES as readonly string[]).includes(body.planType) ? (body.planType as typeof TRAINING_PLAN_TYPES[number]) : null;
+      if (!planType) return err(res, { status: 400, error: "invalid_plan_type", message: "Choose a valid plan type." }), true;
+      const totalWeeks = typeof body.totalWeeks === "number" ? Math.round(body.totalWeeks) : NaN;
+      if (!Number.isFinite(totalWeeks) || totalWeeks < 1 || totalWeeks > 52) return err(res, { status: 400, error: "invalid_weeks", message: "Plan length must be between 1 and 52 weeks." }), true;
+      const startDate = typeof body.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.startDate) ? body.startDate : null;
+      if (!startDate) return err(res, { status: 400, error: "invalid_start_date", message: "Give a valid start date." }), true;
+      const customLabel = planType === "other" && typeof body.customLabel === "string" ? body.customLabel.trim().slice(0, 40) || null : null;
+      let linkedRaceId: string | null = null;
+      if (body.linkedRaceId !== null && body.linkedRaceId !== undefined) {
+        if (typeof body.linkedRaceId !== "string" || !db.getRace(body.linkedRaceId)) return err(res, { status: 400, error: "invalid_race", message: "That race couldn't be found." }), true;
+        linkedRaceId = body.linkedRaceId;
+      }
+      const existing = db.getTrainingPlan(sess.accountId);
+      const plan = db.setTrainingPlan({
+        accountId: sess.accountId,
+        planType,
+        customLabel,
+        totalWeeks,
+        startDate,
+        linkedRaceId,
+        createdAt: existing?.createdAt ?? now.toISOString(),
+        updatedAt: now.toISOString(),
+      });
+      await db.persist();
+      const race = plan.linkedRaceId ? db.getRace(plan.linkedRaceId) : undefined;
+      return ok(res, { plan: { ...plan, currentWeek: currentTrainingWeek(plan, now), linkedRaceName: race?.name ?? null } }), true;
+    }
+
+    if (method === "DELETE") {
+      db.deleteTrainingPlan(sess.accountId);
+      await db.persist();
+      return ok(res, { deleted: true }), true;
+    }
   }
 
   // ---- runner tags on content (posts/events/runs) --------------------------

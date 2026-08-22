@@ -50,6 +50,20 @@ export function newId(): string {
 }
 
 /**
+ * Current week of a training plan, computed fresh from startDate every time
+ * — never stored, so it's always correct without any background job. Week 1
+ * covers the 7 days starting on startDate; clamped to [1, totalWeeks] so a
+ * plan that's finished still reads as "week N of N" rather than climbing
+ * past it, and a plan that hasn't started yet reads as week 1.
+ */
+export function currentTrainingWeek(plan: { startDate: string; totalWeeks: number }, now: Date): number {
+  const start = new Date(`${plan.startDate}T00:00:00Z`);
+  const daysSince = Math.floor((now.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+  const week = Math.floor(daysSince / 7) + 1;
+  return Math.max(1, Math.min(plan.totalWeeks, week));
+}
+
+/**
  * Canonical connection key — the SORTED pair (least/greatest id). One row per
  * pair: A→B and B→A always map to the same key and can never coexist.
  */
@@ -283,6 +297,7 @@ export class Db {
   private connections = new Map<string, import("./types").ConnectionRecord>();
   private conversations = new Map<string, import("./types").ConversationRecord>();
   private messages = new Map<string, import("./types").MessageRecord>();
+  private trainingPlans = new Map<string, import("./types").TrainingPlanRecord>();
   /** Per-account privacy settings — keyed by accountId (defaults when absent). */
   private privacy = new Map<string, import("./types").PrivacySettingsRecord>();
   /** Runner tags on content — keyed by tag id. */
@@ -404,6 +419,7 @@ export class Db {
       }
       for (const c of parsed.conversations ?? []) this.conversations.set(c.id, { ...c, runCreatedId: c.runCreatedId ?? null });
       for (const m of parsed.messages ?? []) this.messages.set(m.id, { ...m, deletedAt: m.deletedAt ?? null, reactions: m.reactions ?? {} });
+      for (const t of parsed.trainingPlans ?? []) this.trainingPlans.set(t.accountId, t);
       // Privacy: records persisted before a field existed are merged over the
       // verbatim owner-spec defaults so they keep working.
       for (const p of parsed.privacy ?? []) this.privacy.set(p.accountId, { ...PRIVACY_DEFAULTS, ...p, accountId: p.accountId });
@@ -460,6 +476,7 @@ export class Db {
       connections: [...this.connections.values()],
       conversations: [...this.conversations.values()],
       messages: [...this.messages.values()],
+      trainingPlans: [...this.trainingPlans.values()],
       privacy: [...this.privacy.values()],
       tags: [...this.tags.values()],
     };
@@ -1091,6 +1108,16 @@ export class Db {
     const next = { ...m, reactions };
     this.messages.set(messageId, next);
     return next;
+  }
+  getTrainingPlan(accountId: string): import("./types").TrainingPlanRecord | undefined {
+    return this.trainingPlans.get(accountId);
+  }
+  setTrainingPlan(plan: import("./types").TrainingPlanRecord): import("./types").TrainingPlanRecord {
+    this.trainingPlans.set(plan.accountId, plan);
+    return plan;
+  }
+  deleteTrainingPlan(accountId: string): boolean {
+    return this.trainingPlans.delete(accountId);
   }
   getPrivacy(accountId: string): import("./types").PrivacySettingsRecord {
     return this.privacy.get(accountId) ?? { accountId, ...PRIVACY_DEFAULTS };

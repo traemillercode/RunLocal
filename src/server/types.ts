@@ -442,6 +442,7 @@ export interface PersistedDb {
   connections?: ConnectionRecord[];
   conversations?: ConversationRecord[];
   messages?: MessageRecord[];
+  trainingPlans?: TrainingPlanRecord[];
   /** Per-account privacy settings (keyed by accountId; defaults when absent). */
   privacy?: PrivacySettingsRecord[];
   /** Runner tags on content ("run"|"post"|"event"). */
@@ -549,6 +550,26 @@ export interface ConnectionRecord {
   respondedAt: string | null;
   /** When the row was soft-deleted via removeConnection/block (null until then). */
   removedAt: string | null;
+}
+
+/**
+ * A structured training plan — replaces the free-text trainingBlock field
+ * when set. "Current week" is never stored; it's computed from startDate on
+ * every read, so it's always accurate without a background job.
+ */
+export type TrainingPlanType = "5k" | "10k" | "half_marathon" | "marathon" | "ultra" | "other";
+export interface TrainingPlanRecord {
+  accountId: string;
+  planType: TrainingPlanType;
+  /** Only meaningful when planType === "other". */
+  customLabel: string | null;
+  totalWeeks: number;
+  /** ISO date (yyyy-mm-dd) — week 1 starts this day. */
+  startDate: string;
+  /** Optional link to a specific race in Races — shown alongside the plan when set. */
+  linkedRaceId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
