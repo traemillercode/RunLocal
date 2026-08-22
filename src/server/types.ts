@@ -603,6 +603,8 @@ export interface ConversationRecord {
   lastMessageAt: string;
   /** Set once a run has been created from this thread — prevents creating a second one from the same chat. */
   runCreatedId: string | null;
+  /** accountId -> ISO timestamp of that person's last-read moment in this thread. A message is "seen" once every other participant's readBy timestamp is >= its createdAt. */
+  readBy: Record<string, string>;
 }
 
 export interface MessageRecord {

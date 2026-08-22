@@ -1745,9 +1745,11 @@ async function handleApi(
       name: c.isGroup ? c.name : (other ? publicRunnerProfile(other, now)?.name ?? other.name : "Deleted account"),
       participantIds: c.participantIds,
       otherProfile: other ? publicRunnerProfile(other, now) : null,
+      otherOnline: otherId ? db.isAccountOnline(otherId, now) : false,
       lastMessage: last ? { body: last.deletedAt ? null : last.body, senderId: last.senderId, createdAt: last.createdAt } : null,
       lastMessageAt: c.lastMessageAt,
       runCreatedId: c.runCreatedId,
+      readBy: c.readBy,
     };
   };
 
@@ -1799,7 +1801,11 @@ async function handleApi(
       deletedAt: m.deletedAt,
       reactions: m.reactions,
     }));
-    return ok(res, { conversation: enrichConversation(convo, sess.accountId), messages }), true;
+    // Opening a thread marks it read — same convention as every mainstream
+    // chat app. No separate "mark read" action needed from the client.
+    const updatedConvo = db.updateConversation(convo.id, { readBy: { ...convo.readBy, [sess.accountId]: now.toISOString() } }) ?? convo;
+    await db.persist();
+    return ok(res, { conversation: enrichConversation(updatedConvo, sess.accountId), messages }), true;
   }
 
   if (method === "POST" && messageRoute) {
@@ -1849,7 +1855,7 @@ async function handleApi(
     const convoId = url.pathname.split("/").at(-2)!;
     const convo = db.getConversation(convoId);
     if (!convo || !convo.participantIds.includes(sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
-    const members = convo.participantIds.flatMap((id) => { const rec = db.getAccount(id); const p = rec ? publicRunnerProfile(rec, now) : null; return p ? [{ ...p, isCreator: id === convo.createdBy }] : []; });
+    const members = convo.participantIds.flatMap((id) => { const rec = db.getAccount(id); const p = rec ? publicRunnerProfile(rec, now) : null; return p ? [{ ...p, isCreator: id === convo.createdBy, isOnline: db.isAccountOnline(id, now) }] : []; });
     return ok(res, { members }), true;
   }
 

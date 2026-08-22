@@ -326,11 +326,14 @@ function GroupSettingsSheet({
             <div className="max-h-56 space-y-1 overflow-y-auto">
               {members.map((m) => (
                 <div key={m.id} className="flex items-center gap-3 rounded-xl p-2">
-                  {m.profilePhotoUrl ? (
-                    <img src={m.profilePhotoUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
-                  ) : (
-                    <span className="grid h-9 w-9 place-items-center rounded-full bg-[#14171C] text-[12px] font-bold text-white">{initials(m.name)}</span>
-                  )}
+                  <span className="relative shrink-0">
+                    {m.profilePhotoUrl ? (
+                      <img src={m.profilePhotoUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
+                    ) : (
+                      <span className="grid h-9 w-9 place-items-center rounded-full bg-[#14171C] text-[12px] font-bold text-white">{initials(m.name)}</span>
+                    )}
+                    {m.isOnline ? <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" aria-hidden="true" /> : null}
+                  </span>
                   <p className="text-[14px] font-semibold text-slate-800">
                     {m.name}
                     {m.isCreator ? <span className="ml-1.5 text-[11px] font-bold text-slate-400">Creator</span> : null}
@@ -418,12 +421,18 @@ function Thread({ conversationId }: { conversationId: string }) {
         </button>
         {!convo.isGroup && convo.otherProfile ? (
           <Link to={`/runners/${convo.otherProfile.id}`} className="flex min-w-0 flex-1 items-center gap-2">
-            {convo.otherProfile.profilePhotoUrl ? (
-              <img src={convo.otherProfile.profilePhotoUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
-            ) : (
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#14171C] text-[11px] font-bold text-white">{initials(convo.name)}</span>
-            )}
-            <p className="truncate text-[15px] font-bold text-slate-900">{convo.name}</p>
+            <span className="relative shrink-0">
+              {convo.otherProfile.profilePhotoUrl ? (
+                <img src={convo.otherProfile.profilePhotoUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
+              ) : (
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-[#14171C] text-[11px] font-bold text-white">{initials(convo.name)}</span>
+              )}
+              {convo.otherOnline ? <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" aria-hidden="true" /> : null}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[15px] font-bold text-slate-900">{convo.name}</p>
+              <p className="text-[11px] text-slate-400">{convo.otherOnline ? "Active now" : "Offline"}</p>
+            </div>
           </Link>
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -461,6 +470,14 @@ function Thread({ conversationId }: { conversationId: string }) {
         {messages.map((m) => (
           <MessageBubble key={m.id} msg={m} mine={m.senderId === myId} myId={myId} onReact={(emoji) => react(m.id, emoji)} />
         ))}
+        {(() => {
+          const last = messages[messages.length - 1];
+          if (!last || last.senderId !== myId) return null;
+          const others = convo.participantIds.filter((id) => id !== myId);
+          const seenByAll = others.length > 0 && others.every((id) => convo.readBy[id] && convo.readBy[id] >= last.createdAt);
+          if (!seenByAll) return null;
+          return <p className="text-right text-[11px] text-slate-400">{convo.isGroup ? "Seen by everyone" : "Seen"}</p>;
+        })()}
         <div ref={bottomRef} />
       </div>
 

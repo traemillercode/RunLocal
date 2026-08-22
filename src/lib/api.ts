@@ -983,9 +983,13 @@ export interface ConversationSummary {
   name: string;
   participantIds: string[];
   otherProfile: RunnerProfileView | null;
+  /** Approximate presence for the other person in a 1:1 — polling-accurate, not instant push. */
+  otherOnline?: boolean;
   lastMessage: { body: string | null; senderId: string; createdAt: string } | null;
   lastMessageAt: string;
   runCreatedId: string | null;
+  /** accountId -> ISO timestamp of that person's last-read moment — the basis for "Seen" under your own messages. */
+  readBy: Record<string, string>;
 }
 export interface MessageView {
   id: string;
@@ -1016,7 +1020,7 @@ export function setMessageReaction(messageId: string, emoji: string | null): Pro
 export function createRunFromConversation(conversationId: string): Promise<ApiResult<{ conversationId: string; participantIds: string[]; prefillTitle: string }>> {
   return request(`/api/conversations/${encodeURIComponent(conversationId)}/create-run`, { method: "POST" });
 }
-export interface ConversationMember extends RunnerProfileView { isCreator: boolean; }
+export interface ConversationMember extends RunnerProfileView { isCreator: boolean; isOnline?: boolean; }
 export function getConversationMembers(conversationId: string): Promise<ApiResult<{ members: ConversationMember[] }>> {
   return request(`/api/conversations/${encodeURIComponent(conversationId)}/members`);
 }

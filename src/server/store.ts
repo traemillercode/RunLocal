@@ -63,6 +63,9 @@ export function currentTrainingWeek(plan: { startDate: string; totalWeeks: numbe
   return Math.max(1, Math.min(plan.totalWeeks, week));
 }
 
+/** "Online now" is approximate by nature without a real push/socket layer — this treats any session active within the last 2 minutes as live. Good enough for a presence dot; not a guarantee of this instant. */
+export const PRESENCE_WINDOW_MS = 2 * 60 * 1000;
+
 /**
  * Canonical connection key — the SORTED pair (least/greatest id). One row per
  * pair: A→B and B→A always map to the same key and can never coexist.
@@ -418,7 +421,7 @@ export class Db {
       for (const c of parsed.connections ?? []) {
         this.connections.set(connectionKey(c.requesterId, c.addresseeId), { ...c, respondedAt: c.respondedAt ?? null, removedAt: c.removedAt ?? null });
       }
-      for (const c of parsed.conversations ?? []) this.conversations.set(c.id, { ...c, runCreatedId: c.runCreatedId ?? null });
+      for (const c of parsed.conversations ?? []) this.conversations.set(c.id, { ...c, runCreatedId: c.runCreatedId ?? null, readBy: c.readBy ?? {} });
       for (const m of parsed.messages ?? []) this.messages.set(m.id, { ...m, deletedAt: m.deletedAt ?? null, reactions: m.reactions ?? {} });
       for (const t of parsed.trainingPlans ?? []) this.trainingPlans.set(t.accountId, t);
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
@@ -739,6 +742,14 @@ export class Db {
   // ---------------------------------------------------------------- sessions
   getSession(id: string): SessionRecord | undefined {
     return this.sessions.get(id);
+  }
+  /** Approximate presence — true if any of the account's sessions has been active within PRESENCE_WINDOW_MS. No push layer, so this is polling-accurate, not instant. */
+  isAccountOnline(accountId: string, now: Date): boolean {
+    const cutoff = now.getTime() - PRESENCE_WINDOW_MS;
+    for (const s of this.sessions.values()) {
+      if (s.accountId === accountId && new Date(s.lastSeenAt).getTime() >= cutoff) return true;
+    }
+    return false;
   }
   createSession(accountId: string, ip: string, now = new Date()): SessionRecord {
     const rec: SessionRecord = {
@@ -1066,12 +1077,12 @@ export class Db {
     for (const c of this.conversations.values()) {
       if (!c.isGroup && c.participantIds.length === 2 && c.participantIds.includes(a) && c.participantIds.includes(b)) return c;
     }
-    const rec: import("./types").ConversationRecord = { id: newId(), isGroup: false, name: null, participantIds: [a, b], createdBy: a, createdAt: now.toISOString(), lastMessageAt: now.toISOString(), runCreatedId: null };
+    const rec: import("./types").ConversationRecord = { id: newId(), isGroup: false, name: null, participantIds: [a, b], createdBy: a, createdAt: now.toISOString(), lastMessageAt: now.toISOString(), runCreatedId: null, readBy: {} };
     this.conversations.set(rec.id, rec);
     return rec;
   }
   createGroupConversation(input: { name: string; participantIds: string[]; createdBy: string }, now: Date): import("./types").ConversationRecord {
-    const rec: import("./types").ConversationRecord = { id: newId(), isGroup: true, name: input.name, participantIds: [...new Set(input.participantIds)], createdBy: input.createdBy, createdAt: now.toISOString(), lastMessageAt: now.toISOString(), runCreatedId: null };
+    const rec: import("./types").ConversationRecord = { id: newId(), isGroup: true, name: input.name, participantIds: [...new Set(input.participantIds)], createdBy: input.createdBy, createdAt: now.toISOString(), lastMessageAt: now.toISOString(), runCreatedId: null, readBy: {} };
     this.conversations.set(rec.id, rec);
     return rec;
   }
