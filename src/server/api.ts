@@ -1640,12 +1640,15 @@ async function handleApi(
     const viewerId = sess && !db.getAccount(sess.accountId)?.deletedAt ? sess.accountId : null;
     const mutualVisible = canView(db, viewerId, rec.id, "show_connections_list");
     const mutual = mutualVisible && viewerId !== null ? mutualConnections(db, viewerId, rec.id) : [];
+    const plan = db.getTrainingPlan(rec.id);
+    const planRace = plan?.linkedRaceId ? db.getRace(plan.linkedRaceId) : undefined;
     return ok(res, {
       profile: {
         ...publicRunnerProfile(rec, now)!,
         connectionState: connectionState(db, viewerId, rec.id),
         mutualConnectionsCount: mutualVisible ? mutual.length : 0,
         mutualVisible,
+        trainingPlan: plan ? { planType: plan.planType, customLabel: plan.customLabel, totalWeeks: plan.totalWeeks, currentWeek: currentTrainingWeek(plan, now), linkedRaceName: planRace?.name ?? null } : null,
       },
       trust: publicTrust(db, runnerMatch[1], null),
       recognitions: publicRecognitions(db, rec.cityId ?? ""),

@@ -867,6 +867,8 @@ export interface RunnerProfileView {
   mutualConnectionsCount?: number;
   /** Whether the runner's show_connections_list lets this viewer see the count. */
   mutualVisible?: boolean;
+  /** Structured training plan, when set — takes precedence over the free-text trainingBlock field for display. */
+  trainingPlan?: { planType: TrainingPlanType; customLabel: string | null; totalWeeks: number; currentWeek: number; linkedRaceName: string | null } | null;
 }
 /** GET /api/runners/:id — guest-accessible public runner profile. */
 export interface RunnerProfileResponse {
