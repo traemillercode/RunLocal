@@ -1841,6 +1841,51 @@ async function handleApi(
     return ok(res, { conversationId: convo.id, participantIds: convo.participantIds, prefillTitle: convo.isGroup ? convo.name : "Group run" }), true;
   }
 
+  // GET /api/conversations/:id/members — resolved public profiles for every
+  // participant, for the group settings panel. Members only, not a public route.
+  if (method === "GET" && url.pathname.startsWith("/api/conversations/") && url.pathname.endsWith("/members")) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const convoId = url.pathname.split("/").at(-2)!;
+    const convo = db.getConversation(convoId);
+    if (!convo || !convo.participantIds.includes(sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
+    const members = convo.participantIds.flatMap((id) => { const rec = db.getAccount(id); const p = rec ? publicRunnerProfile(rec, now) : null; return p ? [{ ...p, isCreator: id === convo.createdBy }] : []; });
+    return ok(res, { members }), true;
+  }
+
+  // PATCH /api/conversations/:id — rename a group chat. Creator only; 1:1
+  // threads have no editable name (it's always the other person's name).
+  if (method === "PATCH" && /^\/api\/conversations\/[^/]+$/.test(url.pathname)) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const convoId = url.pathname.split("/").at(-1)!;
+    const convo = db.getConversation(convoId);
+    if (!convo || !convo.participantIds.includes(sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
+    if (!convo.isGroup) return err(res, { status: 400, error: "not_a_group" }), true;
+    if (convo.createdBy !== sess.accountId) return err(res, { status: 403, error: "creator_only", message: "Only the person who started this group can rename it." }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 60) : "";
+    if (!name) return err(res, { status: 400, error: "invalid_name", message: "Give the group a name." }), true;
+    const updated = db.updateConversation(convo.id, { name });
+    await db.persist();
+    return ok(res, { conversation: updated }), true;
+  }
+
+  // POST /api/conversations/:id/leave — removes the caller from a group
+  // chat's participant list. 1:1 threads can't be "left" this way (there's
+  // no concept of a 1:1 without both people — use connection removal instead).
+  if (method === "POST" && url.pathname.startsWith("/api/conversations/") && url.pathname.endsWith("/leave")) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const convoId = url.pathname.split("/").at(-2)!;
+    const convo = db.getConversation(convoId);
+    if (!convo || !convo.participantIds.includes(sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
+    if (!convo.isGroup) return err(res, { status: 400, error: "not_a_group" }), true;
+    db.updateConversation(convo.id, { participantIds: convo.participantIds.filter((id) => id !== sess.accountId) });
+    await db.persist();
+    return ok(res, { left: true }), true;
+  }
+
   // ---- connection lifecycle mutations --------------------------------------
   // POST /api/connections/:id/request — :id is the TARGET ACCOUNT id.
   // POST /api/connections/:id/accept|decline — :id is the REQUEST id; the

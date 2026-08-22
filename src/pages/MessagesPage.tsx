@@ -178,14 +178,14 @@ function MessageBubble({
   };
   return (
     <div className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
-      <div className="relative flex items-end gap-1">
+      <div className="flex items-end gap-1">
         {!msg.deletedAt ? (
           <button
             type="button"
             onClick={() => setPickerOpen((v) => !v)}
             aria-label={myReaction ? `You reacted ${myReaction} — tap to change` : "React to this message"}
             aria-expanded={pickerOpen}
-            className={`order-first shrink-0 rounded-full p-1.5 ${mine ? "order-last" : ""} ${myReaction ? "text-[#FF5741]" : "text-slate-300 hover:text-slate-500"}`}
+            className={`order-first shrink-0 rounded-full bg-slate-100 p-1.5 ${mine ? "order-last" : ""} ${myReaction ? "text-[#FF5741]" : "text-slate-500 hover:bg-slate-200"}`}
           >
             <Icon name="spark" className="h-4 w-4" />
           </button>
@@ -199,22 +199,24 @@ function MessageBubble({
         >
           {msg.deletedAt ? "Message removed" : msg.body}
         </button>
-        {pickerOpen ? (
-          <div className={`absolute bottom-full z-10 mb-1.5 flex gap-1 rounded-full bg-white px-2 py-1.5 shadow-lg ring-1 ring-slate-200 ${mine ? "right-0" : "left-0"}`}>
-            {QUICK_REACTIONS.map((e) => (
-              <button
-                key={e}
-                type="button"
-                onClick={() => pick(e)}
-                aria-pressed={myReaction === e}
-                className={`grid h-8 w-8 place-items-center rounded-full text-[18px] ${myReaction === e ? "bg-[#FF5741]/15 ring-2 ring-[#FF5741]" : "hover:bg-slate-100"}`}
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-        ) : null}
       </div>
+      {/* Inline, not an absolute overlay — a popover here would get silently
+          clipped by the message list's overflow-y-auto and never be seen. */}
+      {pickerOpen ? (
+        <div className="mt-1.5 flex gap-1 rounded-full bg-white px-2 py-1.5 shadow-md ring-1 ring-slate-200">
+          {QUICK_REACTIONS.map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => pick(e)}
+              aria-pressed={myReaction === e}
+              className={`grid h-8 w-8 place-items-center rounded-full text-[18px] ${myReaction === e ? "bg-[#FF5741]/15 ring-2 ring-[#FF5741]" : "hover:bg-slate-100"}`}
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <span className="mt-0.5 px-1 text-[11px] text-slate-400">{formatMessageTime(msg.createdAt)}</span>
       {tally.length > 0 ? (
         <div className="mt-1 flex flex-wrap gap-1">
@@ -237,6 +239,127 @@ function MessageBubble({
   );
 }
 
+function GroupSettingsSheet({
+  conversationId,
+  convo,
+  onClose,
+  onRenamed,
+  onLeft,
+}: {
+  conversationId: string;
+  convo: api.ConversationSummary;
+  onClose: () => void;
+  onRenamed: (name: string) => void;
+  onLeft: () => void;
+}) {
+  const toast = useToast();
+  const { me } = useAccount();
+  const myId = me?.status === "signed_in" ? me.account.id : null;
+  const [members, setMembers] = useState<api.ConversationMember[] | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState(convo.name);
+  const [saving, setSaving] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const isCreator = members?.find((m) => m.id === myId)?.isCreator ?? false;
+
+  useEffect(() => {
+    void api.getConversationMembers(conversationId).then((r) => { if (r.ok) setMembers(r.data.members); });
+  }, [conversationId]);
+
+  const saveName = () => {
+    const trimmed = name.trim();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    void api.renameConversation(conversationId, trimmed).then((r) => {
+      setSaving(false);
+      if (r.ok) { onRenamed(r.data.conversation.name); setRenaming(false); toast("Group renamed.", "success"); }
+      else toast(r.error.message ?? "Couldn't rename the group.", "info");
+    });
+  };
+
+  const leave = () => {
+    setLeaving(true);
+    void api.leaveConversation(conversationId).then((r) => {
+      setLeaving(false);
+      if (r.ok) { toast("You left the group.", "neutral"); onLeft(); }
+      else toast(r.error.message ?? "Couldn't leave the group.", "info");
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
+      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-extrabold text-slate-900">Group settings</h2>
+          <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-5 w-5" /></button>
+        </div>
+
+        <div className="mt-5">
+          <span className="mb-1.5 block text-sm font-semibold text-slate-700">Group name</span>
+          {renaming ? (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={name}
+                maxLength={60}
+                onChange={(e) => setName(e.target.value)}
+                className="h-11 flex-1 rounded-xl border border-slate-200 px-3.5 text-[15px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
+              />
+              <button type="button" disabled={saving} onClick={saveName} className="h-11 rounded-full bg-[#14171C] px-4 text-sm font-bold text-white disabled:opacity-50">
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <p className="text-[15px] font-bold text-slate-900">{convo.name}</p>
+              {isCreator ? <button type="button" onClick={() => setRenaming(true)} className="text-[13px] font-bold text-[#14171C] underline underline-offset-2">Rename</button> : null}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-5">
+          <span className="mb-2 block text-sm font-semibold text-slate-700">{convo.participantIds.length} members</span>
+          {members === null ? (
+            <p className="text-sm text-slate-500">Loading…</p>
+          ) : (
+            <div className="max-h-56 space-y-1 overflow-y-auto">
+              {members.map((m) => (
+                <div key={m.id} className="flex items-center gap-3 rounded-xl p-2">
+                  {m.profilePhotoUrl ? (
+                    <img src={m.profilePhotoUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
+                  ) : (
+                    <span className="grid h-9 w-9 place-items-center rounded-full bg-[#14171C] text-[12px] font-bold text-white">{initials(m.name)}</span>
+                  )}
+                  <p className="text-[14px] font-semibold text-slate-800">
+                    {m.name}
+                    {m.isCreator ? <span className="ml-1.5 text-[11px] font-bold text-slate-400">Creator</span> : null}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 border-t border-slate-100 pt-4">
+          {confirmLeave ? (
+            <div className="flex gap-2">
+              <button type="button" disabled={leaving} onClick={leave} className="h-11 flex-1 rounded-full bg-red-600 text-sm font-bold text-white disabled:opacity-50">
+                {leaving ? "Leaving…" : "Confirm — leave group"}
+              </button>
+              <button type="button" onClick={() => setConfirmLeave(false)} className="h-11 rounded-full bg-slate-100 px-4 text-sm font-bold text-slate-700">Cancel</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setConfirmLeave(true)} className="h-11 w-full rounded-full border border-red-200 text-sm font-bold text-red-600">
+              Leave group
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Thread({ conversationId }: { conversationId: string }) {
   const navigate = useNavigate();
   const toast = useToast();
@@ -247,6 +370,7 @@ function Thread({ conversationId }: { conversationId: string }) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [creatingRun, setCreatingRun] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const load = () => {
@@ -310,12 +434,28 @@ function Thread({ conversationId }: { conversationId: string }) {
             </div>
           </div>
         )}
-        {convo.isGroup && !convo.runCreatedId ? (
-          <PillButton variant="secondary" disabled={creatingRun} onClick={createRun}>
-            <Icon name="calendar" className="h-4 w-4" /> {creatingRun ? "Starting…" : "Create run"}
-          </PillButton>
+        {convo.isGroup ? (
+          <span className="flex shrink-0 items-center gap-2">
+            {!convo.runCreatedId ? (
+              <PillButton variant="secondary" disabled={creatingRun} onClick={createRun}>
+                <Icon name="calendar" className="h-4 w-4" /> {creatingRun ? "Starting…" : "Create run"}
+              </PillButton>
+            ) : null}
+            <button type="button" onClick={() => setSettingsOpen(true)} aria-label="Group chat settings" className="rounded-full p-2 hover:bg-slate-100">
+              <Icon name="settings" className="h-5 w-5 text-slate-500" />
+            </button>
+          </span>
         ) : null}
       </div>
+      {settingsOpen ? (
+        <GroupSettingsSheet
+          conversationId={conversationId}
+          convo={convo}
+          onClose={() => setSettingsOpen(false)}
+          onRenamed={(name) => setConvo((c) => (c ? { ...c, name } : c))}
+          onLeft={() => navigate("/messages")}
+        />
+      ) : null}
 
       <div className="flex-1 space-y-3 overflow-y-auto py-4">
         {messages.map((m) => (

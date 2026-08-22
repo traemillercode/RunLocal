@@ -1016,6 +1016,16 @@ export function setMessageReaction(messageId: string, emoji: string | null): Pro
 export function createRunFromConversation(conversationId: string): Promise<ApiResult<{ conversationId: string; participantIds: string[]; prefillTitle: string }>> {
   return request(`/api/conversations/${encodeURIComponent(conversationId)}/create-run`, { method: "POST" });
 }
+export interface ConversationMember extends RunnerProfileView { isCreator: boolean; }
+export function getConversationMembers(conversationId: string): Promise<ApiResult<{ members: ConversationMember[] }>> {
+  return request(`/api/conversations/${encodeURIComponent(conversationId)}/members`);
+}
+export function renameConversation(conversationId: string, name: string): Promise<ApiResult<{ conversation: ConversationSummary }>> {
+  return request(`/api/conversations/${encodeURIComponent(conversationId)}`, { method: "PATCH", body: JSON.stringify({ name }) });
+}
+export function leaveConversation(conversationId: string): Promise<ApiResult<{ left: boolean }>> {
+  return request(`/api/conversations/${encodeURIComponent(conversationId)}/leave`, { method: "POST" });
+}
 
 export type TrainingPlanType = "5k" | "10k" | "half_marathon" | "marathon" | "ultra" | "other";
 export interface TrainingPlanView {
