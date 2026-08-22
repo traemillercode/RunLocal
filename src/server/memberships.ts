@@ -5,9 +5,38 @@ import { isGlobalAdmin, isCityAdminForGroup, canManageGroupOps } from "./roles";
 
 export function membershipDto(db: Db, m: GroupMembershipRecord) {
   const g = db.getGroup(m.groupId);
-  return { id: m.id, groupId: m.groupId, cityId: m.cityId, groupName: g?.name ?? "Group", status: m.status, requestedAt: m.requestedAt, updatedAt: m.updatedAt, groupmeUrl: g?.groupmeUrl ?? null, websiteUrl: g?.websiteUrl ?? null };
+  return { id: m.id, groupId: m.groupId, cityId: m.cityId, groupName: g?.name ?? "Group", status: m.status, requestedAt: m.requestedAt, updatedAt: m.updatedAt, websiteUrl: g?.websiteUrl ?? null };
 }
 export function myMemberships(db: Db, accountId: string) { return db.listMemberships(accountId).map(m => membershipDto(db, m)); }
+
+/**
+ * Native group chat for a club — lazily created on first access (seeded
+ * with every currently-active member), reused after that. Membership
+ * changes sync in via syncGroupChatMembership below, called from the
+ * membership approve/leave/remove/revoke paths.
+ */
+export function getOrCreateGroupChat(db: Db, groupId: string, now: Date): string {
+  const group = db.getGroup(groupId);
+  if (group?.chatConversationId && db.getConversation(group.chatConversationId)) return group.chatConversationId;
+  const memberIds = db.listMemberships().filter((m) => m.groupId === groupId && m.status === "active").map((m) => m.accountId);
+  const ownerId = group?.ownerId ?? memberIds[0] ?? "system";
+  const participantIds = [...new Set([ownerId, ...memberIds])];
+  const convo = db.createGroupConversation({ name: group?.name ?? "Club chat", participantIds, createdBy: ownerId }, now);
+  db.updateGroup(groupId, { chatConversationId: convo.id });
+  return convo.id;
+}
+
+/** Adds or removes an account from the group's chat when their membership changes — a no-op if the chat hasn't been created yet (it'll be seeded correctly whenever it first is). */
+export function syncGroupChatMembership(db: Db, groupId: string, accountId: string, action: "add" | "remove"): void {
+  const group = db.getGroup(groupId);
+  if (!group?.chatConversationId) return;
+  const convo = db.getConversation(group.chatConversationId);
+  if (!convo) return;
+  const participantIds = action === "add"
+    ? [...new Set([...convo.participantIds, accountId])]
+    : convo.participantIds.filter((id) => id !== accountId);
+  db.updateConversation(convo.id, { participantIds });
+}
 
 /**
  * Who may decide a group's membership requests: the group owner/leaders, the

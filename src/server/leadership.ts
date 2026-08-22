@@ -302,7 +302,7 @@ export function editGroupProfile(
       apply.description = patch.description;
     }
   }
-  for (const urlKey of ["websiteUrl", "groupmeUrl", "facebookUrl", "instagramUrl"] as const) {
+  for (const urlKey of ["websiteUrl", "facebookUrl", "instagramUrl"] as const) {
     const v = patch[urlKey];
     if (v === undefined) continue;
     if (v !== null && (typeof v !== "string" || v.length > MAX_FIELD || !/^https?:\/\//.test(v))) {

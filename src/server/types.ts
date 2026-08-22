@@ -790,10 +790,12 @@ export type GroupStatus = "pending_approval" | "published" | "suspended";
 export type MembershipMode = "open" | "request";
 export interface GroupModRecord {
   id: string; cityId: string; name: string; description?: string;
-  groupType?: GroupType; websiteUrl?: string|null; groupmeUrl?: string|null; facebookUrl?: string|null; instagramUrl?: string|null;
+  groupType?: GroupType; websiteUrl?: string|null; facebookUrl?: string|null; instagramUrl?: string|null;
   coverPhotoRef?: string|null; logoPhotoRef?: string|null; ownerId?: string; leaderIds?: string[]; membershipMode?: MembershipMode; status?: GroupStatus;
   rrcaBadge: boolean; rrcaNote: string | null; rrcaNoteUpdatedAt: string | null;
   rejectionReason?: string|null;
+  /** Native group chat conversation — lazily created on first access, then reused. Members are synced in as they join. */
+  chatConversationId?: string | null;
   /**
    * Archived by a super-admin: removed from the public directory permanently
    * (the record and its audit trail remain). Group "hide" uses the existing

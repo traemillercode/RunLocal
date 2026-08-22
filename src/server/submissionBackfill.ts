@@ -27,7 +27,7 @@ export function repairApprovedSubmissions(db: Db, now = new Date()): { repaired:
     } else {
       const p = s.payload as GroupSubmissionPayload;
       if (!db.getGroup(refId)) {
-        db.upsertGroup({ id: refId, cityId: s.cityId, name: p.name, rrcaBadge: false, rrcaNote: null, rrcaNoteUpdatedAt: null, description: p.description, groupType: p.groupType, websiteUrl: p.websiteUrl, groupmeUrl: p.groupmeUrl, facebookUrl: p.facebookUrl, instagramUrl: p.instagramUrl, coverPhotoRef: p.coverPhotoRef, logoPhotoRef: p.logoPhotoRef, membershipMode: p.membershipMode, status: "published", ownerId: s.submitterAccountId, leaderIds: [s.submitterAccountId] });
+        db.upsertGroup({ id: refId, cityId: s.cityId, name: p.name, rrcaBadge: false, rrcaNote: null, rrcaNoteUpdatedAt: null, description: p.description, groupType: p.groupType, websiteUrl: p.websiteUrl, facebookUrl: p.facebookUrl, instagramUrl: p.instagramUrl, coverPhotoRef: p.coverPhotoRef, logoPhotoRef: p.logoPhotoRef, membershipMode: p.membershipMode, status: "published", ownerId: s.submitterAccountId, leaderIds: [s.submitterAccountId] });
         changed = true;
       }
     }

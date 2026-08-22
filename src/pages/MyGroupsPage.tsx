@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import * as api from "../lib/api";
 import { useAccount } from "../state/account";
+import { useToast } from "../lib/toast";
 import { Icon } from "../components/ui";
 /** Role label for a manage-list row (leads plus in-scope City/Global Admins). */
 export function ledGroupRoleLabel(role: api.LedGroupRow["role"]): string {
@@ -26,32 +27,61 @@ export function LedGroupsSection({ groups }: { groups: api.LedGroupRow[] }) {
     </div>
   );
 }
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
 /** The actual "My Clubs" content — extracted so GroupsHubPage can render it as a tab without duplicating logic. */
 export function MyGroupsContent() {
+  const navigate = useNavigate();
+  const toast = useToast();
   const { me } = useAccount();
   const [memberships, setMemberships] = useState<api.MyGroupMembership[]>([]);
   const [waivers, setWaivers] = useState<api.WaiverStatus[]>([]);
   const [led, setLed] = useState<api.LedGroupRow[]>([]);
+  const [events, setEvents] = useState<api.CanonicalEvent[]>([]);
   const [error, setError] = useState("");
+  const [openingChatFor, setOpeningChatFor] = useState<string | null>(null);
   const load = () => {
     void api.getMyGroups().then((r) => (r.ok ? setMemberships(r.data.memberships) : setError(r.error.message)));
     void api.getMyWaivers().then((r) => r.ok && setWaivers(r.data.waivers));
     if (me) void api.getMyLedGroups().then((r) => r.ok && setLed(r.data.groups));
   };
   useEffect(load, [me]);
+  useEffect(() => {
+    if (memberships.length === 0) return;
+    void Promise.all([...new Set(memberships.map((m) => m.cityId))].map((cityId) => api.getCanonicalEvents(cityId))).then((results) => {
+      setEvents(results.flatMap((r) => (r.ok ? r.data.events : [])));
+    });
+  }, [memberships]);
+  const openChat = (groupId: string) => {
+    setOpeningChatFor(groupId);
+    void api.openGroupChat(groupId).then((r) => {
+      setOpeningChatFor(null);
+      if (r.ok) navigate(`/messages/${r.data.conversationId}`);
+      else toast(r.error.message ?? "Couldn't open the group chat.", "info");
+    });
+  };
   return <>
     <LedGroupsSection groups={led} />
-    {error ? <p role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p> : memberships.length === 0 ? <div className="mt-6 rounded-2xl bg-white p-5 text-slate-600">You are not a member of any groups yet. Browse the Discover tab to request access.</div> : <div className="mt-6 grid gap-3">{memberships.filter((m) => m.status !== "left" && m.status !== "revoked").map((m) => (
-      <div key={m.id} className="rounded-2xl bg-white p-5 shadow-sm"><Link to={`/groups/${m.groupId}`} className="text-lg font-bold">{m.groupName}</Link><p className="mt-1 text-sm capitalize text-slate-600">Membership: {m.status}</p>
+    {error ? <p role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p> : memberships.length === 0 ? <div className="mt-6 rounded-2xl bg-white p-5 text-slate-600">You are not a member of any groups yet. Browse the Discover tab to request access.</div> : <div className="mt-6 grid gap-3">{memberships.filter((m) => m.status !== "left" && m.status !== "revoked").map((m) => {
+      const nextRun = events.filter((e) => e.groupId === m.groupId && e.status === "published" && !e.hidden).sort((a, b) => a.dayOfWeek - b.dayOfWeek)[0];
+      return (
+      <div key={m.id} className="rounded-2xl bg-white p-5 shadow-sm border border-neutral-200/80"><Link to={`/groups/${m.groupId}`} className="text-lg font-bold">{m.groupName}</Link><p className="mt-1 text-sm capitalize text-slate-600">Membership: {m.status}</p>
+        {nextRun ? (
+          <p className="mt-2 flex items-center gap-1.5 text-sm text-slate-700">
+            <Icon name="calendar" className="h-4 w-4 text-slate-400" />
+            Next run: <span className="font-semibold">{DAY_NAMES[nextRun.dayOfWeek]}s, {nextRun.time}</span> · {nextRun.location}
+          </p>
+        ) : null}
         {(() => { const w = waivers.find((x) => x.groupId === m.groupId); return w && <p className="mt-2 text-sm font-semibold">Waiver: <span className={w.status === "signed" ? "text-emerald-700" : "text-amber-700"}>{w.status === "signed" ? `Signed${w.expiresAt ? ` until ${new Date(w.expiresAt).toLocaleDateString()}` : ""}` : w.status === "unsigned" ? "Not signed" : "Expired"}</span>{(w.status === "unsigned" || w.status === "expired") && <Link className="ml-2 text-orange-700 underline" to={`/groups/${m.groupId}`}>Review</Link>}</p>; })()}
-        {m.status === "active" && m.groupmeUrl ? (
-          <a href={m.groupmeUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#14171C] px-3.5 py-2 text-sm font-bold text-white">
-            <Icon name="chat" className="h-4 w-4" /> Group chat
-          </a>
+        {m.status === "active" ? (
+          <button type="button" disabled={openingChatFor === m.groupId} onClick={() => openChat(m.groupId)} className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#14171C] px-3.5 py-2 text-sm font-bold text-white disabled:opacity-60">
+            <Icon name="chat" className="h-4 w-4" /> {openingChatFor === m.groupId ? "Opening…" : "Group chat"}
+          </button>
         ) : null}
         <button className="mt-3 ml-2 rounded-lg border px-3 py-2 text-sm font-bold" onClick={() => void api.updateGroupMembership(m.groupId, "leave").then(load)}>Leave group</button>
       </div>
-    ))}</div>}
+      );
+    })}</div>}
   </>;
 }
 export function MyGroupsPage() {

@@ -703,7 +703,6 @@ function decideSubmissionCore(
       description: (rec.payload as GroupSubmissionPayload).description,
       groupType: (rec.payload as GroupSubmissionPayload).groupType,
       websiteUrl: (rec.payload as GroupSubmissionPayload).websiteUrl,
-      groupmeUrl: (rec.payload as GroupSubmissionPayload).groupmeUrl,
       facebookUrl: (rec.payload as GroupSubmissionPayload).facebookUrl,
       instagramUrl: (rec.payload as GroupSubmissionPayload).instagramUrl,
       coverPhotoRef: (rec.payload as GroupSubmissionPayload).coverPhotoRef,

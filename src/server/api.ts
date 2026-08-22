@@ -60,7 +60,7 @@ import {
   sessionMeDto,
   signViaSession,
 } from "./checkins";
-import { membershipDto, myMemberships, createMembership, canAdministerMembership } from "./memberships";
+import { membershipDto, myMemberships, createMembership, canAdministerMembership, getOrCreateGroupChat, syncGroupChatMembership } from "./memberships";
 import { listLedGroups, leaderQueue, assignGroupLeader, removeGroupLeader, transferGroupOwnership, editGroupProfile, notifyLeadersOfMembershipRequest, type GroupProfilePatch } from "./leadership";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
 import { eventCapabilities, moderateEvent, editEventPublic } from "./eventModeration";
@@ -651,6 +651,7 @@ async function handleApi(
     const status = group.membershipMode === "open" ? "active" : "pending";
     const membership = createMembership(db, group.id, account.id, status, now)!;
     if (status === "pending") notifyLeadersOfMembershipRequest(db, group, account.id, now);
+    else syncGroupChatMembership(db, group.id, account.id, "add");
     db.appendAudit({admin:account.email, action:"group.membership_request", reason:"Member membership request", targetId:group.id, ip, cityId:group.cityId}); await db.persist();
     return ok(res,{membership:membershipDto(db,membership)}),true;
   }
@@ -666,8 +667,26 @@ async function handleApi(
     else if (!leader && !isOwnerEmail(account?.email ?? "")) return err(res,{status:403,error:"forbidden"}),true;
     else membership.status = membershipAction[2] === "approve" ? "active" : membershipAction[2] === "decline" ? "declined" : "revoked";
     membership.updatedAt=now.toISOString(); membership.decidedAt=now.toISOString(); membership.decidedBy=sess.accountId;
-    db.updateMembership(membership.id,membership); db.appendAudit({admin:account?.email ?? "unknown",action:(membershipAction[2] === "leave" ? "group.membership_leave" : membershipAction[2] === "approve" ? "group.membership_approve" : membershipAction[2] === "decline" ? "group.membership_decline" : "group.membership_remove") as import("./types").AdminAction,reason:"Membership lifecycle action",targetId:group.id,ip,cityId:group.cityId}); await db.persist();
+    db.updateMembership(membership.id,membership); db.appendAudit({admin:account?.email ?? "unknown",action:(membershipAction[2] === "leave" ? "group.membership_leave" : membershipAction[2] === "approve" ? "group.membership_approve" : membershipAction[2] === "decline" ? "group.membership_decline" : "group.membership_remove") as import("./types").AdminAction,reason:"Membership lifecycle action",targetId:group.id,ip,cityId:group.cityId});
+    syncGroupChatMembership(db, group.id, targetId, membership.status === "active" ? "add" : "remove");
+    await db.persist();
     return ok(res,{membership:membershipDto(db,membership)}),true;
+  }
+
+  // GET /api/groups/:id/chat — opens (creating on first access) the club's
+  // native group chat. Active members only — pending/declined/left/revoked
+  // can't peek into a chat they're not part of.
+  const groupChatPath = /^\/api\/groups\/([^/]+)\/chat$/.exec(url.pathname);
+  if (groupChatPath && method === "GET") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const group = db.getGroup(groupChatPath[1]);
+    if (!group) return err(res, { status: 404, error: "not_found" }), true;
+    const membership = db.getMembership(group.id, sess.accountId);
+    if (!membership || membership.status !== "active") return err(res, { status: 403, error: "not_a_member" }), true;
+    const conversationId = getOrCreateGroupChat(db, group.id, now);
+    await db.persist();
+    return ok(res, { conversationId }), true;
   }
 
   // ==================== Group leadership & leader queue ====================
