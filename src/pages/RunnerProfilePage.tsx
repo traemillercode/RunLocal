@@ -82,6 +82,25 @@ export function RunnerProfileHeader({ profile }: { profile: RunnerProfileView })
           {profile.upcomingRaces ? <p><span className="font-semibold text-white/60">Upcoming races</span> · {profile.upcomingRaces}</p> : null}
         </div>
       ) : null}
+      {(profile.instagramUrl || profile.facebookUrl || profile.tiktokUrl) ? (
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+          {profile.instagramUrl ? (
+            <a href={profile.instagramUrl} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white active:bg-white/20">
+              Instagram
+            </a>
+          ) : null}
+          {profile.facebookUrl ? (
+            <a href={profile.facebookUrl} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white active:bg-white/20">
+              Facebook
+            </a>
+          ) : null}
+          {profile.tiktokUrl ? (
+            <a href={profile.tiktokUrl} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white active:bg-white/20">
+              TikTok
+            </a>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

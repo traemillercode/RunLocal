@@ -132,6 +132,10 @@ export interface PublicAccount {
   cityId: string | null;
   bio?: string | null;
   customTitle?: string | null;
+  instagramUrl?: string | null;
+  facebookUrl?: string | null;
+  tiktokUrl?: string | null;
+  showSocialLinks?: boolean;
   paceLabel?: string | null;
   runningGoal?: string | null;
   trainingBlock?: string | null;
@@ -201,6 +205,10 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new D
     cityId: rec.cityId ?? null,
     bio: rec.bio ?? null,
     customTitle: rec.customTitle ?? null,
+    instagramUrl: rec.instagramUrl ?? null,
+    facebookUrl: rec.facebookUrl ?? null,
+    tiktokUrl: rec.tiktokUrl ?? null,
+    showSocialLinks: rec.showSocialLinks === true,
     paceLabel: rec.paceLabel ?? null,
     runningGoal: rec.runningGoal ?? null,
     trainingBlock: rec.trainingBlock ?? null,
@@ -543,6 +551,10 @@ export class Db {
       upcomingRaces: null,
       bio: null,
       customTitle: null,
+      instagramUrl: null,
+      facebookUrl: null,
+      tiktokUrl: null,
+      showSocialLinks: false,
       status: isOwner ? "verified" : "pending",
       phase: "email",
       role: isOwner ? "site_admin" : "runner",

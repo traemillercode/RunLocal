@@ -67,6 +67,11 @@ export interface AccountRecord {
   bio?: string | null;
   /** Optional override shown instead of the role label (e.g. "Founder"). Display-only — grants no permissions. */
   customTitle?: string | null;
+  instagramUrl?: string | null;
+  facebookUrl?: string | null;
+  tiktokUrl?: string | null;
+  /** Off by default — social links are private until the runner explicitly opts to show them on their public profile. */
+  showSocialLinks?: boolean;
   status: AccountStatus;
   /** Funnel stage; only meaningful while status === "pending". */
   phase: VerifyPhase;

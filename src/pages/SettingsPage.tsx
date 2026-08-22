@@ -377,7 +377,11 @@ export function ProfileDetailsSection({
     runningGoal: account.runningGoal ?? "",
     trainingBlock: account.trainingBlock ?? "",
     upcomingRaces: account.upcomingRaces ?? "",
+    instagramUrl: account.instagramUrl ?? "",
+    facebookUrl: account.facebookUrl ?? "",
+    tiktokUrl: account.tiktokUrl ?? "",
   });
+  const [showSocialLinks, setShowSocialLinks] = useState(account.showSocialLinks === true);
   const fieldCls = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
   const rows: { key: keyof typeof draft; label: string; placeholder: string; textarea?: boolean }[] = [
     { key: "name", label: "Display name", placeholder: "Your name" },
@@ -387,6 +391,11 @@ export function ProfileDetailsSection({
     { key: "runningGoal", label: "Goal", placeholder: "e.g. Sub-4 marathon by fall" },
     { key: "trainingBlock", label: "Current training block", placeholder: "e.g. Week 6 of 16 — marathon block" },
     { key: "upcomingRaces", label: "Upcoming races", placeholder: "e.g. Columbia Half — Oct 12" },
+  ];
+  const socialRows: { key: "instagramUrl" | "facebookUrl" | "tiktokUrl"; label: string; placeholder: string }[] = [
+    { key: "instagramUrl", label: "Instagram", placeholder: "https://instagram.com/yourhandle" },
+    { key: "facebookUrl", label: "Facebook", placeholder: "https://facebook.com/yourprofile" },
+    { key: "tiktokUrl", label: "TikTok", placeholder: "https://tiktok.com/@yourhandle" },
   ];
   return (
     <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70 p-5" aria-busy={saving}>
@@ -417,6 +426,33 @@ export function ProfileDetailsSection({
           </label>
         ))}
       </div>
+      <div className="mt-6 border-t border-slate-100 pt-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-[14px] font-bold text-slate-900">Social accounts</h3>
+          <label className="flex items-center gap-2 text-[13px] font-semibold text-slate-600">
+            <input type="checkbox" checked={showSocialLinks} onChange={(e) => setShowSocialLinks(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+            Show on my profile
+          </label>
+        </div>
+        <p className="mb-3 text-[12px] text-slate-500">
+          {showSocialLinks ? "Visible to anyone who views your profile." : "Private — filled in but hidden until you turn this on."}
+        </p>
+        <div className="space-y-4">
+          {socialRows.map((row) => (
+            <label key={row.key} className="block">
+              <span className="mb-1.5 block text-sm font-semibold text-slate-700">{row.label}</span>
+              <input
+                type="url"
+                value={draft[row.key]}
+                maxLength={200}
+                placeholder={row.placeholder}
+                onChange={(e) => setDraft((d) => ({ ...d, [row.key]: e.target.value }))}
+                className={fieldCls}
+              />
+            </label>
+          ))}
+        </div>
+      </div>
       <button
         type="button"
         disabled={saving || !draft.name.trim()}
@@ -429,6 +465,10 @@ export function ProfileDetailsSection({
             runningGoal: draft.runningGoal || null,
             trainingBlock: draft.trainingBlock || null,
             upcomingRaces: draft.upcomingRaces || null,
+            instagramUrl: draft.instagramUrl || null,
+            facebookUrl: draft.facebookUrl || null,
+            tiktokUrl: draft.tiktokUrl || null,
+            showSocialLinks,
           })
         }
         className="mt-5 h-11 w-full rounded-full bg-[#14171C] text-sm font-bold text-white disabled:opacity-50"

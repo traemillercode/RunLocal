@@ -255,9 +255,14 @@ export interface PublicRunnerProfile {
   bio?: string | null;
   /** Optional override shown instead of the role label — display-only, grants no permissions. */
   customTitle?: string | null;
+  /** Null unless the runner opted in via showSocialLinks — never exposed otherwise, regardless of what's stored. */
+  instagramUrl: string | null;
+  facebookUrl: string | null;
+  tiktokUrl: string | null;
 }
 export function publicRunnerProfile(rec: AccountRecord, now = new Date()): PublicRunnerProfile | null {
   if (rec.deletedAt || isSuspended(rec, now)) return null;
+  const showSocial = rec.showSocialLinks === true;
   return {
     id: rec.id,
     name: rec.name,
@@ -273,6 +278,9 @@ export function publicRunnerProfile(rec: AccountRecord, now = new Date()): Publi
     upcomingRaces: rec.upcomingRaces ?? null,
     bio: rec.bio ?? null,
     customTitle: rec.customTitle ?? null,
+    instagramUrl: showSocial ? (rec.instagramUrl ?? null) : null,
+    facebookUrl: showSocial ? (rec.facebookUrl ?? null) : null,
+    tiktokUrl: showSocial ? (rec.tiktokUrl ?? null) : null,
   };
 }
 

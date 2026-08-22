@@ -2010,8 +2010,8 @@ async function handleApi(
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const body = (await readJson(req)) as Record<string, unknown>;
-    const allowed = ["name", "bio", "customTitle", "paceLabel", "runningGoal", "trainingBlock", "upcomingRaces"];
-    const patch: Record<string, string | null> = {};
+    const allowed = ["name", "bio", "customTitle", "paceLabel", "runningGoal", "trainingBlock", "upcomingRaces", "instagramUrl", "facebookUrl", "tiktokUrl", "showSocialLinks"];
+    const patch: Record<string, string | null | boolean> = {};
     for (const [k, v] of Object.entries(body)) {
       if (!allowed.includes(k)) return err(res, { status: 400, error: "invalid_field", message: `Unknown profile field: ${k}` }), true;
       if (k === "name") {
@@ -2019,8 +2019,16 @@ async function handleApi(
         patch.name = v.trim().slice(0, 60);
         continue;
       }
+      if (k === "showSocialLinks") {
+        if (typeof v !== "boolean") return err(res, { status: 400, error: "invalid_field", message: "showSocialLinks must be a boolean" }), true;
+        patch.showSocialLinks = v;
+        continue;
+      }
       if (v !== null && typeof v !== "string") return err(res, { status: 400, error: "invalid_field", message: `${k} must be a string or null` }), true;
-      patch[k] = v === null ? null : v.trim().slice(0, k === "bio" ? 280 : 140) || null;
+      if ((k === "instagramUrl" || k === "facebookUrl" || k === "tiktokUrl") && v) {
+        if (!/^https?:\/\/.+/.test(v)) return err(res, { status: 400, error: "invalid_url", message: `${k} must be a full link starting with https://` }), true;
+      }
+      patch[k] = v === null ? null : v.trim().slice(0, k === "bio" ? 280 : 200) || null;
     }
     const updated = db.updateAccount(sess.accountId, patch);
     if (!updated) return err(res, { status: 404, error: "not_found" }), true;

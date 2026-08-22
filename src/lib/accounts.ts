@@ -66,6 +66,10 @@ export interface PublicAccount {
   cityId: string | null;
   bio?: string | null;
   customTitle?: string | null;
+  instagramUrl?: string | null;
+  facebookUrl?: string | null;
+  tiktokUrl?: string | null;
+  showSocialLinks?: boolean;
   paceLabel?: string | null;
   runningGoal?: string | null;
   trainingBlock?: string | null;

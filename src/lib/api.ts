@@ -858,6 +858,9 @@ export interface RunnerProfileView {
   bio?: string | null;
   /** Optional override shown instead of the role label (e.g. "Founder") — display-only. */
   customTitle?: string | null;
+  instagramUrl?: string | null;
+  facebookUrl?: string | null;
+  tiktokUrl?: string | null;
   /** Relationship of the signed-in viewer to this runner (null for guests). */
   connectionState?: ConnectionState | null;
   /** Shared accepted connections; meaningful only when mutualVisible is true. */
@@ -1014,7 +1017,7 @@ export function putPrivacy(patch: Partial<PrivacySettings>): Promise<ApiResult<{
   return request("/api/profile/privacy", { method: "PUT", body: JSON.stringify(patch) });
 }
 
-export interface ProfileDetailsPatch { name?: string; bio?: string | null; customTitle?: string | null; paceLabel?: string | null; runningGoal?: string | null; trainingBlock?: string | null; upcomingRaces?: string | null; }
+export interface ProfileDetailsPatch { name?: string; bio?: string | null; customTitle?: string | null; paceLabel?: string | null; runningGoal?: string | null; trainingBlock?: string | null; upcomingRaces?: string | null; instagramUrl?: string | null; facebookUrl?: string | null; tiktokUrl?: string | null; showSocialLinks?: boolean; }
 /** Self-reported pace/goal/training-block/races, shown on the public profile. Partial update; response is the full public profile. */
 export function putProfileDetails(patch: ProfileDetailsPatch): Promise<ApiResult<{ profile: RunnerProfileView }>> {
   return request("/api/profile/details", { method: "PUT", body: JSON.stringify(patch) });
