@@ -30,10 +30,9 @@ import { ProviderCallbackPage } from "./pages/ProviderCallbackPage";
 import { MyRunsPage } from "./pages/MyRunsPage";
 import { PersonalRunsPage } from "./pages/PersonalRunsPage";
 import { PastEventsPage } from "./pages/PastEventsPage";
-import { GroupsPage } from "./pages/GroupsPage";
+import { GroupsHubPage } from "./pages/GroupsPage";
 import { MarketingPage } from "./pages/MarketingPage";
 import { GroupDetailPage } from "./pages/GroupDetailPage";
-import { MyGroupsPage } from "./pages/MyGroupsPage";
 import { GroupManagePage } from "./pages/GroupManagePage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { ConnectionsPage } from "./pages/ConnectionsPage";
@@ -95,8 +94,8 @@ function Shell() {
             <Route path="/events" element={<EventsPage city={city} store={store} />} />
             <Route path="/events/:eventId" element={<EventDetailPage city={city} store={store} />} />
             <Route path="/past-events" element={<PastEventsPage city={city} />} />
-            <Route path="/groups" element={<GroupsPage city={city} />} />
-            <Route path="/my-groups" element={<MyGroupsPage />} />
+            <Route path="/groups" element={<GroupsHubPage city={city} />} />
+            <Route path="/my-groups" element={<Navigate to="/groups?tab=mine" replace />} />
             <Route path="/groups/:groupId" element={<GroupRoute />} />
             <Route path="/groups/:groupId/manage" element={<GroupManagePage id={location.pathname.split("/").at(-2) ?? ""} />} />
             <Route path="/groups/:groupId/roster" element={<RosterPage />} />
