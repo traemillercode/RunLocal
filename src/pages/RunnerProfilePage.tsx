@@ -85,17 +85,20 @@ export function RunnerProfileHeader({ profile }: { profile: RunnerProfileView })
       {(profile.instagramUrl || profile.facebookUrl || profile.tiktokUrl) ? (
         <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
           {profile.instagramUrl ? (
-            <a href={profile.instagramUrl} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white active:bg-white/20">
+            <a href={profile.instagramUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full bg-white/10 py-1.5 pl-2.5 pr-3.5 text-[12px] font-semibold text-white active:bg-white/20">
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current"><path d="M12 2c2.7 0 3.05.01 4.12.06 1.06.05 1.79.22 2.43.47.66.26 1.21.6 1.76 1.15.55.55.9 1.1 1.15 1.76.25.64.42 1.37.47 2.43.05 1.07.06 1.42.06 4.12s-.01 3.05-.06 4.12c-.05 1.06-.22 1.79-.47 2.43a4.9 4.9 0 0 1-1.15 1.76 4.9 4.9 0 0 1-1.76 1.15c-.64.25-1.37.42-2.43.47-1.07.05-1.42.06-4.12.06s-3.05-.01-4.12-.06c-1.06-.05-1.79-.22-2.43-.47a4.9 4.9 0 0 1-1.76-1.15 4.9 4.9 0 0 1-1.15-1.76c-.25-.64-.42-1.37-.47-2.43C2.01 15.05 2 14.7 2 12s.01-3.05.06-4.12c.05-1.06.22-1.79.47-2.43.26-.66.6-1.21 1.15-1.76A4.9 4.9 0 0 1 5.44 2.5c.64-.25 1.37-.42 2.43-.47C8.95 2.01 9.3 2 12 2zm0 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 8.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4zm5.2-8.4a1.2 1.2 0 1 1-2.4 0 1.2 1.2 0 0 1 2.4 0z"/></svg>
               Instagram
             </a>
           ) : null}
           {profile.facebookUrl ? (
-            <a href={profile.facebookUrl} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white active:bg-white/20">
+            <a href={profile.facebookUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full bg-white/10 py-1.5 pl-2.5 pr-3.5 text-[12px] font-semibold text-white active:bg-white/20">
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current"><path d="M14 13.5h2.5l1-4H14v-2c0-1.03 0-2 2-2h1.5V2.14C17.17 2.1 15.99 2 14.75 2 12.15 2 10 3.66 10 6.7v2.8H7v4h3V22h4v-8.5z"/></svg>
               Facebook
             </a>
           ) : null}
           {profile.tiktokUrl ? (
-            <a href={profile.tiktokUrl} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white active:bg-white/20">
+            <a href={profile.tiktokUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full bg-white/10 py-1.5 pl-2.5 pr-3.5 text-[12px] font-semibold text-white active:bg-white/20">
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current"><path d="M16.6 5.82c-.7-.77-1.09-1.77-1.09-2.82h-3.13v13.44c0 1.5-1.22 2.72-2.72 2.72a2.72 2.72 0 0 1-1.02-5.24 2.72 2.72 0 0 1 1.7-.13V10.7a5.86 5.86 0 0 0-.68-.04A5.85 5.85 0 0 0 3.7 16.5a5.85 5.85 0 0 0 5.85 5.85 5.85 5.85 0 0 0 5.85-5.85V8.6a7.9 7.9 0 0 0 4.6 1.47V6.94a4.85 4.85 0 0 1-3.4-1.12z"/></svg>
               TikTok
             </a>
           ) : null}

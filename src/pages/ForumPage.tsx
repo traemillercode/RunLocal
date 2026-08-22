@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { HomeCityBanner } from "../components/HomeCityBanner";
 import { ProfileCompletionBanner } from "../components/ProfileCompletionBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
@@ -502,7 +502,11 @@ export function PostCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="min-w-0 flex-1 text-[15px] font-bold leading-snug text-slate-900">{post.title}</h3>
+            <h3 className="min-w-0 flex-1 text-[15px] font-bold leading-snug text-slate-900">
+              <button type="button" onClick={onReply} className="text-left hover:underline underline-offset-2">
+                {post.title}
+              </button>
+            </h3>
             <span className="flex shrink-0 items-center gap-1.5">
               {post.pinned ? (
                 <Chip tone={section === "announcements" ? "amber" : "neutral"}>
@@ -512,7 +516,7 @@ export function PostCard({
               <ActionMenu entityTitle={post.title} items={actionMenuItems(post.capabilities)} onSelect={(key) => onAction?.(key)} />
             </span>
           </div>
-          <p className="mt-1 text-[13px] leading-relaxed text-slate-600 line-clamp-3">{post.body}</p>
+          <p className={`mt-1 text-[13px] leading-relaxed text-slate-600 ${replyExpanded ? "" : "line-clamp-3"}`}>{post.body}</p>
           {tags}
         </div>
       </div>
@@ -652,6 +656,7 @@ export function ForumRail({ city }: { city: City }) {
 
 export function ForumPage({ city }: { city: City }) {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { role, me } = useAccount();
   const { hidden } = useModerated();
   const [section, setSection] = useState<ForumSection>("announcements");
@@ -719,6 +724,22 @@ export function ForumPage({ city }: { city: City }) {
     });
   };
 
+  // Deep link: ?post=<id> opens that thread directly, switching to its
+  // section first if needed. Runs once serverPosts have loaded so
+  // server-created posts (not just seed posts) are found too.
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    const targetId = searchParams.get("post");
+    if (!targetId || deepLinkHandled.current) return;
+    const seedMatch = city.forum.find((p) => p.id === targetId);
+    const serverMatch = serverPosts.find((p) => p.id === targetId);
+    const match = seedMatch ?? serverMatch;
+    if (!match) return;
+    deepLinkHandled.current = true;
+    if (match.section !== section) setSection(match.section);
+    openThread(targetId);
+  }, [searchParams, city.forum, serverPosts]);
+
   // Admin capability list for SEED posts (the server only computes
   // capabilities for user-created posts it serves; seed posts live in the
   // client city data and are moderated through the same content registry).
@@ -775,10 +796,18 @@ export function ForumPage({ city }: { city: City }) {
       setGateOpen(true);
       return;
     }
-    // Verified: toggle the inline thread + live composer.
-    setOpenThreadId((cur) => (cur === postId ? null : postId));
-    if (openThreadId !== postId) openThread(postId);
-    else setReplyDraft("");
+    // Verified: toggle the inline thread + live composer. The open post is
+    // synced to ?post=<id> so a thread has a real, shareable, reloadable URL —
+    // the "click a post and see the full thing" behavior.
+    const closing = openThreadId === postId;
+    setOpenThreadId(closing ? null : postId);
+    if (!closing) {
+      openThread(postId);
+      setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set("post", postId); return next; }, { replace: true });
+    } else {
+      setReplyDraft("");
+      setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete("post"); return next; }, { replace: true });
+    }
   };
 
   const onSubmitReply = (postId: string) => {
