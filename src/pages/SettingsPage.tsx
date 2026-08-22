@@ -811,7 +811,7 @@ export function SettingsPage() {
             </p>
           ) : null}
           <div className="flex gap-2 border-t border-slate-100 px-4 py-3.5">
-            <PillButton variant="primary" className="flex-1" disabled={cityBusy || pendingCityId === null || pendingCityId === cityId} onClick={() => void saveHomeCity()}>
+            <PillButton variant="primary" className="flex-1" disabled={cityBusy || pendingCityId === null || (hasHomeCity && pendingCityId === cityId)} onClick={() => void saveHomeCity()}>
               {cityBusy ? "Saving…" : "Save home city"}
             </PillButton>
             {pendingCityId !== null ? (

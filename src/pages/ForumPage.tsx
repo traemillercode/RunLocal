@@ -562,6 +562,8 @@ export function PostCard({
 export interface ForumPostRow {
   id: string;
   section: ForumSection;
+  /** Topic filter — null/absent for seed posts and posts created before categories existed. */
+  category?: ForumCategory | null;
   title: string;
   body: string;
   author: string;
@@ -652,6 +654,7 @@ export function ForumPage({ city }: { city: City }) {
   const { role, me } = useAccount();
   const { hidden } = useModerated();
   const [section, setSection] = useState<ForumSection>("announcements");
+  const [categoryFilter, setCategoryFilter] = useState<ForumCategory | null>(null);
   const [qaSort, setQaSort] = useState<QaSort>("newest");
   const [gateOpen, setGateOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -738,6 +741,7 @@ export function ForumPage({ city }: { city: City }) {
       .map((p) => ({
         id: p.id,
         section: p.section,
+        category: p.category,
         title: p.title,
         body: p.body,
         author: p.author,
@@ -750,6 +754,7 @@ export function ForumPage({ city }: { city: City }) {
         capabilities: p.capabilities,
       }));
     let list = [...visible, ...userPosts].filter((p) => p.section === section);
+    if (categoryFilter) list = list.filter((p) => p.category === categoryFilter);
     if (section === "qa") {
       const sorted = [...list];
       if (qaSort === "newest") sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -758,7 +763,7 @@ export function ForumPage({ city }: { city: City }) {
       return sorted;
     }
     return [...list].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
-  }, [city.forum, hidden, localHidden, section, qaSort, serverPosts, replyCounts, adminCaps]);
+  }, [city.forum, hidden, localHidden, section, categoryFilter, qaSort, serverPosts, replyCounts, adminCaps]);
 
   const [activityCards, setActivityCards] = useState<PublicActivityCard[]>([]);
   useEffect(() => { let live = true; void getActivityFeed(city.id).then((r) => { if (live && r.ok) setActivityCards(r.data.cards); }); return () => { live = false; }; }, [city.id]);
@@ -1132,6 +1137,29 @@ export function ForumPage({ city }: { city: City }) {
       {/* Section tabs — visually distinct per section */}
       <ForumSectionTabs section={section} onSelect={setSection} />
       <p className="mt-2 text-xs text-slate-500">{FORUM_SECTIONS.find((s) => s.id === section)?.blurb}</p>
+
+      {/* Category filter — topic, independent of section. "All" clears the filter. */}
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          aria-pressed={categoryFilter === null}
+          onClick={() => setCategoryFilter(null)}
+          className={`min-h-9 rounded-full px-3.5 text-[13px] font-semibold ${categoryFilter === null ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-600"}`}
+        >
+          All
+        </button>
+        {FORUM_CATEGORIES.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            aria-pressed={categoryFilter === c.id}
+            onClick={() => setCategoryFilter(categoryFilter === c.id ? null : c.id)}
+            className={`min-h-9 rounded-full px-3.5 text-[13px] font-semibold ${categoryFilter === c.id ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-600"}`}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
 
       <HomeCityBanner />
       {activityCards.length > 0 ? <section aria-label="Community activity" className="mt-4 space-y-2">
