@@ -5,7 +5,7 @@ import { isGlobalAdmin, isCityAdminForGroup, canManageGroupOps } from "./roles";
 
 export function membershipDto(db: Db, m: GroupMembershipRecord) {
   const g = db.getGroup(m.groupId);
-  return { id: m.id, groupId: m.groupId, cityId: m.cityId, groupName: g?.name ?? "Group", status: m.status, requestedAt: m.requestedAt, updatedAt: m.updatedAt };
+  return { id: m.id, groupId: m.groupId, cityId: m.cityId, groupName: g?.name ?? "Group", status: m.status, requestedAt: m.requestedAt, updatedAt: m.updatedAt, groupmeUrl: g?.groupmeUrl ?? null, websiteUrl: g?.websiteUrl ?? null };
 }
 export function myMemberships(db: Db, accountId: string) { return db.listMemberships(accountId).map(m => membershipDto(db, m)); }
 

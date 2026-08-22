@@ -1267,7 +1267,7 @@ export function cityGetTrustedMembers(reason: string): Promise<ApiResult<{ membe
   return adminRequest("/api/admin/city/trust/members", reason);
 }
 
-export interface MyGroupMembership { id:string; groupId:string; cityId:string; groupName:string; status:"pending"|"active"|"declined"|"revoked"|"left"; requestedAt:string; updatedAt:string }
+export interface MyGroupMembership { id:string; groupId:string; cityId:string; groupName:string; status:"pending"|"active"|"declined"|"revoked"|"left"; requestedAt:string; updatedAt:string; groupmeUrl?: string | null; websiteUrl?: string | null }
 export function getMyGroups(): Promise<ApiResult<{memberships:MyGroupMembership[]}>> { return request("/api/me/groups"); }
 export function requestGroupMembership(groupId:string): Promise<ApiResult<{membership:MyGroupMembership}>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership`, {method:"POST",body:"{}"}); }
 export function updateGroupMembership(groupId:string, action:"leave"|"approve"|"decline"|"remove", accountId?:string): Promise<ApiResult<{membership:MyGroupMembership}>> { return request(`/api/groups/${encodeURIComponent(groupId)}/membership/${action}`, {method:"POST",body:JSON.stringify(accountId?{accountId}:{})}); }

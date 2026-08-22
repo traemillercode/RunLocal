@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import * as api from "../lib/api";
 import { useAccount } from "../state/account";
+import { Icon } from "../components/ui";
 /** Role label for a manage-list row (leads plus in-scope City/Global Admins). */
 export function ledGroupRoleLabel(role: api.LedGroupRow["role"]): string {
   return role === "owner" ? "Owner" : role === "leader" ? "Leader" : role === "city_admin" ? "City Admin" : "Platform owner";
@@ -43,7 +44,12 @@ export function MyGroupsContent() {
     {error ? <p role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p> : memberships.length === 0 ? <div className="mt-6 rounded-2xl bg-white p-5 text-slate-600">You are not a member of any groups yet. Browse the Discover tab to request access.</div> : <div className="mt-6 grid gap-3">{memberships.filter((m) => m.status !== "left" && m.status !== "revoked").map((m) => (
       <div key={m.id} className="rounded-2xl bg-white p-5 shadow-sm"><Link to={`/groups/${m.groupId}`} className="text-lg font-bold">{m.groupName}</Link><p className="mt-1 text-sm capitalize text-slate-600">Membership: {m.status}</p>
         {(() => { const w = waivers.find((x) => x.groupId === m.groupId); return w && <p className="mt-2 text-sm font-semibold">Waiver: <span className={w.status === "signed" ? "text-emerald-700" : "text-amber-700"}>{w.status === "signed" ? `Signed${w.expiresAt ? ` until ${new Date(w.expiresAt).toLocaleDateString()}` : ""}` : w.status === "unsigned" ? "Not signed" : "Expired"}</span>{(w.status === "unsigned" || w.status === "expired") && <Link className="ml-2 text-orange-700 underline" to={`/groups/${m.groupId}`}>Review</Link>}</p>; })()}
-        <button className="mt-3 rounded-lg border px-3 py-2 text-sm font-bold" onClick={() => void api.updateGroupMembership(m.groupId, "leave").then(load)}>Leave group</button>
+        {m.status === "active" && m.groupmeUrl ? (
+          <a href={m.groupmeUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#14171C] px-3.5 py-2 text-sm font-bold text-white">
+            <Icon name="chat" className="h-4 w-4" /> Group chat
+          </a>
+        ) : null}
+        <button className="mt-3 ml-2 rounded-lg border px-3 py-2 text-sm font-bold" onClick={() => void api.updateGroupMembership(m.groupId, "leave").then(load)}>Leave group</button>
       </div>
     ))}</div>}
   </>;
