@@ -966,6 +966,46 @@ export interface PrivacySettings {
   show_tagged_content: ContentVisibilitySetting;
   searchable_by_name: boolean;
 }
+export interface ConversationSummary {
+  id: string;
+  isGroup: boolean;
+  name: string;
+  participantIds: string[];
+  otherProfile: RunnerProfileView | null;
+  lastMessage: { body: string | null; senderId: string; createdAt: string } | null;
+  lastMessageAt: string;
+  runCreatedId: string | null;
+}
+export interface MessageView {
+  id: string;
+  senderId: string;
+  body: string | null;
+  createdAt: string;
+  deletedAt: string | null;
+  reactions: Record<string, string>;
+}
+export function getConversations(): Promise<ApiResult<{ conversations: ConversationSummary[] }>> {
+  return request("/api/conversations");
+}
+export function createDirectConversation(accountId: string): Promise<ApiResult<{ conversation: ConversationSummary }>> {
+  return request("/api/conversations", { method: "POST", body: JSON.stringify({ accountId }) });
+}
+export function createGroupConversation(name: string, participantIds: string[]): Promise<ApiResult<{ conversation: ConversationSummary }>> {
+  return request("/api/conversations", { method: "POST", body: JSON.stringify({ name, participantIds }) });
+}
+export function getMessages(conversationId: string): Promise<ApiResult<{ conversation: ConversationSummary; messages: MessageView[] }>> {
+  return request(`/api/conversations/${encodeURIComponent(conversationId)}/messages`);
+}
+export function sendMessage(conversationId: string, body: string): Promise<ApiResult<{ message: MessageView }>> {
+  return request(`/api/conversations/${encodeURIComponent(conversationId)}/messages`, { method: "POST", body: JSON.stringify({ body }) });
+}
+export function setMessageReaction(messageId: string, emoji: string | null): Promise<ApiResult<{ message: MessageView }>> {
+  return request(`/api/messages/${encodeURIComponent(messageId)}/reaction`, { method: "PUT", body: JSON.stringify({ emoji }) });
+}
+export function createRunFromConversation(conversationId: string): Promise<ApiResult<{ conversationId: string; participantIds: string[]; prefillTitle: string }>> {
+  return request(`/api/conversations/${encodeURIComponent(conversationId)}/create-run`, { method: "POST" });
+}
+
 export function getPrivacy(): Promise<ApiResult<{ settings: PrivacySettings }>> {
   return request("/api/profile/privacy");
 }

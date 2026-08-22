@@ -36,6 +36,7 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   { id: "forum", route: "/forum", label: "Forum", icon: "chat", surfaces: ["bottom", "sidebar"], match: "prefix" },
   { id: "groups", route: "/groups", label: "Groups & Clubs", icon: "users", surfaces: ["sidebar"], match: "prefix" },
   { id: "connections", route: "/connections", label: "Connections", icon: "users", surfaces: ["bottom", "sidebar"], match: "prefix" },
+  { id: "messages", route: "/messages", label: "Messages", icon: "chat", surfaces: ["sidebar", "menu"], match: "prefix" },
   { id: "my-runs", route: "/my-runs", label: "My Runs", icon: "rsvp", surfaces: ["bottom", "sidebar"], match: "prefix" },
   { id: "profile", route: "/profile", label: "Profile", icon: "user", surfaces: ["sidebar", "menu"], match: "prefix" },
   { id: "settings", route: "/settings", label: "Settings", icon: "settings", surfaces: ["sidebar", "menu"], match: "prefix" },
