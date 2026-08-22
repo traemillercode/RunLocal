@@ -519,7 +519,18 @@ export function PostCard({
               <ActionMenu entityTitle={post.title} items={actionMenuItems(post.capabilities)} onSelect={(key) => onAction?.(key)} />
             </span>
           </div>
-          <p className={`mt-1 text-[13px] leading-relaxed text-slate-600 ${replyExpanded ? "" : "line-clamp-3"}`}>{post.body}</p>
+          {verified ? (
+            <p className={`mt-1 text-[13px] leading-relaxed text-slate-600 ${replyExpanded ? "" : "line-clamp-3"}`}>{post.body}</p>
+          ) : (
+            <button type="button" onClick={onReply} className="relative mt-1.5 block w-full text-left">
+              <p aria-hidden="true" className="line-clamp-2 select-none text-[13px] leading-relaxed text-slate-500 blur-[5px]">
+                {post.body}
+              </p>
+              <span className="mt-1.5 flex items-center gap-1.5 text-[12px] font-bold text-[#14171C]">
+                <Icon name="lock" className="h-3.5 w-3.5" /> Verify your account to read this
+              </span>
+            </button>
+          )}
           {tags}
         </div>
       </div>
