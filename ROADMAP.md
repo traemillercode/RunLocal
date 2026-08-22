@@ -47,13 +47,15 @@ Last updated: 2026-08-22. This file is the source of truth for what's done and w
 **Forum ranking**
 - Upvotes ("was this helpful") on every post, verified runners only, one vote per person, optimistic UI. Q&A's "Top" sort now genuinely ranks by votes — it silently used reply count before.
 
+**Content gating**
+- Non-verified viewers see a blurred post body with a clear verify prompt instead of the full text. Titles stay visible. Reply threads were already fully gated.
+
 ## Open — scoped, not started
 
-1. **Content gating for non-verified viewers** — forum currently fully readable regardless of verification status; the ask was to make it genuinely hard to parse until verified.
-2. **Full visual/navigation redesign** — the "feels like Airbnb" ask. Deliberately not started piecemeal; deserves its own pass once the underlying features (forum, messaging, connections) are stable.
-3. **Ambassador role + Strava 10-connection cap** — OAuth itself works now; there's no cap enforcement or admin-assigns-ambassador flow yet.
-4. **Rejection emails** — verified users get emailed; rejected applicants only get the in-app notification.
-5. **Public profile URL by username** — confirm whether `/runners/:id` is sufficient or a `/​@username` style URL is wanted for sharing.
+1. **Full visual/navigation redesign** — the "feels like Airbnb" ask. Deliberately not started piecemeal; deserves its own pass once the underlying features (forum, messaging, connections) are stable.
+2. **Ambassador role + Strava 10-connection cap** — OAuth itself works now; there's no cap enforcement or admin-assigns-ambassador flow yet.
+3. **Rejection emails** — verified users get emailed; rejected applicants only get the in-app notification.
+4. **Public profile URL by username** — confirm whether `/runners/:id` is sufficient or a `/​@username` style URL is wanted for sharing.
 
 ## Open — not yet scoped
 
