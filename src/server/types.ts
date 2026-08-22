@@ -656,7 +656,7 @@ export interface RecognitionRecord { accountId:string; cityId:string; role:"coac
  */
 /** Per-event/occurrence visibility override (see AttendanceRecord.visibilityOverride). */
 export type AttendanceVisibility = "inherit" | "public" | "connections_only" | "private";
-export interface AttendanceRecord { id:string; accountId:string; eventId:string; role:"rsvp"|"host"; createdAt:string; /** Concrete occurrence; absent on legacy event-level rows. */ occurrenceId?: string; runDate?: string; startsAt?: string; /** Soft-delete stamp: set when an admin archives the event. The row is preserved (audit trail) but excluded from active RSVP/eligibility checks. */ deletedAt?: string|null; /** Opt-in "Keep on My Runs": a past occurrence stays visible in My Runs forever (indefinite kept history). */ kept?: boolean; /**
+export interface AttendanceRecord { id:string; accountId:string; eventId:string; role:"rsvp"|"host"; createdAt:string; /** Concrete occurrence; absent on legacy event-level rows. */ occurrenceId?: string; runDate?: string; startsAt?: string; /** Soft-delete stamp: set when an admin archives the event. The row is preserved (audit trail) but excluded from active RSVP/eligibility checks. */ deletedAt?: string|null; /** Opt-in "Keep on My Runs": a past occurrence stays visible in My Runs forever (indefinite kept history). */ kept?: boolean; /** Set once a run-reminder notification has fired for this row — prevents re-notifying on every check. */ remindedAt?: string | null; /**
    * Event-level privacy override — "inherit" (default) means the OWNER's
    * global `show_upcoming_events` setting applies; any other value REPLACES it
    * for visibility decisions about this specific event/occurrence (see

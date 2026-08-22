@@ -944,6 +944,30 @@ export class Db {
   hasAttendance(accountId: string, eventId: string) { return [...this.attendance.values()].some(a => !a.deletedAt && a.accountId === accountId && a.eventId === eventId); }
   addAttendance(a: import("./types").AttendanceRecord) { this.attendance.set(a.id, a); return a; }
   updateAttendance(id: string, patch: Partial<import("./types").AttendanceRecord>) { const a = this.attendance.get(id); if (!a) return undefined; const next = { ...a, ...patch }; this.attendance.set(id, next); return next; }
+  /**
+   * Fires a "your run starts soon" notification for every active RSVP whose
+   * event starts within the reminder window and hasn't been reminded yet.
+   * Idempotent per attendance row (remindedAt gates it) so calling this on
+   * every interval tick never double-notifies. Returns the count notified,
+   * for logging only — never account ids.
+   */
+  checkRunReminders(now: Date, windowMinutes = 90): number {
+    const nowMs = now.getTime();
+    const windowEndMs = nowMs + windowMinutes * 60_000;
+    let notified = 0;
+    for (const a of this.attendance.values()) {
+      if (a.deletedAt || a.remindedAt || !a.startsAt) continue;
+      const startsMs = Date.parse(a.startsAt);
+      if (!Number.isFinite(startsMs) || startsMs < nowMs || startsMs > windowEndMs) continue;
+      this.updateAttendance(a.id, { remindedAt: now.toISOString() });
+      if (this.getNotificationPreferences(a.accountId).run_reminders) {
+        const minutesAway = Math.round((startsMs - nowMs) / 60_000);
+        this.addNotification({ id: newId(), accountId: a.accountId, category: "run_reminders", title: "Your run is coming up", body: `Starting in about ${minutesAway} minute${minutesAway === 1 ? "" : "s"} — see you out there.`, createdAt: now.toISOString(), readAt: null });
+        notified++;
+      }
+    }
+    return notified;
+  }
   removeAttendance(id: string) { this.attendance.delete(id); }
   /**
    * Read one account's event/occurrence visibility override. Returns

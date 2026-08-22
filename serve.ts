@@ -72,6 +72,17 @@ await runRetentionPurge();
 const purgeInterval = setInterval(() => void runRetentionPurge(), 24 * 60 * 60 * 1000);
 purgeInterval.unref();
 
+async function runReminderCheck() {
+  const notified = db.checkRunReminders(new Date());
+  if (notified > 0) {
+    await db.persist();
+    console.log(`[reminders] notified ${notified} upcoming-run attendee(s)`);
+  }
+}
+await runReminderCheck();
+const reminderInterval = setInterval(() => void runReminderCheck(), 10 * 60 * 1000);
+reminderInterval.unref();
+
 const server = createServer(async (req, res) => {
   try {
     // 1) API + admin endpoints (same origin as the SPA).
