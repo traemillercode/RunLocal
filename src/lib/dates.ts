@@ -73,6 +73,9 @@ export interface WeekCanonicalSource {
   status: "draft" | "approved" | "published" | "hidden" | "archived";
   hidden: boolean;
   archivedAt: string | null;
+  minParticipants?: number;
+  confirmedCount?: number;
+  isConfirmedGroupRun?: boolean;
 }
 /**
  * Merge the three weekly run sources — client seed slots, the server canonical
@@ -110,6 +113,9 @@ export function mergeWeekEventSources(
       distanceLabel: e.distanceLabel,
       invite: e.invite,
       externalUrl: e.externalUrl ?? undefined,
+      minParticipants: e.minParticipants,
+      confirmedCount: e.confirmedCount,
+      isConfirmedGroupRun: e.isConfirmedGroupRun,
     });
   }
   out.push(...recurring);

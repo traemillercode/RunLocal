@@ -49,6 +49,10 @@ export interface RunEvent {
   invite: InviteLabel;
   /** External details page (club site etc.), when the host provides one. */
   externalUrl?: string;
+  /** Confirmation threshold for informal proposals — undefined/0 means no threshold, always confirmed. */
+  minParticipants?: number;
+  confirmedCount?: number;
+  isConfirmedGroupRun?: boolean;
 }
 
 export interface Race {

@@ -38,3 +38,8 @@ export function defaultOccurrenceDate(event: RunEventRecord, now: Date): string 
 export function sameEventId(a: string, b: string): boolean {
   return a.replace(/^event:/, "") === b.replace(/^event:/, "");
 }
+
+/** Count of RSVP attendance rows for one specific occurrence — the raw number behind "X/3 confirmed" and any "N going" display. */
+export function occurrenceAttendeeCount(db: Db, eventId: string, occurrenceId: string): number {
+  return db.listAttendance().filter((a) => a.role === "rsvp" && sameEventId(a.eventId, eventId) && a.occurrenceId === occurrenceId).length;
+}

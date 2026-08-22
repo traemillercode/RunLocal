@@ -42,7 +42,7 @@ import {
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail } from "./owner";
-import { resolveOccurrence, defaultOccurrenceDate, sameEventId } from "./occurrences";
+import { resolveOccurrence, defaultOccurrenceDate, sameEventId, occurrenceAttendeeCount } from "./occurrences";
 import { publicGroups, publicGroup } from "./groups";
 import { currentWaiver, waiverStatus, createWaiverVersion, signWaiver, processWaiverExpiry } from "./waivers";
 import {
@@ -453,7 +453,17 @@ async function handleApi(
     // anonymous caller receives [] per event, which clients treat as "no
     // actions available".
     const actor = sessionAccount(db, { adminSessionId: null, userSessionId: cookies[SESSION_COOKIE] ?? null, reason: undefined, ip: "" });
-    return ok(res, { cityId: cityId ?? null, events: publicEvents(db, cityId).map((e) => ({ ...e, capabilities: eventCapabilities(db, actor, e) })) }), true;
+    return ok(res, { cityId: cityId ?? null, events: publicEvents(db, cityId).map((e) => {
+      const occurrenceDate = defaultOccurrenceDate(e, now);
+      const occurrenceId = `${e.id.startsWith("event:") ? e.id : `event:${e.id}`}:${occurrenceDate}`;
+      const confirmedCount = occurrenceAttendeeCount(db, e.id, occurrenceId);
+      return {
+        ...e,
+        capabilities: eventCapabilities(db, actor, e),
+        confirmedCount,
+        isConfirmedGroupRun: !e.minParticipants || confirmedCount >= e.minParticipants,
+      };
+    }) }), true;
   }
   // ---- group-lead scoped event moderation ----------------------------------
   // PATCH /api/events/:id/moderation — hide/restore/delete a recurring group

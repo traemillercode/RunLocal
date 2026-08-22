@@ -339,6 +339,8 @@ export interface RunEventRecord {
   dayOfWeek: number; /** One-time submissions carry an exact date; recurring records leave this null. */ scheduleDate?: string | null; recurrenceType?: "one_time" | "recurring"; time: string; location: string; distanceLabel: string; invite: InviteLabel; externalUrl: string | null;
   provenance: "seed" | "community" | "admin"; status: "draft" | "approved" | "published" | "hidden" | "archived";
   hidden: boolean; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; archivedAt: string | null;
+  /** When set, this occurrence needs at least this many RSVPs before it counts as a confirmed group run rather than a proposal. Undefined/0 = no threshold, always confirmed. */
+  minParticipants?: number;
 }
 
 /**

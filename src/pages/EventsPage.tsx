@@ -202,6 +202,27 @@ export function EventFeedRow({
           <p className="flex items-center gap-2"><Icon name="mapPin" className="h-4 w-4 text-slate-400" />{event.location}</p>
           <p className="flex items-center gap-2"><Icon name="users" className="h-4 w-4 text-slate-400" />{event.invite}</p>
         </div>
+        {event.minParticipants && event.minParticipants > 0 ? (
+          <div className="border-t border-slate-100 px-4 py-3">
+            {event.isConfirmedGroupRun ? (
+              <p className="flex items-center gap-1.5 text-[13px] font-bold text-emerald-700">
+                <Icon name="check" className="h-4 w-4" /> Confirmed group run
+              </p>
+            ) : (
+              <>
+                <p className="text-[13px] font-semibold text-slate-700">
+                  Needs {event.minParticipants} runners to confirm ({event.confirmedCount ?? 0}/{event.minParticipants})
+                </p>
+                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-[#FF5741] transition-all"
+                    style={{ width: `${Math.min(100, ((event.confirmedCount ?? 0) / event.minParticipants) * 100)}%` }}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
         {event.externalUrl ? (
           <div className="border-t border-slate-100 px-4 py-2.5">
             <a href={event.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[#14171C] text-sm font-semibold text-white">
