@@ -287,7 +287,7 @@ export function NotificationPreferencesSection({
       </ul>
       <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
         Category preferences are saved to your account and default to off. Only Community updates delivers in-app
-        notifications today; Run reminders and Account alerts are coming soon. In-app notifications are private to your
+        notifications today; Account alerts are now real too. Run reminders are still coming soon. In-app notifications are private to your
         account. Browser permission is foreground-only; Run Local does not claim background push.
       </p>
     </section>
