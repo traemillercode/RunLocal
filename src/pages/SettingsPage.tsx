@@ -917,6 +917,11 @@ export function SettingsPage() {
           <h2 className="border-b border-slate-100 px-5 py-3.5 text-[15px] font-bold text-slate-900">Session</h2>
           <ul className="divide-y divide-slate-100">
             <li>
+              <Link to="/legal" className="flex min-h-11 w-full items-center px-5 text-left text-[14px] font-semibold text-slate-700 active:bg-slate-50">
+                Terms of Service &amp; Privacy Policy
+              </Link>
+            </li>
+            <li>
               <button
                 type="button"
                 onClick={() => void signOut().then(() => toast("Signed out.", "neutral"))}

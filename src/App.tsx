@@ -22,6 +22,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { RunnerProfilePage } from "./pages/RunnerProfilePage";
 import { RacesPage } from "./pages/RacesPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { LegalPage } from "./pages/LegalPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { RecoveryPage } from "./pages/RecoveryPage";
 import { ConfirmationPage } from "./pages/ConfirmationPage";
@@ -111,6 +112,7 @@ function Shell() {
             <Route path="/messages" element={<MessagesPage />} />
             <Route path="/messages/:conversationId" element={<MessagesPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/legal" element={<LegalPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/recovery" element={<RecoveryPage sessionError={recoveryError} />} />
             <Route path="/confirmation" element={<ConfirmationPage />} />

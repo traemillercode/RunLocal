@@ -24,7 +24,7 @@
  * on /verify.
  */
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Chip, Icon, PillButton } from "../components/ui";
 import { ResendConfirmationBox } from "../components/ResendConfirmationBox";
 import * as api from "../lib/api";
@@ -613,6 +613,14 @@ export function LoginPage() {
           <PillButton variant="primary" className="w-full" disabled={busy} onClick={() => void submit()}>
             {busy ? (mode === "login" ? "Logging in…" : "Creating account…") : mode === "login" ? "Log in" : "Create account"}
           </PillButton>
+          {mode === "signup" ? (
+            <p className="text-center text-[12px] text-slate-500">
+              By creating an account, you agree to Kimbio's{" "}
+              <Link to="/legal#terms" className="font-semibold text-slate-700 underline underline-offset-2">Terms of Service</Link>
+              {" "}and{" "}
+              <Link to="/legal#privacy" className="font-semibold text-slate-700 underline underline-offset-2">Privacy Policy</Link>.
+            </p>
+          ) : null}
           {mode === "login" && (
             <button type="button" disabled={busy} onClick={() => void reset()} className="block w-full text-center text-sm font-semibold text-[#14171C] underline">
               Forgot password?
