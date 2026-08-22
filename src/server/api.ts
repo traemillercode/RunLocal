@@ -140,6 +140,31 @@ import {
   searchable,
 } from "./connections";
 import { canView } from "./privacy";
+import sharp from "sharp";
+
+/**
+ * Basic, honest image-quality pre-filter for selfie submissions — NOT face
+ * detection or identity verification. Catches the obvious junk (blank/black
+ * camera-cap shots, extreme blur, too-small images) so the admin review
+ * queue only sees real candidates. Every submission that passes still goes
+ * to manual review; this never approves anyone on its own.
+ */
+async function selfieQualityCheck(bytes: Buffer): Promise<{ ok: true } | { ok: false; error: string; message: string }> {
+  try {
+    const img = sharp(bytes);
+    const [metadata, stats] = await Promise.all([img.metadata(), img.stats()]);
+    if (!metadata.width || !metadata.height || metadata.width < 200 || metadata.height < 200) {
+      return { ok: false, error: "image_too_small", message: "That photo is too small — please retake it." };
+    }
+    const avgBrightness = stats.channels.slice(0, 3).reduce((sum, c) => sum + c.mean, 0) / Math.min(3, stats.channels.length);
+    if (avgBrightness < 20) return { ok: false, error: "image_too_dark", message: "That photo is too dark to review — please retake it somewhere brighter." };
+    if (avgBrightness > 240) return { ok: false, error: "image_too_bright", message: "That photo is overexposed — please retake it out of direct light." };
+    if (stats.entropy < 3) return { ok: false, error: "image_too_flat", message: "That photo looks blank or out of focus — please retake it." };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "invalid_image", message: "Couldn't read that photo — please try again." };
+  }
+}
 
 export const SESSION_COOKIE = "runlocal_sid";
 export const ADMIN_COOKIE = "runlocal_admin";
@@ -1159,6 +1184,8 @@ async function handleApi(
     if (typeof body.photo !== "string") return err(res, { status: 400, error: "invalid_image" }), true;
     const img = decodeImage(body.photo);
     if (!img.ok) return err(res, { status: 400, error: img.error }), true;
+    const quality = await selfieQualityCheck(Buffer.from(img.bytes));
+    if (!quality.ok) return err(res, { status: 400, error: quality.error, message: quality.message }), true;
     const filename = `${rec.id}_selfie.${img.ext}`;
     await db.writePrivateUpload(filename, img.bytes);
     db.updateAccount(rec.id, {
