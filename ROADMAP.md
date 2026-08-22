@@ -41,15 +41,17 @@ Last updated: 2026-08-22. This file is the source of truth for what's done and w
 **Legal**
 - Terms of Service &amp; Privacy Policy pages, covering the real risk areas (in-person run liability, selfie verification, data sharing, third-party integrations). Linked from signup and Settings. Substantive draft — still worth an actual lawyer's review before treating as final.
 
+**Training**
+- Structured training plan: plan type (5K/10K/half/marathon/ultra/custom), length in weeks, start date, optional link to a specific race. Current week is computed fresh every time (never stored), shown in Settings and on the public profile, replacing the old free-text field when a real plan is set.
+
 ## Open — scoped, not started
 
-1. **Training block system** (real version) — a structured plan (start date, length, linked event) that auto-computes "week 7 of 16" and surfaces it as a reminder and a run-creation default. What exists today is just a free-text field.
-2. **Forum ranking** — upvotes, a helpfulness score, sort-by-top.
-3. **Content gating for non-verified viewers** — forum currently fully readable regardless of verification status; the ask was to make it genuinely hard to parse until verified.
-4. **Full visual/navigation redesign** — the "feels like Airbnb" ask. Deliberately not started piecemeal; deserves its own pass once the underlying features (forum, messaging, connections) are stable.
-5. **Ambassador role + Strava 10-connection cap** — OAuth itself works now; there's no cap enforcement or admin-assigns-ambassador flow yet.
-6. **Rejection emails** — verified users get emailed; rejected applicants only get the in-app notification.
-7. **Public profile URL by username** — confirm whether `/runners/:id` is sufficient or a `/​@username` style URL is wanted for sharing.
+1. **Forum ranking** — upvotes, a helpfulness score, sort-by-top.
+2. **Content gating for non-verified viewers** — forum currently fully readable regardless of verification status; the ask was to make it genuinely hard to parse until verified.
+3. **Full visual/navigation redesign** — the "feels like Airbnb" ask. Deliberately not started piecemeal; deserves its own pass once the underlying features (forum, messaging, connections) are stable.
+4. **Ambassador role + Strava 10-connection cap** — OAuth itself works now; there's no cap enforcement or admin-assigns-ambassador flow yet.
+5. **Rejection emails** — verified users get emailed; rejected applicants only get the in-app notification.
+6. **Public profile URL by username** — confirm whether `/runners/:id` is sufficient or a `/​@username` style URL is wanted for sharing.
 
 ## Open — not yet scoped
 
