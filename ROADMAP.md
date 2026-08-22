@@ -44,14 +44,16 @@ Last updated: 2026-08-22. This file is the source of truth for what's done and w
 **Training**
 - Structured training plan: plan type (5K/10K/half/marathon/ultra/custom), length in weeks, start date, optional link to a specific race. Current week is computed fresh every time (never stored), shown in Settings and on the public profile, replacing the old free-text field when a real plan is set.
 
+**Forum ranking**
+- Upvotes ("was this helpful") on every post, verified runners only, one vote per person, optimistic UI. Q&A's "Top" sort now genuinely ranks by votes — it silently used reply count before.
+
 ## Open — scoped, not started
 
-1. **Forum ranking** — upvotes, a helpfulness score, sort-by-top.
-2. **Content gating for non-verified viewers** — forum currently fully readable regardless of verification status; the ask was to make it genuinely hard to parse until verified.
-3. **Full visual/navigation redesign** — the "feels like Airbnb" ask. Deliberately not started piecemeal; deserves its own pass once the underlying features (forum, messaging, connections) are stable.
-4. **Ambassador role + Strava 10-connection cap** — OAuth itself works now; there's no cap enforcement or admin-assigns-ambassador flow yet.
-5. **Rejection emails** — verified users get emailed; rejected applicants only get the in-app notification.
-6. **Public profile URL by username** — confirm whether `/runners/:id` is sufficient or a `/​@username` style URL is wanted for sharing.
+1. **Content gating for non-verified viewers** — forum currently fully readable regardless of verification status; the ask was to make it genuinely hard to parse until verified.
+2. **Full visual/navigation redesign** — the "feels like Airbnb" ask. Deliberately not started piecemeal; deserves its own pass once the underlying features (forum, messaging, connections) are stable.
+3. **Ambassador role + Strava 10-connection cap** — OAuth itself works now; there's no cap enforcement or admin-assigns-ambassador flow yet.
+4. **Rejection emails** — verified users get emailed; rejected applicants only get the in-app notification.
+5. **Public profile URL by username** — confirm whether `/runners/:id` is sufficient or a `/​@username` style URL is wanted for sharing.
 
 ## Open — not yet scoped
 
