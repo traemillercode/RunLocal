@@ -127,6 +127,9 @@ export interface PublicForumPost {
   createdAt: string;
   replies: number;
   pinned: boolean;
+  /** "Was this helpful" upvote count — everyone sees the count; hasVoted reflects the viewer only. Optional on responses that don't compute it (edit/delete confirmations) — the client treats missing as 0/false. */
+  voteCount?: number;
+  hasVoted?: boolean;
   /** Author account id — null for seed posts (never an "own" target). */
   authorId: string | null;
   /** Server-computed action capabilities for the requesting account. */
@@ -176,6 +179,7 @@ export function publicForumPosts(db: Db, cityId: string, actor?: AccountRecord |
       return {
         id: f.id,
         section: f.section,
+        category: f.category ?? null,
         title: f.title,
         body: f.body,
         author: author?.name ?? "Runner",
@@ -183,6 +187,8 @@ export function publicForumPosts(db: Db, cityId: string, actor?: AccountRecord |
         createdAt: forumDateLabel(f.createdAt, now),
         replies: visibleReplyCount(db, f.id),
         pinned: f.pinned === true,
+        voteCount: db.forumVoteCount(f.id),
+        hasVoted: actor ? db.hasForumVote(actor.id, f.id) : false,
         authorId: f.authorAccountId,
         capabilities: forumPostCapabilities(actor, { ...f, hidden: mod?.hidden === true }, now),
       };
@@ -405,6 +411,8 @@ export function createForumPost(
         createdAt: forumDateLabel(post.createdAt, now),
         replies: 0,
         pinned: false,
+        voteCount: 0,
+        hasVoted: false,
         authorId: post.authorAccountId,
         capabilities: forumPostCapabilities(rec, post, now),
       },
@@ -854,6 +862,8 @@ export function setForumPostHidden(
         createdAt: forumDateLabel(post.createdAt, now),
         replies: visibleReplyCount(db, post.id),
         pinned: post.pinned === true,
+        voteCount: db.forumVoteCount(post.id),
+        hasVoted: db.hasForumVote(auth.rec.id, post.id),
         authorId: post.authorAccountId,
         capabilities: forumPostCapabilities(auth.rec, { ...post, hidden }, now),
       },

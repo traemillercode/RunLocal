@@ -443,6 +443,7 @@ export interface PersistedDb {
   conversations?: ConversationRecord[];
   messages?: MessageRecord[];
   trainingPlans?: TrainingPlanRecord[];
+  forumVotes?: ForumVoteRecord[];
   /** Per-account privacy settings (keyed by accountId; defaults when absent). */
   privacy?: PrivacySettingsRecord[];
   /** Runner tags on content ("run"|"post"|"event"). */
@@ -550,6 +551,18 @@ export interface ConnectionRecord {
   respondedAt: string | null;
   /** When the row was soft-deleted via removeConnection/block (null until then). */
   removedAt: string | null;
+}
+
+/**
+ * A single upvote on a forum post — "this was helpful," Reddit-lite (no
+ * downvotes, keeps it simple and hard to weaponize). One row per
+ * (accountId, postId) pair; toggling off deletes the row rather than
+ * storing a zero/negative value.
+ */
+export interface ForumVoteRecord {
+  accountId: string;
+  postId: string;
+  createdAt: string;
 }
 
 /**

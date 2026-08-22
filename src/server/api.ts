@@ -815,6 +815,21 @@ async function handleApi(
     await db.persist();
     return ok(res, { post: result.data.post }), true;
   }
+  // POST /api/forum/:id/vote — toggles the caller's upvote. Verified accounts
+  // only (same bar as replying); the post itself doesn't need to exist as a
+  // user record since seed posts can be voted on too — only the vote row is
+  // checked/written, so there's nothing to look up or 404 on here.
+  const forumPostVote = /^\/api\/forum\/([^/]+)\/vote\/?$/.exec(url.pathname);
+  if (forumPostVote && method === "POST") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(sess.accountId);
+    if (!rec || rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const postId = decodeURIComponent(forumPostVote[1]);
+    const nowVoted = db.toggleForumVote(sess.accountId, postId, now);
+    await db.persist();
+    return ok(res, { voted: nowVoted, voteCount: db.forumVoteCount(postId) }), true;
+  }
   // ---- author hide/restore of their own forum post -------------------------
   // PATCH /api/forum/:id/hide with { hidden: boolean } — the verified author of
   // a user-created post may hide it from public rendering and restore it. Same

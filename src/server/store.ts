@@ -298,6 +298,7 @@ export class Db {
   private conversations = new Map<string, import("./types").ConversationRecord>();
   private messages = new Map<string, import("./types").MessageRecord>();
   private trainingPlans = new Map<string, import("./types").TrainingPlanRecord>();
+  private forumVotes = new Map<string, import("./types").ForumVoteRecord>();
   /** Per-account privacy settings — keyed by accountId (defaults when absent). */
   private privacy = new Map<string, import("./types").PrivacySettingsRecord>();
   /** Runner tags on content — keyed by tag id. */
@@ -420,6 +421,7 @@ export class Db {
       for (const c of parsed.conversations ?? []) this.conversations.set(c.id, { ...c, runCreatedId: c.runCreatedId ?? null });
       for (const m of parsed.messages ?? []) this.messages.set(m.id, { ...m, deletedAt: m.deletedAt ?? null, reactions: m.reactions ?? {} });
       for (const t of parsed.trainingPlans ?? []) this.trainingPlans.set(t.accountId, t);
+      for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
       // Privacy: records persisted before a field existed are merged over the
       // verbatim owner-spec defaults so they keep working.
       for (const p of parsed.privacy ?? []) this.privacy.set(p.accountId, { ...PRIVACY_DEFAULTS, ...p, accountId: p.accountId });
@@ -477,6 +479,7 @@ export class Db {
       conversations: [...this.conversations.values()],
       messages: [...this.messages.values()],
       trainingPlans: [...this.trainingPlans.values()],
+      forumVotes: [...this.forumVotes.values()],
       privacy: [...this.privacy.values()],
       tags: [...this.tags.values()],
     };
@@ -1118,6 +1121,21 @@ export class Db {
   }
   deleteTrainingPlan(accountId: string): boolean {
     return this.trainingPlans.delete(accountId);
+  }
+  /** Toggles the caller's upvote on a post — voting again removes it. Returns whether it's now upvoted. */
+  toggleForumVote(accountId: string, postId: string, now: Date): boolean {
+    const key = `${accountId}:${postId}`;
+    if (this.forumVotes.has(key)) { this.forumVotes.delete(key); return false; }
+    this.forumVotes.set(key, { accountId, postId, createdAt: now.toISOString() });
+    return true;
+  }
+  forumVoteCount(postId: string): number {
+    let count = 0;
+    for (const v of this.forumVotes.values()) if (v.postId === postId) count++;
+    return count;
+  }
+  hasForumVote(accountId: string, postId: string): boolean {
+    return this.forumVotes.has(`${accountId}:${postId}`);
   }
   getPrivacy(accountId: string): import("./types").PrivacySettingsRecord {
     return this.privacy.get(accountId) ?? { accountId, ...PRIVACY_DEFAULTS };
