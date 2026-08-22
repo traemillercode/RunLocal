@@ -38,6 +38,9 @@ Last updated: 2026-08-22. This file is the source of truth for what's done and w
 **Standing fix**
 - Service worker was still registering at a defunct `/app/` scope since the domain migration — fixed, and self-heals for anyone already carrying the stale registration
 
+**Legal**
+- Terms of Service &amp; Privacy Policy pages, covering the real risk areas (in-person run liability, selfie verification, data sharing, third-party integrations). Linked from signup and Settings. Substantive draft — still worth an actual lawyer's review before treating as final.
+
 ## Open — scoped, not started
 
 1. **Training block system** (real version) — a structured plan (start date, length, linked event) that auto-computes "week 7 of 16" and surfaces it as a reminder and a run-creation default. What exists today is just a free-text field.
@@ -50,7 +53,6 @@ Last updated: 2026-08-22. This file is the source of truth for what's done and w
 
 ## Open — not yet scoped
 
-- **Terms of Service + Privacy Policy pages.** Flagged early as a hard gate before real users; still doesn't exist. This is the one item on this list that's a legal exposure, not a feature gap — worth prioritizing independent of everything else.
 - **Real liability waiver language** (current is a free-text admin field).
 - Trail safety plan for the six-week Thursday race series: trailhead check-in, sweep runner, cutoff time, who monitors the safety-report queue weekly.
 - RRCA insurance confirmation for the trail race series.
