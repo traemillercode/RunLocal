@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { TrustedBadge } from "../components/TrustedBadge";
 import { RunnerFeedbackSheet } from "../components/RunnerFeedbackSheet";
@@ -113,6 +113,7 @@ export function RunnerConnectBlock({
   onAcceptRequest,
   onOpenGate,
   onOpenRemove,
+  onMessage,
 }: {
   profile: RunnerProfileView;
   viewerRole: AccountRole;
@@ -121,6 +122,7 @@ export function RunnerConnectBlock({
   onAcceptRequest: () => void;
   onOpenGate: () => void;
   onOpenRemove: () => void;
+  onMessage?: () => void;
 }) {
   if (viewerRole === "guest") return null;
   const state = profile.connectionState ?? null;
@@ -129,9 +131,14 @@ export function RunnerConnectBlock({
   return (
     <div>
       {viewerRole === "verified" && state === "connected" ? (
-        <button type="button" onClick={onOpenRemove} disabled={busy} className={`${base} bg-emerald-100 text-emerald-800 active:opacity-90`}>
-          <Icon name="check" className="h-4 w-4" /> {busy ? "Removing…" : "Connected"}
-        </button>
+        <div className="flex gap-2">
+          <button type="button" onClick={onMessage} className={`${base} bg-[#14171C] text-white active:opacity-90`}>
+            <Icon name="chat" className="h-4 w-4" /> Message
+          </button>
+          <button type="button" onClick={onOpenRemove} disabled={busy} className={`${base} bg-emerald-100 text-emerald-800 active:opacity-90`}>
+            <Icon name="check" className="h-4 w-4" /> {busy ? "Removing…" : "Connected"}
+          </button>
+        </div>
       ) : viewerRole === "verified" && state === "requested_by_me" ? (
         <div>
           <button type="button" disabled aria-disabled="true" className={`${base} bg-transparent text-slate-700 ring-1 ring-slate-200`}>
@@ -421,6 +428,13 @@ export function RunnerShareFeedbackButton({ visible, onClick }: { visible: boole
 export function RunnerProfilePage({ id }: { id: string }) {
   const { me, role } = useAccount();
   const toast = useToast();
+  const navigate = useNavigate();
+  const startMessage = () => {
+    void api.createDirectConversation(id).then((r) => {
+      if (r.ok) navigate(`/messages/${r.data.conversation.id}`);
+      else toast(r.error.message ?? "Couldn't start a conversation.", "info");
+    });
+  };
   const [state, setState] = useState<"loading" | "ready" | "missing">("loading");
   const [data, setData] = useState<RunnerProfileResponse | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -587,6 +601,7 @@ export function RunnerProfilePage({ id }: { id: string }) {
               onAcceptRequest={acceptRequest}
               onOpenGate={() => setGateOpen(true)}
               onOpenRemove={() => setRemoveOpen(true)}
+              onMessage={startMessage}
             />
           ) : (
             <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-slate-100 p-4">

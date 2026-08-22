@@ -17,7 +17,7 @@
  * NotificationsCenter/EventDetailView convention.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import * as api from "../lib/api";
 import { Chip, Icon, PillButton } from "../components/ui";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
@@ -35,6 +35,13 @@ const TABS: { id: ConnectionsTab; label: string }[] = [
 export function ConnectionsPage() {
   const { me } = useAccount();
   const toast = useToast();
+  const navigate = useNavigate();
+  const onMessage = (c: api.ConnectionView) => {
+    void api.createDirectConversation(c.id).then((r) => {
+      if (r.ok) navigate(`/messages/${r.data.conversation.id}`);
+      else toast(r.error.message ?? "Couldn't start a conversation.", "info");
+    });
+  };
   const [tab, setTab] = useState<ConnectionsTab>("requests");
   const [requests, setRequests] = useState<api.ConnectionRequestView[]>([]);
   const [connections, setConnections] = useState<api.ConnectionView[]>([]);
@@ -247,6 +254,7 @@ export function ConnectionsPage() {
   }
   return (
     <ConnectionsView
+      onMessage={onMessage}
       tab={tab}
       onTabChange={setTab}
       requests={requests}
@@ -308,6 +316,7 @@ export function ConnectionsView({
   onAcceptFromSearch,
   actionError,
   onClearActionError,
+  onMessage,
 }: {
   tab: ConnectionsTab;
   onTabChange: (t: ConnectionsTab) => void;
@@ -334,6 +343,7 @@ export function ConnectionsView({
   onAcceptFromSearch: (p: api.PeopleSearchResult) => void;
   actionError: string | null;
   onClearActionError: () => void;
+  onMessage?: (c: api.ConnectionView) => void;
 }) {
   // My Connections filtering is local (name/username) — the server list is
   // already privacy-filtered, so this never leaks anything.
@@ -453,6 +463,13 @@ export function ConnectionsView({
                       {c.username ? <span className="block truncate text-xs text-slate-500">@{c.username}</span> : null}
                     </span>
                   </Link>
+                  <button
+                    type="button"
+                    onClick={() => onMessage?.(c)}
+                    className="min-h-11 shrink-0 rounded-[10px] bg-[#14171C] px-3 text-xs font-bold text-white active:opacity-90"
+                  >
+                    Message
+                  </button>
                   <button
                     type="button"
                     onClick={() => onRequestRemove(c)}
