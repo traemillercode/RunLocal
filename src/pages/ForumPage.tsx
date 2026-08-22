@@ -474,6 +474,7 @@ export function PostCard({
   thread = null,
   verified,
   onAction,
+  onVote,
   tags,
 }: {
   post: ForumPostRow;
@@ -484,6 +485,8 @@ export function PostCard({
   verified: boolean;
   /** Menu action dispatcher — the page maps each key to an edit sheet or confirm flow. */
   onAction?: (key: ActionKey) => void;
+  /** Toggles the viewer's upvote — omitted for guests/pending (button still shows the count, just isn't clickable). */
+  onVote?: () => void;
   /** Tag chips under the post body (PostTags) — renders nothing when empty. */
   tags?: ReactNode;
 }) {
@@ -541,16 +544,30 @@ export function PostCard({
             </span>
           ) : null}
         </p>
-        <button
-          type="button"
-          onClick={onReply}
-          aria-expanded={replyExpanded}
-          className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold active:bg-slate-200 ${
-            replyExpanded ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-700"
-          }`}
-        >
-          <Icon name={verified ? "chat" : "lock"} className="h-3.5 w-3.5" /> Reply
-        </button>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onVote}
+            disabled={!onVote}
+            aria-pressed={post.hasVoted}
+            aria-label={post.hasVoted ? "Remove your helpful vote" : "Mark this post as helpful"}
+            className={`inline-flex min-h-11 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold disabled:opacity-50 ${
+              post.hasVoted ? "bg-[#FF5741] text-[#14171C]" : "bg-slate-100 text-slate-700 active:bg-slate-200"
+            }`}
+          >
+            <Icon name="spark" className="h-3.5 w-3.5" /> {post.voteCount ?? 0}
+          </button>
+          <button
+            type="button"
+            onClick={onReply}
+            aria-expanded={replyExpanded}
+            className={`inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold active:bg-slate-200 ${
+              replyExpanded ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-700"
+            }`}
+          >
+            <Icon name={verified ? "chat" : "lock"} className="h-3.5 w-3.5" /> Reply
+          </button>
+        </span>
       </div>
       {replyExpanded ? thread : null}
     </article>
@@ -579,6 +596,9 @@ export interface ForumPostRow {
   answered?: boolean;
   pinned?: boolean;
   replies: number;
+  /** "Was this helpful" upvote count and whether the viewer has voted — absent/0/false for seed posts and posts loaded before voting existed. */
+  voteCount?: number;
+  hasVoted?: boolean;
   /** Server-computed action capabilities (user posts) or the admin-only list (seed posts). */
   capabilities: string[];
 }
@@ -669,6 +689,8 @@ export function ForumPage({ city }: { city: City }) {
   const [submitting, setSubmitting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  /** Optimistic overlay for votes — applies to both seed and server posts uniformly, since seed posts aren't tracked in serverPosts state at all. */
+  const [voteOverrides, setVoteOverrides] = useState<Record<string, { voteCount: number; hasVoted: boolean }>>({});
   const [repliesByPost, setRepliesByPost] = useState<Record<string, api.ForumReplyView[]>>({});
   const [threadLoading, setThreadLoading] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
@@ -773,19 +795,23 @@ export function ForumPage({ city }: { city: City }) {
         answered: false,
         pinned: p.pinned,
         replies: p.replies,
+        voteCount: p.voteCount ?? 0,
+        hasVoted: p.hasVoted ?? false,
         capabilities: p.capabilities,
       }));
-    let list = [...visible, ...userPosts].filter((p) => p.section === section);
+    let list = [...visible, ...userPosts]
+      .filter((p) => p.section === section)
+      .map((p) => (voteOverrides[p.id] ? { ...p, ...voteOverrides[p.id] } : p));
     if (categoryFilter) list = list.filter((p) => p.category === categoryFilter);
     if (section === "qa") {
       const sorted = [...list];
       if (qaSort === "newest") sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       if (qaSort === "unanswered") sorted.sort((a, b) => Number(!!a.answered) - Number(!!b.answered));
-      if (qaSort === "top") sorted.sort((a, b) => b.replies - a.replies);
+      if (qaSort === "top") sorted.sort((a, b) => (b.voteCount ?? 0) - (a.voteCount ?? 0));
       return sorted;
     }
     return [...list].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
-  }, [city.forum, hidden, localHidden, section, categoryFilter, qaSort, serverPosts, replyCounts, adminCaps]);
+  }, [city.forum, hidden, localHidden, section, categoryFilter, qaSort, serverPosts, replyCounts, adminCaps, voteOverrides]);
 
   const [activityCards, setActivityCards] = useState<PublicActivityCard[]>([]);
   useEffect(() => { let live = true; void getActivityFeed(city.id).then((r) => { if (live && r.ok) setActivityCards(r.data.cards); }); return () => { live = false; }; }, [city.id]);
@@ -808,6 +834,22 @@ export function ForumPage({ city }: { city: City }) {
       setReplyDraft("");
       setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete("post"); return next; }, { replace: true });
     }
+  };
+
+  const onVote = (postId: string, currentVoteCount: number, currentlyVoted: boolean) => {
+    if (role !== "verified") {
+      setGateOpen(true);
+      return;
+    }
+    // Optimistic — flip immediately, reconcile with the server's real count on response.
+    setVoteOverrides((prev) => ({ ...prev, [postId]: { hasVoted: !currentlyVoted, voteCount: currentVoteCount + (currentlyVoted ? -1 : 1) } }));
+    void api.toggleForumVote(postId).then((r) => {
+      if (r.ok) setVoteOverrides((prev) => ({ ...prev, [postId]: { hasVoted: r.data.voted, voteCount: r.data.voteCount } }));
+      else {
+        setVoteOverrides((prev) => ({ ...prev, [postId]: { hasVoted: currentlyVoted, voteCount: currentVoteCount } }));
+        toast(r.error.message ?? "Couldn't record your vote.", "info");
+      }
+    });
   };
 
   const onSubmitReply = (postId: string) => {
@@ -1240,6 +1282,7 @@ export function ForumPage({ city }: { city: City }) {
                 verified={role === "verified"}
                 replyExpanded={expanded}
                 onReply={() => onReply(p.id, p.title)}
+                onVote={() => onVote(p.id, p.voteCount ?? 0, p.hasVoted ?? false)}
                 onAction={handlePostAction(p)}
                 tags={<PostTags postId={p.id} viewerId={viewerId} reloadKey={tagsReload} />}
                 thread={

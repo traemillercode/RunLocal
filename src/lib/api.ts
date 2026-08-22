@@ -490,6 +490,8 @@ export interface ForumPostView {
   createdAt: string;
   replies: number;
   pinned: boolean;
+  voteCount?: number;
+  hasVoted?: boolean;
   /** Author account id — null for seed posts (never an "own" target). */
   authorId: string | null;
   /** Server-computed action capabilities for the requesting account. */
@@ -500,6 +502,10 @@ export function getForumPosts(cityId: string): Promise<ApiResult<{ cityId: strin
 }
 export function createForumPost(input: { section: import("../types").ForumSection; category: import("../types").ForumCategory; title: string; body: string }): Promise<ApiResult<{ post: ForumPostView }>> {
   return request("/api/forum", { method: "POST", body: JSON.stringify(input) });
+}
+/** Toggles the caller's upvote on a post — verified runners only, one vote per person. */
+export function toggleForumVote(postId: string): Promise<ApiResult<{ voted: boolean; voteCount: number }>> {
+  return request(`/api/forum/${encodeURIComponent(postId)}/vote`, { method: "POST" });
 }
 /** Author edit of an own forum post (PATCH /api/forum/:id — server re-validates). */
 export function updateForumPost(id: string, input: { title: string; body: string }): Promise<ApiResult<{ post: ForumPostView }>> {
