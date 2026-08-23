@@ -356,6 +356,9 @@ export function createForumPost(
   const title = typeof input.title === "string" ? input.title.trim() : "";
   const body = typeof input.body === "string" ? input.body.trim() : "";
   if (!section) return { ok: false, status: 400, error: "invalid_section" };
+  if (section === "announcements" && rec.role === "runner") {
+    return { ok: false, status: 403, error: "leaders_only", message: "Announcements are reserved for group leaders and admins — post in Community or Q&A instead." };
+  }
   if (!title || title.length > MAX_TITLE) {
     return { ok: false, status: 400, error: "invalid_title", message: `Give your post a title (1-${MAX_TITLE} characters).` };
   }

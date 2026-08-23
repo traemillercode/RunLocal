@@ -90,12 +90,14 @@ export interface ForumPostDraft {
  */
 export function ForumCreateSheetBody({
   role,
+  canPostAnnouncements = false,
   onOpenGate,
   onSubmit,
   submitting = false,
   postError = null,
 }: {
   role: AccountRole;
+  canPostAnnouncements?: boolean;
   onClose: () => void;
   onOpenGate: () => void;
   onSubmit?: (draft: ForumPostDraft) => void;
@@ -174,7 +176,7 @@ export function ForumCreateSheetBody({
       <div>
         <span className="mb-1.5 block text-sm font-semibold text-slate-700">Section</span>
         <div className="grid grid-cols-3 gap-1.5">
-          {FORUM_SECTIONS.map((s) => {
+          {FORUM_SECTIONS.filter((s) => s.id !== "announcements" || canPostAnnouncements).map((s) => {
             const meta = SECTION_META[s.id];
             const active = section === s.id;
             return (
@@ -1336,6 +1338,7 @@ export function ForumPage({ city }: { city: City }) {
       >
         <ForumCreateSheetBody
           role={role}
+          canPostAnnouncements={me?.status === "signed_in" && me.account.role !== "runner"}
           onClose={() => setCreateOpen(false)}
           onOpenGate={() => {
             setCreateOpen(false);
