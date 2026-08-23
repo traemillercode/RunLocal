@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Chip, Icon } from "./ui";
 import { ActionMenu } from "./ActionMenu";
+import { CalendarExportButton } from "./CalendarExportButton";
 import { actionMenuItems, type ActionKey } from "../lib/actionModel";
 import { GROUP_TYPE_LABELS, type City } from "../types";
 import { dayLabel, monthDayLabel, type DatedRunEvent } from "../lib/dates";
@@ -96,6 +97,7 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
                   <Icon name="flag" className="h-3 w-3" /> {event.distanceLabel}
                 </Chip>
               </div>
+              <CalendarExportButton className="mt-2 inline-flex" event={{ title: event.title, date: event.date, time: event.time, location: event.location }} />
             </div>
           </div>
         </Link>

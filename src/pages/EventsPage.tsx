@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { EventCard } from "../components/EventCard";
 import { ActionMenu } from "../components/ActionMenu";
+import { CalendarExportButton } from "../components/CalendarExportButton";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { HomeCityBanner } from "../components/HomeCityBanner";
 import { ProfileCompletionBanner } from "../components/ProfileCompletionBanner";
@@ -201,6 +202,7 @@ export function EventFeedRow({
           <p className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4 text-slate-400" />{event.time}</p>
           <p className="flex items-center gap-2"><Icon name="mapPin" className="h-4 w-4 text-slate-400" />{event.location}</p>
           <p className="flex items-center gap-2"><Icon name="users" className="h-4 w-4 text-slate-400" />{event.invite}</p>
+          <CalendarExportButton className="!mt-3" event={{ title: event.title, date: event.date, time: event.time, location: event.location }} />
         </div>
         {event.minParticipants && event.minParticipants > 0 ? (
           <div className="border-t border-slate-100 px-4 py-3">
@@ -618,7 +620,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
           </h2>
           <ul className="space-y-3">
             {oneOffThisWeek.map((e) => {
-              const [, m, d] = e.date!.split("-").map(Number);
+              const [y, m, d] = e.date!.split("-").map(Number);
               const oneOffItems = actionMenuItems(capsFor(e));
               return (
                 <li key={e.id}>
@@ -640,6 +642,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
                           Details <Icon name="external" className="h-4 w-4 text-[#FF5741]" />
                         </a>
                       ) : null}
+                      <CalendarExportButton event={{ title: e.title, date: new Date(Date.UTC(y, m - 1, d)), time: e.time, location: e.location }} />
                     </div>
                   </article>
                 </li>
