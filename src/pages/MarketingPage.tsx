@@ -10,6 +10,30 @@ const sections = [
   { eyebrow: "Stay in the loop", title: "A better local running conversation", body: "Ask a gear question, find a pace group, post a route — a running forum without the spam, because everyone here is a real, verified runner." },
 ];
 
+/** Columbia, MO trail classics for the showcase. Elevation points are illustrative (relative shape for the profile graphic), not GPS-precise. */
+const FEATURED_ROUTES = [
+  { name: "MKT Nature Trail", surface: "Gravel", distance: "8.9 mi", elevation: "120 ft", elevationProfile: [10, 14, 12, 22, 30, 26, 34, 28, 18, 22, 12, 8] },
+  { name: "Rock Bridge — Devil's Icebox", surface: "Trail", distance: "3.9 mi", elevation: "310 ft", elevationProfile: [8, 20, 42, 60, 48, 70, 55, 38, 50, 30, 18, 10] },
+  { name: "Grindstone Loop", surface: "Trail", distance: "8.1 mi", elevation: "480 ft", elevationProfile: [12, 35, 55, 40, 65, 80, 60, 45, 70, 50, 25, 14] },
+];
+
+/** A small, dependency-free elevation-profile line — smooths a set of relative height points into an SVG path. */
+function ElevationProfile({ points }: { points: number[] }) {
+  const w = 260;
+  const h = 48;
+  const max = Math.max(...points);
+  const step = w / (points.length - 1);
+  const coords = points.map((p, i) => `${i * step},${h - (p / max) * (h - 6) - 3}`);
+  const path = `M0,${h} L${coords.join(" L")} L${w},${h} Z`;
+  const line = `M${coords.join(" L")}`;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="marketing-route-elevation" width="100%" height={h} aria-hidden="true">
+      <path d={path} fill="#ff5a3c" fillOpacity="0.12" />
+      <path d={line} fill="none" stroke="#ff5a3c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function MarketingPage() {
   return (
     <div className="marketing-page">
@@ -26,6 +50,11 @@ export function MarketingPage() {
           <p className="marketing-lede">Real group runs, local races, and the people who make running in Columbia feel like home.</p>
           <div className="marketing-actions"><Link to="/events" className="marketing-button marketing-button-primary">Browse public events <span aria-hidden="true">↗</span></Link><Link to="/login?mode=signup" className="marketing-button marketing-button-light">Create your account</Link></div>
           <p className="marketing-note">No login needed to look around.</p>
+          <div className="marketing-stat-pills">
+            <span className="marketing-stat-pill"><strong>100%</strong> identity-verified</span>
+            <span className="marketing-stat-pill"><strong>3</strong> weekly group runs</span>
+            <span className="marketing-stat-pill"><strong>0</strong> fake followers</span>
+          </div>
         </section>
 
         <section className="marketing-hook" aria-label="Kimbio mission"><p>Running is better when the route comes with a <strong>reason to show up.</strong></p><span aria-hidden="true">✳</span></section>
@@ -37,6 +66,28 @@ export function MarketingPage() {
           <Link to="/events" className="marketing-text-link">See all public events <span aria-hidden="true">→</span></Link>
         </section>
 
+        <section className="marketing-route-section" aria-labelledby="routes-title">
+          <p className="marketing-kicker">Columbia classics</p>
+          <h2 id="routes-title">Routes people actually run</h2>
+          <div className="marketing-route-grid">
+            {FEATURED_ROUTES.map((route) => (
+              <article className="marketing-route-card" key={route.name}>
+                <div className="marketing-route-photo">
+                  <span className="marketing-route-badge">{route.surface}</span>
+                </div>
+                <div className="marketing-route-body">
+                  <h3>{route.name}</h3>
+                  <div className="marketing-route-stats">
+                    <span><strong>{route.distance}</strong>distance</span>
+                    <span><strong>{route.elevation}</strong>elevation gain</span>
+                  </div>
+                  <ElevationProfile points={route.elevationProfile} />
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section id="how-it-works" className="marketing-section marketing-feature-section" aria-labelledby="features-title"><p className="marketing-kicker">The local layer</p><h2 id="features-title">More than a start line</h2><div className="marketing-feature-grid">{sections.map((section) => <article className="marketing-feature" key={section.title}><p className="marketing-kicker">{section.eyebrow}</p><h3>{section.title}</h3><p>{section.body}</p></article>)}</div></section>
 
         <section className="marketing-split-section" aria-labelledby="tools-title"><div><p className="marketing-kicker">Log it your way</p><h2 id="tools-title">Every run,<br />on your terms.</h2><p>No auto-sync, no algorithm deciding what counts. Log your distance, pace, and surface — add a photo, a voice note, or tag who you ran with. Intentional, not automatic.</p></div></section>
@@ -45,7 +96,15 @@ export function MarketingPage() {
         <section className="marketing-multicity" aria-labelledby="cities-title"><p className="marketing-kicker">Starting in Columbia</p><h2 id="cities-title">More cities,<br /><em>same local feeling.</em></h2><p>Columbia is live. We’re building the foundation to bring Kimbio to more running communities next.</p></section>
         <section className="marketing-final" aria-labelledby="final-title"><h2 id="final-title">Make your next run<br /><em>a local one.</em></h2><Link to="/login?mode=signup" className="marketing-button marketing-button-primary">Join Kimbio <span aria-hidden="true">↗</span></Link></section>
       </main>
-      <footer className="marketing-footer"><span>KIMBIO</span><span>Columbia, MO · Launch city</span></footer>
+      <footer className="marketing-footer">
+        <span>KIMBIO</span>
+        <span>Columbia, MO · Launch city</span>
+        <span className="marketing-footer-links">
+          <a href="https://facebook.com/getkimbio" target="_blank" rel="noopener noreferrer" aria-label="Kimbio on Facebook">Facebook</a>
+          <a href="https://instagram.com/getkimbio" target="_blank" rel="noopener noreferrer" aria-label="Kimbio on Instagram">Instagram</a>
+          <Link to="/legal">Terms &amp; Privacy</Link>
+        </span>
+      </footer>
     </div>
   );
 }
