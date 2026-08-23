@@ -447,6 +447,7 @@ export interface PersistedDb {
   trainingPlans?: TrainingPlanRecord[];
   forumVotes?: ForumVoteRecord[];
   accountReports?: AccountReportRecord[];
+  routes?: RouteRecord[];
   /** Per-account privacy settings (keyed by accountId; defaults when absent). */
   privacy?: PrivacySettingsRecord[];
   /** Runner tags on content ("run"|"post"|"event"). */
@@ -557,6 +558,26 @@ export interface AccountReportRecord {
   conversationId: string | null;
   createdAt: string;
   status: "open" | "reviewed" | "dismissed";
+}
+
+/**
+ * A route backed by a real uploaded GPX file — distance and elevation gain
+ * are computed from the actual track points, never hand-entered guesses.
+ * The GPX itself is stored so anyone can download it back onto their own
+ * watch/Strava/Garmin — that's the actual "shareable" artifact.
+ */
+export interface RouteRecord {
+  id: string;
+  cityId: string;
+  name: string;
+  surfaceType: "trail" | "gravel" | "road" | "track";
+  /** Computed from the GPX track points at upload time, not user-entered. */
+  distanceMiles: number;
+  elevationGainFt: number;
+  /** Filename under the GPX upload store — see readGpxUpload/writeGpxUpload. */
+  gpxRef: string;
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface ConnectionRecord {

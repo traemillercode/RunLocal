@@ -9,6 +9,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Db, newId, normalizePhone, EMAIL_SEND_LIMIT, EMAIL_SEND_WINDOW_MS, toPublicAccount, MIN_AGE, currentTrainingWeek } from "./store";
+import { parseGpx } from "./gpx";
 import type { AccountRecord } from "./types";
 import { PERSONAL_RUN_CONSENT_VERSION, MATCHING_CONSENT_VERSION } from "./types";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
@@ -961,6 +962,40 @@ async function handleApi(
   // exists because a manual entry is normalized against one of these shapes
   // (distance/pace field conventions), not because any of them sync data.
   const validProvider = (p: string | undefined): p is Provider => p === "strava" || p === "garmin" || p === "coros" || p === "suunto";
+  // ---- Routes (real GPX-backed) ---------------------------------------
+  // GET /api/routes?city=X — public, no auth needed to browse.
+  if (method === "GET" && url.pathname === "/api/routes") {
+    const cityId = url.searchParams.get("city") ?? undefined;
+    const routes = db.listRoutes(cityId).map((r) => ({ id: r.id, cityId: r.cityId, name: r.name, surfaceType: r.surfaceType, distanceMiles: r.distanceMiles, elevationGainFt: r.elevationGainFt, gpxUrl: `/uploads/public/${r.gpxRef}` }));
+    return ok(res, { routes }), true;
+  }
+
+  // POST /api/routes — verified runners only. Upload a real GPX file; every
+  // number shown is computed from it server-side, never entered by hand.
+  if (method === "POST" && url.pathname === "/api/routes") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rec = db.getAccount(sess.accountId);
+    if (!rec || rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 80) : "";
+    if (!name) return err(res, { status: 400, error: "invalid_name", message: "Give the route a name." }), true;
+    const surfaceType = typeof body.surfaceType === "string" && ["trail", "gravel", "road", "track"].includes(body.surfaceType) ? body.surfaceType as import("./types").RouteRecord["surfaceType"] : null;
+    if (!surfaceType) return err(res, { status: 400, error: "invalid_surface" }), true;
+    const gpxXml = typeof body.gpx === "string" ? body.gpx : "";
+    if (!gpxXml || gpxXml.length > 5_000_000) return err(res, { status: 400, error: "invalid_gpx", message: "Attach a GPX file under 5MB." }), true;
+    const parsed = parseGpx(gpxXml);
+    if ("error" in parsed) return err(res, { status: 400, error: parsed.error, message: "Couldn't read any track points from that file — make sure it's a real GPX export." }), true;
+    const gpxRef = `route_${newId()}.gpx`;
+    await db.writePublicUpload(gpxRef, Buffer.from(gpxXml, "utf-8"));
+    const route = db.createRoute({ id: newId(), cityId: rec.cityId ?? "columbia-mo", name, surfaceType, distanceMiles: parsed.distanceMiles, elevationGainFt: parsed.elevationGainFt, gpxRef, createdBy: sess.accountId, createdAt: now.toISOString() });
+    await db.persist();
+    return ok(res, { route: { id: route.id, cityId: route.cityId, name: route.name, surfaceType: route.surfaceType, distanceMiles: route.distanceMiles, elevationGainFt: route.elevationGainFt, gpxUrl: `/uploads/public/${route.gpxRef}` } }), true;
+  }
+
+  // GPX files are served the same way as every other public upload (see
+  // serve.ts's static /uploads/public/ handler) - no separate endpoint needed.
+
   if (method === "GET" && url.pathname === "/api/activity/feed") {
     const cityId = url.searchParams.get("city") ?? "";
     const cards = db.listActivities().filter(a => a.shareMode !== "private").flatMap(a => { const owner=db.getAccount(a.accountId); return owner?.cityId===cityId ? [publicActivityCard(a)] : []; });

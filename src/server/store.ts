@@ -303,6 +303,7 @@ export class Db {
   private trainingPlans = new Map<string, import("./types").TrainingPlanRecord>();
   private forumVotes = new Map<string, import("./types").ForumVoteRecord>();
   private accountReports = new Map<string, import("./types").AccountReportRecord>();
+  private routes = new Map<string, import("./types").RouteRecord>();
   /** Ephemeral typing state — accountId -> expiry timestamp, per conversation. Deliberately NOT part of load/persist: it's a live-only signal, meaningless across a restart, and would just be stale noise if saved. */
   private typing = new Map<string, Map<string, number>>();
   /** Per-account privacy settings — keyed by accountId (defaults when absent). */
@@ -429,6 +430,7 @@ export class Db {
       for (const t of parsed.trainingPlans ?? []) this.trainingPlans.set(t.accountId, t);
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
       for (const r of parsed.accountReports ?? []) this.accountReports.set(r.id, r);
+      for (const rt of parsed.routes ?? []) this.routes.set(rt.id, rt);
       // Privacy: records persisted before a field existed are merged over the
       // verbatim owner-spec defaults so they keep working.
       for (const p of parsed.privacy ?? []) this.privacy.set(p.accountId, { ...PRIVACY_DEFAULTS, ...p, accountId: p.accountId });
@@ -488,6 +490,7 @@ export class Db {
       trainingPlans: [...this.trainingPlans.values()],
       forumVotes: [...this.forumVotes.values()],
       accountReports: [...this.accountReports.values()],
+      routes: [...this.routes.values()],
       privacy: [...this.privacy.values()],
       tags: [...this.tags.values()],
     };
@@ -1179,6 +1182,16 @@ export class Db {
   }
   listAccountReports(): import("./types").AccountReportRecord[] {
     return [...this.accountReports.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  createRoute(rec: import("./types").RouteRecord): import("./types").RouteRecord {
+    this.routes.set(rec.id, rec);
+    return rec;
+  }
+  getRoute(id: string): import("./types").RouteRecord | undefined {
+    return this.routes.get(id);
+  }
+  listRoutes(cityId?: string): import("./types").RouteRecord[] {
+    return [...this.routes.values()].filter((r) => !cityId || r.cityId === cityId).sort((a, b) => a.name.localeCompare(b.name));
   }
   /** Called on each keystroke (client-debounced) — marks this person as typing for a few seconds. */
   setTyping(conversationId: string, accountId: string, now: Date, ttlMs = 5000): void {

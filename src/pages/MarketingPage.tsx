@@ -10,29 +10,12 @@ const sections = [
   { eyebrow: "Stay in the loop", title: "A better local running conversation", body: "Ask a gear question, find a pace group, post a route — a running forum without the spam, because everyone here is a real, verified runner." },
 ];
 
-/** Columbia, MO trail classics for the showcase. Elevation points are illustrative (relative shape for the profile graphic), not GPS-precise. */
+/** Columbia, MO trail classics for the showcase. Distance/elevation are real published figures for these trails; there's no GPX-backed route detail page yet, so no fabricated elevation graphic is shown here - that's the next real piece to build. */
 const FEATURED_ROUTES = [
-  { name: "MKT Nature Trail", surface: "Gravel", distance: "8.9 mi", elevation: "120 ft", elevationProfile: [10, 14, 12, 22, 30, 26, 34, 28, 18, 22, 12, 8] },
-  { name: "Rock Bridge — Devil's Icebox", surface: "Trail", distance: "3.9 mi", elevation: "310 ft", elevationProfile: [8, 20, 42, 60, 48, 70, 55, 38, 50, 30, 18, 10] },
-  { name: "Grindstone Loop", surface: "Trail", distance: "8.1 mi", elevation: "480 ft", elevationProfile: [12, 35, 55, 40, 65, 80, 60, 45, 70, 50, 25, 14] },
+  { name: "MKT Nature Trail", surface: "Gravel", distance: "8.9 mi", elevation: "120 ft" },
+  { name: "Rock Bridge — Devil's Icebox", surface: "Trail", distance: "3.9 mi", elevation: "310 ft" },
+  { name: "Grindstone Loop", surface: "Trail", distance: "8.1 mi", elevation: "480 ft" },
 ];
-
-/** A small, dependency-free elevation-profile line — smooths a set of relative height points into an SVG path. */
-function ElevationProfile({ points }: { points: number[] }) {
-  const w = 260;
-  const h = 48;
-  const max = Math.max(...points);
-  const step = w / (points.length - 1);
-  const coords = points.map((p, i) => `${i * step},${h - (p / max) * (h - 6) - 3}`);
-  const path = `M0,${h} L${coords.join(" L")} L${w},${h} Z`;
-  const line = `M${coords.join(" L")}`;
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="marketing-route-elevation" width="100%" height={h} aria-hidden="true">
-      <path d={path} fill="#ff5a3c" fillOpacity="0.12" />
-      <path d={line} fill="none" stroke="#ff5a3c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
 
 export function MarketingPage() {
   return (
@@ -81,7 +64,6 @@ export function MarketingPage() {
                     <span><strong>{route.distance}</strong>distance</span>
                     <span><strong>{route.elevation}</strong>elevation gain</span>
                   </div>
-                  <ElevationProfile points={route.elevationProfile} />
                 </div>
               </article>
             ))}
