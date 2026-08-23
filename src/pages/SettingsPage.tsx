@@ -798,7 +798,7 @@ export function SettingsPage() {
         : "Not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)";
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
+    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading-narrow">
       <div data-tour-target="settings-main">
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Settings</h1>
         <p className="mt-0.5 text-sm font-medium text-slate-500">Account preferences & status</p>

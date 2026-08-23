@@ -74,6 +74,11 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
   .desktop-main.full-bleed { margin-left: 0 !important; }
   .desktop-main > .desktop-browse-layout { max-width: 1240px !important; padding-left: clamp(24px, 4vw, 56px); padding-right: clamp(24px, 4vw, 56px); }
   .desktop-main > .desktop-reading { max-width: 1240px !important; }
+  /* Settings, Profile, and Connections are narrow single-column UI, not
+     wide article/reading content — the shared 1240px reading width made
+     them stretch absurdly wide on desktop. Give them their own, much
+     narrower ceiling instead of removing the shared component pattern. */
+  .desktop-main > .desktop-reading-narrow { max-width: 640px !important; }
   .app-shell-header, .app-shell-nav { display: none; }
   .desktop-sheet-panel { max-width: 640px; max-height: 86dvh; border-radius: 10px; animation: fade-in 160ms ease-out; }
   [role="dialog"] { align-items: center; }

@@ -4,15 +4,16 @@ import { CITIES } from "../data/cities";
 const city = CITIES.find((item) => item.id === "columbia-mo");
 const previewEvents = city?.events.slice(0, 3) ?? [];
 
-/**
- * Lifestyle photography for atmosphere — sourced as generic running imagery,
- * not verified to depict the specific named Missouri locations. Used as
- * background/mood treatment, not as a factual claim about what's pictured.
- */
-export const STOCK_IMAGES = {
-  hero: "https://images.unsplash.com/photo-1502224562085-639556652f33?auto=format&fit=crop&w=1600&q=80",
-  groupRun: "https://images.unsplash.com/photo-1530549387789-4c1017266635?auto=format&fit=crop&w=1000&q=80",
-  socialPostRun: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=1000&q=80",
+/** Real photography, stored locally and optimized (see public/marketing/). Sourced as general running lifestyle imagery — not verified to depict the specific named Missouri trails, so captions never make that claim. */
+export const MARKETING_IMAGES = {
+  hero: "/marketing/hero-marathon-crowd.jpg",
+  trailMisty: "/marketing/trail-misty-forest.jpg",
+  trailTwoRunners: "/marketing/trail-two-runners.jpg",
+  track: "/marketing/track-sunny-field.jpg",
+  groupSunrise: "/marketing/group-run-dusty-sunrise.jpg",
+  groupSunset: "/marketing/group-run-riverside-sunset.jpg",
+  raceLegs: "/marketing/race-legs-closeup.jpg",
+  silhouetteDusk: "/marketing/silhouette-dusk-run.jpg",
 };
 
 const sections = [
@@ -23,9 +24,9 @@ const sections = [
 
 /** Columbia, MO trail classics for the showcase. Distance/elevation are real published figures for these trails; there's no GPX-backed route detail page yet, so no fabricated elevation graphic is shown here - that's the next real piece to build. */
 const FEATURED_ROUTES = [
-  { name: "MKT Nature Trail", surface: "Gravel", distance: "8.9 mi", elevation: "120 ft" },
-  { name: "Rock Bridge — Devil's Icebox", surface: "Trail", distance: "3.9 mi", elevation: "310 ft" },
-  { name: "Grindstone Loop", surface: "Trail", distance: "8.1 mi", elevation: "480 ft" },
+  { name: "MKT Nature Trail", surface: "Gravel", distance: "8.9 mi", elevation: "120 ft", photo: MARKETING_IMAGES.trailTwoRunners },
+  { name: "Rock Bridge — Devil's Icebox", surface: "Trail", distance: "3.9 mi", elevation: "310 ft", photo: MARKETING_IMAGES.trailMisty },
+  { name: "Grindstone Loop", surface: "Trail", distance: "8.1 mi", elevation: "480 ft", photo: MARKETING_IMAGES.track },
 ];
 
 export function MarketingPage() {
@@ -38,7 +39,7 @@ export function MarketingPage() {
         </nav>
       </header>
       <main id="top">
-        <section className="marketing-hero marketing-hero-photo" aria-labelledby="hero-title" style={{ backgroundImage: `linear-gradient(180deg, rgba(20,22,26,0.55), rgba(20,22,26,0.92)), url(${STOCK_IMAGES.hero})` }}>
+        <section className="marketing-hero marketing-hero-photo" aria-labelledby="hero-title" style={{ backgroundImage: `linear-gradient(180deg, rgba(20,22,26,0.55), rgba(20,22,26,0.92)), url(${MARKETING_IMAGES.hero})` }}>
           <p className="marketing-kicker">Columbia, MO <span aria-hidden="true">·</span> Live now</p>
           <h1 id="hero-title">Your run.<br /><em>Your people.<br />Your city.</em></h1>
           <p className="marketing-lede">Real group runs, local races, and the people who make running in Columbia feel like home.</p>
@@ -66,7 +67,7 @@ export function MarketingPage() {
           <div className="marketing-route-grid">
             {FEATURED_ROUTES.map((route) => (
               <article className="marketing-route-card" key={route.name}>
-                <div className="marketing-route-photo">
+                <div className="marketing-route-photo" style={{ backgroundImage: `url(${route.photo})` }}>
                   <span className="marketing-route-badge">{route.surface}</span>
                 </div>
                 <div className="marketing-route-body">
@@ -81,13 +82,57 @@ export function MarketingPage() {
           </div>
         </section>
 
-        <section id="how-it-works" className="marketing-section marketing-feature-section" aria-labelledby="features-title"><p className="marketing-kicker">The local layer</p><h2 id="features-title">More than a start line</h2><div className="marketing-feature-grid">{sections.map((section) => <article className="marketing-feature" key={section.title}><p className="marketing-kicker">{section.eyebrow}</p><h3>{section.title}</h3><p>{section.body}</p></article>)}</div></section>
+        <section id="how-it-works" className="marketing-section marketing-feature-section" aria-labelledby="features-title">
+          <p className="marketing-kicker">The local layer</p>
+          <h2 id="features-title">More than a start line</h2>
+          <div className="marketing-feature-grid">
+            {sections.map((section) => (
+              <article className="marketing-feature" key={section.title}>
+                <p className="marketing-kicker">{section.eyebrow}</p>
+                <h3>{section.title}</h3>
+                <p>{section.body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
 
-        <section className="marketing-split-section" aria-labelledby="tools-title"><div><p className="marketing-kicker">Log it your way</p><h2 id="tools-title">Every run,<br />on your terms.</h2><p>No auto-sync, no algorithm deciding what counts. Log your distance, pace, and surface — add a photo, a voice note, or tag who you ran with. Intentional, not automatic.</p></div></section>
+        <section className="marketing-split-section" aria-labelledby="tools-title">
+          <div>
+            <p className="marketing-kicker">Log it your way</p>
+            <h2 id="tools-title">Every run,<br />on your terms.</h2>
+            <p>No auto-sync, no algorithm deciding what counts. Log your distance, pace, and surface — add a photo, a voice note, or tag who you ran with. Intentional, not automatic.</p>
+          </div>
+          <div className="marketing-split-photo">
+            <img src={MARKETING_IMAGES.raceLegs} alt="" loading="lazy" />
+          </div>
+        </section>
 
-<section className="marketing-trust" aria-labelledby="trust-title"><p className="marketing-kicker">Built with care</p><h2 id="trust-title">Useful, not noisy.</h2><p>Your runs stay yours — private by default, with real identity verification behind every profile. No feeds to game, no fake followers, no features that quietly turn on without telling you.</p><div className="marketing-trust-tags"><span>Private by default</span><span>City-scoped</span><span>Human-reviewed</span></div></section>
-        <section className="marketing-multicity" aria-labelledby="cities-title"><p className="marketing-kicker">Starting in Columbia</p><h2 id="cities-title">More cities,<br /><em>same local feeling.</em></h2><p>Columbia is live. We’re building the foundation to bring Kimbio to more running communities next.</p></section>
-        <section className="marketing-final" aria-labelledby="final-title"><h2 id="final-title">Make your next run<br /><em>a local one.</em></h2><Link to="/login?mode=signup" className="marketing-button marketing-button-primary">Join Kimbio <span aria-hidden="true">↗</span></Link></section>
+        <section className="marketing-split-section marketing-split-reverse" aria-labelledby="group-title">
+          <div>
+            <p className="marketing-kicker">Better with people</p>
+            <h2 id="group-title">Running alone<br />is optional.</h2>
+            <p>Find a group that actually shows up — real people, real verification, running the same streets and trails you already know.</p>
+          </div>
+          <div className="marketing-split-photo">
+            <img src={MARKETING_IMAGES.groupSunset} alt="" loading="lazy" />
+          </div>
+        </section>
+
+        <section className="marketing-trust" aria-labelledby="trust-title">
+          <p className="marketing-kicker">Built with care</p>
+          <h2 id="trust-title">Useful, not noisy.</h2>
+          <p>Your runs stay yours — private by default, with real identity verification behind every profile. No feeds to game, no fake followers, no features that quietly turn on without telling you.</p>
+          <div className="marketing-trust-tags"><span>Private by default</span><span>City-scoped</span><span>Human-reviewed</span></div>
+        </section>
+        <section className="marketing-multicity" aria-labelledby="cities-title">
+          <p className="marketing-kicker">Starting in Columbia</p>
+          <h2 id="cities-title">More cities,<br /><em>same local feeling.</em></h2>
+          <p>Columbia is live. We're building the foundation to bring Kimbio to more running communities next.</p>
+        </section>
+        <section className="marketing-final" aria-labelledby="final-title">
+          <h2 id="final-title">Make your next run<br /><em>a local one.</em></h2>
+          <Link to="/login?mode=signup" className="marketing-button marketing-button-primary">Join Kimbio <span aria-hidden="true">↗</span></Link>
+        </section>
       </main>
       <footer className="marketing-footer">
         <span>KIMBIO</span>

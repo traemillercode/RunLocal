@@ -23,3 +23,22 @@
 .marketing-hero-photo{background-size:cover;background-position:center;border-radius:0}
 .marketing-hero-photo h1{font-weight:900;letter-spacing:-.07em}
 @media(min-width:900px){.marketing-hero-photo{border-radius:0 0 32px 32px}}
+
+/* --- Real alignment fix: headline/copy blocks were capped at 800px but
+   never centered within their (also centered) parent, so they hugged the
+   left edge with dead space on the right. Center by default; sections that
+   intentionally break this (image+text split) opt out explicitly. */
+.marketing-section, .marketing-trust, .marketing-multicity, .marketing-final { text-align: center; }
+.marketing-section h2, .marketing-trust h2, .marketing-multicity h2, .marketing-final h2 { margin-left: auto; margin-right: auto; }
+.marketing-section > p.marketing-muted, .marketing-trust > p, .marketing-multicity > p { max-width: 640px; margin-left: auto; margin-right: auto; }
+.marketing-trust-tags, .marketing-final .marketing-button { margin-left: auto; margin-right: auto; }
+.marketing-trust-tags { justify-content: center; }
+
+/* Real photography for the split section (was text-only). */
+.marketing-split-section { display: grid; grid-template-columns: 1fr; gap: 32px; text-align: left; align-items: center; }
+.marketing-split-photo { border-radius: 24px; overflow: hidden; aspect-ratio: 4/3; }
+.marketing-split-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@media(min-width: 900px) { .marketing-split-section { grid-template-columns: 1fr 1fr; } .marketing-split-section.marketing-split-reverse { direction: rtl; } .marketing-split-section.marketing-split-reverse > * { direction: ltr; } }
+
+/* Real photos on route cards, replacing the flat gradient placeholder. */
+.marketing-route-photo { background-size: cover; background-position: center; }

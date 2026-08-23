@@ -421,7 +421,7 @@ export function RunnerProfileMissing() {
 /** Loading skeleton while the public profile fetches. */
 export function RunnerProfileLoading() {
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
+    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading-narrow">
       <div className="h-6 w-32 animate-pulse rounded bg-slate-200" />
       <div className="mt-4 h-28 animate-pulse rounded-2xl bg-slate-200" />
       <div className="mt-4 h-24 animate-pulse rounded-2xl bg-slate-200" />
@@ -613,7 +613,7 @@ export function RunnerProfilePage({ id }: { id: string }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
+    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading-narrow">
       <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Runner profile</h1>
       <p className="mt-0.5 text-sm font-medium text-slate-500">Public community profile</p>
       {state === "loading" ? (

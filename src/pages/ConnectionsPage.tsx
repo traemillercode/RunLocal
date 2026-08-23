@@ -591,7 +591,7 @@ function EmptyState({ icon, title, body }: { icon: string; title: string; body: 
 
 function Page({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
+    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading-narrow">
       {children}
     </div>
   );

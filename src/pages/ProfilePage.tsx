@@ -481,7 +481,7 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
   }, [location.search]);
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading">
+    <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4 desktop-reading-narrow">
       <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Profile</h1>
       <p className="mt-0.5 text-sm font-medium text-slate-500">Your public profile</p>
 
