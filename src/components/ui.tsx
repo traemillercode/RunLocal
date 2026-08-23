@@ -174,6 +174,13 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M8.5 12h.01M12 12h.01M15.5 12h.01" />
     </>
   ),
+  messages: (
+    <>
+      <path d="M8 10.5a5.5 5.5 0 0 1 9.7-3.5" />
+      <path d="M20 8a5.5 5.5 0 0 1-5.2 8.7L11 18l.6-2.7A5.5 5.5 0 1 1 20 8z" />
+      <path d="M4 21l1-3.4A5.5 5.5 0 0 1 9 9" />
+    </>
+  ),
   help: (
     <>
       <circle cx="12" cy="12" r="8.5" />
