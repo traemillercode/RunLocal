@@ -14,7 +14,19 @@ export const MARKETING_IMAGES = {
   groupSunset: "/marketing/group-run-riverside-sunset.jpg",
   raceLegs: "/marketing/race-legs-closeup.jpg",
   silhouetteDusk: "/marketing/silhouette-dusk-run.jpg",
+  trailJump: "/marketing/trail-jump-fisheye.jpg",
+  trackRelay: "/marketing/track-relay-start.jpg",
 };
+
+/** The "moments" gallery — captions read like what a runner would actually caption their own photo, not marketing copy. */
+const GALLERY_MOMENTS = [
+  { photo: MARKETING_IMAGES.groupSunrise, caption: "Dusty roads, early crew" },
+  { photo: MARKETING_IMAGES.trailTwoRunners, caption: "Two miles in, still talking" },
+  { photo: MARKETING_IMAGES.groupSunset, caption: "Last light on the river path" },
+  { photo: MARKETING_IMAGES.trailJump, caption: "Trail day, no regrets" },
+  { photo: MARKETING_IMAGES.trackRelay, caption: "Handoff practice, Tuesday nights" },
+  { photo: MARKETING_IMAGES.silhouetteDusk, caption: "One more mile before dark" },
+];
 
 const sections = [
   { eyebrow: "Find your people", title: "Groups that feel local", body: "Real clubs and community run groups already moving in Columbia — no fake crowds, no empty listings, just who's actually out there." },
@@ -25,7 +37,7 @@ const sections = [
 /** Columbia, MO trail classics for the showcase. Distance/elevation are real published figures for these trails; there's no GPX-backed route detail page yet, so no fabricated elevation graphic is shown here - that's the next real piece to build. */
 const FEATURED_ROUTES = [
   { name: "MKT Nature Trail", surface: "Gravel", distance: "8.9 mi", elevation: "120 ft", photo: MARKETING_IMAGES.trailTwoRunners },
-  { name: "Rock Bridge — Devil's Icebox", surface: "Trail", distance: "3.9 mi", elevation: "310 ft", photo: MARKETING_IMAGES.trailMisty },
+  { name: "Rock Bridge — Devil's Icebox", surface: "Trail", distance: "3.9 mi", elevation: "310 ft", photo: MARKETING_IMAGES.trailJump },
   { name: "Grindstone Loop", surface: "Trail", distance: "8.1 mi", elevation: "480 ft", photo: MARKETING_IMAGES.track },
 ];
 
@@ -39,20 +51,35 @@ export function MarketingPage() {
         </nav>
       </header>
       <main id="top">
-        <section className="marketing-hero marketing-hero-photo" aria-labelledby="hero-title" style={{ backgroundImage: `linear-gradient(180deg, rgba(20,22,26,0.55), rgba(20,22,26,0.92)), url(${MARKETING_IMAGES.hero})` }}>
-          <p className="marketing-kicker">Columbia, MO <span aria-hidden="true">·</span> Live now</p>
-          <h1 id="hero-title">Your run.<br /><em>Your people.<br />Your city.</em></h1>
-          <p className="marketing-lede">Real group runs, local races, and the people who make running in Columbia feel like home.</p>
-          <div className="marketing-actions"><Link to="/events" className="marketing-button marketing-button-primary">Browse public events <span aria-hidden="true">↗</span></Link><Link to="/login?mode=signup" className="marketing-button marketing-button-light">Create your account</Link></div>
-          <p className="marketing-note">No login needed to look around.</p>
-          <div className="marketing-stat-pills">
-            <span className="marketing-stat-pill"><strong>100%</strong> identity-verified</span>
-            <span className="marketing-stat-pill"><strong>3</strong> weekly group runs</span>
-            <span className="marketing-stat-pill"><strong>0</strong> fake followers</span>
+        <section className="marketing-hero-collage" aria-labelledby="hero-title">
+          <div className="marketing-collage-grid">
+            <div className="marketing-collage-main"><img src={MARKETING_IMAGES.groupSunrise} alt="" loading="eager" /></div>
+            <div className="marketing-collage-side">
+              <img src={MARKETING_IMAGES.trailTwoRunners} alt="" loading="eager" />
+              <img src={MARKETING_IMAGES.groupSunset} alt="" loading="eager" />
+            </div>
+          </div>
+          <div className="marketing-collage-copy">
+            <p className="marketing-kicker-warm">Columbia, MO · Live now</p>
+            <h1 id="hero-title">People who actually show up.</h1>
+            <p className="marketing-lede-warm">Real group runs, real faces, real Columbia. No fake crowds, no empty listings.</p>
+            <div className="marketing-actions"><Link to="/events" className="marketing-button marketing-button-primary">Browse public events <span aria-hidden="true">↗</span></Link><Link to="/login?mode=signup" className="marketing-button marketing-button-light">Create your account</Link></div>
+            <p className="marketing-note-warm">No login needed to look around.</p>
           </div>
         </section>
 
-        <section className="marketing-hook" aria-label="Kimbio mission"><p>Running is better when the route comes with a <strong>reason to show up.</strong></p><span aria-hidden="true">✳</span></section>
+        <section className="marketing-gallery" aria-labelledby="gallery-title">
+          <p className="marketing-kicker-warm">From the community</p>
+          <h2 id="gallery-title">This is who you'd be running with.</h2>
+          <div className="marketing-gallery-grid">
+            {GALLERY_MOMENTS.map((m) => (
+              <figure className="marketing-gallery-item" key={m.photo}>
+                <img src={m.photo} alt="" loading="lazy" />
+                <figcaption>{m.caption}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
 
         <section id="preview" className="marketing-section marketing-preview" aria-labelledby="preview-title">
           <p className="marketing-kicker">This week</p><h2 id="preview-title">What’s happening in Columbia</h2>
@@ -114,7 +141,7 @@ export function MarketingPage() {
             <p>Find a group that actually shows up — real people, real verification, running the same streets and trails you already know.</p>
           </div>
           <div className="marketing-split-photo">
-            <img src={MARKETING_IMAGES.groupSunset} alt="" loading="lazy" />
+            <img src={MARKETING_IMAGES.trailMisty} alt="" loading="lazy" />
           </div>
         </section>
 
