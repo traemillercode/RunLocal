@@ -64,6 +64,11 @@ export interface AccountRecord {
   trainingBlock?: string | null;
   upcomingRaces?: string | null;
   /** Free-text about-me, self-reported, optional. */
+  /** Ad-attribution — captured at signup only if the person had granted analytics consent. Null for everyone else, including all pre-existing accounts. */
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+
   bio?: string | null;
   /** Optional override shown instead of the role label (e.g. "Founder"). Display-only — grants no permissions. */
   customTitle?: string | null;

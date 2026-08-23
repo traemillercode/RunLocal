@@ -28,6 +28,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Chip, Icon, PillButton } from "../components/ui";
 import { ResendConfirmationBox } from "../components/ResendConfirmationBox";
 import * as api from "../lib/api";
+import { getStoredUtm } from "../lib/analytics";
 import { validateBirthdate } from "../lib/birthdate";
 import * as supabase from "../lib/supabase";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
@@ -294,7 +295,7 @@ export function LoginPage() {
         // the local Pending profile WITHOUT a Run Local session — signed-in
         // status is never claimed without a valid Supabase session. The
         // account links to the confirmed identity on first login.
-        const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined, noSession: true });
+        const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined, noSession: true, ...getStoredUtm() });
         setBusy(false);
         if (created.ok || created.error.code === "email_taken") {
           setPendingConfirmationEmail(e);
@@ -330,7 +331,7 @@ export function LoginPage() {
       }
       // Immediate session: create the local Pending account (this establishes
       // the Run Local session cookie) — never the password, only metadata.
-      const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined });
+      const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined, ...getStoredUtm() });
       if (!created.ok) {
         setBusy(false);
         if (created.error.code === "email_taken") setError("That email already has an account. Log in instead.");

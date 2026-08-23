@@ -110,7 +110,7 @@ export function normalizeAccountResponse(body: unknown): ApiResult<{ account: im
   }
   return { ok: false, error: new ApiError(502, "invalid_response", "The server returned an invalid account response. Please try again.") };
 }
-export async function createAccount(input: { name: string; username: string; email: string; phone?: string; birthdate: string; cityId: string; requestedRole?: "runner" | "group_leader"; noSession?: boolean }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
+export async function createAccount(input: { name: string; username: string; email: string; phone?: string; birthdate: string; cityId: string; requestedRole?: "runner" | "group_leader"; noSession?: boolean; utm_source?: string; utm_medium?: string; utm_campaign?: string }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
   const result = await request<unknown>("/api/accounts", { method: "POST", body: JSON.stringify(input) });
   return result.ok ? normalizeAccountResponse(result.data) : result;
 }

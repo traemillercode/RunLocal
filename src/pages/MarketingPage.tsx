@@ -4,6 +4,17 @@ import { CITIES } from "../data/cities";
 const city = CITIES.find((item) => item.id === "columbia-mo");
 const previewEvents = city?.events.slice(0, 3) ?? [];
 
+/**
+ * Lifestyle photography for atmosphere — sourced as generic running imagery,
+ * not verified to depict the specific named Missouri locations. Used as
+ * background/mood treatment, not as a factual claim about what's pictured.
+ */
+export const STOCK_IMAGES = {
+  hero: "https://images.unsplash.com/photo-1502224562085-639556652f33?auto=format&fit=crop&w=1600&q=80",
+  groupRun: "https://images.unsplash.com/photo-1530549387789-4c1017266635?auto=format&fit=crop&w=1000&q=80",
+  socialPostRun: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=1000&q=80",
+};
+
 const sections = [
   { eyebrow: "Find your people", title: "Groups that feel local", body: "Real clubs and community run groups already moving in Columbia — no fake crowds, no empty listings, just who's actually out there." },
   { eyebrow: "Plan the big day", title: "Races, without the rabbit holes", body: "Every local race in one place — dates, distances, and a straight link to sign up. No more ten open tabs." },
@@ -27,7 +38,7 @@ export function MarketingPage() {
         </nav>
       </header>
       <main id="top">
-        <section className="marketing-hero" aria-labelledby="hero-title">
+        <section className="marketing-hero marketing-hero-photo" aria-labelledby="hero-title" style={{ backgroundImage: `linear-gradient(180deg, rgba(20,22,26,0.55), rgba(20,22,26,0.92)), url(${STOCK_IMAGES.hero})` }}>
           <p className="marketing-kicker">Columbia, MO <span aria-hidden="true">·</span> Live now</p>
           <h1 id="hero-title">Your run.<br /><em>Your people.<br />Your city.</em></h1>
           <p className="marketing-lede">Real group runs, local races, and the people who make running in Columbia feel like home.</p>

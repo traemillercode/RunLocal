@@ -19,3 +19,7 @@
 .marketing-route-stats strong{color:#f7f7f5;font-size:15px;display:block}
 .marketing-route-elevation{margin-top:12px;opacity:.85}
 @media(max-width:700px){.marketing-route-grid{grid-template-columns:1fr}.marketing-route-section{padding:64px 20px}}
+
+.marketing-hero-photo{background-size:cover;background-position:center;border-radius:0}
+.marketing-hero-photo h1{font-weight:900;letter-spacing:-.07em}
+@media(min-width:900px){.marketing-hero-photo{border-radius:0 0 32px 32px}}

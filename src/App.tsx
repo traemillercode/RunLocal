@@ -5,6 +5,8 @@ import { CitySheet, Header } from "./components/Header";
 import { DesktopSidebar } from "./components/DesktopSidebar";
 import { CITIES } from "./data/cities";
 import { ToastProvider, useToast } from "./lib/toast";
+import { CookieBanner } from "./components/CookieBanner";
+import { captureUtmFromUrl } from "./lib/analytics";
 import { useAppState } from "./lib/store";
 import { AccountProvider } from "./state/account";
 import { NotificationsProvider } from "./state/notifications";
@@ -54,6 +56,7 @@ function Shell() {
   const { city, selectCity } = useSelectedCity();
   const toast = useToast();
   const [recoveryError, setRecoveryError] = useState<string>();
+  useEffect(() => { captureUtmFromUrl(); }, []);
   useEffect(() => {
     const parsed = parseAuthCallback(window.location.href);
     if (!parsed) return;
@@ -147,6 +150,7 @@ export default function App() {
         <NotificationsProvider>
           <BrowserRouter>
             <Shell />
+            <CookieBanner />
           </BrowserRouter>
         </NotificationsProvider>
       </AccountProvider>

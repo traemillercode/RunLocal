@@ -1102,7 +1102,11 @@ async function handleApi(
     // Role requests are label-only and strictly validated server-side; the
     // owner/operator assigns the real role at approval time.
     const requestedRole = body.requestedRole === "group_leader" ? "group_leader" : body.requestedRole === "runner" ? "runner" : null;
+    const utmField = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 100) : null);
     const rec = db.createAccount({ name, username, email, phone, birthdate, cityId, requestedRole });
+    rec.utmSource = utmField((body as Record<string, unknown>).utm_source);
+    rec.utmMedium = utmField((body as Record<string, unknown>).utm_medium);
+    rec.utmCampaign = utmField((body as Record<string, unknown>).utm_campaign);
     rec.signupIp = ip;
     rec.signupAt = now.toISOString();
     if (signupCityStatus === "invite_only") {
