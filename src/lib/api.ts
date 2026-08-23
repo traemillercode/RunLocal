@@ -1042,6 +1042,9 @@ export function renameConversation(conversationId: string, name: string): Promis
 export function leaveConversation(conversationId: string): Promise<ApiResult<{ left: boolean }>> {
   return request(`/api/conversations/${encodeURIComponent(conversationId)}/leave`, { method: "POST" });
 }
+export function reportRunner(accountId: string, reason: string, conversationId?: string): Promise<ApiResult<{ reportId: string }>> {
+  return request(`/api/runners/${encodeURIComponent(accountId)}/report`, { method: "POST", body: JSON.stringify({ reason, conversationId }) });
+}
 export function uploadGroupChatPhoto(conversationId: string, photoDataUrl: string): Promise<ApiResult<{ photoUrl: string; conversation: ConversationSummary }>> {
   return request(`/api/conversations/${encodeURIComponent(conversationId)}/photo`, { method: "POST", body: JSON.stringify({ photo: photoDataUrl }) });
 }

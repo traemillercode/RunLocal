@@ -473,6 +473,67 @@ function GroupSettingsSheet({
   );
 }
 
+function ReportSheet({
+  accountId,
+  accountName,
+  conversationId,
+  onClose,
+}: {
+  accountId: string;
+  accountName: string;
+  conversationId: string;
+  onClose: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const submit = () => {
+    if (reason.trim().length < 5) { setError("Give a bit more detail (at least 5 characters)."); return; }
+    setSubmitting(true);
+    setError(null);
+    void api.reportRunner(accountId, reason.trim(), conversationId).then((r) => {
+      setSubmitting(false);
+      if (r.ok) setDone(true);
+      else setError(r.error.message ?? "Couldn't submit that report.");
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
+      <div className="w-full max-w-md rounded-t-2xl bg-white p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        {done ? (
+          <div className="py-4 text-center">
+            <p className="text-lg font-extrabold text-slate-900">Report submitted</p>
+            <p className="mt-2 text-[13px] text-slate-500">Thanks for looking out for the community. An admin will review this — {accountName} won't be notified.</p>
+            <button type="button" onClick={onClose} className="mt-5 h-11 w-full rounded-full bg-[#14171C] text-sm font-bold text-white">Done</button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-extrabold text-slate-900">Report {accountName}</h2>
+              <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-5 w-5" /></button>
+            </div>
+            <p className="mt-1 text-[13px] text-slate-500">This goes to an admin for review, privately — {accountName} is never told you reported them.</p>
+            {error ? <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-800">{error}</p> : null}
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              maxLength={500}
+              placeholder="What happened? Be specific — this helps admins act on it."
+              className="mt-4 h-28 w-full rounded-xl border border-slate-200 p-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
+            />
+            <button type="button" disabled={submitting} onClick={submit} className="mt-4 h-11 w-full rounded-full bg-red-600 text-sm font-bold text-white disabled:opacity-50">
+              {submitting ? "Submitting…" : "Submit report"}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Thread({ conversationId }: { conversationId: string }) {
   const navigate = useNavigate();
   const toast = useToast();
@@ -484,6 +545,7 @@ function Thread({ conversationId }: { conversationId: string }) {
   const [sending, setSending] = useState(false);
   const [creatingRun, setCreatingRun] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [typingNames, setTypingNames] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastTypingSentRef = useRef(0);
@@ -636,6 +698,11 @@ function Thread({ conversationId }: { conversationId: string }) {
             </div>
           </div>
         )}
+        {!convo.isGroup && convo.otherProfile ? (
+          <button type="button" onClick={() => setReportOpen(true)} aria-label="Report this person" className="shrink-0 rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-red-600">
+            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2"><path d="M12 9v4M12 17h.01" strokeLinecap="round"/><path d="M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.29 2.25h17.78a1.5 1.5 0 0 0 1.29-2.25L13.71 3.86a1.5 1.5 0 0 0-2.58 0z" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+        ) : null}
         {convo.isGroup ? (
           <span className="flex shrink-0 items-center gap-2">
             {!convo.runCreatedId ? (
@@ -691,6 +758,24 @@ function Thread({ conversationId }: { conversationId: string }) {
               {creatingRun ? "Creating…" : "Create run"}
             </button>
           </div>
+        </div>
+      ) : null}
+
+      {reportOpen && convo.otherProfile ? (
+        <ReportSheet
+          accountId={convo.otherProfile.id}
+          accountName={convo.otherProfile.name}
+          conversationId={conversationId}
+          onClose={() => setReportOpen(false)}
+        />
+      ) : null}
+
+      {!convo.isGroup ? (
+        <div className="mt-3 flex items-start gap-2 rounded-2xl bg-amber-50 p-3">
+          <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 fill-none stroke-amber-700" strokeWidth="2"><path d="M12 9v4M12 17h.01" strokeLinecap="round"/><path d="M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.29 2.25h17.78a1.5 1.5 0 0 0 1.29-2.25L13.71 3.86a1.5 1.5 0 0 0-2.58 0z" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          <p className="text-[12px] leading-relaxed text-amber-900">
+            Being verified means someone's identity was confirmed — it doesn't guarantee they're safe to run with. For a 1:1 meetup, especially with someone you don't know, prefer a group of 3+ instead. Meet in a public place, tell someone your plan, and trust your gut.
+          </p>
         </div>
       ) : null}
 
