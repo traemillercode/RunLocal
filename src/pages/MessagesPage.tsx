@@ -565,12 +565,24 @@ function Thread({ conversationId }: { conversationId: string }) {
     });
   };
 
-  const createRun = () => {
+  const [runFormOpen, setRunFormOpen] = useState(false);
+  const [runDate, setRunDate] = useState("");
+  const [runTime, setRunTime] = useState("");
+  const [runLocation, setRunLocation] = useState("");
+  const [runDistance, setRunDistance] = useState("");
+  const [runError, setRunError] = useState<string | null>(null);
+
+  const submitRun = () => {
+    if (!runDate || !runTime.trim() || !runLocation.trim()) {
+      setRunError("Fill in a date, time, and location before creating the run.");
+      return;
+    }
     setCreatingRun(true);
-    void api.createRunFromConversation(conversationId).then((r) => {
+    setRunError(null);
+    void api.createRunFromConversation(conversationId, { scheduleDate: runDate, time: runTime.trim(), location: runLocation.trim(), distanceLabel: runDistance.trim() || undefined }).then((r) => {
       setCreatingRun(false);
-      if (r.ok) navigate(`/?prefillRun=${conversationId}`);
-      else toast(r.error.message ?? "Couldn't start a run from this chat.", "info");
+      if (r.ok) { setRunFormOpen(false); toast("Run created — needs 3 runners to confirm.", "success"); navigate("/"); }
+      else setRunError(r.error.message ?? "Couldn't create that run.");
     });
   };
 
@@ -627,7 +639,7 @@ function Thread({ conversationId }: { conversationId: string }) {
         {convo.isGroup ? (
           <span className="flex shrink-0 items-center gap-2">
             {!convo.runCreatedId ? (
-              <PillButton variant="secondary" disabled={creatingRun} onClick={createRun}>
+              <PillButton variant="secondary" disabled={creatingRun} onClick={() => setRunFormOpen(true)}>
                 <Icon name="calendar" className="h-4 w-4" /> {creatingRun ? "Starting…" : "Create run"}
               </PillButton>
             ) : null}
@@ -646,6 +658,40 @@ function Thread({ conversationId }: { conversationId: string }) {
           onPhotoChanged={(photoUrl) => setConvo((c) => (c ? { ...c, photoUrl } : c))}
           onLeft={() => navigate("/messages")}
         />
+      ) : null}
+
+      {runFormOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => setRunFormOpen(false)}>
+          <div className="w-full max-w-md rounded-t-2xl bg-white p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-extrabold text-slate-900">Create a run</h2>
+              <button type="button" onClick={() => setRunFormOpen(false)} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-5 w-5" /></button>
+            </div>
+            <p className="mt-1 text-[13px] text-slate-500">Everyone in this chat will be invited. Needs 3 confirmed runners before it's official.</p>
+            {runError ? <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-800">{runError}</p> : null}
+            <div className="mt-4 space-y-3">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-slate-700">Date</span>
+                <input type="date" value={runDate} onChange={(e) => setRunDate(e.target.value)} className="h-11 w-full rounded-xl border border-slate-200 px-3.5 text-[15px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-slate-700">Time</span>
+                <input type="text" value={runTime} onChange={(e) => setRunTime(e.target.value)} placeholder="e.g. 6:30 AM" className="h-11 w-full rounded-xl border border-slate-200 px-3.5 text-[15px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-slate-700">Meeting location</span>
+                <input type="text" value={runLocation} onChange={(e) => setRunLocation(e.target.value)} placeholder="e.g. MKT Trailhead, Flat Branch Park" className="h-11 w-full rounded-xl border border-slate-200 px-3.5 text-[15px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-slate-700">Distance (optional)</span>
+                <input type="text" value={runDistance} onChange={(e) => setRunDistance(e.target.value)} placeholder="e.g. 3-5 miles" className="h-11 w-full rounded-xl border border-slate-200 px-3.5 text-[15px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
+              </label>
+            </div>
+            <button type="button" disabled={creatingRun} onClick={submitRun} className="mt-5 h-11 w-full rounded-full bg-[#14171C] text-sm font-bold text-white disabled:opacity-50">
+              {creatingRun ? "Creating…" : "Create run"}
+            </button>
+          </div>
+        </div>
       ) : null}
 
       <div className="flex-1 space-y-3 overflow-y-auto py-4">

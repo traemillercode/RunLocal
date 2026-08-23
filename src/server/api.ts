@@ -1919,14 +1919,59 @@ async function handleApi(
     await db.persist();
     return ok(res, { message: updated }), true;
   }
+  // POST /api/conversations/:id/create-run — actually creates a real,
+  // published one-time event (not admin-review-gated: informal proposals are
+  // meant to bypass that, using the 3-confirmed-runner threshold as the
+  // safety gate instead — see minParticipants on the event). Group chats
+  // only, one per conversation ever (runCreatedId guards re-creation), and
+  // only a participant of that specific chat can trigger it.
   if (method === "POST" && url.pathname.startsWith("/api/conversations/") && url.pathname.endsWith("/create-run")) {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const convoId = url.pathname.split("/").at(-2)!;
     const convo = db.getConversation(convoId);
     if (!convo || !convo.participantIds.includes(sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
+    if (!convo.isGroup) return err(res, { status: 400, error: "not_a_group", message: "Only group chats can start a run this way." }), true;
     if (convo.runCreatedId) return err(res, { status: 409, error: "already_created", message: "A run was already created from this chat." }), true;
-    return ok(res, { conversationId: convo.id, participantIds: convo.participantIds, prefillTitle: convo.isGroup ? convo.name : "Group run" }), true;
+    const rec = db.getAccount(sess.accountId);
+    if (!rec) return err(res, { status: 404, error: "not_found" }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const scheduleDate = typeof body.scheduleDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.scheduleDate) ? body.scheduleDate : null;
+    if (!scheduleDate) return err(res, { status: 400, error: "invalid_date", message: "Pick a date for the run." }), true;
+    const time = typeof body.time === "string" ? body.time.trim().slice(0, 40) : "";
+    if (!time) return err(res, { status: 400, error: "invalid_time", message: "Give a time for the run." }), true;
+    const location = typeof body.location === "string" ? body.location.trim().slice(0, 120) : "";
+    if (!location) return err(res, { status: 400, error: "invalid_location", message: "Give a meeting location." }), true;
+    const distanceLabel = typeof body.distanceLabel === "string" ? body.distanceLabel.trim().slice(0, 40) : "";
+    const dayOfWeek = (new Date(`${scheduleDate}T00:00:00`).getDay() + 6) % 7; // JS: Sun=0..Sat=6 -> our Mon=0..Sun=6
+    const event: import("./types").RunEventRecord = {
+      id: newId(),
+      seedRefId: null,
+      cityId: rec.cityId ?? "columbia-mo",
+      groupId: "",
+      title: convo.name || "Group run",
+      dayOfWeek,
+      scheduleDate,
+      recurrenceType: "one_time",
+      time,
+      location,
+      distanceLabel: distanceLabel || "Distance TBD",
+      invite: "RSVP requested",
+      externalUrl: null,
+      provenance: "community",
+      status: "published",
+      hidden: false,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      createdBy: sess.accountId,
+      updatedBy: sess.accountId,
+      archivedAt: null,
+      minParticipants: 3,
+    };
+    db.setEvent(event);
+    db.updateConversation(convo.id, { runCreatedId: event.id });
+    await db.persist();
+    return ok(res, { eventId: event.id, cityId: event.cityId }), true;
   }
 
   // GET /api/conversations/:id/members — resolved public profiles for every

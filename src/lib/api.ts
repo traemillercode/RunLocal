@@ -1029,8 +1029,8 @@ export function editMessage(messageId: string, body: string): Promise<ApiResult<
 export function deleteMessage(messageId: string): Promise<ApiResult<{ message: MessageView }>> {
   return request(`/api/messages/${encodeURIComponent(messageId)}`, { method: "DELETE" });
 }
-export function createRunFromConversation(conversationId: string): Promise<ApiResult<{ conversationId: string; participantIds: string[]; prefillTitle: string }>> {
-  return request(`/api/conversations/${encodeURIComponent(conversationId)}/create-run`, { method: "POST" });
+export function createRunFromConversation(conversationId: string, input: { scheduleDate: string; time: string; location: string; distanceLabel?: string }): Promise<ApiResult<{ eventId: string; cityId: string }>> {
+  return request(`/api/conversations/${encodeURIComponent(conversationId)}/create-run`, { method: "POST", body: JSON.stringify(input) });
 }
 export interface ConversationMember extends RunnerProfileView { isCreator: boolean; isOnline?: boolean; }
 export function getConversationMembers(conversationId: string): Promise<ApiResult<{ members: ConversationMember[] }>> {
