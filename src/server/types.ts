@@ -446,6 +446,7 @@ export interface PersistedDb {
   messages?: MessageRecord[];
   trainingPlans?: TrainingPlanRecord[];
   forumVotes?: ForumVoteRecord[];
+  accountReports?: AccountReportRecord[];
   /** Per-account privacy settings (keyed by accountId; defaults when absent). */
   privacy?: PrivacySettingsRecord[];
   /** Runner tags on content ("run"|"post"|"event"). */
@@ -541,6 +542,23 @@ export interface BlockRecord { blockerId: string; blockedId: string; createdAt: 
  * hard-deleted: `removeConnection` soft-deletes via the `removed` status.
  */
 export type ConnectionStatus = "pending" | "accepted" | "declined" | "removed";
+/**
+ * A safety report against another runner — separate from the content-flag
+ * system (which is for public city content like posts/events). This is for
+ * reporting a PERSON, typically arising from a message or connection, so it
+ * has no city scoping and no content-registry row to hang off of.
+ */
+export interface AccountReportRecord {
+  id: string;
+  reporterId: string;
+  reportedAccountId: string;
+  reason: string;
+  /** Optional context — the conversation this arose from, if any. */
+  conversationId: string | null;
+  createdAt: string;
+  status: "open" | "reviewed" | "dismissed";
+}
+
 export interface ConnectionRecord {
   id: string;
   /** The account that initiated the request. */

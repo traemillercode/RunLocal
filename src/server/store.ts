@@ -302,6 +302,7 @@ export class Db {
   private messages = new Map<string, import("./types").MessageRecord>();
   private trainingPlans = new Map<string, import("./types").TrainingPlanRecord>();
   private forumVotes = new Map<string, import("./types").ForumVoteRecord>();
+  private accountReports = new Map<string, import("./types").AccountReportRecord>();
   /** Ephemeral typing state — accountId -> expiry timestamp, per conversation. Deliberately NOT part of load/persist: it's a live-only signal, meaningless across a restart, and would just be stale noise if saved. */
   private typing = new Map<string, Map<string, number>>();
   /** Per-account privacy settings — keyed by accountId (defaults when absent). */
@@ -427,6 +428,7 @@ export class Db {
       for (const m of parsed.messages ?? []) this.messages.set(m.id, { ...m, deletedAt: m.deletedAt ?? null, reactions: m.reactions ?? {}, mediaRef: m.mediaRef ?? null, editedAt: m.editedAt ?? null });
       for (const t of parsed.trainingPlans ?? []) this.trainingPlans.set(t.accountId, t);
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
+      for (const r of parsed.accountReports ?? []) this.accountReports.set(r.id, r);
       // Privacy: records persisted before a field existed are merged over the
       // verbatim owner-spec defaults so they keep working.
       for (const p of parsed.privacy ?? []) this.privacy.set(p.accountId, { ...PRIVACY_DEFAULTS, ...p, accountId: p.accountId });
@@ -485,6 +487,7 @@ export class Db {
       messages: [...this.messages.values()],
       trainingPlans: [...this.trainingPlans.values()],
       forumVotes: [...this.forumVotes.values()],
+      accountReports: [...this.accountReports.values()],
       privacy: [...this.privacy.values()],
       tags: [...this.tags.values()],
     };
@@ -1163,6 +1166,19 @@ export class Db {
   }
   hasForumVote(accountId: string, postId: string): boolean {
     return this.forumVotes.has(`${accountId}:${postId}`);
+  }
+  createAccountReport(input: { reporterId: string; reportedAccountId: string; reason: string; conversationId: string | null }, now: Date): import("./types").AccountReportRecord {
+    const rec: import("./types").AccountReportRecord = { id: newId(), reporterId: input.reporterId, reportedAccountId: input.reportedAccountId, reason: input.reason, conversationId: input.conversationId, createdAt: now.toISOString(), status: "open" };
+    this.accountReports.set(rec.id, rec);
+    return rec;
+  }
+  /** Used for rate-limiting and duplicate-prevention — has this reporter already reported this account recently/at all while it's still open? */
+  hasOpenAccountReport(reporterId: string, reportedAccountId: string): boolean {
+    for (const r of this.accountReports.values()) if (r.reporterId === reporterId && r.reportedAccountId === reportedAccountId && r.status === "open") return true;
+    return false;
+  }
+  listAccountReports(): import("./types").AccountReportRecord[] {
+    return [...this.accountReports.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
   /** Called on each keystroke (client-debounced) — marks this person as typing for a few seconds. */
   setTyping(conversationId: string, accountId: string, now: Date, ttlMs = 5000): void {

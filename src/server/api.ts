@@ -1974,6 +1974,30 @@ async function handleApi(
     return ok(res, { eventId: event.id, cityId: event.cityId }), true;
   }
 
+  // POST /api/runners/:id/report — a safety report against a person, not a
+  // piece of content. Verified runners only, can't report yourself, reason
+  // required (5-500 chars, same bar as content flags), one OPEN report per
+  // reporter/target pair at a time. Never visible to the reported person.
+  const runnerReportPath = /^\/api\/runners\/([^/]+)\/report$/.exec(url.pathname);
+  if (method === "POST" && runnerReportPath) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const reporter = db.getAccount(sess.accountId);
+    if (!reporter || reporter.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    const targetId = runnerReportPath[1];
+    if (targetId === sess.accountId) return err(res, { status: 400, error: "cannot_report_self" }), true;
+    if (!db.getAccount(targetId)) return err(res, { status: 404, error: "not_found" }), true;
+    if (db.hasOpenAccountReport(sess.accountId, targetId)) return err(res, { status: 409, error: "already_reported", message: "You already have an open report on this person." }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    if (reason.length < 5 || reason.length > 500) return err(res, { status: 400, error: "invalid_reason", message: "Give a bit more detail (5-500 characters)." }), true;
+    const conversationId = typeof body.conversationId === "string" ? body.conversationId : null;
+    const report = db.createAccountReport({ reporterId: sess.accountId, reportedAccountId: targetId, reason, conversationId }, now);
+    db.appendAudit({ admin: reporter.email, action: "content.flag", reason: "Safety report filed against another runner", targetId, ip, cityId: reporter.cityId ?? "" });
+    await db.persist();
+    return ok(res, { reportId: report.id }), true;
+  }
+
   // GET /api/conversations/:id/members — resolved public profiles for every
   // participant, for the group settings panel. Members only, not a public route.
   if (method === "GET" && url.pathname.startsWith("/api/conversations/") && url.pathname.endsWith("/members")) {
