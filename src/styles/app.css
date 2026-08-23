@@ -40,6 +40,13 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
    hides the bar entirely (see the `.app-shell-nav { display: none }` rule
    below at the 1024px breakpoint). */
 .desktop-main { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+/* Messages manages its own full-height chat layout (see .messages-page-root
+   below) and needs to compute the bottom-nav clearance itself as part of
+   that math — the generic padding here would double up with it and push
+   the composer around. Reset it specifically for that one page. */
+.desktop-main:has(.messages-page-root) { padding-bottom: 0; }
+.messages-page-root { height: calc(100dvh - 4rem - 72px - env(safe-area-inset-bottom)); }
+@media (min-width: 1024px) { .messages-page-root { height: calc(100dvh - 4rem); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
 
 /* Desktop navigation is opt-in at the desktop breakpoint; never let the

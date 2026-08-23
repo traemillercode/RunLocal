@@ -120,7 +120,7 @@ function Inbox() {
     return () => { live = false; };
   }, []);
   return (
-    <div className="mx-auto max-w-lg px-4 py-6">
+    <div className="mx-auto h-full max-w-lg overflow-y-auto px-4 py-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Messages</h1>
         <button type="button" onClick={() => setGroupSheetOpen(true)} className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3.5 py-2 text-[13px] font-bold text-slate-700 active:bg-slate-200">
@@ -182,7 +182,6 @@ function MessageBubble({
   onEdit: (body: string) => void;
   onDelete: () => void;
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(msg.body ?? "");
@@ -192,7 +191,7 @@ function MessageBubble({
   const canEdit = mine && !msg.mediaUrl && Date.now() - new Date(msg.createdAt).getTime() < EDIT_WINDOW_MS;
   const pick = (emoji: string) => {
     onReact(myReaction === emoji ? null : emoji);
-    setPickerOpen(false);
+    setMenuOpen(false);
   };
   const saveEdit = () => {
     const trimmed = editDraft.trim();
@@ -223,60 +222,34 @@ function MessageBubble({
 
   return (
     <div className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
-      <div className="flex items-end gap-1">
-        {!msg.deletedAt ? (
-          <button
-            type="button"
-            onClick={() => setPickerOpen((v) => !v)}
-            aria-label={myReaction ? `You reacted ${myReaction} — tap to change` : "React to this message"}
-            aria-expanded={pickerOpen}
-            className={`order-first shrink-0 rounded-full bg-slate-100 p-1.5 ${mine ? "order-last" : ""} ${myReaction ? "text-[#FF5741]" : "text-slate-500 hover:bg-slate-200"}`}
-          >
-            <Icon name="spark" className="h-4 w-4" />
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => !msg.deletedAt && setPickerOpen((v) => !v)}
-          className={`max-w-[78%] overflow-hidden rounded-3xl text-left shadow-sm ${
-            msg.mediaUrl && !msg.body ? "" : mine ? "bg-[#FF5741] text-white" : "bg-slate-100 text-slate-900"
-          } ${msg.deletedAt ? "italic opacity-60" : ""}`}
-        >
-          {msg.deletedAt ? (
-            <span className="block px-4 py-2.5 text-[14px] leading-relaxed">Message removed</span>
-          ) : (
-            <>
-              {msg.mediaUrl ? <img src={msg.mediaUrl} alt="" className="block max-h-72 w-full object-cover" /> : null}
-              {msg.body ? (
-                <span className={`block px-4 py-2.5 text-[14px] leading-relaxed ${msg.mediaUrl ? (mine ? "bg-[#FF5741] text-white" : "bg-slate-100 text-slate-900") : ""}`}>
-                  {msg.body}
-                </span>
-              ) : null}
-            </>
-          )}
-        </button>
-        {mine && !msg.deletedAt ? (
-          <button type="button" onClick={() => setMenuOpen((v) => !v)} aria-label="Message options" className="order-last shrink-0 rounded-full p-1.5 text-slate-300 hover:bg-slate-100 hover:text-slate-500">
-            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-          </button>
-        ) : null}
-      </div>
-      {menuOpen ? (
-        <div className="mt-1.5 flex gap-1 rounded-2xl bg-white px-2 py-1.5 shadow-md ring-1 ring-slate-200">
-          {canEdit ? (
-            <button type="button" onClick={() => { setEditing(true); setMenuOpen(false); }} className="rounded-full px-3 py-1 text-[13px] font-bold text-slate-700 hover:bg-slate-100">Edit</button>
-          ) : null}
-          {confirmDelete ? (
-            <button type="button" onClick={() => { onDelete(); setMenuOpen(false); }} className="rounded-full px-3 py-1 text-[13px] font-bold text-red-600 hover:bg-red-50">Confirm delete</button>
-          ) : (
-            <button type="button" onClick={() => setConfirmDelete(true)} className="rounded-full px-3 py-1 text-[13px] font-bold text-red-600 hover:bg-red-50">Delete</button>
-          )}
-        </div>
-      ) : null}
-      {/* Inline, not an absolute overlay — a popover here would get silently
-          clipped by the message list's overflow-y-auto and never be seen. */}
-      {pickerOpen ? (
-        <div className="mt-1.5 flex gap-1 rounded-full bg-white px-2 py-1.5 shadow-md ring-1 ring-slate-200">
+      <button
+        type="button"
+        onClick={() => !msg.deletedAt && setMenuOpen((v) => !v)}
+        className={`max-w-[78%] overflow-hidden rounded-3xl text-left shadow-sm ${
+          msg.mediaUrl && !msg.body ? "" : mine ? "bg-[#FF5741] text-white" : "bg-slate-100 text-slate-900"
+        } ${msg.deletedAt ? "italic opacity-60" : ""}`}
+      >
+        {msg.deletedAt ? (
+          <span className="block px-4 py-2.5 text-[14px] leading-relaxed">Message removed</span>
+        ) : (
+          <>
+            {msg.mediaUrl ? <img src={msg.mediaUrl} alt="" className="block max-h-72 w-full object-cover" /> : null}
+            {msg.body ? (
+              <span className={`block px-4 py-2.5 text-[14px] leading-relaxed ${msg.mediaUrl ? (mine ? "bg-[#FF5741] text-white" : "bg-slate-100 text-slate-900") : ""}`}>
+                {msg.body}
+              </span>
+            ) : null}
+          </>
+        )}
+      </button>
+      {/* One tap on the bubble opens everything at once — reactions plus
+          edit/delete for your own messages — instead of permanent icon
+          buttons flanking every row, which reads as cluttered rather than
+          the clean, minimal-until-touched feel of a native chat app. Inline,
+          not an absolute overlay: a popover here would get silently clipped
+          by the message list's overflow-y-auto and never be seen. */}
+      {menuOpen && !msg.deletedAt ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1 rounded-full bg-white px-2 py-1.5 shadow-md ring-1 ring-slate-200">
           {QUICK_REACTIONS.map((e) => (
             <button
               key={e}
@@ -288,6 +261,19 @@ function MessageBubble({
               {e}
             </button>
           ))}
+          {mine ? (
+            <>
+              <span className="mx-0.5 h-5 w-px bg-slate-200" aria-hidden="true" />
+              {canEdit ? (
+                <button type="button" onClick={() => { setEditing(true); setMenuOpen(false); }} className="rounded-full px-2.5 py-1 text-[13px] font-bold text-slate-700 hover:bg-slate-100">Edit</button>
+              ) : null}
+              {confirmDelete ? (
+                <button type="button" onClick={() => { onDelete(); setMenuOpen(false); }} className="rounded-full px-2.5 py-1 text-[13px] font-bold text-red-600 hover:bg-red-50">Confirm</button>
+              ) : (
+                <button type="button" onClick={() => setConfirmDelete(true)} className="rounded-full px-2.5 py-1 text-[13px] font-bold text-red-600 hover:bg-red-50">Delete</button>
+              )}
+            </>
+          ) : null}
         </div>
       ) : null}
       <span className="mt-0.5 px-1 text-[11px] text-slate-400">
@@ -546,6 +532,7 @@ function Thread({ conversationId }: { conversationId: string }) {
   const [creatingRun, setCreatingRun] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [safetyDismissed, setSafetyDismissed] = useState(false);
   const [typingNames, setTypingNames] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastTypingSentRef = useRef(0);
@@ -665,7 +652,7 @@ function Thread({ conversationId }: { conversationId: string }) {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-4rem)] max-w-lg flex-col px-4 py-4">
+    <div className="mx-auto flex h-full max-w-lg flex-col px-4 py-4">
       <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
         <button type="button" onClick={() => navigate("/messages")} className="rounded-full p-1.5 hover:bg-slate-100">
           <Icon name="chevronRight" className="h-5 w-5 rotate-180" />
@@ -770,12 +757,15 @@ function Thread({ conversationId }: { conversationId: string }) {
         />
       ) : null}
 
-      {!convo.isGroup ? (
+      {!convo.isGroup && !safetyDismissed ? (
         <div className="mt-3 flex items-start gap-2 rounded-2xl bg-amber-50 p-3">
           <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 fill-none stroke-amber-700" strokeWidth="2"><path d="M12 9v4M12 17h.01" strokeLinecap="round"/><path d="M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.29 2.25h17.78a1.5 1.5 0 0 0 1.29-2.25L13.71 3.86a1.5 1.5 0 0 0-2.58 0z" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          <p className="text-[12px] leading-relaxed text-amber-900">
+          <p className="flex-1 text-[12px] leading-relaxed text-amber-900">
             Being verified means someone's identity was confirmed — it doesn't guarantee they're safe to run with. For a 1:1 meetup, especially with someone you don't know, prefer a group of 3+ instead. Meet in a public place, tell someone your plan, and trust your gut.
           </p>
+          <button type="button" onClick={() => setSafetyDismissed(true)} aria-label="Dismiss" className="shrink-0 rounded-full p-1 text-amber-700 hover:bg-amber-100">
+            <Icon name="close" className="h-4 w-4" />
+          </button>
         </div>
       ) : null}
 
@@ -872,5 +862,9 @@ function Thread({ conversationId }: { conversationId: string }) {
 
 export function MessagesPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
-  return conversationId ? <Thread conversationId={conversationId} /> : <Inbox />;
+  return (
+    <div className="messages-page-root">
+      {conversationId ? <Thread key={conversationId} conversationId={conversationId} /> : <Inbox />}
+    </div>
+  );
 }
