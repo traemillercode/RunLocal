@@ -65,3 +65,28 @@
 .marketing-gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .marketing-gallery-item figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 12px 10px; background: linear-gradient(0deg, rgba(0,0,0,0.75), transparent); color: #fff; font-size: 12px; font-weight: 700; text-align: left; }
 @media(min-width: 700px) { .marketing-gallery-grid { grid-template-columns: repeat(3, 1fr); } }
+
+/* --- Hero v2: centered card over full-bleed photos (Strava-style), fixed
+   explicit heights throughout so nothing can silently collapse to zero the
+   way the old collage grid did. --- */
+.marketing-hero-v2 { position: relative; height: 640px; overflow: hidden; }
+.marketing-hero-v2-photo { position: absolute; top: 0; bottom: 0; width: 52%; }
+.marketing-hero-v2-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.marketing-hero-v2-photo-left { left: 0; }
+.marketing-hero-v2-photo-right { right: 0; }
+.marketing-hero-v2-photo::after { content: ""; position: absolute; inset: 0; background: rgba(20,22,26,0.35); }
+.marketing-hero-v2-card {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 2; width: min(92%, 460px); background: #14171c; border-radius: 16px;
+  padding: 40px 32px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+}
+.marketing-hero-v2-card h1 { font-size: clamp(28px, 4.5vw, 38px); font-weight: 900; letter-spacing: -.03em; line-height: 1.1; margin: 0 0 14px; color: #f7f7f5; }
+.marketing-hero-v2-card .marketing-actions { flex-direction: column; margin-top: 20px; }
+.marketing-hero-v2-card .marketing-button { width: 100%; }
+@media(max-width: 640px) {
+  .marketing-hero-v2 { height: 520px; }
+  .marketing-hero-v2-photo { width: 100%; }
+  .marketing-hero-v2-photo-left { opacity: 1; }
+  .marketing-hero-v2-photo-right { display: none; }
+  .marketing-hero-v2-card { width: 88%; padding: 28px 22px; }
+}

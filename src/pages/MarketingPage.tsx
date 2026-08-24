@@ -51,15 +51,14 @@ export function MarketingPage() {
         </nav>
       </header>
       <main id="top">
-        <section className="marketing-hero-collage" aria-labelledby="hero-title">
-          <div className="marketing-collage-grid">
-            <div className="marketing-collage-main"><img src={MARKETING_IMAGES.groupSunrise} alt="" loading="eager" /></div>
-            <div className="marketing-collage-side">
-              <img src={MARKETING_IMAGES.trailTwoRunners} alt="" loading="eager" />
-              <img src={MARKETING_IMAGES.groupSunset} alt="" loading="eager" />
-            </div>
+        <section className="marketing-hero-v2" aria-labelledby="hero-title">
+          <div className="marketing-hero-v2-photo marketing-hero-v2-photo-left">
+            <img src={MARKETING_IMAGES.trailTwoRunners} alt="" loading="eager" />
           </div>
-          <div className="marketing-collage-copy">
+          <div className="marketing-hero-v2-photo marketing-hero-v2-photo-right">
+            <img src={MARKETING_IMAGES.groupSunset} alt="" loading="eager" />
+          </div>
+          <div className="marketing-hero-v2-card">
             <p className="marketing-kicker-warm">Columbia, MO · Live now</p>
             <h1 id="hero-title">People who actually show up.</h1>
             <p className="marketing-lede-warm">Real group runs, real faces, real Columbia. No fake crowds, no empty listings.</p>
