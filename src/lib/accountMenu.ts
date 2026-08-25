@@ -67,6 +67,8 @@ export function profileMenuEntries(me: Me | null): { entries: MenuEntry[]; signe
     // Profile and Settings are distinct entries with distinct icons/labels —
     // both derived from the single nav model.
     { key: "profile", label: "My profile", icon: navEntry("profile").icon, to: navEntry("profile").route },
+    { key: "groups", label: navEntry("groups").label, icon: navEntry("groups").icon, to: navEntry("groups").route },
+    { key: "routes", label: navEntry("routes").label, icon: navEntry("routes").icon, to: navEntry("routes").route },
     { key: "submissions", label: navEntry("submissions").label, icon: navEntry("submissions").icon, to: navEntry("submissions").route },
     { key: "settings", label: navEntry("settings").label, icon: navEntry("settings").icon, to: navEntry("settings").route },
     { key: "connections", label: navEntry("connections").label, icon: navEntry("connections").icon, to: navEntry("connections").route },
