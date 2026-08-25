@@ -84,7 +84,7 @@ export function GroupProfileForm({
       <label className="mt-3 block text-sm font-bold" htmlFor="gp-reason">Reason for change (audit log)</label>
       <input id="gp-reason" value={reason} onChange={(e) => onReasonChange(e.target.value)} className="mt-1 w-full rounded-xl border p-3 text-sm" placeholder="Why are you making this change?" />
       {!dirty && reason.trim().length > 0 && <p className="mt-2 text-xs text-slate-500">No profile changes to save — edit the description or membership mode first.</p>}
-      <button className="mt-3 rounded-lg bg-orange-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50" disabled={!dirty} onClick={onSave}>Save profile</button>
+      <button className="mt-3 rounded-lg bg-[#FF5741] px-4 py-2 text-sm font-bold text-[#14171C] disabled:opacity-50" disabled={!dirty} onClick={onSave}>Save profile</button>
     </div>
   );
 }
@@ -127,9 +127,9 @@ export function GroupManagePage({ id }: { id: string }) {
   if (row === "loading") return <section className="mx-auto max-w-3xl px-4 py-8"><p>Loading…</p></section>;
   if (!row) return (
     <section className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="text-3xl font-black">Group management</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Group management</h1>
       <p className="mt-3 text-slate-600">You don't manage this group.{err ? ` ${err}` : ""} Management is limited to the group's owner, its listed leaders, the City Admin for the group's city, and the platform owner.</p>
-      <Link className="mt-5 inline-block font-bold text-orange-700" to="/my-groups">Back to My groups</Link>
+      <Link className="mt-5 inline-block font-bold text-[#FF5741]" to="/my-groups">Back to My groups</Link>
     </section>
   );
   const roleCopy =
@@ -139,8 +139,8 @@ export function GroupManagePage({ id }: { id: string }) {
           : "the platform owner";
   return (
     <section className="mx-auto max-w-3xl px-4 py-6">
-      <p className="text-xs font-bold uppercase tracking-widest text-orange-700">Private · Leader tools</p>
-      <h1 className="mt-2 text-3xl font-black">{row.groupName}</h1>
+      <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">Private · Leader tools</p>
+      <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">{row.groupName}</h1>
       <p className="mt-1 text-sm text-slate-600">You're listed as {roleCopy}. Every change is reason-required and audited.</p>
       {notice && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
       {err && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{err}</p>}
@@ -192,10 +192,10 @@ export function GroupManagePage({ id }: { id: string }) {
           <input id="add-email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-xl border p-3 text-sm" placeholder="runner@example.com" />
           <label className="mt-3 block text-sm font-bold" htmlFor="add-reason">Reason</label>
           <input id="add-reason" value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1 w-full rounded-xl border p-3 text-sm" placeholder="Why is this person a leader?" />
-          <button className="mt-3 rounded-lg bg-orange-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50" disabled={!email || !reason} onClick={() => act(api.assignGroupLeader(row.groupId, email, reason), "Leader added.")}>Add leader</button>
+          <button className="mt-3 rounded-lg bg-[#FF5741] px-4 py-2 text-sm font-bold text-[#14171C] disabled:opacity-50" disabled={!email || !reason} onClick={() => act(api.assignGroupLeader(row.groupId, email, reason), "Leader added.")}>Add leader</button>
         </div>
       )}
-      <Link className="mt-8 inline-block text-sm font-bold text-orange-700" to={`/groups/${row.groupId}`}>View public group page</Link>
+      <Link className="mt-8 inline-block text-sm font-bold text-[#FF5741]" to={`/groups/${row.groupId}`}>View public group page</Link>
     </section>
   );
 }

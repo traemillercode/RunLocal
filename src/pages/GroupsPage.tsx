@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import * as api from "../lib/api";
 import type { City } from "../types";
+import { PillButton } from "../components/ui";
 import { useAccount } from "../state/account";
 import { MyGroupsContent } from "./MyGroupsPage";
 
@@ -18,7 +19,7 @@ export function GroupMembershipAction({ signedIn, onRequest }: { signedIn: boole
       <span aria-hidden="true"> · </span><Link className="font-bold underline" to="/login?mode=signup">Sign up</Link>
     </p>;
   }
-  return <button type="button" className="mt-3 rounded-lg bg-orange-600 px-3 py-2 text-sm font-bold text-white" onClick={onRequest}>Request membership</button>;
+  return <PillButton variant="secondary" className="mt-3" onClick={onRequest}>Request membership</PillButton>;
 }
 
 /** The actual "Discover" directory content — extracted so GroupsHubPage can render it as a tab. */
@@ -52,8 +53,8 @@ export function GroupsHubPage({ city }: { city: City }) {
   const setTab = (t: "discover" | "mine") => setSearchParams(t === "discover" ? {} : { tab: "mine" }, { replace: true });
   return (
     <section className="mx-auto max-w-3xl px-4 py-6">
-      <p className="text-xs font-bold uppercase tracking-widest text-orange-700">{city.name}</p>
-      <h1 className="mt-2 text-3xl font-black" data-tour-target="groups-directory">Groups & clubs</h1>
+      <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">{city.name}</p>
+      <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900" data-tour-target="groups-directory">Groups & clubs</h1>
       <div className="mt-4 flex gap-2">
         <button type="button" onClick={() => setTab("discover")} className={`h-10 rounded-full px-4 text-sm font-bold ${tab === "discover" ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-700"}`}>Discover</button>
         <button type="button" onClick={() => setTab("mine")} className={`h-10 rounded-full px-4 text-sm font-bold ${tab === "mine" ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-700"}`}>My Clubs</button>
@@ -66,5 +67,5 @@ export function GroupsHubPage({ city }: { city: City }) {
 }
 
 export function GroupsPage({ city }: { city: City }) {
-  return <section className="mx-auto max-w-3xl px-4 py-6"><p className="text-xs font-bold uppercase tracking-widest text-orange-700">{city.name}</p><h1 className="mt-2 text-3xl font-black" data-tour-target="groups-directory">Groups & clubs</h1><p className="mt-2 text-slate-600">Find published local running communities. Group posts and messaging are not available.</p><div className="mt-4"><DiscoverGroupsContent city={city} /></div></section>;
+  return <section className="mx-auto max-w-3xl px-4 py-6"><p className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">{city.name}</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900" data-tour-target="groups-directory">Groups & clubs</h1><p className="mt-2 text-slate-600">Find published local running communities. Group posts and messaging are not available.</p><div className="mt-4"><DiscoverGroupsContent city={city} /></div></section>;
 }
