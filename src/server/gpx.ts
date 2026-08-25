@@ -40,7 +40,13 @@ function haversineMiles(a: GpxPoint, b: GpxPoint): number {
 }
 
 export function parseGpx(xml: string): GpxParseResult | { error: string } {
-  const trkptRe = /<trkpt\b[^>]*\blat="(-?\d+\.?\d*)"[^>]*\blon="(-?\d+\.?\d*)"[^>]*>([\s\S]*?)<\/trkpt>/g;
+  // GPX allows two valid forms for a track point: self-closing (common when
+  // there's no elevation data, as in this exact bug report) and paired with
+  // child elements like <ele>. The original regex only matched the paired
+  // form, so any file using self-closing points parsed zero points every
+  // time and always failed with "no track points" — a real parser bug, not
+  // a bad file.
+  const trkptRe = /<trkpt\b[^>]*\blat="(-?\d+\.?\d*)"[^>]*\blon="(-?\d+\.?\d*)"[^>]*(?:\/>|>([\s\S]*?)<\/trkpt>)/g;
   const eleRe = /<ele>(-?\d+\.?\d*)<\/ele>/;
   const points: GpxPoint[] = [];
   let match: RegExpExecArray | null;
@@ -48,7 +54,7 @@ export function parseGpx(xml: string): GpxParseResult | { error: string } {
     const lat = Number(match[1]);
     const lon = Number(match[2]);
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
-    const eleMatch = eleRe.exec(match[3]);
+    const eleMatch = match[3] ? eleRe.exec(match[3]) : null;
     const ele = eleMatch ? Number(eleMatch[1]) : null;
     points.push({ lat, lon, ele: ele !== null && Number.isFinite(ele) ? ele : null });
   }
