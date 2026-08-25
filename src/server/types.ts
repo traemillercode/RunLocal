@@ -488,6 +488,8 @@ export interface ForumPostRecord {
   pinned: boolean;
   createdAt: string;
   updatedAt: string;
+  /** A post can reference a specific run — "this Thursday's route was great" links to the actual event, not just a text mention. Null for most posts. Validated against a real, currently-published event at post-creation time (see createForumPost), never a dangling/fabricated id. */
+  linkedEventId?: string | null;
 }
 
 /**

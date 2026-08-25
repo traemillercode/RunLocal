@@ -818,7 +818,7 @@ async function handleApi(
   if (method === "POST" && url.pathname === "/api/forum") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
-    const body = (await readJson(req)) as { section?: unknown; title?: unknown; body?: unknown };
+    const body = (await readJson(req)) as { section?: unknown; title?: unknown; body?: unknown; linkedEventId?: unknown };
     const result = createForumPost(db, sess.accountId, body, now);
     if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
     await db.persist();

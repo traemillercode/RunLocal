@@ -132,6 +132,8 @@ export interface PublicForumPost {
   hasVoted?: boolean;
   /** Author account id — null for seed posts (never an "own" target). */
   authorId: string | null;
+  /** Resolved display info for a linked run, if any — null when the post has no link or the linked event is no longer valid (e.g. later hidden). Never just a raw id the client would have to look up itself. */
+  linkedEvent: { id: string; title: string; dayOfWeek: number; time: string; location: string } | null;
   /** Server-computed action capabilities for the requesting account. */
   capabilities: ForumCapability[];
 }
@@ -149,6 +151,14 @@ export interface PublicForumReply {
 }
 
 /** Compact "Aug 4" style label for the post list (same year) or "Aug 4, 2025". */
+/** Resolves a post's linked event to its display shape, re-validating at read time (an event can be hidden/archived after a post links to it) - used by every place a PublicForumPost gets built, so this logic lives in exactly one place. */
+export function resolveLinkedEvent(db: Db, linkedEventId?: string | null): PublicForumPost["linkedEvent"] {
+  if (!linkedEventId) return null;
+  const ev = db.getEvent(linkedEventId);
+  if (!ev || ev.status !== "published" || ev.hidden) return null;
+  return { id: ev.id, title: ev.title, dayOfWeek: ev.dayOfWeek, time: ev.time, location: ev.location };
+}
+
 export function forumDateLabel(iso: string, now = new Date()): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
@@ -190,6 +200,7 @@ export function publicForumPosts(db: Db, cityId: string, actor?: AccountRecord |
         voteCount: db.forumVoteCount(f.id),
         hasVoted: actor ? db.hasForumVote(actor.id, f.id) : false,
         authorId: f.authorAccountId,
+        linkedEvent: resolveLinkedEvent(db, f.linkedEventId),
         capabilities: forumPostCapabilities(actor, { ...f, hidden: mod?.hidden === true }, now),
       };
     });
@@ -326,7 +337,7 @@ export type ForumCreateResult =
 export function createForumPost(
   db: Db,
   accountId: string,
-  input: { section?: unknown; category?: unknown; title?: unknown; body?: unknown },
+  input: { section?: unknown; category?: unknown; title?: unknown; body?: unknown; linkedEventId?: unknown },
   now = new Date(),
 ): ForumCreateResult {
   const rec: AccountRecord | undefined = db.getAccount(accountId);
@@ -368,6 +379,15 @@ export function createForumPost(
   if (!db.consumeDiscussionRate(accountId, now.getTime())) {
     return { ok: false, status: 429, error: "rate_limited", message: "You've posted a lot recently — try again in a bit." };
   }
+  // A post can reference a real run, but only a real, published one in the
+  // author's own city — never a dangling id, another city's event, or a
+  // draft/hidden one that shouldn't be surfaced. Silently drop an invalid
+  // reference rather than reject the whole post over it.
+  let linkedEventId: string | null = null;
+  if (typeof input.linkedEventId === "string" && input.linkedEventId) {
+    const ev = db.getEvent(input.linkedEventId);
+    if (ev && ev.cityId === cityId && ev.status === "published" && !ev.hidden) linkedEventId = ev.id;
+  }
   const post: ForumPostRecord = {
     id: newId(),
     cityId,
@@ -380,6 +400,7 @@ export function createForumPost(
     pinned: false,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
+    linkedEventId,
   };
   db.addForumPost(post);
   // Register in the moderation registry so existing admin hide/archive paths
@@ -417,6 +438,7 @@ export function createForumPost(
         voteCount: 0,
         hasVoted: false,
         authorId: post.authorAccountId,
+        linkedEvent: resolveLinkedEvent(db, linkedEventId),
         capabilities: forumPostCapabilities(rec, post, now),
       },
       record: post,
@@ -611,6 +633,7 @@ export function editForumPost(
     data: {
       post: {
         id: updated.id,
+        linkedEvent: resolveLinkedEvent(db, updated.linkedEventId),
         section: updated.section,
         title: updated.title,
         body: updated.body,
@@ -660,6 +683,7 @@ export function deleteForumPost(
     data: {
       post: {
         id: updated.id,
+        linkedEvent: resolveLinkedEvent(db, updated.linkedEventId),
         section: updated.section,
         title: updated.title,
         body: updated.body,
@@ -745,6 +769,7 @@ export function setForumPostPinned(
     data: {
       post: {
         id: updated.id,
+        linkedEvent: resolveLinkedEvent(db, updated.linkedEventId),
         section: updated.section,
         title: updated.title,
         body: updated.body,
@@ -856,6 +881,7 @@ export function setForumPostHidden(
     data: {
       post: {
         id: post.id,
+        linkedEvent: resolveLinkedEvent(db, post.linkedEventId),
         section: post.section,
         category: post.category,
         title: post.title,
@@ -1005,6 +1031,7 @@ export function editForumPostAdmin(
     data: {
       post: {
         id: updated.id,
+        linkedEvent: resolveLinkedEvent(db, updated.linkedEventId),
         section: updated.section,
         title: updated.title,
         body: updated.body,

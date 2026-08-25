@@ -59,7 +59,7 @@ describe("forum GET /api/forum", () => {
     expect(p.replies).toBe(0);
     expect(p.section).toBe("community");
     expect(p.authorNote).toBeNull();
-    expect(Object.keys(p).sort()).toEqual(["author", "authorId", "authorNote", "body", "capabilities", "createdAt", "id", "pinned", "replies", "section", "title"]);
+    expect(Object.keys(p).sort()).toEqual(["author", "authorId", "authorNote", "body", "capabilities", "category", "createdAt", "hasVoted", "id", "linkedEvent", "pinned", "replies", "section", "title", "voteCount"]);
     expect(JSON.stringify(r.body)).not.toContain("taylor@example.com");
   });
 });
@@ -115,6 +115,36 @@ describe("forum POST /api/forum", () => {
     expect((await call(f.db, "POST", "/api/forum", post({ title: "eleventh" }), f.cookie)).status).toBe(429);
     const other = await dbWithoutRate(f.db, f.city.id);
     expect(other.status).toBe(200);
+  });
+
+  it("linkedEventId: accepts a real published event in the author's city, silently drops a fabricated/cross-city/hidden one instead of rejecting the whole post", async () => {
+    const f = setup();
+    const realEvent = { id: "ev-real", seedRefId: null, cityId: f.city.id, groupId: "", title: "Thursday Group Run", dayOfWeek: 3, scheduleDate: null, time: "6:00 PM", location: "MKT Trailhead", distanceLabel: "4 mi", invite: "Open to all" as const, externalUrl: null, provenance: "community" as const, status: "published" as const, hidden: false, createdAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-01T00:00:00.000Z", createdBy: f.account.id, updatedBy: f.account.id, archivedAt: null };
+    f.db.setEvent(realEvent);
+    const otherCityEvent = { ...realEvent, id: "ev-other-city", cityId: "not-" + f.city.id };
+    f.db.setEvent(otherCityEvent);
+    const hiddenEvent = { ...realEvent, id: "ev-hidden", hidden: true };
+    f.db.setEvent(hiddenEvent);
+
+    const good = await call(f.db, "POST", "/api/forum", post({ linkedEventId: "ev-real" }), f.cookie);
+    expect(good.body.post.linkedEvent?.id).toBe("ev-real");
+    expect(good.body.post.linkedEvent?.title).toBe("Thursday Group Run");
+
+    const fabricated = await call(f.db, "POST", "/api/forum", post({ linkedEventId: "does-not-exist" }), f.cookie);
+    expect(fabricated.status).toBe(200); // never rejects the whole post over a bad reference
+    expect(fabricated.body.post.linkedEvent).toBeNull();
+
+    const crossCity = await call(f.db, "POST", "/api/forum", post({ linkedEventId: "ev-other-city" }), f.cookie);
+    expect(crossCity.body.post.linkedEvent).toBeNull();
+
+    const hidden = await call(f.db, "POST", "/api/forum", post({ linkedEventId: "ev-hidden" }), f.cookie);
+    expect(hidden.body.post.linkedEvent).toBeNull();
+
+    // Re-validated at read time too: hide the previously-good event after posting, it should disappear from the public read.
+    f.db.setEvent({ ...realEvent, hidden: true });
+    const listed = publicForumPosts(f.db, f.city.id);
+    const goodPost = listed.find((p) => p.id === good.body.post.id);
+    expect(goodPost?.linkedEvent).toBeNull();
   });
 
   it("hides moderation-hidden posts from the public read while keeping the record", async () => {

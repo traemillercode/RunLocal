@@ -9,6 +9,7 @@ import { Chip, Icon, PillButton, Sheet } from "../components/ui";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
 import { getActivityFeed, type PublicActivityCard } from "../lib/api";
+import { usePublicContent } from "../state/content";
 import { useModerated } from "../state/moderated";
 import { canDo, type AccountRole } from "../lib/accounts";
 import { actionMenuItems, type ActionKey } from "../lib/actionModel";
@@ -17,7 +18,7 @@ import * as api from "../lib/api";
 import { FORUM_SECTIONS, FORUM_CATEGORIES, type City, type ForumSection, type ForumCategory, type QaSort } from "../types";
 import { RailCard, RailItemLink, RailSeeAll, RailStack } from "../components/RailCard";
 import { WEEKDAY_LABELS } from "../lib/calendar";
-import { formatRaceDate } from "../lib/dates";
+import { formatRaceDate, DAY_NAMES } from "../lib/dates";
 import { isPastCalendarDate } from "../lib/activityDates";
 
 /**
@@ -79,6 +80,7 @@ export interface ForumPostDraft {
   category: ForumCategory;
   title: string;
   body: string;
+  linkedEventId?: string;
 }
 
 /**
@@ -91,6 +93,7 @@ export interface ForumPostDraft {
 export function ForumCreateSheetBody({
   role,
   canPostAnnouncements = false,
+  events = [],
   onOpenGate,
   onSubmit,
   submitting = false,
@@ -98,6 +101,8 @@ export function ForumCreateSheetBody({
 }: {
   role: AccountRole;
   canPostAnnouncements?: boolean;
+  /** Real, currently-published events the author could link this post to — passed down from the parent so this component stays presentational/testable rather than fetching its own data. */
+  events?: import("../lib/api").PublicUserEvent[];
   onClose: () => void;
   onOpenGate: () => void;
   onSubmit?: (draft: ForumPostDraft) => void;
@@ -109,8 +114,9 @@ export function ForumCreateSheetBody({
   const [category, setCategory] = useState<ForumCategory>("general");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [linkedEventId, setLinkedEventId] = useState<string | undefined>(undefined);
   const cta: { label: string; icon: string; onClick: () => void } = verified
-    ? { label: "Post to forum", icon: "check", onClick: () => onSubmit?.({ section, category, title, body }) }
+    ? { label: "Post to forum", icon: "check", onClick: () => onSubmit?.({ section, category, title, body, linkedEventId }) }
     : role === "rejected"
       ? { label: "View my verification status", icon: "shield", onClick: onOpenGate }
       : role === "pending"
@@ -235,6 +241,31 @@ export function ForumCreateSheetBody({
           className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-[16px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
         />
       </label>
+      {events.length > 0 ? (
+        <div>
+          <span className="mb-1.5 block text-sm font-semibold text-slate-700">Link a run <span className="font-normal text-slate-400">(optional)</span></span>
+          <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-1.5">
+            <button
+              type="button"
+              onClick={() => setLinkedEventId(undefined)}
+              className={`flex min-h-10 w-full items-center rounded-lg px-2.5 text-left text-[13px] font-semibold ${!linkedEventId ? "bg-slate-100 text-slate-900" : "text-slate-400"}`}
+            >
+              None
+            </button>
+            {events.map((e) => (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => setLinkedEventId(e.id)}
+                className={`flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-2.5 text-left text-[13px] ${linkedEventId === e.id ? "bg-[#14171C] text-white" : "text-slate-700 hover:bg-slate-50"}`}
+              >
+                <span className="truncate font-semibold">{e.title}</span>
+                <span className={`shrink-0 text-[11px] ${linkedEventId === e.id ? "text-white/70" : "text-slate-400"}`}>{e.time}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {postError ? <p role="alert" className="rounded-xl bg-rose-50 p-3 text-[13px] font-semibold text-rose-800">{postError}</p> : null}
       <PillButton variant="primary" className="w-full" disabled={submitting} onClick={cta.onClick}>
         <Icon name={cta.icon} className="h-4 w-4" /> {submitting ? "Posting…" : cta.label}
@@ -522,7 +553,21 @@ export function PostCard({
             </span>
           </div>
           {verified ? (
-            <p className={`mt-1 text-[13px] leading-relaxed text-slate-600 ${replyExpanded ? "" : "line-clamp-3"}`}>{post.body}</p>
+            <>
+              <p className={`mt-1 text-[13px] leading-relaxed text-slate-600 ${replyExpanded ? "" : "line-clamp-3"}`}>{post.body}</p>
+              {post.linkedEvent ? (
+                <Link
+                  to="/"
+                  className="mt-2 flex items-center gap-2.5 rounded-xl bg-slate-50 p-2.5 hover:bg-slate-100"
+                >
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#14171C] text-white"><Icon name="calendar" className="h-4 w-4" /></span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] font-bold text-slate-900">{post.linkedEvent.title}</span>
+                    <span className="block text-[12px] text-slate-500">{DAY_NAMES[post.linkedEvent.dayOfWeek]}s, {post.linkedEvent.time} · {post.linkedEvent.location}</span>
+                  </span>
+                </Link>
+              ) : null}
+            </>
           ) : (
             <button type="button" onClick={onReply} className="relative mt-1.5 block w-full text-left">
               <p aria-hidden="true" className="line-clamp-2 select-none text-[13px] leading-relaxed text-slate-500 blur-[5px]">
@@ -612,6 +657,8 @@ export interface ForumPostRow {
   /** "Was this helpful" upvote count and whether the viewer has voted — absent/0/false for seed posts and posts loaded before voting existed. */
   voteCount?: number;
   hasVoted?: boolean;
+  /** Real, currently-published run this post references — absent/null for seed posts and posts with no link. */
+  linkedEvent?: { id: string; title: string; dayOfWeek: number; time: string; location: string } | null;
   /** Server-computed action capabilities (user posts) or the admin-only list (seed posts). */
   capabilities: string[];
 }
@@ -691,6 +738,7 @@ export function ForumPage({ city }: { city: City }) {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const { role, me } = useAccount();
+  const { events: linkableEvents } = usePublicContent();
   const { hidden } = useModerated();
   const [section, setSection] = useState<ForumSection>("announcements");
   const [categoryFilter, setCategoryFilter] = useState<ForumCategory | null>(null);
@@ -810,6 +858,7 @@ export function ForumPage({ city }: { city: City }) {
         replies: p.replies,
         voteCount: p.voteCount ?? 0,
         hasVoted: p.hasVoted ?? false,
+        linkedEvent: p.linkedEvent,
         capabilities: p.capabilities,
       }));
     let list = [...visible, ...userPosts]
@@ -1339,6 +1388,7 @@ export function ForumPage({ city }: { city: City }) {
         <ForumCreateSheetBody
           role={role}
           canPostAnnouncements={me?.status === "signed_in" && me.account.role !== "runner"}
+          events={linkableEvents}
           onClose={() => setCreateOpen(false)}
           onOpenGate={() => {
             setCreateOpen(false);

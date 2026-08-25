@@ -494,13 +494,15 @@ export interface ForumPostView {
   hasVoted?: boolean;
   /** Author account id — null for seed posts (never an "own" target). */
   authorId: string | null;
+  /** Resolved display info for a linked run, if any. */
+  linkedEvent: { id: string; title: string; dayOfWeek: number; time: string; location: string } | null;
   /** Server-computed action capabilities for the requesting account. */
   capabilities: string[];
 }
 export function getForumPosts(cityId: string): Promise<ApiResult<{ cityId: string; posts: ForumPostView[]; replyCounts: Record<string, number> }>> {
   return request(`/api/forum?city=${encodeURIComponent(cityId)}`);
 }
-export function createForumPost(input: { section: import("../types").ForumSection; category: import("../types").ForumCategory; title: string; body: string }): Promise<ApiResult<{ post: ForumPostView }>> {
+export function createForumPost(input: { section: import("../types").ForumSection; category: import("../types").ForumCategory; title: string; body: string; linkedEventId?: string }): Promise<ApiResult<{ post: ForumPostView }>> {
   return request("/api/forum", { method: "POST", body: JSON.stringify(input) });
 }
 /** Toggles the caller's upvote on a post — verified runners only, one vote per person. */
