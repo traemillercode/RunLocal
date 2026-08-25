@@ -430,7 +430,7 @@ export class Db {
       for (const t of parsed.trainingPlans ?? []) this.trainingPlans.set(t.accountId, t);
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
       for (const r of parsed.accountReports ?? []) this.accountReports.set(r.id, r);
-      for (const rt of parsed.routes ?? []) this.routes.set(rt.id, rt);
+      for (const rt of parsed.routes ?? []) this.routes.set(rt.id, { ...rt, hasElevationData: rt.hasElevationData ?? rt.elevationGainFt > 0 });
       // Privacy: records persisted before a field existed are merged over the
       // verbatim owner-spec defaults so they keep working.
       for (const p of parsed.privacy ?? []) this.privacy.set(p.accountId, { ...PRIVACY_DEFAULTS, ...p, accountId: p.accountId });

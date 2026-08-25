@@ -25,6 +25,8 @@ export interface GpxParseResult {
   points: GpxPoint[];
   distanceMiles: number;
   elevationGainFt: number;
+  /** False when the file has no <ele> values at all (like self-closing trkpt with no elevation) - lets the UI say "No elevation data" instead of a misleading "0 ft". */
+  hasElevationData: boolean;
 }
 
 const EARTH_RADIUS_MILES = 3958.8;
@@ -81,5 +83,6 @@ export function parseGpx(xml: string): GpxParseResult | { error: string } {
     points: sampled,
     distanceMiles: Math.round(distanceMiles * 10) / 10,
     elevationGainFt: Math.round(elevationGainMeters * 3.28084),
+    hasElevationData: points.some((p) => p.ele !== null),
   };
 }

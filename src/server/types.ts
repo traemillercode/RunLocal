@@ -579,6 +579,8 @@ export interface RouteRecord {
   /** Computed from the GPX track points at upload time, not user-entered. */
   distanceMiles: number;
   elevationGainFt: number;
+  /** False when the source GPX had no elevation data at all - the UI shows "No elevation data" instead of a misleading "0 ft". */
+  hasElevationData: boolean;
   /** Filename under the GPX upload store — see readGpxUpload/writeGpxUpload. */
   gpxRef: string;
   createdBy: string;

@@ -106,7 +106,9 @@ export function RouteDetailPage() {
       <div className="mt-2 flex items-center gap-2">
         <Chip tone="outline">{SURFACE_LABELS[route.surfaceType]}</Chip>
         <span className="text-[13px] text-slate-500"><strong className="text-slate-800">{route.distanceMiles}</strong> mi</span>
-        <span className="text-[13px] text-slate-500"><strong className="text-slate-800">{route.elevationGainFt}</strong> ft gain</span>
+        <span className="text-[13px] text-slate-500">
+          {route.hasElevationData ? <><strong className="text-slate-800">{route.elevationGainFt}</strong> ft gain</> : "No elevation data"}
+        </span>
       </div>
 
       <div className="mt-5 overflow-hidden rounded-2xl shadow-sm ring-1 ring-slate-200/70" style={{ height: 380 }}>

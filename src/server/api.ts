@@ -978,7 +978,7 @@ async function handleApi(
     return ok(res, {
       route: {
         id: route.id, cityId: route.cityId, name: route.name, surfaceType: route.surfaceType,
-        distanceMiles: route.distanceMiles, elevationGainFt: route.elevationGainFt,
+        distanceMiles: route.distanceMiles, elevationGainFt: route.elevationGainFt, hasElevationData: route.hasElevationData,
         gpxUrl: `/uploads/public/${route.gpxRef}`, points,
       },
     }), true;
@@ -986,7 +986,17 @@ async function handleApi(
 
   if (method === "GET" && url.pathname === "/api/routes") {
     const cityId = url.searchParams.get("city") ?? undefined;
-    const routes = db.listRoutes(cityId).map((r) => ({ id: r.id, cityId: r.cityId, name: r.name, surfaceType: r.surfaceType, distanceMiles: r.distanceMiles, elevationGainFt: r.elevationGainFt, gpxUrl: `/uploads/public/${r.gpxRef}` }));
+    const routes = await Promise.all(db.listRoutes(cityId).map(async (r) => {
+      const gpxBuffer = await db.readPublicUpload(r.gpxRef);
+      const parsed = gpxBuffer ? parseGpx(gpxBuffer.toString("utf-8")) : null;
+      const allPoints = parsed && !("error" in parsed) ? parsed.points : [];
+      // A small, cheap sample just for a shape thumbnail on the list card —
+      // not the full-resolution trace (that's the detail page's job).
+      const previewPoints: [number, number][] = allPoints
+        .filter((_, i) => i % Math.max(1, Math.ceil(allPoints.length / 24)) === 0)
+        .map((p) => [p.lat, p.lon]);
+      return { id: r.id, cityId: r.cityId, name: r.name, surfaceType: r.surfaceType, distanceMiles: r.distanceMiles, elevationGainFt: r.elevationGainFt, hasElevationData: r.hasElevationData, gpxUrl: `/uploads/public/${r.gpxRef}`, previewPoints };
+    }));
     return ok(res, { routes }), true;
   }
 
@@ -1008,9 +1018,9 @@ async function handleApi(
     if ("error" in parsed) return err(res, { status: 400, error: parsed.error, message: "Couldn't read any track points from that file — make sure it's a real GPX export." }), true;
     const gpxRef = `route_${newId()}.gpx`;
     await db.writePublicUpload(gpxRef, Buffer.from(gpxXml, "utf-8"));
-    const route = db.createRoute({ id: newId(), cityId: rec.cityId ?? "columbia-mo", name, surfaceType, distanceMiles: parsed.distanceMiles, elevationGainFt: parsed.elevationGainFt, gpxRef, createdBy: sess.accountId, createdAt: now.toISOString() });
+    const route = db.createRoute({ id: newId(), cityId: rec.cityId ?? "columbia-mo", name, surfaceType, distanceMiles: parsed.distanceMiles, elevationGainFt: parsed.elevationGainFt, hasElevationData: parsed.hasElevationData, gpxRef, createdBy: sess.accountId, createdAt: now.toISOString() });
     await db.persist();
-    return ok(res, { route: { id: route.id, cityId: route.cityId, name: route.name, surfaceType: route.surfaceType, distanceMiles: route.distanceMiles, elevationGainFt: route.elevationGainFt, gpxUrl: `/uploads/public/${route.gpxRef}` } }), true;
+    return ok(res, { route: { id: route.id, cityId: route.cityId, name: route.name, surfaceType: route.surfaceType, distanceMiles: route.distanceMiles, elevationGainFt: route.elevationGainFt, hasElevationData: route.hasElevationData, gpxUrl: `/uploads/public/${route.gpxRef}`, previewPoints: parsed.points.filter((_, i) => i % Math.max(1, Math.ceil(parsed.points.length / 24)) === 0).map((p) => [p.lat, p.lon] as [number, number]) } }), true;
   }
 
   // GPX files are served the same way as every other public upload (see
