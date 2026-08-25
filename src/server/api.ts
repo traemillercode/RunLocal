@@ -964,6 +964,26 @@ async function handleApi(
   const validProvider = (p: string | undefined): p is Provider => p === "strava" || p === "garmin" || p === "coros" || p === "suunto";
   // ---- Routes (real GPX-backed) ---------------------------------------
   // GET /api/routes?city=X — public, no auth needed to browse.
+  // GET /api/routes/:id — full detail including the actual GPS/elevation
+  // points, re-parsed from the stored GPX file on each request rather than
+  // duplicating them into the main store (keeps store.json lean; parsing a
+  // few hundred points is cheap).
+  const routeDetailPath = /^\/api\/routes\/([^/]+)$/.exec(url.pathname);
+  if (method === "GET" && routeDetailPath) {
+    const route = db.getRoute(routeDetailPath[1]);
+    if (!route) return err(res, { status: 404, error: "not_found" }), true;
+    const gpxBuffer = await db.readPublicUpload(route.gpxRef);
+    const parsed = gpxBuffer ? parseGpx(gpxBuffer.toString("utf-8")) : null;
+    const points = parsed && !("error" in parsed) ? parsed.points : [];
+    return ok(res, {
+      route: {
+        id: route.id, cityId: route.cityId, name: route.name, surfaceType: route.surfaceType,
+        distanceMiles: route.distanceMiles, elevationGainFt: route.elevationGainFt,
+        gpxUrl: `/uploads/public/${route.gpxRef}`, points,
+      },
+    }), true;
+  }
+
   if (method === "GET" && url.pathname === "/api/routes") {
     const cityId = url.searchParams.get("city") ?? undefined;
     const routes = db.listRoutes(cityId).map((r) => ({ id: r.id, cityId: r.cityId, name: r.name, surfaceType: r.surfaceType, distanceMiles: r.distanceMiles, elevationGainFt: r.elevationGainFt, gpxUrl: `/uploads/public/${r.gpxRef}` }));

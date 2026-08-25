@@ -1285,6 +1285,14 @@ export class Db {
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, filename), buffer);
   }
+  async readPublicUpload(filename: string): Promise<Buffer | null> {
+    if (!this.dataDir) return null;
+    try {
+      return await readFile(join(this.uploadDir("public"), filename));
+    } catch {
+      return null;
+    }
+  }
   async deletePublicUpload(filename: string): Promise<void> {
     if (!this.dataDir) return;
     try {

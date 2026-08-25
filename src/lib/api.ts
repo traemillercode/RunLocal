@@ -600,6 +600,14 @@ export interface PublicRaceView {
   capabilities: string[];
 }
 /** Public race listing (seed + approved community) with the requesting account's capabilities. */
+export interface RouteView { id: string; cityId: string; name: string; surfaceType: "trail" | "gravel" | "road" | "track"; distanceMiles: number; elevationGainFt: number; gpxUrl: string; }
+export function getRoutes(cityId: string): Promise<ApiResult<{ routes: RouteView[] }>> {
+  return request(`/api/routes?city=${encodeURIComponent(cityId)}`);
+}
+export function uploadRoute(input: { name: string; surfaceType: string; gpx: string }): Promise<ApiResult<{ route: RouteView }>> {
+  return request("/api/routes", { method: "POST", body: JSON.stringify(input) });
+}
+
 export function getRaces(cityId: string): Promise<ApiResult<{ cityId: string; races: PublicRaceView[] }>> {
   return request(`/api/races?city=${encodeURIComponent(cityId)}`);
 }

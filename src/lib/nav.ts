@@ -33,6 +33,7 @@ export interface NavEntry {
 export const NAV_ENTRIES: readonly NavEntry[] = [
   { id: "events", route: "/", label: "Events", icon: "calendar", surfaces: ["bottom", "sidebar"], match: "prefix" },
   { id: "races", route: "/races", label: "Races", icon: "trophy", surfaces: ["bottom", "sidebar"], match: "prefix" },
+  { id: "routes", route: "/routes", label: "Routes", icon: "mapPin", surfaces: ["sidebar"], match: "prefix" },
   { id: "forum", route: "/forum", label: "Forum", icon: "chat", surfaces: ["bottom", "sidebar"], match: "prefix" },
   { id: "groups", route: "/groups", label: "Groups & Clubs", icon: "users", surfaces: ["sidebar"], match: "prefix" },
   { id: "connections", route: "/connections", label: "Connections", icon: "users", surfaces: ["bottom", "sidebar"], match: "prefix" },

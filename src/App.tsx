@@ -34,6 +34,8 @@ import { PersonalRunsPage } from "./pages/PersonalRunsPage";
 import { PastEventsPage } from "./pages/PastEventsPage";
 import { GroupsHubPage } from "./pages/GroupsPage";
 import { MarketingPage } from "./pages/MarketingPage";
+import { RoutesPage } from "./pages/RoutesPage";
+import { RouteDetailPage } from "./pages/RouteDetailPage";
 import { GroupDetailPage } from "./pages/GroupDetailPage";
 import { GroupManagePage } from "./pages/GroupManagePage";
 import { NotificationsPage } from "./pages/NotificationsPage";
@@ -104,6 +106,8 @@ function Shell() {
             <Route path="/groups/:groupId/roster" element={<RosterPage />} />
             <Route path="/checkin" element={<CheckinPage />} />
             <Route path="/races" element={<RacesPage city={city} />} />
+            <Route path="/routes" element={<RoutesPage />} />
+            <Route path="/routes/:routeId" element={<RouteDetailPage />} />
             <Route path="/forum" element={<ForumPage city={city} />} />
             <Route path="/my-runs" element={<MyRunsPage />} />
             <Route path="/personal-runs" element={<PersonalRunsPage />} />

@@ -489,6 +489,9 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
           </p>
         </div>
         <div className="flex gap-1.5">
+          <Link to="/routes" className="flex min-h-11 items-center gap-1.5 rounded-full bg-slate-100 px-3 text-[13px] font-bold text-slate-700 active:bg-slate-200">
+            <Icon name="mapPin" className="h-4 w-4" /> Routes
+          </Link>
           <PillButton variant="secondary" onClick={openEvent} className="min-h-11 px-3">
             <Icon name="plus" className="h-4 w-4" /> Host a run
           </PillButton>
