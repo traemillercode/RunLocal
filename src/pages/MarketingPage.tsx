@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CITIES } from "../data/cities";
+import { Icon } from "../components/ui";
 
 const city = CITIES.find((item) => item.id === "columbia-mo");
 const previewEvents = city?.events.slice(0, 3) ?? [];
@@ -41,15 +43,88 @@ const FEATURED_ROUTES = [
   { name: "Grindstone Loop", surface: "Trail", distance: "8.1 mi", elevation: "480 ft", photo: MARKETING_IMAGES.track },
 ];
 
+const EXPLORE_LINKS = [
+  { to: "/", label: "Events", icon: "calendar", blurb: "This week's group runs" },
+  { to: "/races", label: "Races", icon: "trophy", blurb: "Every local race, one place" },
+  { to: "/forum", label: "Forum", icon: "chat", blurb: "Ask, share, find a pace group" },
+  { to: "/routes", label: "Routes", icon: "mapPin", blurb: "Real GPX-backed trails" },
+];
+
+function MarketingNav() {
+  const [exploreOpen, setExploreOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  return (
+    <header className="marketing-header">
+      <a href="#top" className="marketing-logo" aria-label="Kimbio home"><span>KIM</span>BIO</a>
+
+      {/* Desktop: a real dropdown with actual destinations, not just an anchor-scroll link. */}
+      <nav aria-label="Marketing navigation" className="marketing-nav marketing-nav-desktop">
+        <div className="marketing-nav-dropdown-wrap" onMouseEnter={() => setExploreOpen(true)} onMouseLeave={() => setExploreOpen(false)}>
+          <button type="button" className="marketing-nav-dropdown-trigger" aria-expanded={exploreOpen} aria-haspopup="true">
+            Explore <Icon name="chevronDown" className="h-3.5 w-3.5" />
+          </button>
+          {exploreOpen ? (
+            <div className="marketing-nav-dropdown">
+              {EXPLORE_LINKS.map((l) => (
+                <Link key={l.to} to={l.to} className="marketing-nav-dropdown-item">
+                  <span className="marketing-nav-dropdown-icon"><Icon name={l.icon} className="h-4.5 w-4.5" /></span>
+                  <span>
+                    <span className="marketing-nav-dropdown-label">{l.label}</span>
+                    <span className="marketing-nav-dropdown-blurb">{l.blurb}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <a href="#how-it-works">How it works</a>
+        <Link to="/login" className="marketing-nav-loglink">Log in</Link>
+        <Link to="/login?mode=signup" className="marketing-nav-cta">Sign up</Link>
+      </nav>
+
+      {/* Mobile: previously nothing rendered here at all except Sign up - a real hamburger with real destinations instead. */}
+      <button
+        type="button"
+        className="marketing-nav-hamburger"
+        aria-label="Open menu"
+        aria-expanded={mobileOpen}
+        onClick={() => setMobileOpen(true)}
+      >
+        <Icon name="menu" className="h-5 w-5" />
+      </button>
+
+      {mobileOpen ? (
+        <div className="marketing-mobile-menu" role="dialog" aria-modal="true" aria-label="Menu">
+          <div className="marketing-mobile-menu-header">
+            <span className="marketing-logo"><span>KIM</span>BIO</span>
+            <button type="button" aria-label="Close menu" onClick={() => setMobileOpen(false)} className="marketing-mobile-menu-close">
+              <Icon name="close" className="h-5 w-5" />
+            </button>
+          </div>
+          <p className="marketing-mobile-menu-kicker">Explore</p>
+          {EXPLORE_LINKS.map((l) => (
+            <Link key={l.to} to={l.to} className="marketing-mobile-menu-item" onClick={() => setMobileOpen(false)}>
+              <Icon name={l.icon} className="h-5 w-5" /> {l.label}
+            </Link>
+          ))}
+          <a href="#how-it-works" className="marketing-mobile-menu-item" onClick={() => setMobileOpen(false)}>
+            <Icon name="spark" className="h-5 w-5" /> How it works
+          </a>
+          <div className="marketing-mobile-menu-actions">
+            <Link to="/login" onClick={() => setMobileOpen(false)} className="marketing-button marketing-button-light">Log in</Link>
+            <Link to="/login?mode=signup" onClick={() => setMobileOpen(false)} className="marketing-button marketing-button-primary">Sign up</Link>
+          </div>
+        </div>
+      ) : null}
+    </header>
+  );
+}
+
 export function MarketingPage() {
   return (
     <div className="marketing-page">
-      <header className="marketing-header">
-        <a href="#top" className="marketing-logo" aria-label="Kimbio home"><span>KIM</span>BIO</a>
-        <nav aria-label="Marketing navigation" className="marketing-nav">
-          <a href="#preview">Explore</a><a href="#how-it-works">How it works</a><Link to="/login?mode=signup" className="marketing-nav-cta">Sign up</Link>
-        </nav>
-      </header>
+      <MarketingNav />
       <main id="top">
         <section className="marketing-hero-v2" aria-labelledby="hero-title">
           <div className="marketing-hero-v2-photo marketing-hero-v2-photo-left">

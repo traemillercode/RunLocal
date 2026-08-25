@@ -174,6 +174,7 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M8.5 12h.01M12 12h.01M15.5 12h.01" />
     </>
   ),
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   messages: (
     <>
       <path d="M8 10.5a5.5 5.5 0 0 1 9.7-3.5" />

@@ -90,3 +90,28 @@
   .marketing-hero-v2-photo-right { display: none; }
   .marketing-hero-v2-card { width: 88%; padding: 28px 22px; }
 }
+
+/* --- Real marketing nav: desktop dropdown + mobile hamburger menu --- */
+.marketing-nav-desktop { display: none; }
+.marketing-nav-hamburger { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: transparent; color: #f7f7f5; border: 1px solid #3a3d42; }
+@media (min-width: 701px) {
+  .marketing-nav-desktop { display: flex; }
+  .marketing-nav-hamburger { display: none; }
+}
+.marketing-nav-loglink { color: #d5d6d8 !important; }
+.marketing-nav-dropdown-wrap { position: relative; padding: 8px 0; }
+.marketing-nav-dropdown-trigger { display: flex; align-items: center; gap: 4px; background: none; border: none; color: inherit; font-size: 13px; font-family: inherit; cursor: pointer; padding: 0; }
+.marketing-nav-dropdown { position: absolute; top: 100%; left: -16px; margin-top: 4px; width: 280px; background: #1c1e22; border: 1px solid #3a3d42; border-radius: 14px; padding: 8px; box-shadow: 0 20px 50px rgba(0,0,0,0.4); z-index: 30; }
+.marketing-nav-dropdown-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; border-radius: 10px; text-decoration: none; color: inherit; }
+.marketing-nav-dropdown-item:hover { background: rgba(255,255,255,0.06); }
+.marketing-nav-dropdown-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: rgba(255,90,60,0.12); color: #ff5a3c; flex-shrink: 0; }
+.marketing-nav-dropdown-label { display: block; font-size: 14px; font-weight: 800; }
+.marketing-nav-dropdown-blurb { display: block; font-size: 12px; color: #97999e; margin-top: 2px; }
+
+.marketing-mobile-menu { position: fixed; inset: 0; z-index: 50; background: #14161a; display: flex; flex-direction: column; padding: 16px; overflow-y: auto; }
+.marketing-mobile-menu-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 16px; border-bottom: 1px solid #3a3d42; margin-bottom: 8px; }
+.marketing-mobile-menu-close { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: none; border: 1px solid #3a3d42; color: #f7f7f5; }
+.marketing-mobile-menu-kicker { color: #97999e; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: 16px 4px 6px; }
+.marketing-mobile-menu-item { display: flex; align-items: center; gap: 14px; padding: 14px 4px; min-height: 44px; color: #f7f7f5; text-decoration: none; font-size: 15px; font-weight: 700; border-bottom: 1px solid #262930; }
+.marketing-mobile-menu-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+.marketing-mobile-menu-actions .marketing-button { width: 100%; }
