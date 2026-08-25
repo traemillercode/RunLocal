@@ -47,6 +47,25 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
 .desktop-main:has(.messages-page-root) { padding-bottom: 0; }
 .messages-page-root { height: calc(100dvh - 4rem - 72px - env(safe-area-inset-bottom)); }
 @media (min-width: 1024px) { .messages-page-root { height: calc(100dvh - 4rem); } }
+
+/* Mobile: single pane at a time, toggled by whether a thread is selected —
+   both panes exist in the DOM (so the inbox never has to unmount/remount
+   when you back out of a thread) but only one is visible. */
+.messages-split { display: flex; height: 100%; overflow: hidden; }
+.messages-split-inbox, .messages-split-thread { height: 100%; width: 100%; flex-shrink: 0; }
+.messages-split[data-has-conversation="true"] .messages-split-inbox { display: none; }
+.messages-split[data-has-conversation="false"] .messages-split-thread { display: none; }
+
+/* Desktop: real side-by-side panes, like every modern messaging app — this
+   was the actual cause of "looks crazy on desktop": before this, the whole
+   chat UI sat in a max-w-lg column in the middle of the screen with huge
+   dead space on both sides, and you could never see the list and a thread
+   at once. */
+@media (min-width: 1024px) {
+  .messages-split-inbox, .messages-split-thread { display: block !important; }
+  .messages-split-inbox { width: 360px; flex-shrink: 0; border-right: 1px solid #e5e7eb; }
+  .messages-split-thread { flex: 1; min-width: 0; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
 
 /* Desktop navigation is opt-in at the desktop breakpoint; never let the

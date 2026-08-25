@@ -110,22 +110,100 @@ function NewGroupSheet({ onClose, onCreated }: { onClose: () => void; onCreated:
   );
 }
 
-function Inbox() {
+function NewMessageSheet({ onClose, onStarted }: { onClose: () => void; onStarted: (conversationId: string) => void }) {
+  const [connections, setConnections] = useState<api.ConnectionView[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [startingId, setStartingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void api.getConnections().then((r) => { if (r.ok) setConnections(r.data.connections); });
+  }, []);
+
+  const filtered = connections?.filter((c) => c.name.toLowerCase().includes(query.toLowerCase())) ?? null;
+
+  const start = (accountId: string) => {
+    setStartingId(accountId);
+    void api.createDirectConversation(accountId).then((r) => {
+      setStartingId(null);
+      if (r.ok) onStarted(r.data.conversation.id);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
+      <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-t-2xl bg-white sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 pb-3">
+          <h2 className="text-lg font-extrabold text-slate-900">New message</h2>
+          <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-5 w-5" /></button>
+        </div>
+        <div className="px-5 pb-3">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search your connections…"
+            className="h-11 w-full rounded-xl border border-slate-200 px-3.5 text-[15px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto px-2 pb-5">
+          {connections === null ? (
+            <p className="px-3 text-sm text-slate-500">Loading…</p>
+          ) : filtered && filtered.length === 0 ? (
+            <div className="px-3 py-6 text-center">
+              <p className="text-sm font-semibold text-slate-600">{connections.length === 0 ? "No connections yet" : "No matches"}</p>
+              {connections.length === 0 ? (
+                <Link to="/connections" onClick={onClose} className="mt-2 inline-block text-[13px] font-bold text-[#14171C] underline underline-offset-2">
+                  Find people to connect with
+                </Link>
+              ) : null}
+            </div>
+          ) : (
+            filtered!.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                disabled={startingId !== null}
+                onClick={() => start(c.id)}
+                className="flex w-full items-center gap-3 rounded-xl p-2.5 text-left active:bg-slate-50 disabled:opacity-50"
+              >
+                {c.profilePhotoUrl ? (
+                  <img src={c.profilePhotoUrl} alt="" className="h-11 w-11 rounded-full object-cover" />
+                ) : (
+                  <span className="grid h-11 w-11 place-items-center rounded-full bg-[#14171C] text-sm font-bold text-white">{initials(c.name)}</span>
+                )}
+                <span className="text-[15px] font-bold text-slate-900">{c.name}</span>
+                {startingId === c.id ? <span className="ml-auto text-[12px] text-slate-400">Starting…</span> : null}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Inbox({ activeConversationId }: { activeConversationId?: string }) {
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<api.ConversationSummary[] | null>(null);
   const [groupSheetOpen, setGroupSheetOpen] = useState(false);
+  const [newMessageOpen, setNewMessageOpen] = useState(false);
   useEffect(() => {
     let live = true;
     void api.getConversations().then((r) => { if (live && r.ok) setConversations(r.data.conversations); });
     return () => { live = false; };
   }, []);
   return (
-    <div className="mx-auto h-full max-w-lg overflow-y-auto px-4 py-6">
+    <div className="h-full overflow-y-auto px-4 py-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Messages</h1>
-        <button type="button" onClick={() => setGroupSheetOpen(true)} className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3.5 py-2 text-[13px] font-bold text-slate-700 active:bg-slate-200">
-          <Icon name="users" className="h-4 w-4" /> New group
-        </button>
+        <div className="flex gap-1.5">
+          <button type="button" onClick={() => setGroupSheetOpen(true)} className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3.5 py-2 text-[13px] font-bold text-slate-700 active:bg-slate-200">
+            <Icon name="users" className="h-4 w-4" /> New group
+          </button>
+          <button type="button" onClick={() => setNewMessageOpen(true)} className="flex items-center gap-1.5 rounded-full bg-[#14171C] px-3.5 py-2 text-[13px] font-bold text-white active:opacity-90">
+            <Icon name="plus" className="h-4 w-4" /> New message
+          </button>
+        </div>
       </div>
       {conversations === null ? (
         <p className="mt-6 text-sm text-slate-500">Loading…</p>
@@ -133,20 +211,23 @@ function Inbox() {
         <div className="mt-6 rounded-2xl bg-slate-50 p-6 text-center">
           <Icon name="chat" className="mx-auto h-8 w-8 text-slate-300" />
           <p className="mt-2 text-sm font-semibold text-slate-600">No conversations yet</p>
-          <p className="mt-1 text-[13px] text-slate-500">Message a connection from their profile to start one.</p>
-          <Link to="/connections" className="mt-3 inline-block text-[13px] font-bold text-[#14171C] underline underline-offset-2">
-            Find people to connect with
-          </Link>
+          <p className="mt-1 text-[13px] text-slate-500">Tap "New message" to start one with a connection.</p>
         </div>
       ) : (
         <div className="mt-4 space-y-1">
-          {conversations.map((c) => <ConversationRow key={c.id} convo={c} active={false} />)}
+          {conversations.map((c) => <ConversationRow key={c.id} convo={c} active={c.id === activeConversationId} />)}
         </div>
       )}
       {groupSheetOpen ? (
         <NewGroupSheet
           onClose={() => setGroupSheetOpen(false)}
           onCreated={(id) => { setGroupSheetOpen(false); navigate(`/messages/${id}`); }}
+        />
+      ) : null}
+      {newMessageOpen ? (
+        <NewMessageSheet
+          onClose={() => setNewMessageOpen(false)}
+          onStarted={(id) => { setNewMessageOpen(false); navigate(`/messages/${id}`); }}
         />
       ) : null}
     </div>
@@ -652,7 +733,7 @@ function Thread({ conversationId }: { conversationId: string }) {
   }
 
   return (
-    <div className="mx-auto flex h-full max-w-lg flex-col px-4 py-4">
+    <div className="flex h-full flex-col px-4 py-4">
       <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
         <button type="button" onClick={() => navigate("/messages")} className="rounded-full p-1.5 hover:bg-slate-100">
           <Icon name="chevronRight" className="h-5 w-5 rotate-180" />
@@ -863,8 +944,24 @@ function Thread({ conversationId }: { conversationId: string }) {
 export function MessagesPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   return (
-    <div className="messages-page-root">
-      {conversationId ? <Thread key={conversationId} conversationId={conversationId} /> : <Inbox />}
+    <div className="messages-page-root messages-split" data-has-conversation={conversationId ? "true" : "false"}>
+      <div className="messages-split-inbox">
+        <Inbox activeConversationId={conversationId} />
+      </div>
+      <div className="messages-split-thread">
+        {conversationId ? <Thread key={conversationId} conversationId={conversationId} /> : <EmptyThreadState />}
+      </div>
+    </div>
+  );
+}
+
+/** Desktop-only placeholder shown in the right pane when no thread is selected — mobile never sees this, since the two panes are never both visible there. */
+function EmptyThreadState() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+      <span className="grid h-14 w-14 place-items-center rounded-full bg-slate-100 text-slate-300"><Icon name="messages" className="h-7 w-7" /></span>
+      <p className="text-[15px] font-bold text-slate-700">Select a conversation</p>
+      <p className="max-w-[220px] text-[13px] text-slate-400">Or start something new from the panel on the left.</p>
     </div>
   );
 }
