@@ -359,8 +359,8 @@ export function ConnectionsView({
     <Page>
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-start">
         <div>
-          <h1>Connections</h1>
-          <p className="mt-2 text-sm text-slate-500">
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Connections</h1>
+          <p className="mt-1 text-[13px] text-slate-500">
             Requests, the runners you're connected to, and verified people to run with.
           </p>
         </div>
@@ -561,10 +561,10 @@ export function ConnectionsView({
 
 function Avatar({ profile }: { profile: { profilePhotoUrl?: string | null; name: string } }) {
   if (profile.profilePhotoUrl) {
-    return <img src={profile.profilePhotoUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white" />;
+    return <img src={profile.profilePhotoUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-slate-100" />;
   }
   return (
-    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-[12px] font-bold text-slate-600">
+    <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#14171C] text-[13px] font-extrabold text-white ring-2 ring-slate-100">
       {initials(profile.name)}
     </span>
   );
