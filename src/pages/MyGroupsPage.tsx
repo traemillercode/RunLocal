@@ -67,10 +67,10 @@ export function MyGroupsContent() {
       return (
       <div key={m.id} className="rounded-2xl bg-white p-5 shadow-sm border border-neutral-200/80"><Link to={`/groups/${m.groupId}`} className="text-lg font-bold">{m.groupName}</Link><p className="mt-1 text-sm capitalize text-slate-600">Membership: {m.status}</p>
         {nextRun ? (
-          <p className="mt-2 flex items-center gap-1.5 text-sm text-slate-700">
+          <Link to="/" className="mt-2 flex items-center gap-1.5 text-sm text-slate-700 hover:underline underline-offset-2">
             <Icon name="calendar" className="h-4 w-4 text-slate-400" />
             Next run: <span className="font-semibold">{DAY_NAMES[nextRun.dayOfWeek]}s, {nextRun.time}</span> · {nextRun.location}
-          </p>
+          </Link>
         ) : null}
         {(() => { const w = waivers.find((x) => x.groupId === m.groupId); return w && <p className="mt-2 text-sm font-semibold">Waiver: <span className={w.status === "signed" ? "text-emerald-700" : "text-amber-700"}>{w.status === "signed" ? `Signed${w.expiresAt ? ` until ${new Date(w.expiresAt).toLocaleDateString()}` : ""}` : w.status === "unsigned" ? "Not signed" : "Expired"}</span>{(w.status === "unsigned" || w.status === "expired") && <Link className="ml-2 text-orange-700 underline" to={`/groups/${m.groupId}`}>Review</Link>}</p>; })()}
         {m.status === "active" ? (

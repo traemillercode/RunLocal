@@ -76,7 +76,13 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
                 </span>
               </p>
               <p className="mt-1.5 text-[13px] font-medium text-slate-500">
-                {group ? group.name : "Local group"}
+                {group ? (
+                  <Link to={`/groups/${group.id}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-slate-700 underline-offset-2 hover:underline">
+                    {group.name}
+                  </Link>
+                ) : (
+                  "Local group"
+                )}
                 {label ? (
                   <span className="ml-1.5 font-normal text-slate-400">· {label}</span>
                 ) : null}
