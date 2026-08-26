@@ -139,6 +139,13 @@ function NewSponsorForm({ cityId, reason, onDone, onCancel }: { cityId: string; 
   const [logoRef, setLogoRef] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [stripeReady, setStripeReady] = useState(false);
+  const [paymentLink, setPaymentLink] = useState<string | null>(null);
+  const [copyLabel, setCopyLabel] = useState("Copy link");
+
+  useEffect(() => {
+    void api.getSponsorPaymentsStatus().then((r) => { if (r.ok) setStripeReady(r.data.configured); });
+  }, []);
 
   const handleLogoFile = (file: File) => {
     const reader = new FileReader();
@@ -159,6 +166,25 @@ function NewSponsorForm({ cityId, reason, onDone, onCancel }: { cityId: string; 
     setSubmitting(false);
     if (r.ok) onDone();
     else setFormError(r.error.message ?? "That tier is full — deactivate one first.");
+  };
+
+  /**
+   * Creates the sponsor record inactive first, then asks Stripe for a
+   * hosted checkout link tied to that record's id — the placement flips
+   * active automatically once the webhook confirms payment (see
+   * activateSponsorFromEvent server-side), never from anything editable
+   * on this form.
+   */
+  const generatePaymentLink = async () => {
+    if (!businessName.trim()) { setFormError("Business name is required."); return; }
+    if (!linkUrl.trim()) { setFormError("A link URL is required."); return; }
+    setSubmitting(true);
+    const created = await api.adminCreateSponsor({ cityId, tier, businessName: businessName.trim(), tagline: tagline.trim(), linkUrl: linkUrl.trim(), logoRef, active: false }, reason.trim());
+    if (!created.ok) { setSubmitting(false); setFormError(created.error.message ?? "That tier is full — deactivate one first."); return; }
+    const checkout = await api.createSponsorCheckoutLink(created.data.sponsor.id, reason.trim());
+    setSubmitting(false);
+    if (!checkout.ok) { setFormError(checkout.error.message ?? "Couldn't generate a payment link."); return; }
+    setPaymentLink(checkout.data.url);
   };
 
   const inputCls = "h-11 w-full rounded-xl border border-slate-200 px-3.5 text-[15px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
@@ -185,12 +211,38 @@ function NewSponsorForm({ cityId, reason, onDone, onCancel }: { cityId: string; 
         <span className="cursor-pointer rounded-full bg-slate-100 px-3 py-1.5">{logoRef ? "Logo uploaded ✓" : "Upload logo (optional)"}</span>
       </label>
       {formError ? <p role="alert" className="text-[13px] font-semibold text-rose-700">{formError}</p> : null}
-      <div className="flex gap-2">
-        <PillButton variant="ghost" onClick={onCancel} className="flex-1">Cancel</PillButton>
-        <PillButton variant="primary" disabled={submitting} onClick={() => void submit()} className="flex-1">
-          {submitting ? "Adding…" : "Add sponsor"}
-        </PillButton>
-      </div>
+      {paymentLink ? (
+        <div className="space-y-2 rounded-xl bg-slate-50 p-3">
+          <p className="text-[12px] font-semibold text-slate-600">Send this link to the business — the placement activates automatically once they pay.</p>
+          <div className="flex items-center gap-2">
+            <input readOnly value={paymentLink} className="h-9 flex-1 truncate rounded-lg border border-slate-200 bg-white px-2.5 text-[12px] text-slate-700" />
+            <button
+              type="button"
+              onClick={() => { void navigator.clipboard.writeText(paymentLink); setCopyLabel("Copied ✓"); setTimeout(() => setCopyLabel("Copy link"), 2000); }}
+              className="shrink-0 rounded-lg bg-[#14171C] px-3 py-1.5 text-[12px] font-bold text-white"
+            >
+              {copyLabel}
+            </button>
+          </div>
+          <PillButton variant="ghost" onClick={onDone} className="w-full">Done — it's listed as pending until paid</PillButton>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <PillButton variant="ghost" onClick={onCancel} className="flex-1">Cancel</PillButton>
+            <PillButton variant={stripeReady ? "ghost" : "primary"} disabled={submitting} onClick={() => void submit()} className="flex-1">
+              {submitting ? "Adding…" : "Add now (mark active)"}
+            </PillButton>
+          </div>
+          {stripeReady ? (
+            <PillButton variant="primary" disabled={submitting} onClick={() => void generatePaymentLink()} className="w-full">
+              {submitting ? "Generating…" : "Generate payment link"}
+            </PillButton>
+          ) : (
+            <p className="text-center text-[11px] text-slate-400">Add STRIPE_SECRET_KEY on Railway to enable payment links — for now, add and toggle active manually once paid.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

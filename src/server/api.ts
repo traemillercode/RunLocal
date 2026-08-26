@@ -102,6 +102,7 @@ import { decideSubmission,
 } from "./submissions";
 import { listAdminContent, editContentTitle, hideContent, restoreContent, archiveContent, deleteContent, listAdminDiscussions, editDiscussion, deleteDiscussion, setAnnouncement, clearAnnouncement } from "./contentAdmin";
 import { publicSponsors, listAdminSponsors, createSponsor, updateSponsor, deleteSponsor } from "./sponsors";
+import { createSponsorCheckout, handleStripeWebhook, activateSponsorFromEvent, stripeConfigured } from "./payments";
 import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
 import { repairApprovedSubmissions } from "./submissionBackfill";
 import {
@@ -221,6 +222,22 @@ function ical(res: ServerResponse, body: string, filename: string): void {
     "cache-control": "no-store",
   });
   res.end(body);
+}
+
+async function readRawBody(req: IncomingMessage): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of req) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buf.length;
+    if (total > MAX_JSON_BODY) {
+      const e = new Error("body_too_large") as Error & { status: number };
+      e.status = 413;
+      throw e;
+    }
+    chunks.push(buf);
+  }
+  return Buffer.concat(chunks);
 }
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
@@ -1028,6 +1045,18 @@ async function handleApi(
 
   // ---- sponsors: public listing only here (no ctx/auth needed); admin
   // routes live further down after ctx is constructed, see below. -----------
+  // ---- Stripe webhook: verified by signature, not a session/cookie - must
+  // read the RAW body (readJson would re-serialize and break signature
+  // verification). Placed early since it needs no ctx/cookies at all. ------
+  if (method === "POST" && url.pathname === "/api/webhooks/stripe") {
+    const raw = await readRawBody(req);
+    const result = handleStripeWebhook(raw, req.headers["stripe-signature"] as string | undefined);
+    if (!result.ok) return err(res, { status: result.status, error: result.error }), true;
+    activateSponsorFromEvent(db, result.event);
+    await db.persist();
+    return ok(res, { received: true }), true;
+  }
+
   if (method === "GET" && url.pathname === "/api/sponsors") {
     const cityId = url.searchParams.get("city") ?? "columbia-mo";
     return ok(res, { sponsors: publicSponsors(db, cityId) }), true;
@@ -2778,6 +2807,20 @@ async function handleAdmin(
     const filename = `sponsor_${newId()}.${img.ext}`;
     await db.writePublicUpload(filename, img.bytes);
     return ok(res, { logoRef: filename }), true;
+  }
+  // GET /api/admin/sponsors/payments-status — lets the admin UI know whether
+  // to show the "Generate payment link" action at all.
+  if (method === "GET" && url.pathname === "/api/admin/sponsors/payments-status") {
+    return ok(res, { configured: stripeConfigured() }), true;
+  }
+  // POST /api/admin/sponsors/checkout — generates a one-time Stripe Checkout
+  // link for an already-created (inactive) sponsor record, to send to the
+  // business. The record activates automatically once the webhook confirms payment.
+  if (method === "POST" && url.pathname === "/api/admin/sponsors/checkout") {
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const result = await createSponsorCheckout(db, ctx, body, now);
+    if (!result.ok) return sendErr(result), true;
+    return ok(res, result.data), true;
   }
 
   // Idempotent repair for legacy approved submissions; owner/key admin only.

@@ -638,6 +638,12 @@ export function adminDeleteSponsor(id: string, reason: string): Promise<ApiResul
 export function adminUploadSponsorLogo(photoDataUrl: string, reason: string): Promise<ApiResult<{ logoRef: string }>> {
   return request("/api/admin/sponsors/logo", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify({ photo: photoDataUrl }) });
 }
+export function getSponsorPaymentsStatus(): Promise<ApiResult<{ configured: boolean }>> {
+  return request("/api/admin/sponsors/payments-status");
+}
+export function createSponsorCheckoutLink(sponsorId: string, reason: string): Promise<ApiResult<{ url: string }>> {
+  return request("/api/admin/sponsors/checkout", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify({ sponsorId, successUrl: window.location.href, cancelUrl: window.location.href }) });
+}
 
 export function getRaces(cityId: string): Promise<ApiResult<{ cityId: string; races: PublicRaceView[] }>> {
   return request(`/api/races?city=${encodeURIComponent(cityId)}`);
