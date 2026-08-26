@@ -45,12 +45,19 @@ function downscaleToDataUrl(video: HTMLVideoElement, mirror: boolean): string {
   return canvas.toDataURL("image/jpeg", SELFIE_JPEG_QUALITY);
 }
 
-export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo", facingMode = "user", mirror = facingMode === "user" }: CameraCaptureProps) {
+export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo", facingMode = "user", mirror: mirrorProp = facingMode === "user" }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [status, setStatus] = useState<CameraStatus>("requesting");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const [capturedUrl, setCapturedUrl] = useState<string | null>(null);
+  // Desktop webcam mirroring is genuinely inconsistent across hardware/drivers
+  // — some already present a mirrored feed, some don't — so there's no
+  // reliable way to auto-detect the "correct" direction. Let the user flip it
+  // themselves, the same mitigation every video app (Zoom, Meet, FaceTime)
+  // uses for this exact problem. Only offered for front-facing capture.
+  const [flipped, setFlipped] = useState(false);
+  const mirror = facingMode === "user" ? mirrorProp !== flipped : mirrorProp;
 
   const stopTracks = useCallback(() => {
     if (streamRef.current) {
@@ -149,6 +156,16 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo",
           aria-label="Live selfie preview"
           onLoadedData={handleLoadedData}
         />
+        {status === "ready" && facingMode === "user" && (
+          <button
+            type="button"
+            onClick={() => setFlipped((f) => !f)}
+            aria-label="Flip preview if it looks mirrored the wrong way"
+            className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-2 text-xs font-semibold text-white backdrop-blur-sm active:bg-black/70"
+          >
+            <Icon name="refresh" className="h-3.5 w-3.5" /> Flip
+          </button>
+        )}
 
         {status === "captured" && capturedUrl && (
           <img src={capturedUrl} alt="Captured selfie preview" className="h-full w-full object-cover" />

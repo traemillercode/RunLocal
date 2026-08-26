@@ -175,6 +175,14 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  refresh: (
+    <>
+      <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16" />
+      <path d="M3 21v-5h5" />
+    </>
+  ),
   messages: (
     <>
       <path d="M8 10.5a5.5 5.5 0 0 1 9.7-3.5" />
