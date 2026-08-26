@@ -60,23 +60,26 @@ export async function createSponsorCheckout(db: Db, ctx: AdminCtx, input: Checko
   const successUrl = typeof input.successUrl === "string" && input.successUrl ? input.successUrl : "https://getkimbio.com/";
   const cancelUrl = typeof input.cancelUrl === "string" && input.cancelUrl ? input.cancelUrl : "https://getkimbio.com/";
   try {
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            unit_amount: SPONSOR_PRICING_USD[sponsor.tier] * 100,
-            product_data: { name: `Kimbio ${sponsor.tier === "featured" ? "Featured" : "Standard"} sponsor placement — ${sponsor.businessName}` },
+    const session = await stripe.checkout.sessions.create(
+      {
+        mode: "payment",
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: "usd",
+              unit_amount: SPONSOR_PRICING_USD[sponsor.tier] * 100,
+              product_data: { name: `Kimbio ${sponsor.tier === "featured" ? "Featured" : "Standard"} sponsor placement — ${sponsor.businessName}` },
+            },
           },
-        },
-      ],
-      metadata: { kind: "sponsor_placement", sponsorId: sponsor.id },
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-    });
+        ],
+        metadata: { kind: "sponsor_placement", sponsorId: sponsor.id },
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+      },
+      { idempotencyKey: checkoutIdempotencyKey(sponsor.id) },
+    );
     if (!session.url) return { ok: false, status: 502, error: "stripe_error", message: "Stripe didn't return a checkout URL — try again." };
     return { ok: true, data: { url: session.url } };
   } catch (e) {
@@ -97,6 +100,20 @@ export async function createSponsorCheckout(db: Db, ctx: AdminCtx, input: Checko
  * generate a second checkout for an already-active sponsor, so a shared
  * link can't be reused to double-charge or otherwise misuse it.
  */
+/**
+ * Idempotency key for a checkout attempt: scoped to the sponsor and a
+ * one-minute time bucket. This means a double-click or an automatic network
+ * retry within that window safely reuses the same Checkout Session instead
+ * of creating a duplicate one (Stripe's own guidance calls idempotency keys
+ * "mandatory" for exactly this failure mode) - but a genuinely new attempt
+ * a few minutes later (e.g. after the first session expired or the business
+ * closed the tab) still gets a fresh session rather than being stuck replaying
+ * a stale one forever.
+ */
+function checkoutIdempotencyKey(sponsorId: string): string {
+  return `sponsor-checkout-${sponsorId}-${Math.floor(Date.now() / 60_000)}`;
+}
+
 export async function createPublicSponsorCheckout(db: Db, sponsorId: string, successUrl: string, cancelUrl: string): Promise<{ ok: true; url: string } | { ok: false; status: number; error: string; message?: string }> {
   const stripe = stripeClient();
   if (!stripe) return { ok: false, status: 503, error: "stripe_unconfigured", message: "Payments aren't set up yet — contact Kimbio directly." };
@@ -104,23 +121,26 @@ export async function createPublicSponsorCheckout(db: Db, sponsorId: string, suc
   if (!sponsor) return { ok: false, status: 404, error: "not_found" };
   if (sponsor.active) return { ok: false, status: 409, error: "already_active", message: "This placement is already active." };
   try {
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            unit_amount: SPONSOR_PRICING_USD[sponsor.tier] * 100,
-            product_data: { name: `Kimbio ${sponsor.tier === "featured" ? "Featured" : "Standard"} sponsor placement — ${sponsor.businessName}` },
+    const session = await stripe.checkout.sessions.create(
+      {
+        mode: "payment",
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: "usd",
+              unit_amount: SPONSOR_PRICING_USD[sponsor.tier] * 100,
+              product_data: { name: `Kimbio ${sponsor.tier === "featured" ? "Featured" : "Standard"} sponsor placement — ${sponsor.businessName}` },
+            },
           },
-        },
-      ],
-      metadata: { kind: "sponsor_placement", sponsorId: sponsor.id },
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-    });
+        ],
+        metadata: { kind: "sponsor_placement", sponsorId: sponsor.id },
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+      },
+      { idempotencyKey: checkoutIdempotencyKey(sponsor.id) },
+    );
     if (!session.url) return { ok: false, status: 502, error: "stripe_error", message: "Stripe didn't return a checkout URL — try again." };
     return { ok: true, url: session.url };
   } catch (e) {
