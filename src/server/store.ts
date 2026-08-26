@@ -188,6 +188,8 @@ export interface PublicAccount {
   adminCityId?: string | null;
   /** Server-derived super-admin flag (from RUN_LOCAL_OWNER_EMAIL). */
   isOwner: boolean;
+  /** Server-computed: true for the owner or anyone on the admin-managed geofence allowlist. Client uses this to bypass the location check without ever seeing the allowlist itself. */
+  isGeofenceExempt: boolean;
   /**
    * Posting-blocking suspension, computed server-side against the current
    * time. The client may only ever see this boolean — never the expiry or the
@@ -233,7 +235,7 @@ export function canPost(rec: AccountRecord, now = new Date()): { ok: boolean; re
   return { ok: false, reason: "suspended" };
 }
 
-export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new Date()): PublicAccount {
+export function toPublicAccount(rec: AccountRecord, isOwner = false, db?: Db, now = new Date()): PublicAccount {
   return {
     id: rec.id,
     name: rec.name,
@@ -257,6 +259,8 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, now = new D
     roles: accountRoles(rec),
     adminCityId: hasRole(rec, "city_admin") ? rec.adminCityId : null,
     isOwner,
+    /** Server-computed: owner is always exempt from the geofence, plus anyone on the admin-managed allowlist. Never derived client-side. */
+    isGeofenceExempt: isOwner || (db?.isGeofenceExempt(rec.email) ?? false),
     suspended: isSuspended(rec, now),
     underReview: rec.underReview === true,
     trustedMember: rec.trustedMember === true,
@@ -326,6 +330,7 @@ export class Db {
   private routes = new Map<string, import("./types").RouteRecord>();
   private routeWaypoints = new Map<string, import("./types").RouteWaypointRecord>();
   private sponsors = new Map<string, import("./types").SponsorRecord>();
+  private geofenceAllowlist = new Set<string>();
   /** Ephemeral typing state — accountId -> expiry timestamp, per conversation. Deliberately NOT part of load/persist: it's a live-only signal, meaningless across a restart, and would just be stale noise if saved. */
   private typing = new Map<string, Map<string, number>>();
   /** Per-account privacy settings — keyed by accountId (defaults when absent). */
@@ -455,6 +460,7 @@ export class Db {
       for (const rt of parsed.routes ?? []) this.routes.set(rt.id, { ...rt, hasElevationData: rt.hasElevationData ?? rt.elevationGainFt > 0 });
       for (const wp of parsed.routeWaypoints ?? []) this.routeWaypoints.set(wp.id, { ...wp, volunteerAccountIds: wp.volunteerAccountIds ?? [] });
       for (const s of parsed.sponsors ?? []) this.sponsors.set(s.id, s);
+      for (const e of parsed.geofenceAllowlist ?? []) this.geofenceAllowlist.add(e.toLowerCase());
       // Privacy: records persisted before a field existed are merged over the
       // verbatim owner-spec defaults so they keep working.
       for (const p of parsed.privacy ?? []) this.privacy.set(p.accountId, { ...PRIVACY_DEFAULTS, ...p, accountId: p.accountId });
@@ -517,6 +523,7 @@ export class Db {
       routes: [...this.routes.values()],
       routeWaypoints: [...this.routeWaypoints.values()],
       sponsors: [...this.sponsors.values()],
+      geofenceAllowlist: [...this.geofenceAllowlist],
       privacy: [...this.privacy.values()],
       tags: [...this.tags.values()],
     };
@@ -1282,6 +1289,20 @@ export class Db {
   }
   deleteSponsor(id: string): boolean {
     return this.sponsors.delete(id);
+  }
+  /** True if this email is exempt from the 20-mile geofence (admin-added). Case-insensitive. */
+  isGeofenceExempt(email: string | null | undefined): boolean {
+    if (!email) return false;
+    return this.geofenceAllowlist.has(email.trim().toLowerCase());
+  }
+  addGeofenceAllowlistEmail(email: string): void {
+    this.geofenceAllowlist.add(email.trim().toLowerCase());
+  }
+  removeGeofenceAllowlistEmail(email: string): void {
+    this.geofenceAllowlist.delete(email.trim().toLowerCase());
+  }
+  listGeofenceAllowlist(): string[] {
+    return [...this.geofenceAllowlist].sort();
   }
   /** Called on each keystroke (client-debounced) — marks this person as typing for a few seconds. */
   setTyping(conversationId: string, accountId: string, now: Date, ttlMs = 5000): void {

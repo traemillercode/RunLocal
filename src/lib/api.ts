@@ -638,6 +638,15 @@ export function adminDeleteSponsor(id: string, reason: string): Promise<ApiResul
 export function adminUploadSponsorLogo(photoDataUrl: string, reason: string): Promise<ApiResult<{ logoRef: string }>> {
   return request("/api/admin/sponsors/logo", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify({ photo: photoDataUrl }) });
 }
+export function adminListGeofenceAllowlist(reason: string): Promise<ApiResult<{ emails: string[] }>> {
+  return request("/api/admin/geofence-allowlist", { headers: { "x-audit-reason": reason } });
+}
+export function adminAddGeofenceAllowlistEmail(email: string, reason: string): Promise<ApiResult<{ emails: string[] }>> {
+  return request("/api/admin/geofence-allowlist", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify({ email }) });
+}
+export function adminRemoveGeofenceAllowlistEmail(email: string, reason: string): Promise<ApiResult<{ emails: string[] }>> {
+  return request(`/api/admin/geofence-allowlist/${encodeURIComponent(email)}`, { method: "DELETE", headers: { "x-audit-reason": reason } });
+}
 export function getSponsorPaymentsStatus(): Promise<ApiResult<{ configured: boolean }>> {
   return request("/api/admin/sponsors/payments-status");
 }

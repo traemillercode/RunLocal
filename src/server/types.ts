@@ -231,6 +231,8 @@ export type AdminAction =
   | "admin.sponsor_create"
   | "admin.sponsor_edit"
   | "admin.sponsor_delete"
+  | "admin.geofence_allowlist_add"
+  | "admin.geofence_allowlist_remove"
   | "admin.invitation_revoke"
   | "admin.view_credential_proof"
   | "admin.appeal_list"
@@ -386,6 +388,8 @@ export interface PersistedDb {
   accounts: AccountRecord[];
   sessions: SessionRecord[];
   codes: CodeRecord[];
+  /** Emails (lowercased) exempt from the 20-mile geofence - admin-managed, e.g. someone who lives just outside the radius or a remote partner who needs full access. Never exposed to the client as a list; only a per-account isGeofenceExempt boolean via /api/me. */
+  geofenceAllowlist?: string[];
   audits: AuditEntry[];
   /**
    * Owner-dashboard registry: seeded public content (events/races/forum posts)

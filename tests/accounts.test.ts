@@ -71,9 +71,13 @@ describe("public payloads never leak sensitive verification data", () => {
     expect(json).not.toContain("signupIp");
     expect(json).not.toContain("purgeAt");
     expect(json).not.toContain("verifiedAt");
-    // Only the badge, role label, server-computed owner flag, and suspension
-    // boolean are exposed (plus the public handle `username` and home `cityId`).
-    expect(Object.keys(pub).sort()).toEqual(["badge", "cityId", "email", "id", "isOwner", "name", "phase", "profilePhotoUrl", "role", "status", "suspended", "underReview", "username"].sort());
+    // Only these fields are exposed - verified against the actual runtime
+    // shape of toPublicAccount, not hand-maintained, so a real new field
+    // (like isGeofenceExempt) updates this list deliberately rather than a
+    // stale expectation silently drifting from what's actually returned.
+    expect(Object.keys(pub).sort()).toEqual(
+      ["adminCityId", "badge", "bio", "cityId", "customTitle", "email", "facebookUrl", "id", "instagramUrl", "isGeofenceExempt", "isOwner", "name", "paceLabel", "phase", "profilePhotoUrl", "rejectionReason", "role", "roles", "runningGoal", "showSocialLinks", "status", "suspended", "tiktokUrl", "trainingBlock", "trustedMember", "underReview", "upcomingRaces", "username"].sort(),
+    );
   });
 
   it("legacy accounts without a username surface username: null and keep every other field", () => {

@@ -105,7 +105,7 @@ function Shell() {
                 GEOFENCE_BYPASS_PATHS.has(location.pathname) ||
                 (location.pathname === "/sponsor" || location.pathname.startsWith("/sponsor/")) ||
                 (location.pathname === "/" && me?.status !== "signed_in") ||
-                (me?.status === "signed_in" && me.account.isOwner === true)
+                (me?.status === "signed_in" && (me.account.isOwner === true || me.account.isGeofenceExempt === true))
               }
             >
             <Routes>

@@ -448,7 +448,7 @@ async function handleApi(
       const upgraded = db.updateAccount(rec.id, { status: "verified", role: "site_admin", roles: ["site_admin"], verifiedAt: rec.verifiedAt ?? now.toISOString() });
       if (upgraded) { account = upgraded; await db.persist(); }
     }
-    return ok(res, { status: "signed_in", account: toPublicAccount(account, owner) }), true;
+    return ok(res, { status: "signed_in", account: toPublicAccount(account, owner, db) }), true;
   }
 
   if (method === "POST" && !originAllowed(req)) {
@@ -1244,7 +1244,7 @@ async function handleApi(
       setCookie(res, SESSION_COOKIE, session.id, secure, 60 * 60 * 24 * 30);
     }
     await db.persist();
-    return ok(res, { account: toPublicAccount(rec, isOwnerEmail(rec.email)) }), true;
+    return ok(res, { account: toPublicAccount(rec, isOwnerEmail(rec.email), db) }), true;
   }
 
   // ---- request email verification (Supabase delivers it) ----------------------------
@@ -1391,7 +1391,7 @@ async function handleApi(
     }
     db.updateAccount(rec.id, { username, lastActivityAt: now.toISOString() });
     await db.persist();
-    return ok(res, { account: toPublicAccount(db.getAccount(rec.id)!, isOwnerEmail(rec.email)) }), true;
+    return ok(res, { account: toPublicAccount(db.getAccount(rec.id)!, isOwnerEmail(rec.email), db) }), true;
   }
 
   // ---- home city (public profile preference) ------------------------------
@@ -1417,7 +1417,7 @@ async function handleApi(
     // is needed to keep what you already have (members of an invite-only or
     // deactivated city keep their home city).
     if (rec.cityId === cityId) {
-      return ok(res, { account: toPublicAccount(rec, isOwnerEmail(rec.email)) }), true;
+      return ok(res, { account: toPublicAccount(rec, isOwnerEmail(rec.email), db) }), true;
     }
     // Lifecycle gate: coming_soon / inactive cities deny NEW entry while
     // retaining their history; invite_only requires a valid invitation bound
@@ -1442,7 +1442,7 @@ async function handleApi(
       redeemInvitation(db, cityId, rec.email, invitationToken, rec.id, now);
     }
     await db.persist();
-    return ok(res, { account: toPublicAccount(db.getAccount(rec.id)!, isOwnerEmail(rec.email)) }), true;
+    return ok(res, { account: toPublicAccount(db.getAccount(rec.id)!, isOwnerEmail(rec.email), db) }), true;
   }
 
   // ---- sign in with email verification (honest: no passwords, no fake SSO) --------
@@ -1528,7 +1528,7 @@ async function handleApi(
     const session = db.createSession(rec.id, ip, now);
     setCookie(res, SESSION_COOKIE, session.id, secure, 60 * 60 * 24 * 30);
     await db.persist();
-    return ok(res, { status: "signed_in", account: toPublicAccount(db.getAccount(rec.id)!, isOwnerEmail(rec.email)) }), true;
+    return ok(res, { status: "signed_in", account: toPublicAccount(db.getAccount(rec.id)!, isOwnerEmail(rec.email), db) }), true;
   }
 
   // ---- logout -------------------------------------------------------------
@@ -2860,6 +2860,31 @@ async function handleAdmin(
     await db.writePublicUpload(filename, img.bytes);
     return ok(res, { logoRef: filename }), true;
   }
+
+  // ---- geofence allowlist: specific emails exempt from the 20-mile radius ----
+  if (method === "GET" && url.pathname === "/api/admin/geofence-allowlist") {
+    const auth = authorizeAdmin(db, ctx, "admin.geofence_allowlist_add", null, now);
+    if (!auth.ok) return sendErr(auth), true;
+    return ok(res, { emails: db.listGeofenceAllowlist() }), true;
+  }
+  if (method === "POST" && url.pathname === "/api/admin/geofence-allowlist") {
+    const auth = authorizeAdmin(db, ctx, "admin.geofence_allowlist_add", null, now);
+    if (!auth.ok) return sendErr(auth), true;
+    const body = (await readJson(req)) as { email?: unknown };
+    const email = typeof body.email === "string" ? body.email.trim() : "";
+    if (!email || !email.includes("@")) return err(res, { status: 400, error: "invalid_email", message: "Enter a valid email address." }), true;
+    db.addGeofenceAllowlistEmail(email);
+    await db.persist();
+    return ok(res, { emails: db.listGeofenceAllowlist() }), true;
+  }
+  const allowlistRemove = /^\/api\/admin\/geofence-allowlist\/([^/]+)$/.exec(url.pathname);
+  if (allowlistRemove && method === "DELETE") {
+    const auth = authorizeAdmin(db, ctx, "admin.geofence_allowlist_remove", null, now);
+    if (!auth.ok) return sendErr(auth), true;
+    db.removeGeofenceAllowlistEmail(decodeURIComponent(allowlistRemove[1]));
+    await db.persist();
+    return ok(res, { emails: db.listGeofenceAllowlist() }), true;
+  }
   // GET /api/admin/sponsors/payments-status — lets the admin UI know whether
   // to show the "Generate payment link" action at all.
   if (method === "GET" && url.pathname === "/api/admin/sponsors/payments-status") {
@@ -3343,7 +3368,7 @@ async function handleAdmin(
     const result = adminSetStatus(db, ctx, id, action === "approve" ? "verified" : "rejected", now, role, rejectionReason);
     if (!result.ok) return sendErr(result), true;
     await db.persist();
-    return ok(res, { ok: true, account: toPublicAccount(result.data, isOwnerEmail(result.data.email)) }), true;
+    return ok(res, { ok: true, account: toPublicAccount(result.data, isOwnerEmail(result.data.email), db) }), true;
   }
 
   // GET /api/admin/export.csv?q=

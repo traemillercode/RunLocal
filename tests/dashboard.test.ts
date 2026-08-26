@@ -231,7 +231,7 @@ describe("suspensions (posting-blocking, optional expiry)", () => {
     const db = createMemoryStore();
     const rec = runner(db);
     suspendAccount(db, ownerCtx(db, "harassment"), rec.id, null, T0);
-    const pub = toPublicAccount(db.getAccount(rec.id)!, false, T0);
+    const pub = toPublicAccount(db.getAccount(rec.id)!, false, db, T0);
     expect(pub.suspended).toBe(true);
     const json = JSON.stringify(pub);
     expect(json).not.toContain("suspendedUntil");

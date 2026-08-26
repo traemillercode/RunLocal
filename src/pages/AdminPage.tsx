@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GlobalAdminSection } from "../components/GlobalAdminSection";
 import { SponsorsAdminSection } from "../components/SponsorsAdminSection";
+import { GeofenceAllowlistSection } from "../components/GeofenceAllowlistSection";
 import { AdminTrustSection } from "../components/AdminTrustSection";
 import { TrustedMembersSection } from "../components/TrustedMembersSection";
 import { EventCmsSection } from "../components/EventCmsSection";
@@ -1012,6 +1013,7 @@ export function AdminPage() {
       {authed && !isCityAdmin && <EventCmsSection />}
       {authed && !isCityAdmin && <GlobalAdminSection />}
       {authed && !isCityAdmin && <SponsorsAdminSection cityId="columbia-mo" reason={reason} />}
+      {authed && !isCityAdmin && <GeofenceAllowlistSection reason={reason} />}
       {/* Global Admin — community trust & credentials (audited) */}
       {authed && !isCityAdmin && <AdminTrustSection />}
       {/* Trusted Member (manual trust / blue-check) - Global or scoped City Admin */}

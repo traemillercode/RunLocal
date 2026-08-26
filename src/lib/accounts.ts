@@ -92,6 +92,8 @@ export interface PublicAccount {
    * self-assign the role — never derive it from the email client-side.
    */
   isOwner: boolean;
+  /** Present on real server responses; optional here only so existing test fixtures that construct this type directly don't all need updating for a new field. */
+  isGeofenceExempt?: boolean;
   /**
    * Posting-blocking suspension, computed SERVER-side against the current
    * time. The client may only see the boolean — never the expiry or reason.
