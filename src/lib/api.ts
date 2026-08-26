@@ -644,6 +644,17 @@ export function getSponsorPaymentsStatus(): Promise<ApiResult<{ configured: bool
 export function createSponsorCheckoutLink(sponsorId: string, reason: string): Promise<ApiResult<{ url: string }>> {
   return request("/api/admin/sponsors/checkout", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify({ sponsorId, successUrl: window.location.href, cancelUrl: window.location.href }) });
 }
+export interface SponsorPaymentView { id: string; tier: "featured" | "standard"; businessName: string; active: boolean; priceUsd: number; }
+/** Public — no auth. Knowing the id is the authorization (a one-time link sent to one business). */
+export function getSponsorPayment(sponsorId: string): Promise<ApiResult<{ sponsor: SponsorPaymentView }>> {
+  return request(`/api/sponsors/${encodeURIComponent(sponsorId)}/payment`);
+}
+export function payForSponsor(sponsorId: string): Promise<ApiResult<{ url: string }>> {
+  return request(`/api/sponsors/${encodeURIComponent(sponsorId)}/checkout`, {
+    method: "POST",
+    body: JSON.stringify({ successUrl: `${window.location.origin}/sponsor/${sponsorId}?paid=1`, cancelUrl: window.location.href }),
+  });
+}
 
 export function getRaces(cityId: string): Promise<ApiResult<{ cityId: string; races: PublicRaceView[] }>> {
   return request(`/api/races?city=${encodeURIComponent(cityId)}`);

@@ -169,22 +169,20 @@ function NewSponsorForm({ cityId, reason, onDone, onCancel }: { cityId: string; 
   };
 
   /**
-   * Creates the sponsor record inactive first, then asks Stripe for a
-   * hosted checkout link tied to that record's id — the placement flips
-   * active automatically once the webhook confirms payment (see
-   * activateSponsorFromEvent server-side), never from anything editable
-   * on this form.
+   * Creates the sponsor record inactive first, then hands back a link to
+   * its own branded payment page (getkimbio.com/sponsor/:id) - a real page
+   * explaining the deal, not a raw stripe.com URL. That page creates the
+   * actual Stripe checkout session itself when the business clicks Pay, so
+   * generating this link doesn't require Stripe to be configured yet.
    */
-  const generatePaymentLink = async () => {
+  const generateSponsorLink = async () => {
     if (!businessName.trim()) { setFormError("Business name is required."); return; }
     if (!linkUrl.trim()) { setFormError("A link URL is required."); return; }
     setSubmitting(true);
     const created = await api.adminCreateSponsor({ cityId, tier, businessName: businessName.trim(), tagline: tagline.trim(), linkUrl: linkUrl.trim(), logoRef, active: false }, reason.trim());
-    if (!created.ok) { setSubmitting(false); setFormError(created.error.message ?? "That tier is full — deactivate one first."); return; }
-    const checkout = await api.createSponsorCheckoutLink(created.data.sponsor.id, reason.trim());
     setSubmitting(false);
-    if (!checkout.ok) { setFormError(checkout.error.message ?? "Couldn't generate a payment link."); return; }
-    setPaymentLink(checkout.data.url);
+    if (!created.ok) { setFormError(created.error.message ?? "That tier is full — deactivate one first."); return; }
+    setPaymentLink(`${window.location.origin}/sponsor/${created.data.sponsor.id}`);
   };
 
   const inputCls = "h-11 w-full rounded-xl border border-slate-200 px-3.5 text-[15px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
@@ -213,7 +211,7 @@ function NewSponsorForm({ cityId, reason, onDone, onCancel }: { cityId: string; 
       {formError ? <p role="alert" className="text-[13px] font-semibold text-rose-700">{formError}</p> : null}
       {paymentLink ? (
         <div className="space-y-2 rounded-xl bg-slate-50 p-3">
-          <p className="text-[12px] font-semibold text-slate-600">Send this link to the business — the placement activates automatically once they pay.</p>
+          <p className="text-[12px] font-semibold text-slate-600">Send this link to the business — it opens a Kimbio page explaining their placement, and the spot activates automatically once they pay.</p>
           <div className="flex items-center gap-2">
             <input readOnly value={paymentLink} className="h-9 flex-1 truncate rounded-lg border border-slate-200 bg-white px-2.5 text-[12px] text-slate-700" />
             <button
@@ -230,17 +228,16 @@ function NewSponsorForm({ cityId, reason, onDone, onCancel }: { cityId: string; 
         <div className="flex flex-col gap-2">
           <div className="flex gap-2">
             <PillButton variant="ghost" onClick={onCancel} className="flex-1">Cancel</PillButton>
-            <PillButton variant={stripeReady ? "ghost" : "primary"} disabled={submitting} onClick={() => void submit()} className="flex-1">
+            <PillButton variant="ghost" disabled={submitting} onClick={() => void submit()} className="flex-1">
               {submitting ? "Adding…" : "Add now (mark active)"}
             </PillButton>
           </div>
-          {stripeReady ? (
-            <PillButton variant="primary" disabled={submitting} onClick={() => void generatePaymentLink()} className="w-full">
-              {submitting ? "Generating…" : "Generate payment link"}
-            </PillButton>
-          ) : (
-            <p className="text-center text-[11px] text-slate-400">Add STRIPE_SECRET_KEY on Railway to enable payment links — for now, add and toggle active manually once paid.</p>
-          )}
+          <PillButton variant="primary" disabled={submitting} onClick={() => void generateSponsorLink()} className="w-full">
+            {submitting ? "Generating…" : "Generate sponsor page link"}
+          </PillButton>
+          {!stripeReady ? (
+            <p className="text-center text-[11px] text-slate-400">Note: add STRIPE_SECRET_KEY on Railway before sending this — the business's "Pay" button needs it to actually charge a card.</p>
+          ) : null}
         </div>
       )}
     </div>

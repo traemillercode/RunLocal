@@ -101,8 +101,8 @@ import { decideSubmission,
   removeSubmission,
 } from "./submissions";
 import { listAdminContent, editContentTitle, hideContent, restoreContent, archiveContent, deleteContent, listAdminDiscussions, editDiscussion, deleteDiscussion, setAnnouncement, clearAnnouncement } from "./contentAdmin";
-import { publicSponsors, listAdminSponsors, createSponsor, updateSponsor, deleteSponsor } from "./sponsors";
-import { createSponsorCheckout, handleStripeWebhook, activateSponsorFromEvent, stripeConfigured } from "./payments";
+import { publicSponsors, publicSponsorPayment, listAdminSponsors, createSponsor, updateSponsor, deleteSponsor } from "./sponsors";
+import { createSponsorCheckout, createPublicSponsorCheckout, handleStripeWebhook, activateSponsorFromEvent, stripeConfigured, SPONSOR_PRICING_USD } from "./payments";
 import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
 import { repairApprovedSubmissions } from "./submissionBackfill";
 import {
@@ -1060,6 +1060,24 @@ async function handleApi(
   if (method === "GET" && url.pathname === "/api/sponsors") {
     const cityId = url.searchParams.get("city") ?? "columbia-mo";
     return ok(res, { sponsors: publicSponsors(db, cityId) }), true;
+  }
+
+  // ---- public sponsor payment page: knowing the id is the authorization -
+  // this is a one-time link sent directly to one business, not discoverable.
+  const sponsorPay = /^\/api\/sponsors\/([^/]+)\/payment$/.exec(url.pathname);
+  if (sponsorPay && method === "GET") {
+    const view = publicSponsorPayment(db, decodeURIComponent(sponsorPay[1]), (t) => SPONSOR_PRICING_USD[t]);
+    if (!view) return err(res, { status: 404, error: "not_found" }), true;
+    return ok(res, { sponsor: view }), true;
+  }
+  const sponsorPublicCheckout = /^\/api\/sponsors\/([^/]+)\/checkout$/.exec(url.pathname);
+  if (sponsorPublicCheckout && method === "POST") {
+    const body = (await readJson(req)) as { successUrl?: unknown; cancelUrl?: unknown };
+    const successUrl = typeof body.successUrl === "string" && body.successUrl ? body.successUrl : "https://getkimbio.com/";
+    const cancelUrl = typeof body.cancelUrl === "string" && body.cancelUrl ? body.cancelUrl : "https://getkimbio.com/";
+    const result = await createPublicSponsorCheckout(db, decodeURIComponent(sponsorPublicCheckout[1]), successUrl, cancelUrl);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    return ok(res, { url: result.url }), true;
   }
 
   if (method === "GET" && url.pathname === "/api/activity/feed") {

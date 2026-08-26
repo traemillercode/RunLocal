@@ -89,6 +89,45 @@ export async function createSponsorCheckout(db: Db, ctx: AdminCtx, input: Checko
  * STRIPE_WEBHOOK_SECRET — never trusts an unsigned payload, since this
  * endpoint has no other auth and directly creates paid placements.
  */
+/**
+ * Public variant for the sponsor's own payment page — no admin auth, since
+ * the business paying isn't an admin. Safe because knowing a sponsor's id
+ * can only ever pay for that one pre-agreed, already-created record; it
+ * can't create a new sponsor or activate a different one. Refuses to
+ * generate a second checkout for an already-active sponsor, so a shared
+ * link can't be reused to double-charge or otherwise misuse it.
+ */
+export async function createPublicSponsorCheckout(db: Db, sponsorId: string, successUrl: string, cancelUrl: string): Promise<{ ok: true; url: string } | { ok: false; status: number; error: string; message?: string }> {
+  const stripe = stripeClient();
+  if (!stripe) return { ok: false, status: 503, error: "stripe_unconfigured", message: "Payments aren't set up yet — contact Kimbio directly." };
+  const sponsor = db.getSponsor(sponsorId);
+  if (!sponsor) return { ok: false, status: 404, error: "not_found" };
+  if (sponsor.active) return { ok: false, status: 409, error: "already_active", message: "This placement is already active." };
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "usd",
+            unit_amount: SPONSOR_PRICING_USD[sponsor.tier] * 100,
+            product_data: { name: `Kimbio ${sponsor.tier === "featured" ? "Featured" : "Standard"} sponsor placement — ${sponsor.businessName}` },
+          },
+        },
+      ],
+      metadata: { kind: "sponsor_placement", sponsorId: sponsor.id },
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    });
+    if (!session.url) return { ok: false, status: 502, error: "stripe_error", message: "Stripe didn't return a checkout URL — try again." };
+    return { ok: true, url: session.url };
+  } catch (e) {
+    return { ok: false, status: 502, error: "stripe_error", message: e instanceof Error ? e.message : "Stripe request failed." };
+  }
+}
+
 export function handleStripeWebhook(rawBody: Buffer, signature: string | undefined, env: Record<string, string | undefined> = process.env): { ok: true; event: Stripe.Event } | { ok: false; status: number; error: string } {
   const stripe = stripeClient(env);
   const webhookSecret = env[STRIPE_WEBHOOK_SECRET_VAR];

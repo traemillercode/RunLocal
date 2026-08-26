@@ -27,6 +27,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { LegalPage } from "./pages/LegalPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { GeofenceGate } from "./components/GeofenceGate";
+import { SponsorPaymentPage } from "./pages/SponsorPaymentPage";
 import { RecoveryPage } from "./pages/RecoveryPage";
 import { ConfirmationPage } from "./pages/ConfirmationPage";
 import { ProviderCallbackPage } from "./pages/ProviderCallbackPage";
@@ -90,7 +91,7 @@ function Shell() {
   }, [navigate]);
   const [cityOpen, setCityOpen] = useState(false);
   const location = useLocation();
-  const noNav = NO_NAV_PATHS.has(location.pathname);
+  const noNav = NO_NAV_PATHS.has(location.pathname) || location.pathname.startsWith("/sponsor/");
   return (
     <div className="min-h-dvh bg-[#f7f7f5] text-slate-900">
       <Header city={city} onOpenCitySheet={() => setCityOpen(true)} />
@@ -101,6 +102,7 @@ function Shell() {
               city={city}
               bypass={
                 GEOFENCE_BYPASS_PATHS.has(location.pathname) ||
+                location.pathname.startsWith("/sponsor/") ||
                 (location.pathname === "/" && me?.status !== "signed_in") ||
                 (me?.status === "signed_in" && me.account.isOwner === true)
               }
@@ -136,6 +138,7 @@ function Shell() {
             <Route path="/confirmation" element={<ConfirmationPage />} />
             <Route path="/callback" element={<ProviderCallbackPage />} />
             <Route path="/verify" element={<VerifyPage />} />
+            <Route path="/sponsor/:sponsorId" element={<SponsorPaymentPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

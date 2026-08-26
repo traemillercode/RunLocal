@@ -30,6 +30,28 @@ export function publicSponsors(db: Db, cityId: string): PublicSponsor[] {
   return db.listActiveSponsors(cityId).map(toPublic);
 }
 
+export interface SponsorPaymentView {
+  id: string;
+  tier: "featured" | "standard";
+  businessName: string;
+  active: boolean;
+  priceUsd: number;
+}
+
+/**
+ * GET /api/sponsors/:id/payment — public, no admin auth. Knowing the id is
+ * the authorization here: this is a one-time link the owner sends directly
+ * to a specific business for a deal already agreed on, not a discoverable
+ * or listable resource. Works whether the sponsor is still pending (not yet
+ * paid) or already active (so a business revisiting a paid link sees a
+ * clear "already active" state instead of an error).
+ */
+export function publicSponsorPayment(db: Db, id: string, priceUsd: (tier: "featured" | "standard") => number): SponsorPaymentView | null {
+  const s = db.getSponsor(id);
+  if (!s) return null;
+  return { id: s.id, tier: s.tier, businessName: s.businessName, active: s.active, priceUsd: priceUsd(s.tier) };
+}
+
 interface AdminSponsorView extends PublicSponsor {
   active: boolean;
   createdAt: string;
