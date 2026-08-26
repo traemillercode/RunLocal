@@ -26,6 +26,7 @@ import { RacesPage } from "./pages/RacesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { LegalPage } from "./pages/LegalPage";
 import { VerifyPage } from "./pages/VerifyPage";
+import { GeofenceGate } from "./components/GeofenceGate";
 import { RecoveryPage } from "./pages/RecoveryPage";
 import { ConfirmationPage } from "./pages/ConfirmationPage";
 import { ProviderCallbackPage } from "./pages/ProviderCallbackPage";
@@ -47,6 +48,9 @@ import { parseAuthCallback } from "./lib/recovery";
 import * as supabase from "./lib/supabase";
 import { TourHost } from "./components/TourHost";
 import { NO_NAV_PATHS } from "./lib/nav";
+
+/** Reachable from anywhere, no location check — the marketing/legal pages and account-setup flows need to work for someone outside the geofence considering a move or already mid-signup. Everything else (events, groups, messaging, etc.) requires being within GEOFENCE_RADIUS_MILES. */
+const GEOFENCE_BYPASS_PATHS = new Set(["/landing", "/legal", "/login", "/recovery", "/confirmation", "/callback"]);
 
 function GroupRoute() { const location = useLocation(); const id = location.pathname.split("/").pop() ?? ""; return <GroupDetailPage id={id} />; }
 function RunnerRoute() { const location = useLocation(); const id = location.pathname.split("/").pop() ?? ""; return <RunnerProfilePage id={id} />; }
@@ -93,6 +97,7 @@ function Shell() {
       <DesktopSidebar city={city} onOpenCitySheet={() => setCityOpen(true)} />
 <main key={location.pathname} className={`desktop-main${location.pathname === "/" && me?.status !== "signed_in" ? " full-bleed" : ""}`}>        <ModeratedProvider cityId={city.id}>
           <PublicContentProvider cityId={city.id}>
+            <GeofenceGate city={city} bypass={GEOFENCE_BYPASS_PATHS.has(location.pathname) || (location.pathname === "/" && me?.status !== "signed_in")}>
             <Routes>
             <Route path="/" element={me?.status === "signed_in" ? <EventsPage city={city} store={store} /> : <MarketingPage />} />
             <Route path="/landing" element={<MarketingPage />} />
@@ -127,6 +132,7 @@ function Shell() {
             <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </GeofenceGate>
           </PublicContentProvider>
         </ModeratedProvider>
       </main>

@@ -9,6 +9,9 @@ export interface City {
   tagline: string;
   /** True only for the seeded launch city. Future cities ship later. */
   live: boolean;
+  /** Geofence center — the app enforces users be within GEOFENCE_RADIUS_MILES of this point (see src/lib/geofence.ts). Only meaningful for live cities. */
+  centerLat?: number;
+  centerLng?: number;
   /** Real local organizing groups & races for this city (admin-seeded). */
   groups: RunGroup[];
   events: RunEvent[];

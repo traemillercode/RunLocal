@@ -250,6 +250,8 @@ export const CITIES: City[] = [
     state: "MO",
     tagline: "Launch city — group runs, races, and community",
     live: true,
+    centerLat: 38.9517,
+    centerLng: -92.3341,
     groups: COLUMBIA_GROUPS,
     events: COLUMBIA_EVENTS,
     races: COLUMBIA_RACES,
