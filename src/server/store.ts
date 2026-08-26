@@ -304,6 +304,7 @@ export class Db {
   private forumVotes = new Map<string, import("./types").ForumVoteRecord>();
   private accountReports = new Map<string, import("./types").AccountReportRecord>();
   private routes = new Map<string, import("./types").RouteRecord>();
+  private routeWaypoints = new Map<string, import("./types").RouteWaypointRecord>();
   /** Ephemeral typing state — accountId -> expiry timestamp, per conversation. Deliberately NOT part of load/persist: it's a live-only signal, meaningless across a restart, and would just be stale noise if saved. */
   private typing = new Map<string, Map<string, number>>();
   /** Per-account privacy settings — keyed by accountId (defaults when absent). */
@@ -431,6 +432,7 @@ export class Db {
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
       for (const r of parsed.accountReports ?? []) this.accountReports.set(r.id, r);
       for (const rt of parsed.routes ?? []) this.routes.set(rt.id, { ...rt, hasElevationData: rt.hasElevationData ?? rt.elevationGainFt > 0 });
+      for (const wp of parsed.routeWaypoints ?? []) this.routeWaypoints.set(wp.id, { ...wp, volunteerAccountIds: wp.volunteerAccountIds ?? [] });
       // Privacy: records persisted before a field existed are merged over the
       // verbatim owner-spec defaults so they keep working.
       for (const p of parsed.privacy ?? []) this.privacy.set(p.accountId, { ...PRIVACY_DEFAULTS, ...p, accountId: p.accountId });
@@ -491,6 +493,7 @@ export class Db {
       forumVotes: [...this.forumVotes.values()],
       accountReports: [...this.accountReports.values()],
       routes: [...this.routes.values()],
+      routeWaypoints: [...this.routeWaypoints.values()],
       privacy: [...this.privacy.values()],
       tags: [...this.tags.values()],
     };

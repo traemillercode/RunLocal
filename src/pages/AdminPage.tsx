@@ -72,6 +72,8 @@ export function AdminPage() {
   // search
   const [query, setQuery] = useState("");
   const [reason, setReason] = useState("");
+  const [selfieModalUrl, setSelfieModalUrl] = useState<string | null>(null);
+  const [selfieModalLoading, setSelfieModalLoading] = useState(false);
   const [results, setResults] = useState<AdminSearchRow[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -352,6 +354,7 @@ export function AdminPage() {
 
   const openRecord = async (id: string) => {
     setDetailError(null);
+    closeSelfieModal();
     if (!reason.trim() || reason.trim().length < 5) {
       setDetailError("Enter a reason (min 5 characters) to view this record.");
       return;
@@ -487,7 +490,14 @@ export function AdminPage() {
       setDetailError("Enter a reason (min 5 characters) to view the selfie.");
       return;
     }
-    // Stream via authed fetch (audited server-side) and display as object URL.
+    setDetailError("");
+    setSelfieModalLoading(true);
+    // Stream via authed fetch (audited server-side) and display inline in this
+    // page's own modal — a previous version used window.open(url), but that
+    // call happens after an awaited fetch, well after the click that
+    // triggered it, so browsers routinely treat it as an unrequested popup
+    // and block it silently. Rendering the image in our own modal state
+    // avoids ever creating a new window at all.
     try {
       const res = await fetch(api.adminSelfieUrl(record.id), {
         credentials: "same-origin",
@@ -495,16 +505,22 @@ export function AdminPage() {
       });
       if (!res.ok) {
         setDetailError(res.status === 401 ? "Admin session expired — sign in again." : "Selfie could not be loaded.");
+        setSelfieModalLoading(false);
         return;
       }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const w = window.open(url, "_blank");
-      if (!w) setDetailError("Pop-up blocked — allow pop-ups for this site to view the selfie.");
+      setSelfieModalUrl(URL.createObjectURL(blob));
       selfieCheckRef.current = true;
     } catch {
       setDetailError("Selfie could not be loaded.");
+    } finally {
+      setSelfieModalLoading(false);
     }
+  };
+
+  const closeSelfieModal = () => {
+    if (selfieModalUrl) URL.revokeObjectURL(selfieModalUrl);
+    setSelfieModalUrl(null);
   };
 
   if (loading) {
@@ -1052,8 +1068,8 @@ export function AdminPage() {
             </li>
           </dl>
           {record.canViewSelfie && (
-            <PillButton variant="ghost" className="mt-3 w-full" onClick={() => void openSelfie()}>
-              <Icon name="shield" className="h-4 w-4" /> View selfie (audited)
+            <PillButton variant="ghost" className="mt-3 w-full" disabled={selfieModalLoading} onClick={() => void openSelfie()}>
+              <Icon name="shield" className="h-4 w-4" /> {selfieModalLoading ? "Loading…" : "View selfie (audited)"}
             </PillButton>
           )}
           <RoleEditor
@@ -1141,6 +1157,19 @@ export function AdminPage() {
         error={sheetError}
         onConfirm={(reason) => void confirmSheet(reason)}
       />
+      {selfieModalUrl ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={closeSelfieModal}>
+          <div className="max-h-[85vh] max-w-md overflow-hidden rounded-2xl bg-white" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-100 p-4">
+              <p className="text-sm font-bold text-slate-900">Verification selfie — audited view</p>
+              <button type="button" onClick={closeSelfieModal} className="rounded-full p-1.5 hover:bg-slate-100">
+                <Icon name="close" className="h-5 w-5" />
+              </button>
+            </div>
+            <img src={selfieModalUrl} alt="Submitted verification selfie" className="max-h-[70vh] w-full object-contain" />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -450,6 +450,7 @@ export interface PersistedDb {
   conversations?: ConversationRecord[];
   messages?: MessageRecord[];
   trainingPlans?: TrainingPlanRecord[];
+  routeWaypoints?: RouteWaypointRecord[];
   forumVotes?: ForumVoteRecord[];
   accountReports?: AccountReportRecord[];
   routes?: RouteRecord[];
@@ -585,6 +586,33 @@ export interface RouteRecord {
   hasElevationData: boolean;
   /** Filename under the GPX upload store — see readGpxUpload/writeGpxUpload. */
   gpxRef: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+/**
+ * A point of interest along an existing route: a checkpoint/mile marker, an
+ * aid station, a volunteer spot that needs a real person to staff it (a
+ * water table, a turn, traffic control), or a turn feeding turn-by-turn
+ * directions. Lives on top of a route's real GPS points — this is not a
+ * from-scratch route drawing tool, it annotates a route that already has a
+ * real GPX track.
+ */
+export interface RouteWaypointRecord {
+  id: string;
+  routeId: string;
+  kind: "checkpoint" | "aid_station" | "volunteer_spot" | "turn";
+  lat: number;
+  lng: number;
+  /** Distance in miles along the route to this point, computed at creation time from the route's GPS points — not user-entered, so it can't drift from reality. */
+  distanceMiles: number;
+  label: string;
+  /** e.g. "Gatorade + water", "Direct runners left onto Elm St", volunteer instructions. */
+  note?: string;
+  /** Only meaningful for kind === "volunteer_spot". */
+  volunteersNeeded?: number;
+  /** Account ids who have claimed a slot at this spot — length is capped at volunteersNeeded server-side. */
+  volunteerAccountIds: string[];
   createdBy: string;
   createdAt: string;
 }
