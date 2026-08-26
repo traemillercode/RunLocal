@@ -216,16 +216,17 @@ function NewSponsorForm({ cityId, reason, onDone, onCancel }: { cityId: string; 
             key={t}
             type="button"
             onClick={() => setTier(t)}
-            className={`min-h-9 flex-1 rounded-full text-[13px] font-bold ${tier === t ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-500"}`}
+            className={`min-h-9 min-w-0 flex-1 rounded-full px-2 text-[13px] font-bold ${tier === t ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-500"}`}
           >
-            {t === "featured" ? "Featured (1 slot)" : "Standard (3 slots)"}
+            {t === "featured" ? "Featured · 1 slot" : "Standard · 3 slots"}
           </button>
         ))}
       </div>
-      <div className="flex gap-2">
-        <label className="flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Start date</span><input type="date" min={todayStr} value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} /></label>
-        <label className="flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">End date</span><input type="date" min={startDate} value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputCls} /></label>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <label className="min-w-0 flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Start date</span><input type="date" min={todayStr} value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} /></label>
+        <label className="min-w-0 flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">End date</span><input type="date" min={startDate} value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputCls} /></label>
       </div>
+      <p className="text-[11px] text-slate-400">All day, not time-specific — live midnight start date through 11:59pm end date.</p>
       <div className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-[13px] font-semibold ${availability === "unavailable" ? "bg-rose-50 text-rose-700" : availability === "available" ? "bg-emerald-50 text-emerald-800" : "bg-slate-50 text-slate-500"}`}>
         <span>{dayCount} day{dayCount === 1 ? "" : "s"} · ${totalPrice} total</span>
         <span>{availability === "checking" ? "Checking…" : availability === "available" ? "Dates open ✓" : availability === "unavailable" ? "Already booked" : ""}</span>

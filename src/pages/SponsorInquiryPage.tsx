@@ -102,10 +102,11 @@ export function SponsorInquiryPage() {
         </div>
 
         <span className="mb-2 mt-5 block text-[11px] font-bold uppercase tracking-widest text-slate-500">2. Pick your dates</span>
-        <div className="flex gap-2">
-          <label className="flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Start</span><input type="date" min={todayStr} value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} /></label>
-          <label className="flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">End</span><input type="date" min={startDate} value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputCls} /></label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <label className="min-w-0 flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Start</span><input type="date" min={todayStr} value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} /></label>
+          <label className="min-w-0 flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">End</span><input type="date" min={startDate} value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputCls} /></label>
         </div>
+        <p className="mt-1.5 text-[11px] text-slate-400">Placements run all day (not a specific time) — live starting midnight on your start date, through 11:59pm on your end date.</p>
         <div className={`mt-2 flex items-center justify-between rounded-xl px-3.5 py-2.5 text-[13px] font-semibold ${availability === "unavailable" ? "bg-rose-50 text-rose-700" : availability === "available" ? "bg-emerald-50 text-emerald-800" : "bg-slate-50 text-slate-500"}`}>
           <span>{dayCount} day{dayCount === 1 ? "" : "s"} · ${totalPrice} total</span>
           <span>{availability === "checking" ? "Checking…" : availability === "available" ? "Available ✓" : availability === "unavailable" ? "Not available" : ""}</span>
