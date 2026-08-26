@@ -72,7 +72,23 @@ export function AdminPage() {
 
   // search
   const [query, setQuery] = useState("");
-  const [reason, setReason] = useState("");
+  // The reason field exists for real accountability on delegated admin
+  // access (city admins, key-based sessions) — but for the owner, re-typing
+  // a justification to yourself on every click is pure friction with no
+  // safety benefit. Persisted in sessionStorage and auto-filled once for the
+  // owner, so it's "type it once per browser session," not per action.
+  const [reason, setReason] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return sessionStorage.getItem("adminReason") ?? "";
+  });
+  const setReasonPersisted = (v: string) => {
+    setReason(v);
+    if (typeof window !== "undefined") sessionStorage.setItem("adminReason", v);
+  };
+  useEffect(() => {
+    if (isOwner && !reason) setReasonPersisted("Routine admin session");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner]);
   const [selfieModalUrl, setSelfieModalUrl] = useState<string | null>(null);
   const [selfieModalLoading, setSelfieModalLoading] = useState(false);
   const [results, setResults] = useState<AdminSearchRow[] | null>(null);
@@ -99,7 +115,11 @@ export function AdminPage() {
   // owner dashboard (moderation, RRCA, featured/pinned)
   const [dashCity, setDashCity] = useState<string>(CITIES.find((c) => c.live)?.id ?? "columbia-mo");
   const [dash, setDash] = useState<DashboardView | null>(null);
-  const [dashReason, setDashReason] = useState("");
+  // Was a second, separate reason box for the dashboard section - unified
+  // into the one shared, persisted `reason` above so there's only ever one
+  // "type a reason" moment for the owner, not two different boxes on one page.
+  const dashReason = reason;
+  const setDashReason = setReasonPersisted;
   const [dashError, setDashError] = useState<string | null>(null);
   const [dashBusy, setDashBusy] = useState(false);
   /** Registry id of the row action currently in flight (disables that row). */
@@ -594,6 +614,11 @@ export function AdminPage() {
         </button>
       </div>
 
+      <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
+        <span className="mb-1 block text-xs font-semibold text-slate-600">Reason for this admin session (required, audited) — set once, applies to every action below</span>
+        <textarea rows={2} placeholder="e.g. Routine admin session" value={reason} onChange={(e) => setReasonPersisted(e.target.value)} className={reasonCls} />
+      </section>
+
       <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70" aria-labelledby="admin-overview-heading">
         <div className="flex items-start justify-between gap-3">
           <div><h2 id="admin-overview-heading" className="text-[15px] font-bold text-slate-900">Attention overview</h2>
@@ -750,7 +775,6 @@ export function AdminPage() {
                 ))}
               </select>
             </label>
-            <textarea rows={2} placeholder="Reason for dashboard access & actions (required, audited)" value={dashReason} onChange={(e) => setDashReason(e.target.value)} className={reasonCls} />
             <PillButton variant="primary" className="w-full" disabled={dashBusy} onClick={() => void loadDashboard()}>
               <Icon name="shield" className="h-4 w-4" /> {dashBusy ? "Loading…" : "Load dashboard"}
             </PillButton>
@@ -1001,10 +1025,6 @@ export function AdminPage() {
         <p className="mt-0.5 text-xs text-slate-500">Phone-number search is intentionally not available — no discovery by phone.</p>
         <div className="mt-3 space-y-3">
           <input id="lookup-query" type="search" inputMode="search" placeholder="Name or email" value={query} onChange={(e) => setQuery(e.target.value)} className={inputCls} aria-label="Search query" />
-          <div>
-            <span className="mb-1 block text-xs font-semibold text-slate-600">Reason for this access (required, audited)</span>
-            <textarea rows={2} placeholder="e.g. Safety review of a flagged report" value={reason} onChange={(e) => setReason(e.target.value)} className={reasonCls} />
-          </div>
           <div className="flex gap-2">
             <PillButton variant="primary" className="flex-1" onClick={() => void doSearch()}>
               <Icon name="search" className="h-4 w-4" /> Search
