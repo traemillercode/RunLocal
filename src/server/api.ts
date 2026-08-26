@@ -101,6 +101,7 @@ import { decideSubmission,
   removeSubmission,
 } from "./submissions";
 import { listAdminContent, editContentTitle, hideContent, restoreContent, archiveContent, deleteContent, listAdminDiscussions, editDiscussion, deleteDiscussion, setAnnouncement, clearAnnouncement } from "./contentAdmin";
+import { publicSponsors, listAdminSponsors, createSponsor, updateSponsor, deleteSponsor } from "./sponsors";
 import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
 import { repairApprovedSubmissions } from "./submissionBackfill";
 import {
@@ -1024,6 +1025,13 @@ async function handleApi(
 
   // GPX files are served the same way as every other public upload (see
   // serve.ts's static /uploads/public/ handler) - no separate endpoint needed.
+
+  // ---- sponsors: public listing only here (no ctx/auth needed); admin
+  // routes live further down after ctx is constructed, see below. -----------
+  if (method === "GET" && url.pathname === "/api/sponsors") {
+    const cityId = url.searchParams.get("city") ?? "columbia-mo";
+    return ok(res, { sponsors: publicSponsors(db, cityId) }), true;
+  }
 
   if (method === "GET" && url.pathname === "/api/activity/feed") {
     const cityId = url.searchParams.get("city") ?? "";
@@ -2728,6 +2736,50 @@ async function handleAdmin(
   const ctx = { adminSessionId, userSessionId, reason: typeof reason === "string" ? reason : undefined, ip };
   const sendErr = (r: { ok: false; error: string; status: number; message?: string }) =>
     err(res, { status: r.status, error: r.error, message: r.message });
+
+  // ---- sponsors: admin routes (public GET /api/sponsors lives earlier, no ctx needed there) ----
+  if (method === "GET" && url.pathname === "/api/admin/sponsors") {
+    const cityId = url.searchParams.get("city") ?? "columbia-mo";
+    const result = listAdminSponsors(db, ctx, cityId, now);
+    if (!result.ok) return sendErr(result), true;
+    return ok(res, result.data), true;
+  }
+  if (method === "POST" && url.pathname === "/api/admin/sponsors") {
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const result = createSponsor(db, ctx, body, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, result.data), true;
+  }
+  const sponsorPatch = /^\/api\/admin\/sponsors\/([^/]+)$/.exec(url.pathname);
+  if (sponsorPatch && method === "PATCH") {
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const result = updateSponsor(db, ctx, decodeURIComponent(sponsorPatch[1]), body, now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, result.data), true;
+  }
+  if (sponsorPatch && method === "DELETE") {
+    const result = deleteSponsor(db, ctx, decodeURIComponent(sponsorPatch[1]), now);
+    if (!result.ok) return sendErr(result), true;
+    await db.persist();
+    return ok(res, result.data), true;
+  }
+  // POST /api/admin/sponsors/logo — uploads a logo image, returns a ref to
+  // pass as logoRef on create/update. Kept as its own step so a failed image
+  // upload never corrupts an otherwise-valid sponsor record.
+  if (method === "POST" && url.pathname === "/api/admin/sponsors/logo") {
+    const auth = authorizeAdmin(db, ctx, "admin.sponsor_create", null, now);
+    if (!auth.ok) return sendErr(auth), true;
+    const body = (await readJson(req)) as { photo?: unknown };
+    if (typeof body.photo !== "string") return err(res, { status: 400, error: "invalid_image" }), true;
+    const img = decodeImage(body.photo, 64);
+    if (!img.ok) return err(res, { status: 400, error: img.error }), true;
+    const filename = `sponsor_${newId()}.${img.ext}`;
+    await db.writePublicUpload(filename, img.bytes);
+    return ok(res, { logoRef: filename }), true;
+  }
+
   // Idempotent repair for legacy approved submissions; owner/key admin only.
   if (method === "POST" && url.pathname === "/api/admin/city/submissions/backfill") {
     const auth = authorizeAdmin(db, ctx, "admin.submission_approve", null, now);

@@ -228,6 +228,9 @@ export type AdminAction =
   | "admin.city_admin_revoke"
   | "admin.roles_assign"
   | "admin.invitation_create"
+  | "admin.sponsor_create"
+  | "admin.sponsor_edit"
+  | "admin.sponsor_delete"
   | "admin.invitation_revoke"
   | "admin.view_credential_proof"
   | "admin.appeal_list"
@@ -451,6 +454,7 @@ export interface PersistedDb {
   messages?: MessageRecord[];
   trainingPlans?: TrainingPlanRecord[];
   routeWaypoints?: RouteWaypointRecord[];
+  sponsors?: SponsorRecord[];
   forumVotes?: ForumVoteRecord[];
   accountReports?: AccountReportRecord[];
   routes?: RouteRecord[];
@@ -615,6 +619,27 @@ export interface RouteWaypointRecord {
   volunteerAccountIds: string[];
   createdBy: string;
   createdAt: string;
+}
+
+/**
+ * A paid local sponsorship placement — sold and set up manually (no
+ * self-serve ad platform), shown on the Events page. "featured" is the one
+ * larger/top placement; "standard" covers the smaller slots. At most one
+ * featured + three standard sponsors are active at once (four total),
+ * enforced server-side in sponsors.ts, not just a UI convention.
+ */
+export interface SponsorRecord {
+  id: string;
+  cityId: string;
+  tier: "featured" | "standard";
+  businessName: string;
+  tagline: string;
+  linkUrl: string;
+  /** Filename under the public upload store — see readPublicUpload/writePublicUpload. Null shows a text-only placement. */
+  logoRef: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ConnectionRecord {

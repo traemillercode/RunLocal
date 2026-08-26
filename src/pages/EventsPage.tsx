@@ -6,6 +6,7 @@ import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { HomeCityBanner } from "../components/HomeCityBanner";
 import { ProfileCompletionBanner } from "../components/ProfileCompletionBanner";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
+import { SponsorStrip } from "../components/SponsorStrip";
 import { GroupSubmissionSheet, IndependentEventSheet, SoloRunSheet } from "../components/SubmissionSheets";
 import { Chip, Icon, PillButton, Sheet } from "../components/ui";
 import * as api from "../lib/api";
@@ -497,6 +498,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
           </PillButton>
         </div>
       </div>
+      <SponsorStrip cityId={city.id} />
       <div role="group" aria-label="This week's runs" className="mt-3 flex gap-1 rounded-[10px] bg-slate-100 p-1">
         {([
           ["all", "All"],

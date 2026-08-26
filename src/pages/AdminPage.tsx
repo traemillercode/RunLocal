@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GlobalAdminSection } from "../components/GlobalAdminSection";
+import { SponsorsAdminSection } from "../components/SponsorsAdminSection";
 import { AdminTrustSection } from "../components/AdminTrustSection";
 import { TrustedMembersSection } from "../components/TrustedMembersSection";
 import { EventCmsSection } from "../components/EventCmsSection";
@@ -986,6 +987,7 @@ export function AdminPage() {
           Global Admins (authorizeAdmin), so a City Admin would only see errors. */}
       {authed && !isCityAdmin && <EventCmsSection />}
       {authed && !isCityAdmin && <GlobalAdminSection />}
+      {authed && !isCityAdmin && <SponsorsAdminSection cityId="columbia-mo" reason={reason} />}
       {/* Global Admin — community trust & credentials (audited) */}
       {authed && !isCityAdmin && <AdminTrustSection />}
       {/* Trusted Member (manual trust / blue-check) - Global or scoped City Admin */}

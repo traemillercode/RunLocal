@@ -610,6 +610,35 @@ export function uploadRoute(input: { name: string; surfaceType: string; gpx: str
   return request("/api/routes", { method: "POST", body: JSON.stringify(input) });
 }
 
+export interface SponsorView { id: string; tier: "featured" | "standard"; businessName: string; tagline: string; linkUrl: string; logoUrl: string | null; }
+export interface AdminSponsorView extends SponsorView { active: boolean; createdAt: string; }
+/** Public, active sponsor placements for a city — no auth required. */
+export function getSponsors(cityId: string): Promise<ApiResult<{ sponsors: SponsorView[] }>> {
+  return request(`/api/sponsors?city=${encodeURIComponent(cityId)}`);
+}
+export function adminListSponsors(cityId: string, reason: string): Promise<ApiResult<{ sponsors: AdminSponsorView[] }>> {
+  return request(`/api/admin/sponsors?city=${encodeURIComponent(cityId)}`, { headers: { "x-audit-reason": reason } });
+}
+export function adminCreateSponsor(
+  input: { cityId: string; tier: "featured" | "standard"; businessName: string; tagline: string; linkUrl: string; logoRef?: string | null; active?: boolean },
+  reason: string,
+): Promise<ApiResult<{ sponsor: AdminSponsorView }>> {
+  return request("/api/admin/sponsors", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify(input) });
+}
+export function adminUpdateSponsor(
+  id: string,
+  patch: Partial<{ tier: "featured" | "standard"; businessName: string; tagline: string; linkUrl: string; logoRef: string | null; active: boolean }>,
+  reason: string,
+): Promise<ApiResult<{ sponsor: AdminSponsorView }>> {
+  return request(`/api/admin/sponsors/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "x-audit-reason": reason }, body: JSON.stringify(patch) });
+}
+export function adminDeleteSponsor(id: string, reason: string): Promise<ApiResult<{ deleted: true }>> {
+  return request(`/api/admin/sponsors/${encodeURIComponent(id)}`, { method: "DELETE", headers: { "x-audit-reason": reason } });
+}
+export function adminUploadSponsorLogo(photoDataUrl: string, reason: string): Promise<ApiResult<{ logoRef: string }>> {
+  return request("/api/admin/sponsors/logo", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify({ photo: photoDataUrl }) });
+}
+
 export function getRaces(cityId: string): Promise<ApiResult<{ cityId: string; races: PublicRaceView[] }>> {
   return request(`/api/races?city=${encodeURIComponent(cityId)}`);
 }

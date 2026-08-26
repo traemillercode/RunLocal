@@ -305,6 +305,7 @@ export class Db {
   private accountReports = new Map<string, import("./types").AccountReportRecord>();
   private routes = new Map<string, import("./types").RouteRecord>();
   private routeWaypoints = new Map<string, import("./types").RouteWaypointRecord>();
+  private sponsors = new Map<string, import("./types").SponsorRecord>();
   /** Ephemeral typing state — accountId -> expiry timestamp, per conversation. Deliberately NOT part of load/persist: it's a live-only signal, meaningless across a restart, and would just be stale noise if saved. */
   private typing = new Map<string, Map<string, number>>();
   /** Per-account privacy settings — keyed by accountId (defaults when absent). */
@@ -433,6 +434,7 @@ export class Db {
       for (const r of parsed.accountReports ?? []) this.accountReports.set(r.id, r);
       for (const rt of parsed.routes ?? []) this.routes.set(rt.id, { ...rt, hasElevationData: rt.hasElevationData ?? rt.elevationGainFt > 0 });
       for (const wp of parsed.routeWaypoints ?? []) this.routeWaypoints.set(wp.id, { ...wp, volunteerAccountIds: wp.volunteerAccountIds ?? [] });
+      for (const s of parsed.sponsors ?? []) this.sponsors.set(s.id, s);
       // Privacy: records persisted before a field existed are merged over the
       // verbatim owner-spec defaults so they keep working.
       for (const p of parsed.privacy ?? []) this.privacy.set(p.accountId, { ...PRIVACY_DEFAULTS, ...p, accountId: p.accountId });
@@ -494,6 +496,7 @@ export class Db {
       accountReports: [...this.accountReports.values()],
       routes: [...this.routes.values()],
       routeWaypoints: [...this.routeWaypoints.values()],
+      sponsors: [...this.sponsors.values()],
       privacy: [...this.privacy.values()],
       tags: [...this.tags.values()],
     };
@@ -1195,6 +1198,49 @@ export class Db {
   }
   listRoutes(cityId?: string): import("./types").RouteRecord[] {
     return [...this.routes.values()].filter((r) => !cityId || r.cityId === cityId).sort((a, b) => a.name.localeCompare(b.name));
+  }
+  /** Active sponsors for a city, featured first — this is the exact shape/order the public placement renders in. */
+  listActiveSponsors(cityId: string): import("./types").SponsorRecord[] {
+    return [...this.sponsors.values()]
+      .filter((s) => s.cityId === cityId && s.active)
+      .sort((a, b) => (a.tier === b.tier ? a.createdAt.localeCompare(b.createdAt) : a.tier === "featured" ? -1 : 1));
+  }
+  listAllSponsors(cityId: string): import("./types").SponsorRecord[] {
+    return [...this.sponsors.values()].filter((s) => s.cityId === cityId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  getSponsor(id: string): import("./types").SponsorRecord | undefined {
+    return this.sponsors.get(id);
+  }
+  /**
+   * Enforces the real slot cap server-side (never just a UI convention): at
+   * most one active "featured" sponsor and three active "standard" sponsors
+   * per city, four total. Returns null when the requested tier is full.
+   */
+  createSponsor(rec: import("./types").SponsorRecord): import("./types").SponsorRecord | null {
+    if (rec.active) {
+      const activeInTier = [...this.sponsors.values()].filter((s) => s.cityId === rec.cityId && s.active && s.tier === rec.tier);
+      const cap = rec.tier === "featured" ? 1 : 3;
+      if (activeInTier.length >= cap) return null;
+    }
+    this.sponsors.set(rec.id, rec);
+    return rec;
+  }
+  updateSponsor(id: string, patch: Partial<import("./types").SponsorRecord>): import("./types").SponsorRecord | null {
+    const existing = this.sponsors.get(id);
+    if (!existing) return null;
+    const willBeActive = patch.active ?? existing.active;
+    const tier = patch.tier ?? existing.tier;
+    if (willBeActive && !(existing.active && existing.tier === tier)) {
+      const activeInTier = [...this.sponsors.values()].filter((s) => s.id !== id && s.cityId === existing.cityId && s.active && s.tier === tier);
+      const cap = tier === "featured" ? 1 : 3;
+      if (activeInTier.length >= cap) return null;
+    }
+    const updated = { ...existing, ...patch, updatedAt: new Date().toISOString() };
+    this.sponsors.set(id, updated);
+    return updated;
+  }
+  deleteSponsor(id: string): boolean {
+    return this.sponsors.delete(id);
   }
   /** Called on each keystroke (client-debounced) — marks this person as typing for a few seconds. */
   setTyping(conversationId: string, accountId: string, now: Date, ttlMs = 5000): void {
