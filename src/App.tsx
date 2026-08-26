@@ -97,7 +97,14 @@ function Shell() {
       <DesktopSidebar city={city} onOpenCitySheet={() => setCityOpen(true)} />
 <main key={location.pathname} className={`desktop-main${location.pathname === "/" && me?.status !== "signed_in" ? " full-bleed" : ""}`}>        <ModeratedProvider cityId={city.id}>
           <PublicContentProvider cityId={city.id}>
-            <GeofenceGate city={city} bypass={GEOFENCE_BYPASS_PATHS.has(location.pathname) || (location.pathname === "/" && me?.status !== "signed_in")}>
+            <GeofenceGate
+              city={city}
+              bypass={
+                GEOFENCE_BYPASS_PATHS.has(location.pathname) ||
+                (location.pathname === "/" && me?.status !== "signed_in") ||
+                (me?.status === "signed_in" && me.account.isOwner === true)
+              }
+            >
             <Routes>
             <Route path="/" element={me?.status === "signed_in" ? <EventsPage city={city} store={store} /> : <MarketingPage />} />
             <Route path="/landing" element={<MarketingPage />} />
