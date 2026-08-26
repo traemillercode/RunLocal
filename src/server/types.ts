@@ -931,7 +931,6 @@ export interface GroupSubmissionPayload {
    * (see GroupModRecord.rrcaBadge) and may be adjusted by the admin.
    */
   groupType: GroupType;
-  groupmeUrl: string | null;
   facebookUrl: string | null;
   instagramUrl: string | null;
   websiteUrl: string | null;

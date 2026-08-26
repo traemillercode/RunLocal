@@ -758,7 +758,6 @@ async function handleApi(
     const patch: GroupProfilePatch = {};
     if (body.description !== undefined) patch.description = String(body.description);
     if (body.websiteUrl !== undefined) patch.websiteUrl = body.websiteUrl === null ? null : String(body.websiteUrl);
-    if (body.groupmeUrl !== undefined) patch.groupmeUrl = body.groupmeUrl === null ? null : String(body.groupmeUrl);
     if (body.facebookUrl !== undefined) patch.facebookUrl = body.facebookUrl === null ? null : String(body.facebookUrl);
     if (body.instagramUrl !== undefined) patch.instagramUrl = body.instagramUrl === null ? null : String(body.instagramUrl);
     if (body.membershipMode !== undefined) patch.membershipMode = body.membershipMode === "request" ? "request" : body.membershipMode === "open" ? "open" : undefined;
@@ -1556,7 +1555,7 @@ async function handleApi(
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const body = (await readJson(req)) as {
       cityId?: unknown; name?: unknown; description?: unknown; groupType?: unknown;
-      groupmeUrl?: unknown; facebookUrl?: unknown; instagramUrl?: unknown; websiteUrl?: unknown; coverPhoto?: unknown; logoPhoto?: unknown; membershipMode?: unknown;
+      facebookUrl?: unknown; instagramUrl?: unknown; websiteUrl?: unknown; coverPhoto?: unknown; logoPhoto?: unknown; membershipMode?: unknown;
     };
     const result = submitGroup(db, sess.accountId, body, now);
     if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;

@@ -127,7 +127,7 @@ export function GroupSubmissionSheet({ open, onClose, onSubmitted, cityId }: { o
   const [done, setDone] = useState(false);
   useEffect(() => { if (open) setDone(false); }, [open]);
   const [uploading, setUploading] = useState(false);
-  const [f, setF] = useState({ name: "", description: "", groupType: "community", groupmeUrl: "", facebookUrl: "", instagramUrl: "", websiteUrl: "", coverPhoto: "", logoPhoto: "", membershipMode: "request" });
+  const [f, setF] = useState({ name: "", description: "", groupType: "community", facebookUrl: "", instagramUrl: "", websiteUrl: "", coverPhoto: "", logoPhoto: "", membershipMode: "request" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const save = async () => {
     if (!f.coverPhoto || !f.logoPhoto) {
@@ -150,13 +150,13 @@ export function GroupSubmissionSheet({ open, onClose, onSubmitted, cityId }: { o
       const ok = await submit(() =>
         api.submitGroup({
           cityId, name: f.name, description: f.description, groupType: f.groupType as "rrca-chartered" | "community",
-          groupmeUrl: f.groupmeUrl || undefined, facebookUrl: f.facebookUrl || undefined,
+          facebookUrl: f.facebookUrl || undefined,
           instagramUrl: f.instagramUrl || undefined, websiteUrl: f.websiteUrl || undefined,
           coverPhoto: cover.data.photoRef, logoPhoto: logo.data.photoRef, membershipMode: f.membershipMode as "open" | "request",
         }),
       );
       if (ok) {
-        setF({ name: "", description: "", groupType: "community", groupmeUrl: "", facebookUrl: "", instagramUrl: "", websiteUrl: "", coverPhoto: "", logoPhoto: "", membershipMode: "request" });
+        setF({ name: "", description: "", groupType: "community", facebookUrl: "", instagramUrl: "", websiteUrl: "", coverPhoto: "", logoPhoto: "", membershipMode: "request" });
         setDone(true);
         onSubmitted?.();
       }
@@ -187,7 +187,6 @@ export function GroupSubmissionSheet({ open, onClose, onSubmitted, cityId }: { o
             Choosing “RRCA-Chartered Club” is a request only: an admin verifies the charter before the label is ever shown publicly, and may adjust it.
           </p>
         ) : null}
-        <Field label="GroupMe link (optional)"><input className={inputCls} placeholder="https://groupme.com/…" inputMode="url" value={f.groupmeUrl} onChange={set("groupmeUrl")} /></Field>
         <Field label="Facebook link (optional)"><input className={inputCls} placeholder="https://facebook.com/…" inputMode="url" value={f.facebookUrl} onChange={set("facebookUrl")} /></Field>
         <Field label="Instagram link (optional)"><input className={inputCls} placeholder="https://instagram.com/…" inputMode="url" value={f.instagramUrl} onChange={set("instagramUrl")} /></Field>
         <Field label="Membership mode">

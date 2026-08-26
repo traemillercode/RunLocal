@@ -202,7 +202,6 @@ export interface GroupSubmitInput {
   name?: unknown;
   description?: unknown;
   groupType?: unknown;
-  groupmeUrl?: unknown;
   facebookUrl?: unknown;
   instagramUrl?: unknown;
   websiteUrl?: unknown;
@@ -213,7 +212,7 @@ export interface GroupSubmitInput {
 
 /**
  * A Verified Runner may submit a new local run group: name, description,
- * validated home city, external GroupMe/Facebook/Instagram/Website links, and
+ * validated home city, external Facebook/Instagram/Website links, and
  * a group type that is EXACTLY "rrca-chartered" | "community". The RRCA
  * option is a request only — the charter claim is admin-assigned later, never
  * self-claimed. Approval creates the group record and grants the submitter
@@ -249,8 +248,6 @@ export function groupPayloadFrom(input: GroupSubmitInput, cityId: string): Admin
   if (!groupType) {
     return { ok: false, status: 400, error: "invalid_group_type", message: "Group type must be exactly “RRCA-Chartered Club” or “Community Run Group”." };
   }
-  const groupme = optionalUrl(input.groupmeUrl);
-  if (!groupme.ok) return { ok: false, status: 400, error: groupme.error };
   const facebook = optionalUrl(input.facebookUrl);
   if (!facebook.ok) return { ok: false, status: 400, error: facebook.error };
   const instagram = optionalUrl(input.instagramUrl);
@@ -268,7 +265,6 @@ export function groupPayloadFrom(input: GroupSubmitInput, cityId: string): Admin
     description,
     cityId,
     groupType,
-    groupmeUrl: groupme.url,
     facebookUrl: facebook.url,
     instagramUrl: instagram.url,
     websiteUrl: website.url,
@@ -862,7 +858,6 @@ export interface PublicUserGroup {
   name: string;
   groupType: "rrca-chartered" | "community";
   description: string;
-  groupmeUrl: string | null;
   facebookUrl: string | null;
   instagramUrl: string | null;
   websiteUrl: string | null;
@@ -955,7 +950,6 @@ export function publicApprovedContent(db: Db, cityId: string): PublicApprovedCon
         name: p.name,
         groupType: p.groupType,
         description: p.description,
-        groupmeUrl: p.groupmeUrl,
         facebookUrl: p.facebookUrl,
         instagramUrl: p.instagramUrl,
         websiteUrl: p.websiteUrl,

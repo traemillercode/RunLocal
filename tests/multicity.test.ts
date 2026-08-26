@@ -188,7 +188,7 @@ function addPendingSubmission(db: Db, cityId: string, kind: "race" | "group" | "
       kind === "race"
         ? { kind: "race", name: "Test Race", distances: "5K", date: "2026-09-01", location: "Downtown", registrationUrl: "https://example.com", description: "" }
         : kind === "group"
-          ? { kind: "group", name: "Test Group", cityId, groupType: "community", description: "", groupmeUrl: null, facebookUrl: null, instagramUrl: null, websiteUrl: null }
+          ? { kind: "group", name: "Test Group", cityId, groupType: "community", description: "", facebookUrl: null, instagramUrl: null, websiteUrl: null }
           : { kind: "event", type: "one_time", title: "Test Event", date: "2026-09-01", dayOfWeek: null, time: "6:00 PM", location: "Park", distanceLabel: "3 mi", invite: "Open to all", externalUrl: null, description: "" },
   };
   db.appendSubmission(rec);

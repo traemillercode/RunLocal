@@ -267,7 +267,6 @@ export function transferGroupOwnership(
 export interface GroupProfilePatch {
   description?: string;
   websiteUrl?: string | null;
-  groupmeUrl?: string | null;
   facebookUrl?: string | null;
   instagramUrl?: string | null;
   membershipMode?: "open" | "request";

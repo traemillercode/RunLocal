@@ -14,7 +14,7 @@ describe("approved submission backfill", () => {
     db.createAccount({ name: "Author", email: "author@example.com", cityId: "columbia-mo" });
     db.appendSubmission(approved("race", "race-old", { kind: "race", name: "Legacy 5K", distances: "5K", date: "2026-10-01", location: "Park", registrationUrl: "https://example.com/r", description: "Race" }));
     db.appendSubmission(approved("event", "event-old", { kind: "event", type: "recurring", title: "Legacy Hills", dayOfWeek: 3, time: "6:00 PM", location: "Trail", distanceLabel: "3 mi", invite: "Open to all", date: null, externalUrl: null, description: "Hills" }));
-    db.appendSubmission(approved("group", "group-old", { kind: "group", name: "Legacy Club", description: "Club", groupType: "community", facebookUrl: null, instagramUrl: null, websiteUrl: null, groupmeUrl: null, coverPhotoRef: "cover", logoPhotoRef: "logo", membershipMode: "request", cityId: "columbia-mo" }));
+    db.appendSubmission(approved("group", "group-old", { kind: "group", name: "Legacy Club", description: "Club", groupType: "community", facebookUrl: null, instagramUrl: null, websiteUrl: null, coverPhotoRef: "cover", logoPhotoRef: "logo", membershipMode: "request", cityId: "columbia-mo" }));
     const first = repairApprovedSubmissions(db, new Date(now));
     const snapshot = { submissions: db.listSubmissions(), content: [db.getContent("race:user-race-old"), db.getContent("event:user-event-old")], event: db.getEvent("event:user-event-old"), group: db.getGroup("user-group-old") };
     const second = repairApprovedSubmissions(db, new Date(now));

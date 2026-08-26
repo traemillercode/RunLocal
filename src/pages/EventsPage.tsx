@@ -663,7 +663,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
           <ul className="space-y-3">
             {userGroups.map((g) => {
               const badge = groupBadges.get(g.id);
-              const links = [["GroupMe", g.groupmeUrl], ["Facebook", g.facebookUrl], ["Instagram", g.instagramUrl], ["Website", g.websiteUrl]].filter(
+              const links = [["Facebook", g.facebookUrl], ["Instagram", g.instagramUrl], ["Website", g.websiteUrl]].filter(
                 (l): l is [string, string] => Boolean(l[1]),
               );
               return (

@@ -132,7 +132,6 @@ const APPROVED_GROUP: PublicUserGroup = {
   name: "Downtown Runners",
   groupType: "community",
   description: "A friendly community group.",
-  groupmeUrl: null,
   facebookUrl: "https://facebook.com/downtownrunners",
   instagramUrl: null,
   websiteUrl: null,

@@ -420,7 +420,7 @@ export function submitRace(input: {
 
 export function submitGroup(input: {
   cityId?: string; name: string; description?: string; groupType: "rrca-chartered" | "community";
-  groupmeUrl?: string; facebookUrl?: string; instagramUrl?: string; websiteUrl?: string; coverPhoto?: string; logoPhoto?: string; membershipMode?: "open" | "request";
+  facebookUrl?: string; instagramUrl?: string; websiteUrl?: string; coverPhoto?: string; logoPhoto?: string; membershipMode?: "open" | "request";
 }): Promise<ApiResult<{ submission: { id: string; status: string } }>> {
   return request("/api/submissions/group", { method: "POST", body: JSON.stringify(input) });
 }
@@ -566,7 +566,7 @@ export interface PublicUserRace {
 }
 export interface PublicUserGroup {
   id: string; ownerId?: string; kind: "group"; name: string; groupType: "rrca-chartered" | "community"; description: string;
-  groupmeUrl: string | null; facebookUrl: string | null; instagramUrl: string | null; websiteUrl: string | null; coverPhotoUrl?: string; logoPhotoUrl?: string; membershipMode?: "open" | "request"; rrcaVerified?: boolean; leaders?: {id:string;name:string}[];
+  facebookUrl: string | null; instagramUrl: string | null; websiteUrl: string | null; coverPhotoUrl?: string; logoPhotoUrl?: string; membershipMode?: "open" | "request"; rrcaVerified?: boolean; leaders?: {id:string;name:string}[];
 }
 export interface PublicUserEvent {
   id: string; kind: "event"; title: string; type: "one_time" | "recurring"; date: string | null;
@@ -1347,7 +1347,7 @@ export function removeGroupLeader(groupId: string, accountId: string, reason: st
 export function transferGroupOwnership(groupId: string, accountId: string, reason: string): Promise<ApiResult<{ leaders: LeaderIdentity[]; ownerId: string | null }>> {
   return request(`/api/groups/${encodeURIComponent(groupId)}/ownership`, { method: "POST", body: JSON.stringify({ accountId, reason }) });
 }
-export interface GroupProfilePatch { description?: string; websiteUrl?: string | null; groupmeUrl?: string | null; facebookUrl?: string | null; instagramUrl?: string | null; membershipMode?: "open" | "request"; }
+export interface GroupProfilePatch { description?: string; websiteUrl?: string | null; facebookUrl?: string | null; instagramUrl?: string | null; membershipMode?: "open" | "request"; }
 export function updateGroupProfile(groupId: string, patch: GroupProfilePatch, reason: string): Promise<ApiResult<{ leaders: LeaderIdentity[]; ownerId: string | null }>> {
   return request(`/api/groups/${encodeURIComponent(groupId)}/profile`, { method: "PATCH", body: JSON.stringify({ ...patch, reason }) });
 }
