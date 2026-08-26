@@ -610,7 +610,7 @@ export function uploadRoute(input: { name: string; surfaceType: string; gpx: str
   return request("/api/routes", { method: "POST", body: JSON.stringify(input) });
 }
 
-export interface SponsorView { id: string; tier: "featured" | "standard"; businessName: string; tagline: string; linkUrl: string; logoUrl: string | null; }
+export interface SponsorView { id: string; tier: "featured" | "standard"; businessName: string; tagline: string; linkUrl: string; logoUrl: string | null; startDate: string; endDate: string; }
 export interface AdminSponsorView extends SponsorView { active: boolean; createdAt: string; }
 /** Public, active sponsor placements for a city — no auth required. */
 export function getSponsors(cityId: string): Promise<ApiResult<{ sponsors: SponsorView[] }>> {
@@ -620,14 +620,14 @@ export function adminListSponsors(cityId: string, reason: string): Promise<ApiRe
   return request(`/api/admin/sponsors?city=${encodeURIComponent(cityId)}`, { headers: { "x-audit-reason": reason } });
 }
 export function adminCreateSponsor(
-  input: { cityId: string; tier: "featured" | "standard"; businessName: string; tagline: string; linkUrl: string; logoRef?: string | null; active?: boolean },
+  input: { cityId: string; tier: "featured" | "standard"; businessName: string; tagline: string; linkUrl: string; logoRef?: string | null; active?: boolean; startDate: string; endDate: string },
   reason: string,
 ): Promise<ApiResult<{ sponsor: AdminSponsorView }>> {
   return request("/api/admin/sponsors", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify(input) });
 }
 export function adminUpdateSponsor(
   id: string,
-  patch: Partial<{ tier: "featured" | "standard"; businessName: string; tagline: string; linkUrl: string; logoRef: string | null; active: boolean }>,
+  patch: Partial<{ tier: "featured" | "standard"; businessName: string; tagline: string; linkUrl: string; logoRef: string | null; active: boolean; startDate: string; endDate: string }>,
   reason: string,
 ): Promise<ApiResult<{ sponsor: AdminSponsorView }>> {
   return request(`/api/admin/sponsors/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "x-audit-reason": reason }, body: JSON.stringify(patch) });
@@ -644,7 +644,7 @@ export function getSponsorPaymentsStatus(): Promise<ApiResult<{ configured: bool
 export function createSponsorCheckoutLink(sponsorId: string, reason: string): Promise<ApiResult<{ url: string }>> {
   return request("/api/admin/sponsors/checkout", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify({ sponsorId, successUrl: window.location.href, cancelUrl: window.location.href }) });
 }
-export interface SponsorPaymentView { id: string; tier: "featured" | "standard"; businessName: string; active: boolean; priceUsd: number; }
+export interface SponsorPaymentView { id: string; tier: "featured" | "standard"; businessName: string; active: boolean; priceUsd: number; startDate: string; endDate: string; }
 /** Public — no auth. Knowing the id is the authorization (a one-time link sent to one business). */
 export function getSponsorPayment(sponsorId: string): Promise<ApiResult<{ sponsor: SponsorPaymentView }>> {
   return request(`/api/sponsors/${encodeURIComponent(sponsorId)}/payment`);
@@ -654,6 +654,20 @@ export function payForSponsor(sponsorId: string): Promise<ApiResult<{ url: strin
     method: "POST",
     body: JSON.stringify({ successUrl: `${window.location.origin}/sponsor/${sponsorId}?paid=1`, cancelUrl: window.location.href }),
   });
+}
+/** Public - no auth. Lets the self-serve inquiry page validate a date range before the business fills out the whole form. */
+export function checkSponsorAvailability(cityId: string, tier: "featured" | "standard", startDate: string, endDate: string): Promise<ApiResult<{ available: boolean }>> {
+  return request(`/api/sponsors/availability?city=${encodeURIComponent(cityId)}&tier=${tier}&start=${startDate}&end=${endDate}`);
+}
+/** Public - no auth. Self-serve booking submission; always created pending until paid. */
+export function submitSponsorInquiry(input: {
+  cityId: string; tier: "featured" | "standard"; businessName: string; tagline: string; linkUrl: string; logoRef?: string | null; startDate: string; endDate: string;
+}): Promise<ApiResult<{ sponsor: AdminSponsorView }>> {
+  return request("/api/sponsors/inquire", { method: "POST", body: JSON.stringify(input) });
+}
+/** Public - no auth. Uploads a logo for a self-serve inquiry submission (same storage path as the admin upload, just without the admin auth requirement). */
+export function uploadInquirySponsorLogo(photoDataUrl: string): Promise<ApiResult<{ logoRef: string }>> {
+  return request("/api/sponsors/logo", { method: "POST", body: JSON.stringify({ photo: photoDataUrl }) });
 }
 
 export function getRaces(cityId: string): Promise<ApiResult<{ cityId: string; races: PublicRaceView[] }>> {

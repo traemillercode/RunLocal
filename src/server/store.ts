@@ -49,6 +49,26 @@ export function newId(): string {
   return randomBytes(16).toString("hex");
 }
 
+/** Days (as YYYY-MM-DD strings) covered by an inclusive [start, end] range. Small ranges only — sponsor bookings are expected to span days/weeks, not years. */
+function daysInRange(start: string, end: string): string[] {
+  const days: string[] = [];
+  const cur = new Date(start + "T00:00:00Z");
+  const last = new Date(end + "T00:00:00Z");
+  while (cur <= last) {
+    days.push(cur.toISOString().slice(0, 10));
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return days;
+}
+
+/** Today as YYYY-MM-DD in UTC — matches the date-string format sponsor bookings are stored in. */
+function todayDateString(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Real slot caps: at most one live "featured" sponsor and three live "standard" sponsors per city, per day. */
+export const SPONSOR_TIER_CAPS = { featured: 1, standard: 3 } as const;
+
 /**
  * Current week of a training plan, computed fresh from startDate every time
  * — never stored, so it's always correct without any background job. Week 1
@@ -1199,10 +1219,34 @@ export class Db {
   listRoutes(cityId?: string): import("./types").RouteRecord[] {
     return [...this.routes.values()].filter((r) => !cityId || r.cityId === cityId).sort((a, b) => a.name.localeCompare(b.name));
   }
-  /** Active sponsors for a city, featured first — this is the exact shape/order the public placement renders in. */
+  /**
+   * A sponsor "counts" for capacity/conflict purposes once it's paid
+   * (active) — a pending, unpaid booking never blocks anyone else's dates.
+   */
+  private sponsorOccupiesDay(s: import("./types").SponsorRecord, day: string): boolean {
+    return s.active && day >= s.startDate && day <= s.endDate;
+  }
+
+  /**
+   * True if booking `tier` for [startDate, endDate] would fit within the
+   * real capacity for every day in that range (1 featured / 3 standard).
+   * excludeId lets an update check against itself without self-conflicting.
+   */
+  sponsorRangeAvailable(cityId: string, tier: "featured" | "standard", startDate: string, endDate: string, excludeId?: string): boolean {
+    const cap = SPONSOR_TIER_CAPS[tier];
+    const candidates = [...this.sponsors.values()].filter((s) => s.cityId === cityId && s.tier === tier && s.id !== excludeId);
+    for (const day of daysInRange(startDate, endDate)) {
+      const occupied = candidates.filter((s) => this.sponsorOccupiesDay(s, day)).length;
+      if (occupied >= cap) return false;
+    }
+    return true;
+  }
+
+  /** Live sponsors for a city right now — paid AND within their date window. This is what the public Events page actually shows; a booking scheduled for next month or one that already ended doesn't render even though `active` is true. */
   listActiveSponsors(cityId: string): import("./types").SponsorRecord[] {
+    const today = todayDateString();
     return [...this.sponsors.values()]
-      .filter((s) => s.cityId === cityId && s.active)
+      .filter((s) => s.cityId === cityId && s.active && s.startDate <= today && s.endDate >= today)
       .sort((a, b) => (a.tier === b.tier ? a.createdAt.localeCompare(b.createdAt) : a.tier === "featured" ? -1 : 1));
   }
   listAllSponsors(cityId: string): import("./types").SponsorRecord[] {
@@ -1212,16 +1256,15 @@ export class Db {
     return this.sponsors.get(id);
   }
   /**
-   * Enforces the real slot cap server-side (never just a UI convention): at
-   * most one active "featured" sponsor and three active "standard" sponsors
-   * per city, four total. Returns null when the requested tier is full.
+   * Enforces real date-range capacity server-side (never just a UI
+   * convention): a booking can only be created active (paid) if every day
+   * in its range still has room in that tier. A pending (unpaid) booking is
+   * always allowed to be created — it doesn't occupy a slot until paid, so
+   * two people can hold overlapping pending inquiries at once; only the
+   * first to actually pay wins the slot (see confirmSponsorPayment).
    */
   createSponsor(rec: import("./types").SponsorRecord): import("./types").SponsorRecord | null {
-    if (rec.active) {
-      const activeInTier = [...this.sponsors.values()].filter((s) => s.cityId === rec.cityId && s.active && s.tier === rec.tier);
-      const cap = rec.tier === "featured" ? 1 : 3;
-      if (activeInTier.length >= cap) return null;
-    }
+    if (rec.active && !this.sponsorRangeAvailable(rec.cityId, rec.tier, rec.startDate, rec.endDate)) return null;
     this.sponsors.set(rec.id, rec);
     return rec;
   }
@@ -1230,11 +1273,9 @@ export class Db {
     if (!existing) return null;
     const willBeActive = patch.active ?? existing.active;
     const tier = patch.tier ?? existing.tier;
-    if (willBeActive && !(existing.active && existing.tier === tier)) {
-      const activeInTier = [...this.sponsors.values()].filter((s) => s.id !== id && s.cityId === existing.cityId && s.active && s.tier === tier);
-      const cap = tier === "featured" ? 1 : 3;
-      if (activeInTier.length >= cap) return null;
-    }
+    const startDate = patch.startDate ?? existing.startDate;
+    const endDate = patch.endDate ?? existing.endDate;
+    if (willBeActive && !this.sponsorRangeAvailable(existing.cityId, tier, startDate, endDate, id)) return null;
     const updated = { ...existing, ...patch, updatedAt: new Date().toISOString() };
     this.sponsors.set(id, updated);
     return updated;

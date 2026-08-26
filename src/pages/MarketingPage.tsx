@@ -241,6 +241,7 @@ export function MarketingPage() {
         <span className="marketing-footer-links">
           <a href="https://facebook.com/getkimbio" target="_blank" rel="noopener noreferrer" aria-label="Kimbio on Facebook">Facebook</a>
           <a href="https://instagram.com/getkimbio" target="_blank" rel="noopener noreferrer" aria-label="Kimbio on Instagram">Instagram</a>
+          <Link to="/sponsor">Sponsor Kimbio</Link>
           <Link to="/legal">Terms &amp; Privacy</Link>
         </span>
       </footer>

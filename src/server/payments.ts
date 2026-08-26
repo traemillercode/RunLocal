@@ -31,8 +31,18 @@ function stripeClient(env: Record<string, string | undefined> = process.env): St
   return cachedClient;
 }
 
-/** Reasonable starter pricing — easy to change here without touching the checkout flow itself. */
-export const SPONSOR_PRICING_USD = { featured: 250, standard: 100 } as const;
+/** Reasonable starter day rates — easy to change here without touching the checkout flow itself. */
+export const SPONSOR_DAY_RATE_USD = { featured: 25, standard: 10 } as const;
+
+/** Inclusive day count for a booking window. */
+function bookingDays(startDate: string, endDate: string): number {
+  return Math.round((new Date(endDate + "T00:00:00Z").getTime() - new Date(startDate + "T00:00:00Z").getTime()) / 86_400_000) + 1;
+}
+
+/** Total price in whole USD for a sponsor's actual booked date range. */
+export function sponsorTotalPriceUsd(tier: "featured" | "standard", startDate: string, endDate: string): number {
+  return SPONSOR_DAY_RATE_USD[tier] * bookingDays(startDate, endDate);
+}
 
 interface CheckoutInput {
   sponsorId?: unknown;
@@ -70,8 +80,8 @@ export async function createSponsorCheckout(db: Db, ctx: AdminCtx, input: Checko
             quantity: 1,
             price_data: {
               currency: "usd",
-              unit_amount: SPONSOR_PRICING_USD[sponsor.tier] * 100,
-              product_data: { name: `Kimbio ${sponsor.tier === "featured" ? "Featured" : "Standard"} sponsor placement — ${sponsor.businessName}` },
+              unit_amount: sponsorTotalPriceUsd(sponsor.tier, sponsor.startDate, sponsor.endDate) * 100,
+              product_data: { name: `Kimbio ${sponsor.tier === "featured" ? "Featured" : "Standard"} sponsor placement — ${sponsor.businessName} (${sponsor.startDate} to ${sponsor.endDate})` },
             },
           },
         ],
@@ -132,8 +142,8 @@ export async function createPublicSponsorCheckout(db: Db, sponsorId: string, suc
             quantity: 1,
             price_data: {
               currency: "usd",
-              unit_amount: SPONSOR_PRICING_USD[sponsor.tier] * 100,
-              product_data: { name: `Kimbio ${sponsor.tier === "featured" ? "Featured" : "Standard"} sponsor placement — ${sponsor.businessName}` },
+              unit_amount: sponsorTotalPriceUsd(sponsor.tier, sponsor.startDate, sponsor.endDate) * 100,
+              product_data: { name: `Kimbio ${sponsor.tier === "featured" ? "Featured" : "Standard"} sponsor placement — ${sponsor.businessName} (${sponsor.startDate} to ${sponsor.endDate})` },
             },
           },
         ],

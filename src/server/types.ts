@@ -637,7 +637,11 @@ export interface SponsorRecord {
   linkUrl: string;
   /** Filename under the public upload store — see readPublicUpload/writePublicUpload. Null shows a text-only placement. */
   logoRef: string | null;
+  /** Whether this booking has been paid for. A booking can be active=true but not yet showing (startDate is in the future) or no longer showing (endDate has passed) — see isSponsorLive in sponsors.ts, which checks both active and the date window on every read rather than needing a background job to flip a flag. */
   active: boolean;
+  /** Inclusive booking window, YYYY-MM-DD. The placement only actually appears on Events between these dates. */
+  startDate: string;
+  endDate: string;
   createdAt: string;
   updatedAt: string;
 }

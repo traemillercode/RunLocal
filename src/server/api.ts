@@ -101,8 +101,8 @@ import { decideSubmission,
   removeSubmission,
 } from "./submissions";
 import { listAdminContent, editContentTitle, hideContent, restoreContent, archiveContent, deleteContent, listAdminDiscussions, editDiscussion, deleteDiscussion, setAnnouncement, clearAnnouncement } from "./contentAdmin";
-import { publicSponsors, publicSponsorPayment, listAdminSponsors, createSponsor, updateSponsor, deleteSponsor } from "./sponsors";
-import { createSponsorCheckout, createPublicSponsorCheckout, handleStripeWebhook, activateSponsorFromEvent, stripeConfigured, SPONSOR_PRICING_USD } from "./payments";
+import { publicSponsors, publicSponsorPayment, listAdminSponsors, createSponsor, updateSponsor, deleteSponsor, submitSponsorInquiry, checkSponsorAvailability } from "./sponsors";
+import { createSponsorCheckout, createPublicSponsorCheckout, handleStripeWebhook, activateSponsorFromEvent, stripeConfigured, sponsorTotalPriceUsd } from "./payments";
 import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
 import { repairApprovedSubmissions } from "./submissionBackfill";
 import {
@@ -1066,7 +1066,7 @@ async function handleApi(
   // this is a one-time link sent directly to one business, not discoverable.
   const sponsorPay = /^\/api\/sponsors\/([^/]+)\/payment$/.exec(url.pathname);
   if (sponsorPay && method === "GET") {
-    const view = publicSponsorPayment(db, decodeURIComponent(sponsorPay[1]), (t) => SPONSOR_PRICING_USD[t]);
+    const view = publicSponsorPayment(db, decodeURIComponent(sponsorPay[1]), (t, s, e) => sponsorTotalPriceUsd(t, s, e));
     if (!view) return err(res, { status: 404, error: "not_found" }), true;
     return ok(res, { sponsor: view }), true;
   }
@@ -1078,6 +1078,40 @@ async function handleApi(
     const result = await createPublicSponsorCheckout(db, decodeURIComponent(sponsorPublicCheckout[1]), successUrl, cancelUrl);
     if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
     return ok(res, { url: result.url }), true;
+  }
+
+  // GET /api/sponsors/availability?tier=featured&start=YYYY-MM-DD&end=YYYY-MM-DD&city=columbia-mo
+  // Public - lets the self-serve inquiry page validate a date range before the business fills out the whole form.
+  if (method === "GET" && url.pathname === "/api/sponsors/availability") {
+    const tier = url.searchParams.get("tier") === "featured" ? "featured" : "standard";
+    const cityId = url.searchParams.get("city") ?? "columbia-mo";
+    const start = url.searchParams.get("start") ?? "";
+    const end = url.searchParams.get("end") ?? "";
+    return ok(res, checkSponsorAvailability(db, cityId, tier, start, end)), true;
+  }
+  // POST /api/sponsors/inquire - public self-serve booking submission. Always
+  // created pending (unpaid); the business gets redirected straight to the
+  // payment page for the booking they just created.
+  if (method === "POST" && url.pathname === "/api/sponsors/inquire") {
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const result = submitSponsorInquiry(db, body, now);
+    if (!result.ok) return err(res, { status: result.status, error: result.error, message: result.message }), true;
+    await db.persist();
+    return ok(res, result.data), true;
+  }
+  // POST /api/sponsors/logo - public, no admin auth. Lets a business upload
+  // their logo directly on the self-serve inquiry form, same storage path
+  // as the admin upload. Rate-limited by the same size/type validation as
+  // every other image upload in the app (see decodeImage) - not by account,
+  // since there's no account here, but a bad/oversized file is still rejected.
+  if (method === "POST" && url.pathname === "/api/sponsors/logo") {
+    const body = (await readJson(req)) as { photo?: unknown };
+    if (typeof body.photo !== "string") return err(res, { status: 400, error: "invalid_image" }), true;
+    const img = decodeImage(body.photo, 64);
+    if (!img.ok) return err(res, { status: 400, error: img.error }), true;
+    const filename = `sponsor_${newId()}.${img.ext}`;
+    await db.writePublicUpload(filename, img.bytes);
+    return ok(res, { logoRef: filename }), true;
   }
 
   if (method === "GET" && url.pathname === "/api/activity/feed") {

@@ -137,6 +137,10 @@ function NewSponsorForm({ cityId, reason, onDone, onCancel }: { cityId: string; 
   const [tagline, setTagline] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [logoRef, setLogoRef] = useState<string | null>(null);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [startDate, setStartDate] = useState(todayStr);
+  const [endDate, setEndDate] = useState(todayStr);
+  const [availability, setAvailability] = useState<"checking" | "available" | "unavailable" | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [stripeReady, setStripeReady] = useState(false);
@@ -146,6 +150,23 @@ function NewSponsorForm({ cityId, reason, onDone, onCancel }: { cityId: string; 
   useEffect(() => {
     void api.getSponsorPaymentsStatus().then((r) => { if (r.ok) setStripeReady(r.data.configured); });
   }, []);
+
+  // Live availability check whenever tier or dates change - the admin sees
+  // a conflict before submitting, matching what the self-serve page shows.
+  useEffect(() => {
+    if (endDate < startDate) { setAvailability("unavailable"); return; }
+    setAvailability("checking");
+    let live = true;
+    void api.checkSponsorAvailability(cityId, tier, startDate, endDate).then((r) => {
+      if (live) setAvailability(r.ok && r.data.available ? "available" : "unavailable");
+    });
+    return () => { live = false; };
+  }, [cityId, tier, startDate, endDate]);
+
+  // Preview only - the server (SPONSOR_DAY_RATE_USD in payments.ts) is the actual source of truth at checkout time. Keep these two in sync if the rates change.
+  const dayCount = Math.max(0, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86_400_000) + 1);
+  const dayRate = tier === "featured" ? 25 : 10;
+  const totalPrice = dayCount * dayRate;
 
   const handleLogoFile = (file: File) => {
     const reader = new FileReader();
@@ -162,10 +183,10 @@ function NewSponsorForm({ cityId, reason, onDone, onCancel }: { cityId: string; 
     if (!businessName.trim()) { setFormError("Business name is required."); return; }
     if (!linkUrl.trim()) { setFormError("A link URL is required."); return; }
     setSubmitting(true);
-    const r = await api.adminCreateSponsor({ cityId, tier, businessName: businessName.trim(), tagline: tagline.trim(), linkUrl: linkUrl.trim(), logoRef, active: true }, reason.trim());
+    const r = await api.adminCreateSponsor({ cityId, tier, businessName: businessName.trim(), tagline: tagline.trim(), linkUrl: linkUrl.trim(), logoRef, active: true, startDate, endDate }, reason.trim());
     setSubmitting(false);
     if (r.ok) onDone();
-    else setFormError(r.error.message ?? "That tier is full — deactivate one first.");
+    else setFormError(r.error.message ?? "Those dates are already booked for this tier.");
   };
 
   /**
@@ -179,9 +200,9 @@ function NewSponsorForm({ cityId, reason, onDone, onCancel }: { cityId: string; 
     if (!businessName.trim()) { setFormError("Business name is required."); return; }
     if (!linkUrl.trim()) { setFormError("A link URL is required."); return; }
     setSubmitting(true);
-    const created = await api.adminCreateSponsor({ cityId, tier, businessName: businessName.trim(), tagline: tagline.trim(), linkUrl: linkUrl.trim(), logoRef, active: false }, reason.trim());
+    const created = await api.adminCreateSponsor({ cityId, tier, businessName: businessName.trim(), tagline: tagline.trim(), linkUrl: linkUrl.trim(), logoRef, active: false, startDate, endDate }, reason.trim());
     setSubmitting(false);
-    if (!created.ok) { setFormError(created.error.message ?? "That tier is full — deactivate one first."); return; }
+    if (!created.ok) { setFormError(created.error.message ?? "Those dates are already booked for this tier."); return; }
     setPaymentLink(`${window.location.origin}/sponsor/${created.data.sponsor.id}`);
   };
 
@@ -200,6 +221,14 @@ function NewSponsorForm({ cityId, reason, onDone, onCancel }: { cityId: string; 
             {t === "featured" ? "Featured (1 slot)" : "Standard (3 slots)"}
           </button>
         ))}
+      </div>
+      <div className="flex gap-2">
+        <label className="flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Start date</span><input type="date" min={todayStr} value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} /></label>
+        <label className="flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">End date</span><input type="date" min={startDate} value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputCls} /></label>
+      </div>
+      <div className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-[13px] font-semibold ${availability === "unavailable" ? "bg-rose-50 text-rose-700" : availability === "available" ? "bg-emerald-50 text-emerald-800" : "bg-slate-50 text-slate-500"}`}>
+        <span>{dayCount} day{dayCount === 1 ? "" : "s"} · ${totalPrice} total</span>
+        <span>{availability === "checking" ? "Checking…" : availability === "available" ? "Dates open ✓" : availability === "unavailable" ? "Already booked" : ""}</span>
       </div>
       <input className={inputCls} placeholder="Business name" value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
       <input className={inputCls} placeholder="Tagline (optional)" value={tagline} onChange={(e) => setTagline(e.target.value)} maxLength={120} />
@@ -228,11 +257,11 @@ function NewSponsorForm({ cityId, reason, onDone, onCancel }: { cityId: string; 
         <div className="flex flex-col gap-2">
           <div className="flex gap-2">
             <PillButton variant="ghost" onClick={onCancel} className="flex-1">Cancel</PillButton>
-            <PillButton variant="ghost" disabled={submitting} onClick={() => void submit()} className="flex-1">
+            <PillButton variant="ghost" disabled={submitting || availability === "unavailable"} onClick={() => void submit()} className="flex-1">
               {submitting ? "Adding…" : "Add now (mark active)"}
             </PillButton>
           </div>
-          <PillButton variant="primary" disabled={submitting} onClick={() => void generateSponsorLink()} className="w-full">
+          <PillButton variant="primary" disabled={submitting || availability === "unavailable"} onClick={() => void generateSponsorLink()} className="w-full">
             {submitting ? "Generating…" : "Generate sponsor page link"}
           </PillButton>
           {!stripeReady ? (
