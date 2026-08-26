@@ -63,6 +63,7 @@ export async function createSponsorCheckout(db: Db, ctx: AdminCtx, input: Checko
     const session = await stripe.checkout.sessions.create(
       {
         mode: "payment",
+        managed_payments: { enabled: false },
         payment_method_types: ["card"],
         line_items: [
           {
@@ -124,6 +125,7 @@ export async function createPublicSponsorCheckout(db: Db, sponsorId: string, suc
     const session = await stripe.checkout.sessions.create(
       {
         mode: "payment",
+        managed_payments: { enabled: false },
         payment_method_types: ["card"],
         line_items: [
           {
