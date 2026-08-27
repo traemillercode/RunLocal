@@ -33,7 +33,8 @@ export function BottomNav() {
         type="button"
         onClick={() => setCreateOpen(true)}
         aria-label="Create"
-        className="absolute right-4 top-0 z-10 grid h-14 w-14 -translate-y-1/2 place-items-center rounded-full bg-[#FF5741] text-[#14171C] shadow-lg ring-4 ring-white active:scale-95"
+        style={{ transform: "translate(-50%, -78%)" }}
+        className="absolute left-1/2 top-0 z-10 grid h-14 w-14 place-items-center rounded-full bg-[#FF5741] text-[#14171C] shadow-lg ring-4 ring-white active:scale-95"
       >
         <Icon name="plus" className="h-6 w-6" />
       </button>
