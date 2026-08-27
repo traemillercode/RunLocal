@@ -176,14 +176,14 @@ describe("My Runs SSR UI", () => {
     // The header (visible on both List and Calendar views) hosts the private ICS
     // export link; it carries the caller's browser offset so the export's
     // upcoming set matches the list view (see my-runs-eleventh tests).
-    expect(source).toContain("<MyRunsHeader view={view} onViewChange={setView} onAddSolo={() => setSoloOpen(true)} />");
+    expect(source).toContain("<MyRunsHeader view={view} onViewChange={setView} onAddSolo={() => setSoloOpen(true)} onLogRun={() => setLogRunOpen(true)} />");
     expect(source).toContain('href={`/api/my/runs/ical?tzOffsetMinutes=${new Date().getTimezoneOffset()}`}');
     expect(source).toContain('aria-label="Export calendar (.ics)"');
     expect(source).toContain("runlocal-my-runs-"); // date-stamped download name
     expect(source).toContain("Upcoming runs only");
   });
   it("renders the header export affordance with an accessible, date-stamped download in both views", () => {
-    const list = renderToStaticMarkup(<MyRunsHeader view="list" onViewChange={() => {}} onAddSolo={() => {}} />);
+    const list = renderToStaticMarkup(<MyRunsHeader view="list" onViewChange={() => {}} onAddSolo={() => {}} onLogRun={() => {}} />);
     expect(list).toContain('data-tour-target="my-runs-header"');
     expect(list).toContain("Your private RSVP list. Only you can see it.");
     expect(list).toContain('href="/api/my/runs/ical?tzOffsetMinutes=');
@@ -195,7 +195,7 @@ describe("My Runs SSR UI", () => {
     // Exactly one pressed view toggle at a time — List is active by default.
     expect((list.match(/aria-pressed="true"/g) ?? []).length).toBe(1);
     expect(list).toMatch(/<button type="button" aria-pressed="true"[^>]*>List<\/button>/);
-    const calendar = renderToStaticMarkup(<MyRunsHeader view="calendar" onViewChange={() => {}} onAddSolo={() => {}} />);
+    const calendar = renderToStaticMarkup(<MyRunsHeader view="calendar" onViewChange={() => {}} onAddSolo={() => {}} onLogRun={() => {}} />);
     expect((calendar.match(/aria-pressed="true"/g) ?? []).length).toBe(1);
     expect(calendar).toMatch(/<button type="button" aria-pressed="true"[^>]*>Calendar<\/button>/);
   });

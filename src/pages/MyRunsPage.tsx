@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import * as api from "../lib/api";
 import { Icon } from "../components/ui";
-import { SoloRunSheet } from "../components/SubmissionSheets";
+import { SoloRunSheet, LogRunSheet } from "../components/SubmissionSheets";
 import { useAccount } from "../state/account";
 import { useToast } from "../lib/toast";
 import { formatRunDate, groupRunsByMonth, monthKey, monthLabel, orderMyRuns, runStartMs } from "../lib/myRuns";
@@ -23,6 +23,7 @@ export function MyRunsPage() {
   const [keepingId, setKeepingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [soloOpen, setSoloOpen] = useState(false);
+  const [logRunOpen, setLogRunOpen] = useState(false);
   // The runner's own home city (same source useSelectedCity resolves for
   // signed-in accounts) — never a hardcoded city. Guests/legacy accounts pass
   // "" and the server verdict surfaces in the sheet.
@@ -40,7 +41,7 @@ export function MyRunsPage() {
   if (errorCode === "verified_runner_required") return <Page><h1 className="text-2xl font-extrabold tracking-tight text-slate-900">My Runs</h1><p className="mt-3 text-slate-600">Verification is required to view your private RSVPs.</p><Link className="mt-5 inline-flex min-h-11 items-center rounded-[10px] bg-[#14171C] px-4 py-2 font-semibold text-white" to="/verify">Verify your account</Link></Page>;
   if (error) return <Page><h1 className="text-2xl font-extrabold tracking-tight text-slate-900">My Runs</h1><p className="mt-3 text-slate-600">We couldn’t load your runs.</p><button onClick={load} className="mt-5 inline-flex min-h-11 items-center rounded-[10px] bg-[#14171C] px-4 py-2 font-semibold text-white">Try again</button></Page>;
   const hasRuns = sections.upcoming.length + sections.past.length > 0;
-  return <Page><MyRunsHeader view={view} onViewChange={setView} onAddSolo={() => setSoloOpen(true)} />{actionError ? <div role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-800 ring-1 ring-rose-200">{actionError}</div> : null}{!hasRuns ? <Empty /> : view === "calendar" ? <CalendarGrid upcoming={sections.upcoming} onRemove={remove} removingId={removingId} onToggleKeep={toggleKeep} keepingId={keepingId} /> : <div className="mt-6 space-y-8">{sections.upcoming.length > 0 && <RunSection title="Upcoming" runs={sections.upcoming} onRemove={remove} removingId={removingId} onToggleKeep={toggleKeep} keepingId={keepingId} upcoming />}{sections.past.length > 0 && <PastSection runs={sections.past} onRemove={remove} removingId={removingId} onToggleKeep={toggleKeep} keepingId={keepingId} />}</div>}<SoloRunSheet open={soloOpen} onClose={() => setSoloOpen(false)} cityId={cityId} onScheduled={load} /></Page>;
+  return <Page><MyRunsHeader view={view} onViewChange={setView} onAddSolo={() => setSoloOpen(true)} onLogRun={() => setLogRunOpen(true)} />{actionError ? <div role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-medium text-rose-800 ring-1 ring-rose-200">{actionError}</div> : null}{!hasRuns ? <Empty /> : view === "calendar" ? <CalendarGrid upcoming={sections.upcoming} onRemove={remove} removingId={removingId} onToggleKeep={toggleKeep} keepingId={keepingId} /> : <div className="mt-6 space-y-8">{sections.upcoming.length > 0 && <RunSection title="Upcoming" runs={sections.upcoming} onRemove={remove} removingId={removingId} onToggleKeep={toggleKeep} keepingId={keepingId} upcoming />}{sections.past.length > 0 && <PastSection runs={sections.past} onRemove={remove} removingId={removingId} onToggleKeep={toggleKeep} keepingId={keepingId} />}</div>}<SoloRunSheet open={soloOpen} onClose={() => setSoloOpen(false)} cityId={cityId} onScheduled={load} /><LogRunSheet open={logRunOpen} onClose={() => setLogRunOpen(false)} /></Page>;
   function remove(run: api.MyRunView) {
     if (removingId) return;
     setRemovingId(run.id); setActionError(null);
@@ -96,7 +97,7 @@ export function RunCard({ run, onRemove, removing = false, upcoming = false, onT
  * List view (see my-runs-eleventh tests).
  * The date-stamped download name mirrors the server's Content-Disposition so
  * re-exports never collide on import (ical.ts). */
-export function MyRunsHeader({ view, onViewChange, onAddSolo }: { view: View; onViewChange: (v: View) => void; onAddSolo: () => void }) {
+export function MyRunsHeader({ view, onViewChange, onAddSolo, onLogRun }: { view: View; onViewChange: (v: View) => void; onAddSolo: () => void; onLogRun: () => void }) {
   const now = new Date();
   const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   return (
@@ -106,6 +107,7 @@ export function MyRunsHeader({ view, onViewChange, onAddSolo }: { view: View; on
         <p className="mt-2 text-sm text-slate-500">Your private RSVP list. Only you can see it.</p>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <button type="button" onClick={onLogRun} aria-label="Log a run" title="Record a completed run — it shows as an activity card on your public profile" className="inline-flex min-h-11 items-center gap-1.5 rounded-[10px] bg-[#FF5741] px-3 py-2 text-xs font-bold text-[#14171C] shadow-sm hover:bg-[#e94735]"><Icon name="plus" className="h-3.5 w-3.5" />Log a run</button>
         <button type="button" onClick={onAddSolo} aria-label="Add solo run" title="Schedule a private run just for you — only you can see it" className="inline-flex min-h-11 items-center gap-1.5 rounded-[10px] bg-[#14171C] px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#252a31]"><Icon name="plus" className="h-3.5 w-3.5" />Add solo run</button>
         <a href={`/api/my/runs/ical?tzOffsetMinutes=${new Date().getTimezoneOffset()}`} download={`runlocal-my-runs-${stamp}.ics`} aria-label="Export calendar (.ics)" title="Download your upcoming runs as an .ics calendar file (Google, Outlook, Apple compatible)" className="inline-flex min-h-11 items-center rounded-[10px] bg-white px-3 py-2 text-xs font-bold text-[#14171C] shadow-sm ring-1 ring-slate-200 hover:ring-slate-400">Export calendar (.ics)</a>
         <div className="flex shrink-0 rounded-xl bg-slate-100 p-1" role="group" aria-label="My Runs view">

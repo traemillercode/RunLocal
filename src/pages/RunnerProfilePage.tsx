@@ -7,11 +7,14 @@ import { Chip, Icon } from "../components/ui";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { TrustSummary } from "../components/TrustProfileSection";
+import { ActivityCardList } from "../components/ActivityCards";
+import { LogRunSheet } from "../components/SubmissionSheets";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
 import type { AccountRole } from "../lib/accounts";
 import {
   getRunnerProfile,
+  type PublicActivityCard,
   type RecognitionView,
   type RunnerActivityRow,
   type RunnerProfileResponse,
@@ -234,30 +237,72 @@ export function RunnerProfileTabs({ tab, onSelect }: { tab: RunnerProfileTab; on
   );
 }
 
-/** Activity panel — forum posts by this runner (server-gated by
- * show_past_activity; the server sends [] when nothing is visible). */
-export function RunnerActivityPanel({ rows, loading = false }: { rows: RunnerActivityRow[] | null; loading?: boolean }) {
+/** Activity panel — the runner's logged-run activity cards PLUS their forum
+ * posts, both server-gated by show_past_activity + per-card shareMode (the
+ * server sends [] for anything not visible to the current viewer). `ownView`
+ * + `onLogRun` render the "Log a run" posting CTA on the runner's OWN profile
+ * (verified callers open the LogRunSheet; unverified callers get the gate —
+ * never a silent failure). */
+export function RunnerActivityPanel({
+  rows,
+  cards,
+  loading = false,
+  ownView = false,
+  onLogRun,
+}: {
+  rows: RunnerActivityRow[] | null;
+  cards?: PublicActivityCard[] | null;
+  loading?: boolean;
+  ownView?: boolean;
+  onLogRun?: () => void;
+}) {
+  const loadingNow = loading || rows === null;
+  const cardList = cards ?? [];
+  const rowList = rows ?? [];
+  const hasCards = cardList.length > 0;
+  const hasPosts = rowList.length > 0;
   return (
-    <section aria-label="Recent forum activity" role="tabpanel" className="mt-3">
-      {loading || rows === null ? (
+    <section aria-label="Recent activity" role="tabpanel" className="mt-3">
+      {ownView ? (
+        <button
+          type="button"
+          onClick={onLogRun}
+          className="mb-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#FF5741] text-sm font-semibold text-[#14171C] active:bg-[#e94735]"
+        >
+          <Icon name="plus" className="h-4 w-4" /> Log a run
+        </button>
+      ) : null}
+      {loadingNow ? (
         <p className="rounded-2xl bg-white p-5 text-center text-sm text-slate-500 ring-1 ring-slate-200/70">Loading activity…</p>
-      ) : rows.length === 0 ? (
+      ) : hasCards || hasPosts ? (
+        <div className="space-y-3">
+          {hasCards ? <ActivityCardList cards={cardList} /> : null}
+          {hasPosts ? (
+            <ul aria-label="Forum posts" className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+              {rowList.map((a) => (
+                <li key={a.id} className="px-4 py-3.5">
+                  <p className="text-[14px] font-semibold text-slate-900">{a.title}</p>
+                  <p className="mt-0.5 line-clamp-2 text-[13px] leading-relaxed text-slate-500">{a.excerpt}</p>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-400">{a.createdAt}</p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : ownView ? (
+        <div className="rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200/70">
+          <p className="text-sm font-semibold text-slate-700">No runs logged yet</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-500">
+            Use “Log a run” above to record a run you finished — it appears on your public profile and for your connections.
+          </p>
+        </div>
+      ) : (
         <div className="rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200/70">
           <p className="text-sm font-semibold text-slate-700">No public activity yet</p>
           <p className="mt-1 text-[13px] leading-relaxed text-slate-500">
             This runner hasn't posted anything publicly visible — or keeps their past activity private.
           </p>
         </div>
-      ) : (
-        <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
-          {rows.map((a) => (
-            <li key={a.id} className="px-4 py-3.5">
-              <p className="text-[14px] font-semibold text-slate-900">{a.title}</p>
-              <p className="mt-0.5 line-clamp-2 text-[13px] leading-relaxed text-slate-500">{a.excerpt}</p>
-              <p className="mt-1 text-[11px] font-semibold text-slate-400">{a.createdAt}</p>
-            </li>
-          ))}
-        </ul>
       )}
     </section>
   );
@@ -481,8 +526,12 @@ export function RunnerProfilePage({ id }: { id: string }) {
   // Activity | Tagged tabs.
   const [tab, setTab] = useState<RunnerProfileTab>("activity");
   const [activity, setActivity] = useState<RunnerActivityRow[] | null>(null);
+  const [cards, setCards] = useState<PublicActivityCard[] | null>(null);
   const [tagged, setTagged] = useState<RunnerTaggedRow[] | null>(null);
   const [busyTagId, setBusyTagId] = useState<string | null>(null);
+  // Log-a-run composition (verified runners) + its gate for unverified viewers.
+  const [logRunOpen, setLogRunOpen] = useState(false);
+  const [logGateOpen, setLogGateOpen] = useState(false);
   const load = useCallback(() => {
     let live = true;
     setState("loading");
@@ -513,13 +562,19 @@ export function RunnerProfilePage({ id }: { id: string }) {
   // yourself; own privacy lives in Settings), but the Tagged tab still shows
   // self-hide toggles.
   const isSelf = viewerId !== null && viewerId === id;
+  // Quiet refetch of the runner's activity (posts + cards) after a log.
+  const refetchActivity = useCallback(() => {
+    void api.getRunnerActivity(id).then((r) => {
+      if (r.ok) { setActivity(r.data.activity); setCards(r.data.activityCards); }
+    });
+  }, [id]);
   // Activity + Tagged fetch once the profile resolves. The SERVER gates both
   // (show_past_activity / show_tagged_content) and sends [] when nothing is
   // visible — the client never decides visibility.
   useEffect(() => {
     if (state !== "ready") return;
     let alive = true;
-    void api.getRunnerActivity(id).then((r) => { if (alive) setActivity(r.ok ? r.data.activity : []); });
+    void api.getRunnerActivity(id).then((r) => { if (alive) { setActivity(r.ok ? r.data.activity : []); setCards(r.ok ? r.data.activityCards : []); } });
     void api.getRunnerTagged(id).then((r) => { if (alive) setTagged(r.ok ? r.data.tagged : []); });
     return () => { alive = false; };
   }, [state, id]);
@@ -646,7 +701,13 @@ export function RunnerProfilePage({ id }: { id: string }) {
           )}
           <RunnerProfileTabs tab={tab} onSelect={setTab} />
           {tab === "activity" ? (
-            <RunnerActivityPanel rows={activity} loading={activity === null} />
+            <RunnerActivityPanel
+              rows={activity}
+              cards={cards}
+              loading={activity === null}
+              ownView={isSelf}
+              onLogRun={() => (role === "verified" ? setLogRunOpen(true) : setLogGateOpen(true))}
+            />
           ) : (
             <RunnerTaggedPanel rows={tagged} isOwn={isSelf} busyTagId={busyTagId} onToggleHide={toggleTaggedHide} />
           )}
@@ -687,6 +748,19 @@ export function RunnerProfilePage({ id }: { id: string }) {
           busy={removeBusy}
           error={removeError}
           onConfirm={runRemove}
+        />
+      ) : null}
+      {logRunOpen ? (
+        <LogRunSheet open onClose={() => setLogRunOpen(false)} onLogged={refetchActivity} />
+      ) : null}
+      {logGateOpen ? (
+        <VerifiedGateSheet
+          open
+          onClose={() => setLogGateOpen(false)}
+          role={role}
+          actionLabel="logging runs"
+          pendingLabel="Your profile is still in review."
+          rejectionReason={me?.status === "signed_in" ? me.account.rejectionReason ?? null : null}
         />
       ) : null}
     </div>

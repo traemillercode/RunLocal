@@ -20,16 +20,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import * as api from "../lib/api";
 import { Chip, Icon, PillButton } from "../components/ui";
+import { ConnectionActivityCardView } from "../components/ActivityCards";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { useAccount } from "../state/account";
 import { useToast } from "../lib/toast";
 
-export type ConnectionsTab = "requests" | "connections" | "people";
+export type ConnectionsTab = "requests" | "connections" | "people" | "activity";
 
 const TABS: { id: ConnectionsTab; label: string }[] = [
   { id: "requests", label: "Requests" },
   { id: "connections", label: "My Connections" },
   { id: "people", label: "Find People" },
+  { id: "activity", label: "Activity" },
 ];
 
 export function ConnectionsPage() {
@@ -63,6 +65,10 @@ export function ConnectionsPage() {
   const [confirmError, setConfirmError] = useState<string | null>(null);
   // Guards stale Find People responses when the user types quickly.
   const searchSeq = useRef(0);
+  // Connections activity feed (accepted connections' shared cards).
+  const [activity, setActivity] = useState<api.ConnectionActivityCard[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
 
   const signedIn = me?.status === "signed_in";
   const verified = signedIn && me.account.status === "verified";
@@ -75,6 +81,16 @@ export function ConnectionsPage() {
         setConnections(r.data.connections);
         setPendingCount(r.data.pendingCount);
       }
+    });
+  };
+  /** Connections activity feed — accepted connections' shared cards (server-filtered for the viewer). */
+  const loadActivity = () => {
+    setActivityLoading(true);
+    setActivityError(null);
+    void api.getConnectionsActivity().then((r) => {
+      setActivityLoading(false);
+      if (r.ok) setActivity(r.data.cards);
+      else setActivityError(r.error.message ?? "Couldn't load activity.");
     });
   };
   const load = () => {
@@ -94,8 +110,10 @@ export function ConnectionsPage() {
   };
   useEffect(() => {
     if (signedIn) {
-      if (verified) load();
-      else setLoading(false);
+      if (verified) {
+        load();
+        loadActivity();
+      } else setLoading(false);
     } else {
       setLoading(false);
     }
@@ -116,8 +134,9 @@ export function ConnectionsPage() {
       setBusyRequestId(null);
       if (r.ok) {
         // Accepting makes them a connection — refresh so My Connections shows
-        // the accepted runner exactly as the server now knows them.
-        if (action === "accept") refreshList();
+        // the accepted runner exactly as the server now knows them, and reload
+        // their shared activity.
+        if (action === "accept") { refreshList(); loadActivity(); }
         toast(action === "accept" ? "Request accepted." : "Request declined.", "success");
       } else {
         setRequests(prev);
@@ -280,13 +299,17 @@ export function ConnectionsPage() {
       onAcceptFromSearch={acceptFromSearch}
       actionError={actionError}
       onClearActionError={() => setActionError(null)}
+      activityCards={activity}
+      activityLoading={activityLoading}
+      activityError={activityError}
+      onRetryActivity={loadActivity}
     />
   );
 }
 
 /**
  * Presentational Connections body — no hooks, driven entirely by props so SSR
- * tests render the real markup. Three in-page tabs (ForumSectionTabs pattern:
+ * tests render the real markup. Four in-page tabs (ForumSectionTabs pattern:
  * role="tablist"/"tab" + aria-selected, content-sized pills). The active
  * tab's panel is role="tabpanel".
  */
@@ -317,6 +340,10 @@ export function ConnectionsView({
   actionError,
   onClearActionError,
   onMessage,
+  activityCards = [],
+  activityLoading = false,
+  activityError = null,
+  onRetryActivity,
 }: {
   tab: ConnectionsTab;
   onTabChange: (t: ConnectionsTab) => void;
@@ -344,6 +371,10 @@ export function ConnectionsView({
   actionError: string | null;
   onClearActionError: () => void;
   onMessage?: (c: api.ConnectionView) => void;
+  activityCards?: api.ConnectionActivityCard[];
+  activityLoading?: boolean;
+  activityError?: string | null;
+  onRetryActivity?: () => void;
 }) {
   // My Connections filtering is local (name/username) — the server list is
   // already privacy-filtered, so this never leaks anything.
@@ -543,6 +574,35 @@ export function ConnectionsView({
         </section>
       ) : null}
 
+      {tab === "activity" ? (
+        <section aria-label="Connections activity" role="tabpanel" className="mt-4">
+          {activityLoading ? (
+            <p className="mt-8 text-center text-sm text-slate-500">Loading connections' activity…</p>
+          ) : activityError ? (
+            <div className="mt-4">
+              <EmptyState
+                icon="flag"
+                title="Couldn't load activity"
+                body={activityError}
+                action={onRetryActivity ? { label: "Try again", onClick: onRetryActivity } : undefined}
+              />
+            </div>
+          ) : activityCards.length === 0 ? (
+            <EmptyState
+              icon="flag"
+              title="No runs from your connections yet"
+              body="When runners you're connected to log a run that they share, it shows up here — jump to their profile to see the full card."
+            />
+          ) : (
+            <ul aria-label="Activity from your connections" className="divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+              {activityCards.map((c) => (
+                <ConnectionActivityCardView key={c.id} card={c} />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
       <ModerationConfirmSheet
         open={confirmRemove !== null}
         onClose={onCloseRemove}
@@ -579,12 +639,21 @@ function initials(name: string): string {
     .toUpperCase();
 }
 
-function EmptyState({ icon, title, body }: { icon: string; title: string; body: string }) {
+function EmptyState({ icon, title, body, action }: { icon: string; title: string; body: string; action?: { label: string; onClick: () => void } }) {
   return (
     <div className="flex flex-col items-center rounded-2xl bg-white p-8 text-center ring-1 ring-slate-200/70">
       <Icon name={icon} className="h-10 w-10 text-slate-300" />
       <p className="mt-3 font-semibold text-slate-700">{title}</p>
       <p className="mt-1 text-sm text-slate-500">{body}</p>
+      {action ? (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className="mt-4 inline-flex min-h-11 items-center rounded-[10px] bg-[#14171C] px-4 py-2 text-sm font-semibold text-white"
+        >
+          {action.label}
+        </button>
+      ) : null}
     </div>
   );
 }
