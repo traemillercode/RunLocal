@@ -1156,6 +1156,7 @@ export interface TrainingPlanView {
   startDate: string;
   linkedRaceId: string | null;
   linkedRaceName: string | null;
+  customRaceName: string | null;
   currentWeek: number;
   createdAt: string;
   updatedAt: string;
@@ -1163,7 +1164,7 @@ export interface TrainingPlanView {
 export function getTrainingPlan(): Promise<ApiResult<{ plan: TrainingPlanView | null }>> {
   return request("/api/profile/training-plan");
 }
-export function setTrainingPlan(input: { planType: TrainingPlanType; customLabel?: string | null; totalWeeks: number; startDate: string; linkedRaceId?: string | null }): Promise<ApiResult<{ plan: TrainingPlanView }>> {
+export function setTrainingPlan(input: { planType: TrainingPlanType; customLabel?: string | null; totalWeeks: number; startDate: string; linkedRaceId?: string | null; customRaceName?: string | null }): Promise<ApiResult<{ plan: TrainingPlanView }>> {
   return request("/api/profile/training-plan", { method: "PUT", body: JSON.stringify(input) });
 }
 export function deleteTrainingPlan(): Promise<ApiResult<{ deleted: boolean }>> {

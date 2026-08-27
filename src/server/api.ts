@@ -2451,6 +2451,10 @@ async function handleApi(
         if (typeof body.linkedRaceId !== "string" || !db.getRace(body.linkedRaceId)) return err(res, { status: 400, error: "invalid_race", message: "That race couldn't be found." }), true;
         linkedRaceId = body.linkedRaceId;
       }
+      // A race that isn't in the system yet - stored as a plain display
+      // name (not a real race link) until it's submitted and approved
+      // separately. Cleared automatically once a real linkedRaceId is set.
+      const customRaceName = linkedRaceId ? null : (typeof body.customRaceName === "string" && body.customRaceName.trim() ? body.customRaceName.trim().slice(0, 80) : null);
       const existing = db.getTrainingPlan(sess.accountId);
       const plan = db.setTrainingPlan({
         accountId: sess.accountId,
@@ -2459,6 +2463,7 @@ async function handleApi(
         totalWeeks,
         startDate,
         linkedRaceId,
+        customRaceName,
         createdAt: existing?.createdAt ?? now.toISOString(),
         updatedAt: now.toISOString(),
       });

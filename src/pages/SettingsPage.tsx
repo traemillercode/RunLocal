@@ -499,6 +499,10 @@ export function TrainingPlanSection({ cityId }: { cityId: string }) {
   const [totalWeeks, setTotalWeeks] = useState("16");
   const [startDate, setStartDate] = useState("");
   const [linkedRaceId, setLinkedRaceId] = useState("");
+  const [addingNewRace, setAddingNewRace] = useState(false);
+  const [newRaceName, setNewRaceName] = useState("");
+  const [newRaceDate, setNewRaceDate] = useState("");
+  const [newRaceLocation, setNewRaceLocation] = useState("");
 
   useEffect(() => {
     void api.getTrainingPlan().then((r) => { if (r.ok) setPlan(r.data.plan); });
@@ -513,21 +517,49 @@ export function TrainingPlanSection({ cityId }: { cityId: string }) {
       setStartDate(plan.startDate);
       setLinkedRaceId(plan.linkedRaceId ?? "");
     }
+    setAddingNewRace(false);
+    setNewRaceName("");
+    setNewRaceDate("");
+    setNewRaceLocation("");
     setError(null);
     setEditing(true);
   };
 
-  const save = () => {
+  const save = async () => {
     const weeks = Number(totalWeeks);
     if (!startDate) { setError("Pick a start date."); return; }
     if (!Number.isFinite(weeks) || weeks < 1 || weeks > 52) { setError("Plan length must be between 1 and 52 weeks."); return; }
+    if (addingNewRace && (!newRaceName.trim() || !newRaceDate)) { setError("Give your race a name and date."); return; }
     setSaving(true);
     setError(null);
-    void api.setTrainingPlan({ planType, customLabel: planType === "other" ? customLabel : null, totalWeeks: weeks, startDate, linkedRaceId: linkedRaceId || null }).then((r) => {
-      setSaving(false);
-      if (r.ok) { setPlan(r.data.plan); setEditing(false); toast("Training plan saved.", "success"); }
-      else setError(r.error.message ?? "Couldn't save your plan.");
+    // Submitting a race that doesn't exist yet is a separate step from
+    // saving the plan itself - it goes into the normal admin review queue
+    // (same pipeline as any other race submission), and the plan stores the
+    // name directly so it displays right away rather than waiting on approval.
+    if (addingNewRace) {
+      const sub = await api.submitRace({ cityId, name: newRaceName.trim(), distances: "", date: newRaceDate, location: newRaceLocation.trim(), registrationUrl: "" });
+      if (!sub.ok) {
+        setSaving(false);
+        setError(sub.error.message ?? "Couldn't submit that race — try again.");
+        return;
+      }
+    }
+    const r = await api.setTrainingPlan({
+      planType,
+      customLabel: planType === "other" ? customLabel : null,
+      totalWeeks: weeks,
+      startDate,
+      linkedRaceId: addingNewRace ? null : linkedRaceId || null,
+      customRaceName: addingNewRace ? newRaceName.trim() : null,
     });
+    setSaving(false);
+    if (r.ok) {
+      setPlan(r.data.plan);
+      setEditing(false);
+      toast(addingNewRace ? "Plan saved — your race was submitted for review too." : "Training plan saved.", "success");
+    } else {
+      setError(r.error.message ?? "Couldn't save your plan.");
+    }
   };
 
   const clear = () => {
@@ -553,6 +585,9 @@ export function TrainingPlanSection({ cityId }: { cityId: string }) {
             Week {plan.currentWeek} of {plan.totalWeeks} — {plan.planType === "other" ? plan.customLabel || "Custom" : TRAINING_PLAN_LABELS[plan.planType]}
           </p>
           {plan.linkedRaceName ? <p className="mt-1 text-[13px] text-slate-500">Training for {plan.linkedRaceName}</p> : null}
+          {!plan.linkedRaceName && plan.customRaceName ? (
+            <p className="mt-1 text-[13px] text-slate-500">Training for {plan.customRaceName} <span className="text-amber-600">(pending admin review)</span></p>
+          ) : null}
           <div className="mt-3 flex gap-2">
             <button type="button" onClick={startEditing} className="h-10 rounded-full bg-slate-100 px-4 text-[13px] font-bold text-slate-700">Edit</button>
             <button type="button" onClick={clear} disabled={saving} className="h-10 rounded-full px-4 text-[13px] font-bold text-red-600">Remove plan</button>
@@ -587,13 +622,29 @@ export function TrainingPlanSection({ cityId }: { cityId: string }) {
           </label>
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-slate-700">Training for a specific race? (optional)</span>
-            <select value={linkedRaceId} onChange={(e) => setLinkedRaceId(e.target.value)} className={fieldCls}>
+            <select
+              value={addingNewRace ? "__new__" : linkedRaceId}
+              onChange={(e) => {
+                if (e.target.value === "__new__") { setAddingNewRace(true); setLinkedRaceId(""); }
+                else { setAddingNewRace(false); setLinkedRaceId(e.target.value); }
+              }}
+              className={fieldCls}
+            >
               <option value="">No specific race</option>
               {races.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              <option value="__new__">My race isn't listed — add it</option>
             </select>
           </label>
+          {addingNewRace ? (
+            <div className="space-y-2.5 rounded-xl bg-slate-50 p-3.5">
+              <p className="text-[12px] text-slate-500">This gets submitted for admin review so it shows up as a real race on Kimbio — your plan links to it by name right away.</p>
+              <input value={newRaceName} onChange={(e) => setNewRaceName(e.target.value)} placeholder="Race name" className={fieldCls} maxLength={80} />
+              <input type="date" value={newRaceDate} onChange={(e) => setNewRaceDate(e.target.value)} className={fieldCls} />
+              <input value={newRaceLocation} onChange={(e) => setNewRaceLocation(e.target.value)} placeholder="Location (optional)" className={fieldCls} maxLength={80} />
+            </div>
+          ) : null}
           <div className="flex gap-2 pt-1">
-            <button type="button" disabled={saving} onClick={save} className="h-11 flex-1 rounded-full bg-[#14171C] text-sm font-bold text-white disabled:opacity-50">
+            <button type="button" disabled={saving} onClick={() => void save()} className="h-11 flex-1 rounded-full bg-[#14171C] text-sm font-bold text-white disabled:opacity-50">
               {saving ? "Saving…" : "Save plan"}
             </button>
             <button type="button" onClick={() => setEditing(false)} className="h-11 rounded-full bg-slate-100 px-5 text-sm font-bold text-slate-700">Cancel</button>

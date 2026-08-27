@@ -707,6 +707,8 @@ export interface TrainingPlanRecord {
   startDate: string;
   /** Optional link to a specific race in Races — shown alongside the plan when set. */
   linkedRaceId: string | null;
+  /** Set when the runner is training for a race that isn't in the system yet - they submitted it for admin review (see /api/submissions/race) but it's not a real RaceRecord to link to until approved. Shown as "(pending)" until then; cleared once linkedRaceId is set to a real approved race. Mutually exclusive with linkedRaceId in practice, though not enforced at the type level. */
+  customRaceName: string | null;
   createdAt: string;
   updatedAt: string;
 }
