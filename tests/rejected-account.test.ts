@@ -77,6 +77,65 @@ describe("Rejected-account semantics", () => {
     expect(audit(db, "admin.reject")).toHaveLength(0);
   });
 
+  it("a rejected account can resubmit with the same email, instead of being permanently blocked", async () => {
+    const db = createMemoryStore();
+    const owner = account(db, DEFAULT_OWNER_EMAIL);
+    const applicant = pendingApplicant(db, "reapply@example.com");
+    const REJECT_REASON = "Selfie was too blurry to verify.";
+    const rej = await call(db, "POST", `/api/admin/records/${applicant.id}/reject`, owner.cookie, { reason: REJECT_REASON }, AUDIT_REASON);
+    expect(rej.status).toBe(200);
+    expect(db.getAccount(applicant.id)!.username).toBeNull();
+
+    // Previously this returned 409 email_taken with no way forward except
+    // an admin manually deleting the old record - now it succeeds.
+    const signup = await call(db, "POST", "/api/accounts", undefined, {
+      name: "Reapplicant", username: "reapplicant2", email: "reapply@example.com",
+      birthdate: "1995-01-01", cityId: "columbia-mo",
+    });
+    expect(signup.status).toBe(200);
+
+    const rec = db.getAccount(applicant.id)!;
+    // Same underlying account record reused, not a duplicate.
+    expect(rec.id).toBe(applicant.id);
+    expect(rec.status).toBe("pending");
+    expect(rec.phase).toBe("email");
+    expect(rec.username).toBe("reapplicant2");
+    expect(rec.rejectionReason).toBeNull();
+    // Prior reason preserved for admin context, not silently lost.
+    expect(rec.priorRejectionReason).toBe(REJECT_REASON);
+
+    // Only one account exists for this email - not two.
+    expect(db.getAccountByEmail("reapply@example.com")!.id).toBe(applicant.id);
+  });
+
+  it("a pending or verified account still hard-blocks a duplicate signup with the same email", async () => {
+    const db = createMemoryStore();
+    const pending = pendingApplicant(db, "still-pending@example.com");
+    const r = await call(db, "POST", "/api/accounts", undefined, {
+      name: "Someone", username: "someoneelse", email: "still-pending@example.com",
+      birthdate: "1995-01-01", cityId: "columbia-mo",
+    });
+    expect(r.status).toBe(409);
+    expect(r.body.error).toBe("email_taken");
+    void pending;
+  });
+
+  it("undo-rejection HTTP endpoint returns the account to pending review", async () => {
+    const db = createMemoryStore();
+    const owner = account(db, DEFAULT_OWNER_EMAIL);
+    const applicant = pendingApplicant(db, "undo-me@example.com");
+    await call(db, "POST", `/api/admin/records/${applicant.id}/reject`, owner.cookie, { reason: "Bad photo" }, AUDIT_REASON);
+    expect(db.getAccount(applicant.id)!.status).toBe("rejected");
+
+    const undo = await call(db, "POST", `/api/admin/records/${applicant.id}/undo_reject`, owner.cookie, undefined, AUDIT_REASON);
+    expect(undo.status).toBe(200);
+    const rec = db.getAccount(applicant.id)!;
+    expect(rec.status).toBe("pending");
+    expect(rec.phase).toBe("pending_review");
+    expect(rec.rejectionReason).toBeNull();
+  });
+
+
   it("rejection stores the private reason, clears verified/badge state, and is audited", async () => {
     const db = createMemoryStore();
     const owner = account(db, DEFAULT_OWNER_EMAIL);

@@ -416,6 +416,22 @@ export function AdminPage() {
     }
   };
 
+  /** Undo a rejection - returns the account to pending review. Low-risk/reversible (unlike delete), so no confirm dialog, just the reason already required to be viewing this record. */
+  const doUndoRejection = async () => {
+    if (!record) return;
+    setDetailError(null);
+    if (!reason.trim() || reason.trim().length < 5) {
+      setDetailError("Enter a reason (min 5 characters) for this action.");
+      return;
+    }
+    const r = await api.adminUndoRejection(record.id, reason.trim());
+    if (r.ok) {
+      void openRecord(record.id);
+    } else {
+      setDetailError(r.error.status === 401 ? "Admin session expired — sign in again." : r.error.message ?? "Action failed.");
+    }
+  };
+
   const doExport = async () => {
     setDetailError(null);
     if (!reason.trim() || reason.trim().length < 5) {
@@ -1104,6 +1120,11 @@ export function AdminPage() {
             onSaved={() => void openRecord(record.id)}
           />
           {detailError ? <div className="mt-3"><Err msg={detailError} /></div> : null}
+          {record.priorRejectionReason ? (
+            <p className="mt-3 rounded-xl bg-amber-50 p-3 text-[13px] text-amber-900">
+              <span className="font-bold">Previously rejected:</span> {record.priorRejectionReason}
+            </p>
+          ) : null}
           <div className="mt-4 grid grid-cols-3 gap-2">
             <PillButton variant="secondary" className="w-full px-2" onClick={() => void doAction("approve")} disabled={record.status === "verified"}>
               Approve
@@ -1115,6 +1136,11 @@ export function AdminPage() {
               Delete
             </PillButton>
           </div>
+          {record.status === "rejected" ? (
+            <PillButton variant="ghost" className="mt-2 w-full" onClick={() => void doUndoRejection()}>
+              Undo rejection — return to pending review
+            </PillButton>
+          ) : null}
           <p className="mt-2 text-center text-[11px] text-slate-400">Approve is a plain confirmation (audited). Reject shows the applicant your reason. Delete uses the reason above.</p>
         </section>
       )}

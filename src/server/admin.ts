@@ -637,6 +637,8 @@ export interface AdminRecordView extends AdminSearchRow {
   canViewSelfie: boolean;
   /** The applicant-facing reason stored at rejection (admin-set, admin-viewable). */
   rejectionReason: string | null;
+  /** Set when this account was previously rejected and has since resubmitted with the same email - gives full context on the new submission without it looking like an active rejection. */
+  priorRejectionReason: string | null;
   /** Home city id (admin view — used by the role editor's city scoping). */
   cityId: string | null;
   /** Full multi-role set (effective — owner-implied site_admin included). */
@@ -685,6 +687,7 @@ export function adminGetRecord(
       retentionYears: rec.retentionYears,
       canViewSelfie: Boolean(rec.selfieRef && rec.selfieRef.endsWith(".jpg")),
       rejectionReason: rec.rejectionReason ?? null,
+      priorRejectionReason: rec.priorRejectionReason ?? null,
       cityId: rec.cityId ?? null,
       roles: accountRoles(rec),
       adminCityId: rec.adminCityId ?? null,
@@ -867,6 +870,7 @@ export function adminExportRows(
         retentionYears: rec.retentionYears,
         canViewSelfie: Boolean(rec.selfieRef && rec.selfieRef.endsWith(".jpg")),
         rejectionReason: rec.rejectionReason ?? null,
+        priorRejectionReason: rec.priorRejectionReason ?? null,
         cityId: rec.cityId ?? null,
         roles: accountRoles(rec),
         adminCityId: rec.adminCityId ?? null,

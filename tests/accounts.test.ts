@@ -76,7 +76,7 @@ describe("public payloads never leak sensitive verification data", () => {
     // (like isGeofenceExempt) updates this list deliberately rather than a
     // stale expectation silently drifting from what's actually returned.
     expect(Object.keys(pub).sort()).toEqual(
-      ["adminCityId", "badge", "bio", "cityId", "customTitle", "email", "facebookUrl", "id", "instagramUrl", "isGeofenceExempt", "isOwner", "name", "paceLabel", "phase", "profilePhotoUrl", "rejectionReason", "role", "roles", "runningGoal", "showSocialLinks", "status", "suspended", "tiktokUrl", "trainingBlock", "trustedMember", "underReview", "upcomingRaces", "username"].sort(),
+      ["adminCityId", "badge", "bio", "cityId", "customTitle", "email", "facebookUrl", "id", "instagramUrl", "isGeofenceExempt", "isOwner", "name", "paceLabel", "phase", "priorRejectionReason", "profilePhotoUrl", "rejectionReason", "role", "roles", "runningGoal", "showSocialLinks", "status", "suspended", "tiktokUrl", "trainingBlock", "trustedMember", "underReview", "upcomingRaces", "username"].sort(),
     );
   });
 

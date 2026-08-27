@@ -24,6 +24,7 @@ import {
   adminExportRows,
   adminAuditLog,
   adminDeleteAccount,
+  adminUndoRejection,
   adminGetRecord,
   adminLogin,
   adminPending,
@@ -1207,7 +1208,17 @@ async function handleApi(
       return err(res, { status: 400, error: "invalid_username", message: `Choose a valid username. ${USERNAME_HINT}` }), true;
     }
     const existing = db.getAccountByEmail(email);
-    if (existing && !existing.deletedAt) return err(res, { status: 409, error: "email_taken" }), true;
+    // A pending or verified account with this email genuinely blocks a new
+    // signup - that identity is already in use. A REJECTED (non-deleted)
+    // account does not: previously this blocked the person permanently with
+    // "email taken," and the only way forward was contacting support to have
+    // the old record manually deleted. Now they resubmit onto the same
+    // record instead (see resubmitRejectedAccount) - their prior rejection
+    // reason is preserved for the admin reviewing the new submission, not
+    // silently lost.
+    if (existing && !existing.deletedAt && existing.status !== "rejected") {
+      return err(res, { status: 409, error: "email_taken" }), true;
+    }
     // Duplicate usernames are rejected deterministically on the normalized,
     // case-insensitive form. The check + create run in one synchronous turn of
     // the single-threaded store, so a concurrent request can never interleave
@@ -1221,7 +1232,9 @@ async function handleApi(
     // owner/operator assigns the real role at approval time.
     const requestedRole = body.requestedRole === "group_leader" ? "group_leader" : body.requestedRole === "runner" ? "runner" : null;
     const utmField = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 100) : null);
-    const rec = db.createAccount({ name, username, email, phone, birthdate, cityId, requestedRole });
+    const rec = existing && existing.status === "rejected"
+      ? db.resubmitRejectedAccount(existing.id, { name, username, phone, birthdate, cityId, requestedRole })!
+      : db.createAccount({ name, username, email, phone, birthdate, cityId, requestedRole });
     rec.utmSource = utmField((body as Record<string, unknown>).utm_source);
     rec.utmMedium = utmField((body as Record<string, unknown>).utm_medium);
     rec.utmCampaign = utmField((body as Record<string, unknown>).utm_campaign);
@@ -3341,8 +3354,8 @@ async function handleAdmin(
     return true;
   }
 
-  // POST /api/admin/records/:id/approve | reject | delete
-  const actionMatch = /^\/api\/admin\/records\/([a-f0-9]{32})\/(approve|reject|delete)$/.exec(url.pathname);
+  // POST /api/admin/records/:id/approve | reject | delete | undo_reject
+  const actionMatch = /^\/api\/admin\/records\/([a-f0-9]{32})\/(approve|reject|delete|undo_reject)$/.exec(url.pathname);
   if (actionMatch && method === "POST") {
     const [, id, action] = actionMatch;
     if (action === "delete") {
@@ -3350,6 +3363,12 @@ async function handleAdmin(
       if (!result.ok) return sendErr(result), true;
       await db.persist();
       return ok(res, { ok: true, deleted: result.data.id }), true;
+    }
+    if (action === "undo_reject") {
+      const result = adminUndoRejection(db, ctx, id, now);
+      if (!result.ok) return sendErr(result), true;
+      await db.persist();
+      return ok(res, { ok: true, account: toPublicAccount(result.data, isOwnerEmail(result.data.email), db) }), true;
     }
     // Role to assign on approval (owner/operator picks in the control center).
     const role = url.searchParams.get("role") === "group_leader" ? "group_leader" : "runner";

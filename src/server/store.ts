@@ -215,6 +215,7 @@ export interface PublicAccount {
    * views). Never shipped in any other member's projection of this account.
    */
   rejectionReason?: string | null;
+  priorRejectionReason?: string | null;
   profilePhotoUrl: string | null;
 }
 
@@ -265,6 +266,8 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, db?: Db, no
     underReview: rec.underReview === true,
     trustedMember: rec.trustedMember === true,
     rejectionReason: rec.status === "rejected" ? rec.rejectionReason : null,
+    /** Shown when this account was previously rejected and has since resubmitted - gives the admin reviewing the new submission full context without it looking like an active rejection. */
+    priorRejectionReason: rec.priorRejectionReason ?? null,
     profilePhotoUrl: rec.profilePhotoRef ? `/uploads/public/${rec.profilePhotoRef}` : null,
   };
 }
@@ -655,6 +658,40 @@ export class Db {
     };
     this.accounts.set(rec.id, rec);
     return rec;
+  }
+  /**
+   * A rejected (not deleted) account tries to sign up again with the same
+   * email — rather than permanently blocking them with "email taken"
+   * (the actual bug: previously the only way forward was contacting support
+   * to have the old record deleted), this resets the SAME account record to
+   * a fresh pending state with their new signup details, moving the old
+   * rejectionReason into priorRejectionReason so an admin reviewing the new
+   * submission has full context. Does not restore the old username (it was
+   * released back to the pool on rejection and may be taken by now) - the
+   * new signup's chosen username is used, already validated for uniqueness
+   * by the caller before this runs.
+   */
+  resubmitRejectedAccount(id: string, input: { name: string; username: string; phone: string | null; birthdate: string | null; cityId: string | null; requestedRole: "runner" | "group_leader" | null }): AccountRecord | undefined {
+    const rec = this.accounts.get(id);
+    if (!rec || rec.status !== "rejected" || rec.deletedAt) return undefined;
+    return this.updateAccount(id, {
+      name: input.name.trim().slice(0, 60),
+      username: input.username,
+      phone: input.phone,
+      birthdate: input.birthdate,
+      cityId: input.cityId,
+      requestedRole: input.requestedRole,
+      status: "pending",
+      phase: "email",
+      selfieRef: null,
+      selfieCapturedAt: null,
+      phoneVerified: false,
+      phoneVerifiedAt: null,
+      priorRejectionReason: rec.rejectionReason,
+      rejectionReason: null,
+      signupAt: nowIso(this.now()),
+      lastActivityAt: nowIso(this.now()),
+    });
   }
   updateAccount(id: string, patch: Partial<AccountRecord>): AccountRecord | undefined {
     const rec = this.accounts.get(id);

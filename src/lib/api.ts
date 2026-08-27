@@ -262,6 +262,8 @@ export interface AdminRecordView extends AdminSearchRow {
   canViewSelfie: boolean;
   /** Applicant-facing rejection reason stored at rejection (admin view). */
   rejectionReason: string | null;
+  /** Set when this account was previously rejected and has since resubmitted with the same email. */
+  priorRejectionReason: string | null;
   /** Home city id (admin view — used by the role editor's city scoping). */
   cityId: string | null;
   /** Full multi-role set (effective — owner-implied site_admin included). */
@@ -330,6 +332,9 @@ export function adminPending(): Promise<ApiResult<{ results: PendingQueueRow[] }
 
 export function adminDeleteRecord(id: string, reason: string): Promise<ApiResult<{ ok: true }>> {
   return adminRequest(`/api/admin/records/${id}/delete`, reason, { method: "POST" });
+}
+export function adminUndoRejection(id: string, reason: string): Promise<ApiResult<{ ok: true; account: import("./accounts").PublicAccount }>> {
+  return adminRequest(`/api/admin/records/${id}/undo_reject`, reason, { method: "POST" });
 }
 
 export function adminAudit(limit = 100, reason: string): Promise<ApiResult<{ entries: AuditEntryView[] }>> {

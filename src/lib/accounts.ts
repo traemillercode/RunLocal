@@ -118,6 +118,7 @@ export interface PublicAccount {
    * members' projections). `null` when not rejected.
    */
   rejectionReason?: string | null;
+  priorRejectionReason?: string | null;
   profilePhotoUrl: string | null;
 }
 
