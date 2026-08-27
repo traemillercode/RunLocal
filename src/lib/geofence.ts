@@ -24,16 +24,21 @@ export type GeofenceStatus =
   | { kind: "unrestricted" };
 
 /**
- * Checks the browser's geolocation against the given city's center, once per
- * mount. Denial or an unsupported browser is treated as a hard fail (kind:
+ * Checks the browser's geolocation against the given city's center. Denial
+ * or an unsupported browser is treated as a hard fail (kind:
  * "denied"/"unavailable") rather than silently letting the person through —
  * "can only use the app in the city" means location confirmation is
- * required, not optional.
+ * required, not optional. Returns a retry() function that genuinely
+ * re-triggers the check (not just a cosmetic re-render) - it's part of the
+ * effect's own dependency array, so calling it actually calls
+ * getCurrentPosition again, including re-prompting for permission if the
+ * person changed their browser's location setting since the last denial.
  */
-export function useGeofenceStatus(city: City, skip = false): GeofenceStatus {
+export function useGeofenceStatus(city: City, skip = false): { status: GeofenceStatus; retry: () => void } {
   const [status, setStatus] = useState<GeofenceStatus>(() =>
     skip || city.centerLat == null || city.centerLng == null ? { kind: "unrestricted" } : { kind: "checking" },
   );
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     if (skip || city.centerLat == null || city.centerLng == null) {
@@ -59,7 +64,7 @@ export function useGeofenceStatus(city: City, skip = false): GeofenceStatus {
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
     );
     return () => { cancelled = true; };
-  }, [city.id, city.centerLat, city.centerLng, skip]);
+  }, [city.id, city.centerLat, city.centerLng, skip, retryToken]);
 
-  return status;
+  return { status, retry: () => setRetryToken((t) => t + 1) };
 }

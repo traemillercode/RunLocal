@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { City } from "../types";
 import { GEOFENCE_RADIUS_MILES, useGeofenceStatus } from "../lib/geofence";
 import { Icon, PillButton } from "./ui";
@@ -12,8 +11,7 @@ import { Icon, PillButton } from "./ui";
  * "you can only use the app in the city."
  */
 export function GeofenceGate({ city, bypass = false, children }: { city: City; bypass?: boolean; children: React.ReactNode }) {
-  const status = useGeofenceStatus(city, bypass);
-  const [retryKey, setRetryKey] = useState(0);
+  const { status, retry } = useGeofenceStatus(city, bypass);
 
   if (bypass || status.kind === "unrestricted" || status.kind === "inside") {
     return <>{children}</>;
@@ -47,13 +45,13 @@ export function GeofenceGate({ city, bypass = false, children }: { city: City; b
   }[status.kind === "outside" ? "outside" : status.kind === "denied" ? "denied" : "unavailable"];
 
   return (
-    <div key={retryKey} className="mx-auto flex min-h-[60vh] max-w-sm flex-col items-center justify-center gap-4 px-6 text-center">
+    <div className="mx-auto flex min-h-[60vh] max-w-sm flex-col items-center justify-center gap-4 px-6 text-center">
       <span className="grid h-14 w-14 place-items-center rounded-full bg-slate-100 text-slate-400">
         <Icon name="mapPin" className="h-7 w-7" />
       </span>
       <h1 className="text-xl font-extrabold tracking-tight text-slate-900">{copy.title}</h1>
       <p className="text-sm leading-relaxed text-slate-600">{copy.body}</p>
-      <PillButton variant="primary" onClick={() => setRetryKey((k) => k + 1)}>
+      <PillButton variant="primary" onClick={retry}>
         Try again
       </PillButton>
     </div>
