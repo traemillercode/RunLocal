@@ -589,6 +589,7 @@ export function TrainingPlanSection({ cityId }: { cityId: string }) {
             <p className="mt-1 text-[13px] text-slate-500">Training for {plan.customRaceName} <span className="text-amber-600">(pending admin review)</span></p>
           ) : null}
           <div className="mt-3 flex gap-2">
+            <Link to="/training-plan" className="flex h-10 items-center rounded-full bg-[#FF5741] px-4 text-[13px] font-bold text-[#14171C]">View weeks</Link>
             <button type="button" onClick={startEditing} className="h-10 rounded-full bg-slate-100 px-4 text-[13px] font-bold text-slate-700">Edit</button>
             <button type="button" onClick={clear} disabled={saving} className="h-10 rounded-full px-4 text-[13px] font-bold text-red-600">Remove plan</button>
           </div>

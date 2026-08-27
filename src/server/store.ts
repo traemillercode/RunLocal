@@ -328,6 +328,7 @@ export class Db {
   private conversations = new Map<string, import("./types").ConversationRecord>();
   private messages = new Map<string, import("./types").MessageRecord>();
   private trainingPlans = new Map<string, import("./types").TrainingPlanRecord>();
+  private trainingPlanWeeks = new Map<string, import("./types").TrainingPlanWeekRecord>();
   private forumVotes = new Map<string, import("./types").ForumVoteRecord>();
   private accountReports = new Map<string, import("./types").AccountReportRecord>();
   private routes = new Map<string, import("./types").RouteRecord>();
@@ -458,6 +459,7 @@ export class Db {
       for (const c of parsed.conversations ?? []) this.conversations.set(c.id, { ...c, runCreatedId: c.runCreatedId ?? null, readBy: c.readBy ?? {}, photoRef: c.photoRef ?? null });
       for (const m of parsed.messages ?? []) this.messages.set(m.id, { ...m, deletedAt: m.deletedAt ?? null, reactions: m.reactions ?? {}, mediaRef: m.mediaRef ?? null, editedAt: m.editedAt ?? null });
       for (const t of parsed.trainingPlans ?? []) this.trainingPlans.set(t.accountId, t);
+      for (const w of parsed.trainingPlanWeeks ?? []) this.trainingPlanWeeks.set(w.id, w);
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
       for (const r of parsed.accountReports ?? []) this.accountReports.set(r.id, r);
       for (const rt of parsed.routes ?? []) this.routes.set(rt.id, { ...rt, hasElevationData: rt.hasElevationData ?? rt.elevationGainFt > 0 });
@@ -521,6 +523,7 @@ export class Db {
       conversations: [...this.conversations.values()],
       messages: [...this.messages.values()],
       trainingPlans: [...this.trainingPlans.values()],
+      trainingPlanWeeks: [...this.trainingPlanWeeks.values()],
       forumVotes: [...this.forumVotes.values()],
       accountReports: [...this.accountReports.values()],
       routes: [...this.routes.values()],
@@ -1224,7 +1227,21 @@ export class Db {
     return plan;
   }
   deleteTrainingPlan(accountId: string): boolean {
+    // Weekly content belongs to the plan - deleting the plan without
+    // clearing its weeks would leave orphaned rows that reappear (with
+    // stale content) if the person ever creates a new plan later.
+    for (const w of this.listTrainingPlanWeeks(accountId)) this.trainingPlanWeeks.delete(w.id);
     return this.trainingPlans.delete(accountId);
+  }
+  listTrainingPlanWeeks(accountId: string): import("./types").TrainingPlanWeekRecord[] {
+    return [...this.trainingPlanWeeks.values()].filter((w) => w.accountId === accountId).sort((a, b) => a.weekNumber - b.weekNumber);
+  }
+  getTrainingPlanWeek(accountId: string, weekNumber: number): import("./types").TrainingPlanWeekRecord | undefined {
+    return this.trainingPlanWeeks.get(`${accountId}-week-${weekNumber}`);
+  }
+  setTrainingPlanWeek(week: import("./types").TrainingPlanWeekRecord): import("./types").TrainingPlanWeekRecord {
+    this.trainingPlanWeeks.set(week.id, week);
+    return week;
   }
   /** Toggles the caller's upvote on a post — voting again removes it. Returns whether it's now upvoted. */
   toggleForumVote(accountId: string, postId: string, now: Date): boolean {

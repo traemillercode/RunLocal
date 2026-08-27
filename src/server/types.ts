@@ -467,6 +467,7 @@ export interface PersistedDb {
   conversations?: ConversationRecord[];
   messages?: MessageRecord[];
   trainingPlans?: TrainingPlanRecord[];
+  trainingPlanWeeks?: TrainingPlanWeekRecord[];
   routeWaypoints?: RouteWaypointRecord[];
   sponsors?: SponsorRecord[];
   forumVotes?: ForumVoteRecord[];
@@ -710,6 +711,29 @@ export interface TrainingPlanRecord {
   /** Set when the runner is training for a race that isn't in the system yet - they submitted it for admin review (see /api/submissions/race) but it's not a real RaceRecord to link to until approved. Shown as "(pending)" until then; cleared once linkedRaceId is set to a real approved race. Mutually exclusive with linkedRaceId in practice, though not enforced at the type level. */
   customRaceName: string | null;
   createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One week's actual workout content within a plan - the part that was
+ * missing before (the plan record itself only ever stored the overall
+ * shape: type/length/dates, never what to actually run). Stored as a
+ * separate per-week collection rather than an array embedded in
+ * TrainingPlanRecord, so editing week 12 doesn't require resending the
+ * other 51 weeks, and a plan can be filled in progressively rather than
+ * all at once.
+ */
+export interface TrainingPlanWeekRecord {
+  id: string;
+  accountId: string;
+  /** 1-indexed, matches currentTrainingWeek's numbering. */
+  weekNumber: number;
+  /** Total planned mileage for the week. Null = not yet filled in. */
+  targetMiles: number | null;
+  /** The week's single longest run, called out separately since it's the number a runner actually plans their week around. */
+  longRunMiles: number | null;
+  /** Free-text workout notes - e.g. "Tempo Tuesday, long run Saturday, rest Monday/Friday." */
+  notes: string;
   updatedAt: string;
 }
 

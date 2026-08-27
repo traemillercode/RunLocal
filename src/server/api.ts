@@ -2479,6 +2479,43 @@ async function handleApi(
     }
   }
 
+  // GET /api/profile/training-plan/weeks — every week's content for the
+  // signed-in user's own plan, filled or not. A plan doesn't need to exist
+  // for this to return an empty array (rather than erroring), since the UI
+  // may check weeks before the plan itself has loaded.
+  if (method === "GET" && url.pathname === "/api/profile/training-plan/weeks") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    return ok(res, { weeks: db.listTrainingPlanWeeks(sess.accountId) }), true;
+  }
+  // PUT /api/profile/training-plan/weeks/:weekNumber — set one week's content.
+  const weekMatch = /^\/api\/profile\/training-plan\/weeks\/(\d+)$/.exec(url.pathname);
+  if (weekMatch && method === "PUT") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const weekNumber = Number(weekMatch[1]);
+    const plan = db.getTrainingPlan(sess.accountId);
+    if (!plan) return err(res, { status: 404, error: "no_plan", message: "Create a training plan before adding weekly content." }), true;
+    if (!Number.isInteger(weekNumber) || weekNumber < 1 || weekNumber > plan.totalWeeks) {
+      return err(res, { status: 400, error: "invalid_week", message: `Week must be between 1 and ${plan.totalWeeks} for this plan.` }), true;
+    }
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const targetMiles = typeof body.targetMiles === "number" && Number.isFinite(body.targetMiles) && body.targetMiles >= 0 ? body.targetMiles : null;
+    const longRunMiles = typeof body.longRunMiles === "number" && Number.isFinite(body.longRunMiles) && body.longRunMiles >= 0 ? body.longRunMiles : null;
+    const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, 500) : "";
+    const week = db.setTrainingPlanWeek({
+      id: `${sess.accountId}-week-${weekNumber}`,
+      accountId: sess.accountId,
+      weekNumber,
+      targetMiles,
+      longRunMiles,
+      notes,
+      updatedAt: now.toISOString(),
+    });
+    await db.persist();
+    return ok(res, { week }), true;
+  }
+
   // ---- runner tags on content (posts/events/runs) --------------------------
   // POST /api/tags — verified actor, target must exist, self-tag rejected,
   // blocked pairs rejected. No approval needed. PATCH /api/tags/:id/self —

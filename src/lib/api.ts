@@ -1171,6 +1171,22 @@ export function deleteTrainingPlan(): Promise<ApiResult<{ deleted: boolean }>> {
   return request("/api/profile/training-plan", { method: "DELETE" });
 }
 
+export interface TrainingPlanWeekView {
+  id: string;
+  accountId: string;
+  weekNumber: number;
+  targetMiles: number | null;
+  longRunMiles: number | null;
+  notes: string;
+  updatedAt: string;
+}
+export function getTrainingPlanWeeks(): Promise<ApiResult<{ weeks: TrainingPlanWeekView[] }>> {
+  return request("/api/profile/training-plan/weeks");
+}
+export function setTrainingPlanWeek(weekNumber: number, input: { targetMiles?: number | null; longRunMiles?: number | null; notes?: string }): Promise<ApiResult<{ week: TrainingPlanWeekView }>> {
+  return request(`/api/profile/training-plan/weeks/${weekNumber}`, { method: "PUT", body: JSON.stringify(input) });
+}
+
 export function getPrivacy(): Promise<ApiResult<{ settings: PrivacySettings }>> {
   return request("/api/profile/privacy");
 }

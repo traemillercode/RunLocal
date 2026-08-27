@@ -29,6 +29,7 @@ import { VerifyPage } from "./pages/VerifyPage";
 import { GeofenceGate } from "./components/GeofenceGate";
 import { SponsorPaymentPage } from "./pages/SponsorPaymentPage";
 import { SponsorInquiryPage } from "./pages/SponsorInquiryPage";
+import { TrainingPlanDetailPage } from "./pages/TrainingPlanDetailPage";
 import { RecoveryPage } from "./pages/RecoveryPage";
 import { ConfirmationPage } from "./pages/ConfirmationPage";
 import { ProviderCallbackPage } from "./pages/ProviderCallbackPage";
@@ -133,6 +134,7 @@ function Shell() {
             <Route path="/messages" element={<MessagesPage />} />
             <Route path="/messages/:conversationId" element={<MessagesPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/training-plan" element={<TrainingPlanDetailPage />} />
             <Route path="/legal" element={<LegalPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/recovery" element={<RecoveryPage sessionError={recoveryError} />} />
