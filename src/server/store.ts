@@ -640,6 +640,7 @@ export class Db {
       loginIps: [],
       verifiedAt: isOwner ? nowIso(this.now()) : null,
       rejectionReason: null,
+      priorRejectionReason: null,
       deletedAt: null,
       purgeAt: null,
       purgedAt: null,

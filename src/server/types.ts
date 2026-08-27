@@ -137,6 +137,14 @@ export interface AccountRecord {
    * views, never in other members' projections of this account.
    */
   rejectionReason: string | null;
+  /**
+   * Set when a rejected account re-applies with the same email (see the
+   * signup handler in api.ts) - the CURRENT rejectionReason moves here
+   * before being cleared, so an admin reviewing the new submission can see
+   * "this person was previously rejected for: X" without it looking like an
+   * active rejection. Cleared only on a fresh approval.
+   */
+  priorRejectionReason: string | null;
   /** Set when the user deletes their account (tombstone). */
   deletedAt: string | null;
   /** When the retention purge will scrub/remove this record. */
@@ -205,6 +213,7 @@ export type AdminAction =
   | "admin.view_selfie"
   | "admin.approve"
   | "admin.reject"
+  | "admin.undo_rejection"
   | "admin.delete"
   | "admin.export"
   | "admin.audit"

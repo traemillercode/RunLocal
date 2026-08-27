@@ -754,6 +754,10 @@ export function adminSetStatus(
     // trail; only the current-state fields are cleared here.
     trustedMember: status === "rejected" ? false : rec.trustedMember,
     trustedMemberAt: status === "rejected" ? null : rec.trustedMemberAt,
+    // A rejected account's chosen username is released back into the pool -
+    // it was never earned, and holding it hostage forever blocks both other
+    // people AND this same person (on resubmission) from ever using it.
+    username: status === "rejected" ? null : rec.username,
     rejectionReason: status === "rejected" ? rejectionReason : null,
     lastActivityAt: now.toISOString(),
   })!;
@@ -776,6 +780,32 @@ export function adminSetStatus(
     // Notification/email side-effects must never fail the approval itself —
     // the account status change above already succeeded and is what matters.
   }
+  void db.persist();
+  return { ok: true, data: updated };
+}
+
+/**
+ * Reverts a rejected account back to pending review - a real "undo" button,
+ * not a workaround. Restores phase to "pending_review" (the state
+ * rejection came from, since only accounts that completed email+selfie can
+ * be rejected in the first place) and clears rejectionReason so it shows up
+ * fresh in the review queue. Does NOT restore a released username - it may
+ * have been claimed by someone else in the meantime, so the person picks a
+ * new one if needed, same as any account with no username yet.
+ */
+export function adminUndoRejection(db: Db, ctx: AdminCtx, id: string, now = new Date()): AdminResult<AccountRecord> {
+  const auth = authorizeAdmin(db, ctx, "admin.undo_rejection", id, now);
+  if (!auth.ok) return auth;
+  const rec = db.getAccount(id);
+  if (!rec) return { ok: false, status: 404, error: "not_found" };
+  if (rec.deletedAt) return { ok: false, status: 409, error: "account_deleted" };
+  if (rec.status !== "rejected") return { ok: false, status: 409, error: "not_rejected", message: "This account isn't currently rejected." };
+  const updated = db.updateAccount(id, {
+    status: "pending",
+    phase: "pending_review",
+    rejectionReason: null,
+    lastActivityAt: now.toISOString(),
+  })!;
   void db.persist();
   return { ok: true, data: updated };
 }
