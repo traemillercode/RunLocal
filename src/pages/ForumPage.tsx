@@ -745,6 +745,17 @@ export function ForumPage({ city }: { city: City }) {
   const [qaSort, setQaSort] = useState<QaSort>("newest");
   const [gateOpen, setGateOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  // Arrived via the unified "+" create menu - open the same compose sheet
+  // directly, then clean the param so it doesn't reopen on a later revisit.
+  useEffect(() => {
+    if (searchParams.get("compose") === "1") {
+      setCreateOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("compose");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [serverPosts, setServerPosts] = useState<api.ForumPostView[]>([]);
   const [replyCounts, setReplyCounts] = useState<Record<string, number>>({});
   const [submitting, setSubmitting] = useState(false);

@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Icon } from "./ui";
 import { activeForPath, entriesForSurface } from "../lib/nav";
 import { useUnreadMessagesCount } from "../state/unreadMessages";
+import { CreateMenuSheet } from "./CreateMenuSheet";
 
 /**
  * Mobile bottom tab bar — tabs derived from the single nav model
@@ -10,17 +12,31 @@ import { useUnreadMessagesCount } from "../state/unreadMessages";
  * Messages) never silently breaks the grid. Active state uses the SAME
  * activeForPath helper as the desktop sidebar, so detail routes (e.g.
  * /events/:id) keep the tab highlighted consistently.
+ *
+ * The "+" create button is a raised FAB overlaying the bar, not a 7th tab -
+ * the row is already 6 columns wide, and a create action behaves
+ * differently from navigation (it opens a menu, it doesn't go to a page),
+ * so it doesn't belong in the same data-driven Link list.
  */
 export function BottomNav() {
   const { pathname } = useLocation();
   const tabs = entriesForSurface("bottom");
   const unreadMessages = useUnreadMessagesCount();
+  const [createOpen, setCreateOpen] = useState(false);
   return (
     <nav
       aria-label="Primary"
       data-tour-target="bottom-nav"
       className="app-shell-nav fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
     >
+      <button
+        type="button"
+        onClick={() => setCreateOpen(true)}
+        aria-label="Create"
+        className="absolute right-4 top-0 z-10 grid h-14 w-14 -translate-y-1/2 place-items-center rounded-full bg-[#FF5741] text-[#14171C] shadow-lg ring-4 ring-white active:scale-95"
+      >
+        <Icon name="plus" className="h-6 w-6" />
+      </button>
       <div
         className="mx-auto grid w-full max-w-md px-1"
         style={{ paddingBottom: "env(safe-area-inset-bottom)", gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
@@ -53,6 +69,7 @@ export function BottomNav() {
           );
         })}
       </div>
+      {createOpen ? <CreateMenuSheet onClose={() => setCreateOpen(false)} /> : null}
     </nav>
   );
 }

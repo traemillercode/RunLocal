@@ -14,7 +14,7 @@ import { resolveWeekEvents, startOfWeek, weekRangeLabel, MONTHS, occurrenceHasSt
 import { actionMenuItems, type ActionKey } from "../lib/actionModel";
 import { rsvpedEventIds } from "../lib/myRuns";
 import { filterOneTimeEvents } from "../lib/activityDates";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { canDo, roleLabel } from "../lib/accounts";
 import type { AppStore } from "../lib/store";
 import { useToast } from "../lib/toast";
@@ -264,6 +264,18 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
   const [eventSheetOpen, setEventSheetOpen] = useState(false);
   const [groupSheetOpen, setGroupSheetOpen] = useState(false);
   const [soloSheetOpen, setSoloSheetOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Arrived via the unified "+" create menu - open the solo-run sheet
+  // directly, then clean the param so it doesn't reopen on a later revisit.
+  useEffect(() => {
+    if (searchParams.get("soloRun") === "1") {
+      setSoloSheetOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("soloRun");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [gateOpen, setGateOpen] = useState(false);
   const [myRunIds, setMyRunIds] = useState<Set<string>>(new Set());
   const [canonicalEvents, setCanonicalEvents] = useState<api.CanonicalEvent[] | null>(null);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import * as api from "../lib/api";
 import { Chip, Icon } from "../components/ui";
 import { useSelectedCity } from "../state/city";
@@ -132,10 +132,25 @@ export function RoutesPage() {
   const { me } = useAccount();
   const [routes, setRoutes] = useState<api.RouteView[] | null>(null);
   const [surfaceFilter, setSurfaceFilter] = useState<string | null>(null);
+  const uploadFormRef = useRef<HTMLDivElement | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     void api.getRoutes(cityId).then((r) => { if (r.ok) setRoutes(r.data.routes); });
   }, [cityId]);
+
+  // Arrived via the unified "+" create menu - the upload form is inline
+  // (not a sheet like Forum/solo-run), so scroll to it instead of opening
+  // anything, then clean the param so it doesn't rescroll on a later revisit.
+  useEffect(() => {
+    if (searchParams.get("upload") === "1") {
+      uploadFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const next = new URLSearchParams(searchParams);
+      next.delete("upload");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routes]);
 
   const filtered = routes?.filter((r) => !surfaceFilter || r.surfaceType === surfaceFilter) ?? null;
   const counts = routes ? SURFACE_OPTIONS.reduce<Record<string, number>>((acc, s) => { acc[s.id] = routes.filter((r) => r.surfaceType === s.id).length; return acc; }, {}) : {};
@@ -201,7 +216,9 @@ export function RoutesPage() {
         </div>
       )}
       {me?.status === "signed_in" && me.account.status === "verified" ? (
-        <UploadRouteForm onUploaded={(route) => setRoutes((prev) => [...(prev ?? []), route])} />
+        <div ref={uploadFormRef}>
+          <UploadRouteForm onUploaded={(route) => setRoutes((prev) => [...(prev ?? []), route])} />
+        </div>
       ) : null}
     </div>
   );
