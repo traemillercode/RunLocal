@@ -130,12 +130,14 @@ export function TrainingPlanDetailPage() {
               type="button"
               disabled={!inPlan}
               onClick={() => setSelectedDate(dateStr)}
-              className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-[12px] ${
+              className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-[12px] ${
                 !inMonth ? "text-slate-300" : !inPlan ? "text-slate-300" : "text-slate-800"
               } ${selectedDate === dateStr ? "ring-2 ring-[#14171C]" : ""} ${meta ? meta.color : inPlan ? "bg-slate-50" : ""} ${dateStr === today ? "font-extrabold" : ""}`}
             >
               <span>{d.getUTCDate()}</span>
               {meta ? <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} /> : null}
+              {day?.completionStatus === "done" ? <Icon name="check" className="absolute h-3 w-3 translate-x-2 -translate-y-2 text-emerald-600" /> : null}
+              {day?.completionStatus === "missed" ? <span className="absolute translate-x-2 -translate-y-2 text-[9px] font-black text-rose-500">✕</span> : null}
             </button>
           );
         })}
@@ -177,6 +179,12 @@ function DayPanel({
   const [hydrationNotes, setHydrationNotes] = useState(day?.hydrationNotes ?? "");
   const [notes, setNotes] = useState(day?.notes ?? "");
   const [saving, setSaving] = useState(false);
+  const [completionStatus, setCompletionStatus] = useState(day?.completionStatus ?? "pending");
+  const [missedReason, setMissedReason] = useState<api.TrainingDayMissedReason>(day?.missedReason ?? "too_busy");
+  const [completionNotes, setCompletionNotes] = useState(day?.completionNotes ?? "");
+  const [loggingSaving, setLoggingSaving] = useState(false);
+
+  const isPastOrToday = date <= toDateStr(new Date());
 
   const save = async () => {
     setSaving(true);
@@ -191,6 +199,18 @@ function DayPanel({
     });
     setSaving(false);
     if (r.ok) onSaved(r.data.day);
+  };
+
+  /** Plan-vs-actual: separate from editing the planned content itself, since "did this happen" is a different question answered on a different timeline (after the fact) than "what's planned" (before). */
+  const saveLog = async (status: "done" | "missed" | "modified") => {
+    setLoggingSaving(true);
+    const r = await api.setTrainingPlanDay(date, {
+      completionStatus: status,
+      missedReason: status === "missed" ? missedReason : null,
+      completionNotes: completionNotes.trim() || null,
+    });
+    setLoggingSaving(false);
+    if (r.ok) { onSaved(r.data.day); setCompletionStatus(r.data.day.completionStatus); }
   };
 
   const fieldCls = "h-10 w-full rounded-lg border border-slate-200 px-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
@@ -240,6 +260,60 @@ function DayPanel({
       <button type="button" disabled={saving} onClick={() => void save()} className="mt-3 h-10 w-full rounded-full bg-[#14171C] text-[13px] font-bold text-white disabled:opacity-50">
         {saving ? "Saving…" : "Save day"}
       </button>
+
+      {isPastOrToday && workoutType !== "rest" ? (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <p className="mb-2 text-[13px] font-bold text-slate-700">Did you do it?</p>
+          <div className="flex gap-1.5">
+            {(["done", "missed", "modified"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setCompletionStatus(s)}
+                className={`flex-1 rounded-full py-2 text-[12px] font-bold ${
+                  completionStatus === s
+                    ? s === "done" ? "bg-emerald-600 text-white" : s === "missed" ? "bg-rose-600 text-white" : "bg-amber-500 text-white"
+                    : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                {s === "done" ? "Done ✓" : s === "missed" ? "Missed it" : "Did something else"}
+              </button>
+            ))}
+          </div>
+
+          {completionStatus === "missed" ? (
+            <select value={missedReason} onChange={(e) => setMissedReason(e.target.value as api.TrainingDayMissedReason)} className={`mt-2.5 ${fieldCls}`}>
+              <option value="sick">Sick</option>
+              <option value="injured">Injured</option>
+              <option value="too_busy">Too busy / schedule conflict</option>
+              <option value="weather">Weather</option>
+              <option value="low_motivation">Low motivation</option>
+              <option value="other">Other</option>
+            </select>
+          ) : null}
+
+          {completionStatus === "missed" || completionStatus === "modified" ? (
+            <textarea
+              rows={2}
+              value={completionNotes}
+              onChange={(e) => setCompletionNotes(e.target.value)}
+              placeholder={completionStatus === "modified" ? "What did you do instead?" : "Anything else worth noting?"}
+              className="mt-2.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
+            />
+          ) : null}
+
+          {completionStatus !== "pending" ? (
+            <button
+              type="button"
+              disabled={loggingSaving}
+              onClick={() => void saveLog(completionStatus as "done" | "missed" | "modified")}
+              className="mt-2.5 h-9 w-full rounded-full bg-slate-800 text-[12px] font-bold text-white disabled:opacity-50"
+            >
+              {loggingSaving ? "Logging…" : "Log it"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

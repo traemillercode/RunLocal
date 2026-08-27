@@ -2528,9 +2528,17 @@ async function handleApi(
   }
   function buildTrainingDay(accountId: string, dateStr: string, weekNumber: number, body: Record<string, unknown>, existing: import("./types").TrainingPlanDayRecord | undefined, now: Date): import("./types").TrainingPlanDayRecord {
     const WORKOUT_TYPES = ["run", "cross_training", "rest", "recovery", "race"] as const;
+    const COMPLETION_STATUSES = ["pending", "done", "missed", "modified"] as const;
+    const MISSED_REASONS = ["sick", "injured", "too_busy", "weather", "low_motivation", "other"] as const;
     const workoutType = typeof body.workoutType === "string" && (WORKOUT_TYPES as readonly string[]).includes(body.workoutType) ? (body.workoutType as typeof WORKOUT_TYPES[number]) : (existing?.workoutType ?? "run");
     const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : null);
     const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+    const completionStatus = typeof body.completionStatus === "string" && (COMPLETION_STATUSES as readonly string[]).includes(body.completionStatus) ? (body.completionStatus as typeof COMPLETION_STATUSES[number]) : (existing?.completionStatus ?? "pending");
+    // A missed reason only makes sense when the status is actually "missed" - setting status back to
+    // pending/done/modified clears any prior reason rather than leaving a stale one attached.
+    const missedReason = completionStatus === "missed" && typeof body.missedReason === "string" && (MISSED_REASONS as readonly string[]).includes(body.missedReason)
+      ? (body.missedReason as typeof MISSED_REASONS[number])
+      : completionStatus === "missed" ? (existing?.missedReason ?? null) : null;
     return {
       id: `${accountId}-day-${dateStr}`,
       accountId,
@@ -2544,6 +2552,9 @@ async function handleApi(
       hydrationNotes: body.hydrationNotes !== undefined ? str(body.hydrationNotes, 200) : existing?.hydrationNotes ?? null,
       linkedRouteId: body.linkedRouteId !== undefined ? (typeof body.linkedRouteId === "string" && db.getRoute(body.linkedRouteId) ? body.linkedRouteId : null) : existing?.linkedRouteId ?? null,
       notes: body.notes !== undefined ? (str(body.notes, 500) ?? "") : existing?.notes ?? "",
+      completionStatus,
+      missedReason,
+      completionNotes: body.completionNotes !== undefined ? str(body.completionNotes, 500) : existing?.completionNotes ?? null,
       completedRunId: existing?.completedRunId ?? null,
       updatedAt: now.toISOString(),
     };

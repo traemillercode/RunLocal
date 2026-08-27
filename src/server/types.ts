@@ -790,8 +790,21 @@ export interface TrainingPlanDayRecord {
   notes: string;
   /** Set once a real logged/RSVP'd run is linked to this day (see runs -> plan-day linking) - lets the calendar show "done" vs. "planned" distinctly. */
   completedRunId: string | null;
+  /**
+   * Plan-vs-actual: did the planned workout actually happen? "pending" is
+   * the default for any future or not-yet-logged day. A rest day is never
+   * loggable (there's nothing to complete), so this only meaningfully
+   * applies to run/cross_training/recovery/race days.
+   */
+  completionStatus: "pending" | "done" | "missed" | "modified";
+  /** Only set when completionStatus is "missed" - a fixed set of reasons (dropdowns are easier than free text for logging quickly), not open text. */
+  missedReason: TrainingDayMissedReason | null;
+  /** Free-text elaboration on the missed reason or a modification - optional, in addition to the dropdown, not instead of it. */
+  completionNotes: string | null;
   updatedAt: string;
 }
+
+export type TrainingDayMissedReason = "sick" | "injured" | "too_busy" | "weather" | "low_motivation" | "other";
 
 /**
  * A message thread — either a 1:1 between two connected accounts, or a group

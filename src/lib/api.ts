@@ -1224,6 +1224,7 @@ export function setTrainingPlanWeek(weekNumber: number, input: { targetMiles?: n
 }
 
 export type TrainingDayWorkoutType = "run" | "cross_training" | "rest" | "recovery" | "race";
+export type TrainingDayMissedReason = "sick" | "injured" | "too_busy" | "weather" | "low_motivation" | "other";
 export interface TrainingPlanDayView {
   id: string;
   accountId: string;
@@ -1237,6 +1238,9 @@ export interface TrainingPlanDayView {
   hydrationNotes: string | null;
   linkedRouteId: string | null;
   notes: string;
+  completionStatus: "pending" | "done" | "missed" | "modified";
+  missedReason: TrainingDayMissedReason | null;
+  completionNotes: string | null;
   completedRunId: string | null;
   updatedAt: string;
 }

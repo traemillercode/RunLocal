@@ -125,4 +125,41 @@ describe("Day-level training plan content", () => {
     expect(r.status).toBe(200);
     expect(r.body.day.linkedRouteId).toBeNull();
   });
+
+  it("plan-vs-actual: logs done/missed/modified with a real dropdown reason, and defaults to pending", async () => {
+    const db = createMemoryStore();
+    const u = account(db, "runner6@example.com");
+    await call(db, "PUT", "/api/profile/training-plan", u.cookie, { planType: "marathon", totalWeeks: 4, startDate: "2026-08-03" });
+    const created = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { workoutType: "run" });
+    expect(created.body.day.completionStatus).toBe("pending");
+
+    const missed = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { completionStatus: "missed", missedReason: "injured", completionNotes: "Tweaked my knee" });
+    expect(missed.body.day.completionStatus).toBe("missed");
+    expect(missed.body.day.missedReason).toBe("injured");
+    expect(missed.body.day.completionNotes).toBe("Tweaked my knee");
+
+    const done = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { completionStatus: "done" });
+    expect(done.body.day.completionStatus).toBe("done");
+  });
+
+  it("marking a day done clears any prior missed reason - never shows a stale reason on a completed day", async () => {
+    const db = createMemoryStore();
+    const u = account(db, "runner7@example.com");
+    await call(db, "PUT", "/api/profile/training-plan", u.cookie, { planType: "marathon", totalWeeks: 4, startDate: "2026-08-03" });
+    await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { workoutType: "run", completionStatus: "missed", missedReason: "weather" });
+    expect(db.getTrainingPlanDay(u.id, "2026-08-03")!.missedReason).toBe("weather");
+
+    const done = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { completionStatus: "done" });
+    expect(done.body.day.missedReason).toBeNull();
+    expect(db.getTrainingPlanDay(u.id, "2026-08-03")!.missedReason).toBeNull();
+  });
+
+  it("rejects a fabricated missed reason not in the fixed dropdown set", async () => {
+    const db = createMemoryStore();
+    const u = account(db, "runner8@example.com");
+    await call(db, "PUT", "/api/profile/training-plan", u.cookie, { planType: "marathon", totalWeeks: 4, startDate: "2026-08-03" });
+    const r = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { completionStatus: "missed", missedReason: "aliens_abducted_me" });
+    // Falls back to null rather than storing a value outside the fixed set.
+    expect(r.body.day.missedReason).toBeNull();
+  });
 });
