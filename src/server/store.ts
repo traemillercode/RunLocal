@@ -331,6 +331,8 @@ export class Db {
   private trainingPlanWeeks = new Map<string, import("./types").TrainingPlanWeekRecord>();
   private coachRelationships = new Map<string, import("./types").CoachRelationshipRecord>();
   private trainingPlanDays = new Map<string, import("./types").TrainingPlanDayRecord>();
+  private shoes = new Map<string, import("./types").ShoeRecord>();
+  private trainingPlanChangeProposals = new Map<string, import("./types").TrainingPlanChangeProposalRecord>();
   private forumVotes = new Map<string, import("./types").ForumVoteRecord>();
   private accountReports = new Map<string, import("./types").AccountReportRecord>();
   private routes = new Map<string, import("./types").RouteRecord>();
@@ -464,6 +466,8 @@ export class Db {
       for (const w of parsed.trainingPlanWeeks ?? []) this.trainingPlanWeeks.set(w.id, w);
       for (const c of parsed.coachRelationships ?? []) this.coachRelationships.set(c.id, c);
       for (const d of parsed.trainingPlanDays ?? []) this.trainingPlanDays.set(d.id, d);
+      for (const s of parsed.shoes ?? []) this.shoes.set(s.id, s);
+      for (const p of parsed.trainingPlanChangeProposals ?? []) this.trainingPlanChangeProposals.set(p.id, p);
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
       for (const r of parsed.accountReports ?? []) this.accountReports.set(r.id, r);
       for (const rt of parsed.routes ?? []) this.routes.set(rt.id, { ...rt, hasElevationData: rt.hasElevationData ?? rt.elevationGainFt > 0 });
@@ -530,6 +534,8 @@ export class Db {
       trainingPlanWeeks: [...this.trainingPlanWeeks.values()],
       coachRelationships: [...this.coachRelationships.values()],
       trainingPlanDays: [...this.trainingPlanDays.values()],
+      shoes: [...this.shoes.values()],
+      trainingPlanChangeProposals: [...this.trainingPlanChangeProposals.values()],
       forumVotes: [...this.forumVotes.values()],
       accountReports: [...this.accountReports.values()],
       routes: [...this.routes.values()],
@@ -1294,23 +1300,69 @@ export class Db {
   endCoachRelationship(id: string): boolean {
     return this.coachRelationships.delete(id);
   }
-  getTrainingPlanDay(accountId: string, date: string): import("./types").TrainingPlanDayRecord | undefined {
-    return this.trainingPlanDays.get(`${accountId}-day-${date}`);
+  getTrainingPlanDay(accountId: string, date: string, slot: import("./types").TrainingDaySlot = "primary"): import("./types").TrainingPlanDayRecord | undefined {
+    return this.trainingPlanDays.get(`${accountId}-day-${date}-${slot}`);
   }
-  /** Every day for an account, sorted chronologically - the raw feed the calendar view (and PDF export, later) renders from. */
+  /** Every day/slot for an account, sorted chronologically then by slot (am before pm) - the raw feed the calendar view (and PDF export, later) renders from. */
   listTrainingPlanDays(accountId: string): import("./types").TrainingPlanDayRecord[] {
-    return [...this.trainingPlanDays.values()].filter((d) => d.accountId === accountId).sort((a, b) => a.date.localeCompare(b.date));
+    const slotOrder: Record<import("./types").TrainingDaySlot, number> = { primary: 0, am: 0, pm: 1 };
+    return [...this.trainingPlanDays.values()].filter((d) => d.accountId === accountId).sort((a, b) => a.date.localeCompare(b.date) || slotOrder[a.slot] - slotOrder[b.slot]);
   }
   /** Just the days within a specific week - what the current week-focused UI actually needs, without the caller filtering the full list every time. */
   listTrainingPlanDaysInWeek(accountId: string, weekNumber: number): import("./types").TrainingPlanDayRecord[] {
     return this.listTrainingPlanDays(accountId).filter((d) => d.weekNumber === weekNumber);
   }
+  /** All slots for one specific date - lets a day with both an AM and PM workout be fetched together. */
+  listTrainingPlanDaySlots(accountId: string, date: string): import("./types").TrainingPlanDayRecord[] {
+    return this.listTrainingPlanDays(accountId).filter((d) => d.date === date);
+  }
   setTrainingPlanDay(day: import("./types").TrainingPlanDayRecord): import("./types").TrainingPlanDayRecord {
     this.trainingPlanDays.set(day.id, day);
     return day;
   }
-  deleteTrainingPlanDay(accountId: string, date: string): boolean {
-    return this.trainingPlanDays.delete(`${accountId}-day-${date}`);
+  deleteTrainingPlanDay(accountId: string, date: string, slot: import("./types").TrainingDaySlot = "primary"): boolean {
+    return this.trainingPlanDays.delete(`${accountId}-day-${date}-${slot}`);
+  }
+  listShoes(accountId: string): import("./types").ShoeRecord[] {
+    return [...this.shoes.values()].filter((s) => s.accountId === accountId).sort((a, b) => a.name.localeCompare(b.name));
+  }
+  getShoe(id: string): import("./types").ShoeRecord | undefined {
+    return this.shoes.get(id);
+  }
+  addShoe(shoe: import("./types").ShoeRecord): import("./types").ShoeRecord {
+    // Only one default at a time - setting a new default silently un-defaults the rest, rather than requiring the caller to manage it.
+    if (shoe.isDefault) for (const s of this.listShoes(shoe.accountId)) if (s.id !== shoe.id) this.shoes.set(s.id, { ...s, isDefault: false });
+    this.shoes.set(shoe.id, shoe);
+    return shoe;
+  }
+  setShoeDefault(accountId: string, shoeId: string): boolean {
+    const target = this.shoes.get(shoeId);
+    if (!target || target.accountId !== accountId) return false;
+    for (const s of this.listShoes(accountId)) this.shoes.set(s.id, { ...s, isDefault: s.id === shoeId });
+    return true;
+  }
+  deleteShoe(accountId: string, shoeId: string): boolean {
+    const target = this.shoes.get(shoeId);
+    if (!target || target.accountId !== accountId) return false;
+    return this.shoes.delete(shoeId);
+  }
+  /** Every proposal involving this person, as either athlete or coach - their own inbox. */
+  listChangeProposalsFor(accountId: string): import("./types").TrainingPlanChangeProposalRecord[] {
+    return [...this.trainingPlanChangeProposals.values()].filter((p) => p.athleteId === accountId || p.coachId === accountId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  getChangeProposal(id: string): import("./types").TrainingPlanChangeProposalRecord | undefined {
+    return this.trainingPlanChangeProposals.get(id);
+  }
+  createChangeProposal(rec: import("./types").TrainingPlanChangeProposalRecord): import("./types").TrainingPlanChangeProposalRecord {
+    this.trainingPlanChangeProposals.set(rec.id, rec);
+    return rec;
+  }
+  respondToChangeProposal(id: string, approve: boolean, now: Date): import("./types").TrainingPlanChangeProposalRecord | undefined {
+    const rec = this.trainingPlanChangeProposals.get(id);
+    if (!rec || rec.status !== "pending") return undefined;
+    const updated: import("./types").TrainingPlanChangeProposalRecord = { ...rec, status: approve ? "approved" : "declined", respondedAt: now.toISOString() };
+    this.trainingPlanChangeProposals.set(id, updated);
+    return updated;
   }
   /** Toggles the caller's upvote on a post — voting again removes it. Returns whether it's now upvoted. */
   toggleForumVote(accountId: string, postId: string, now: Date): boolean {

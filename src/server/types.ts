@@ -469,6 +469,8 @@ export interface PersistedDb {
   trainingPlans?: TrainingPlanRecord[];
   trainingPlanWeeks?: TrainingPlanWeekRecord[];
   trainingPlanDays?: TrainingPlanDayRecord[];
+  shoes?: ShoeRecord[];
+  trainingPlanChangeProposals?: TrainingPlanChangeProposalRecord[];
   coachRelationships?: CoachRelationshipRecord[];
   routeWaypoints?: RouteWaypointRecord[];
   sponsors?: SponsorRecord[];
@@ -759,7 +761,7 @@ export interface TrainingPlanWeekRecord {
   updatedAt: string;
 }
 
-export type TrainingDayWorkoutType = "run" | "cross_training" | "rest" | "recovery" | "race";
+export type TrainingDayWorkoutType = "run" | "cross_training" | "rest" | "recovery" | "race" | "swim";
 
 /**
  * One actual calendar day's plan content - the real detail everything else
@@ -770,23 +772,39 @@ export type TrainingDayWorkoutType = "run" | "cross_training" | "rest" | "recove
  * calendar date rather than (weekNumber, dayOfWeek), so a day survives even
  * if the plan's start date or length is edited later.
  */
+export type TrainingDaySlot = "primary" | "am" | "pm";
+export type TrainingDistanceUnit = "miles" | "km" | "meters" | "yards";
+
 export interface TrainingPlanDayRecord {
   id: string;
   accountId: string;
   /** ISO yyyy-mm-dd - the actual calendar date this content applies to. */
   date: string;
+  /** "primary" for a single workout that day; "am"/"pm" when there are two - each is its own full record, not a sub-object, so either can be edited/frozen/completed independently. */
+  slot: TrainingDaySlot;
   /** Denormalized for fast weekly grouping/filtering without recomputing from startDate every time. */
   weekNumber: number;
   workoutType: TrainingDayWorkoutType;
   /** Short label shown on the calendar, e.g. "Tempo run" or "Easy 5mi" or "Yoga". Empty for a plain rest day. */
   title: string;
-  distanceMiles: number | null;
-  /** Free-text gear/fuel/hydration guidance - deliberately simple text fields rather than a rigid gear-catalog model, since a coach or self-coached runner needs to write this quickly, not manage an inventory. */
-  shoeNotes: string | null;
+  distanceValue: number | null;
+  /** Miles/km for run-family workouts; meters/yards for swim - a runner and a swimmer need genuinely different units, not a converted mile value pretending to be a pool distance. */
+  distanceUnit: TrainingDistanceUnit;
+  /** References a ShoeRecord in the runner's own shoe library - null shows no shoe (e.g. swim/cross-training days, or a run day where none was picked). */
+  shoeId: string | null;
   fuelNotes: string | null;
   hydrationNotes: string | null;
   /** Optional link to a real route in Routes - shown as a real map/elevation reference for the day, not just a name. */
   linkedRouteId: string | null;
+  /**
+   * Optional link to a real group-run occurrence in Events - lets this
+   * specific plan day say "this is the Thursday group run at 6pm," visible
+   * from both directions (the plan shows the group run's real time/location;
+   * the group run, if the app surfaces it, can show it's someone's planned
+   * workout). Distinct from linkedRouteId (a route is just a course
+   * reference; this is an actual scheduled run people are attending).
+   */
+  linkedEventOccurrenceId: string | null;
   notes: string;
   /** Set once a real logged/RSVP'd run is linked to this day (see runs -> plan-day linking) - lets the calendar show "done" vs. "planned" distinctly. */
   completedRunId: string | null;
@@ -794,17 +812,62 @@ export interface TrainingPlanDayRecord {
    * Plan-vs-actual: did the planned workout actually happen? "pending" is
    * the default for any future or not-yet-logged day. A rest day is never
    * loggable (there's nothing to complete), so this only meaningfully
-   * applies to run/cross_training/recovery/race days.
+   * applies to run/cross_training/recovery/race/swim days.
    */
   completionStatus: "pending" | "done" | "missed" | "modified";
   /** Only set when completionStatus is "missed" - a fixed set of reasons (dropdowns are easier than free text for logging quickly), not open text. */
   missedReason: TrainingDayMissedReason | null;
   /** Free-text elaboration on the missed reason or a modification - optional, in addition to the dropdown, not instead of it. */
   completionNotes: string | null;
+  /**
+   * Set by an active coach to lock this specific day against athlete edits
+   * (linking a group run is still always allowed even when frozen - that's
+   * the athlete's own schedule, not the prescribed content). An athlete
+   * with a coach can never freeze their own day; only the coach can, and
+   * only the coach can unfreeze it.
+   */
+  frozen: boolean;
   updatedAt: string;
 }
 
 export type TrainingDayMissedReason = "sick" | "injured" | "too_busy" | "weather" | "low_motivation" | "other";
+
+/**
+ * A runner's own shoe library - add a shoe once, reuse it across days via
+ * shoeId instead of retyping "Pegasus 40" every time. One shoe can be
+ * marked the default, pre-selected for a new day's content.
+ */
+export interface ShoeRecord {
+  id: string;
+  accountId: string;
+  name: string;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+/**
+ * When an athlete has an active coach, they can't edit the prescribed
+ * workout content directly (title/distance/type/etc.) - they propose a
+ * change, and the coach approves or declines it. Linking a group run to
+ * the day is exempt from this (that's the athlete's own schedule, not the
+ * prescribed content) and never needs a proposal. A frozen day can still
+ * be proposed against, but the coach freezing it is a strong signal they
+ * don't want it touched - the UI should make that context visible.
+ */
+export interface TrainingPlanChangeProposalRecord {
+  id: string;
+  athleteId: string;
+  coachId: string;
+  date: string;
+  slot: TrainingDaySlot;
+  /** The proposed field changes - same shape as a day PUT body, applied verbatim on approval. */
+  proposedChanges: Record<string, unknown>;
+  /** The athlete's own note explaining why, shown to the coach alongside the diff. */
+  note: string;
+  status: "pending" | "approved" | "declined";
+  createdAt: string;
+  respondedAt: string | null;
+}
 
 /**
  * A message thread — either a 1:1 between two connected accounts, or a group

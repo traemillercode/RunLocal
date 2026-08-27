@@ -36,17 +36,20 @@ function account(db: Db, email: string, cityId = "columbia-mo"): { id: string; c
 }
 
 describe("Day-level training plan content", () => {
-  it("sets real daily content - workout type, shoes, fuel, hydration, notes", async () => {
+  it("sets real daily content - workout type, shoe from the library, fuel, hydration, notes", async () => {
     const db = createMemoryStore();
     const u = account(db, "runner@example.com");
     await call(db, "PUT", "/api/profile/training-plan", u.cookie, { planType: "marathon", totalWeeks: 4, startDate: "2026-08-03" });
+    const shoe = db.addShoe({ id: "shoe-1", accountId: u.id, name: "Trail shoes", isDefault: true, createdAt: new Date().toISOString() });
     const r = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-08", u.cookie, {
-      workoutType: "run", title: "Long run", distanceMiles: 12, shoeNotes: "Trail shoes", fuelNotes: "1 gel at mile 6", hydrationNotes: "Handheld bottle", notes: "Hilly route",
+      workoutType: "run", title: "Long run", distanceValue: 12, distanceUnit: "miles", shoeId: shoe.id, fuelNotes: "1 gel at mile 6", hydrationNotes: "Handheld bottle", notes: "Hilly route",
     });
     expect(r.status).toBe(200);
     expect(r.body.day.weekNumber).toBe(1);
     expect(r.body.day.workoutType).toBe("run");
-    expect(r.body.day.shoeNotes).toBe("Trail shoes");
+    expect(r.body.day.shoeId).toBe(shoe.id);
+    expect(r.body.day.distanceValue).toBe(12);
+    expect(r.body.day.distanceUnit).toBe("miles");
     expect(r.body.day.fuelNotes).toBe("1 gel at mile 6");
   });
 

@@ -2526,8 +2526,9 @@ async function handleApi(
     const week = Math.floor(daysSince / 7) + 1;
     return week <= plan.totalWeeks ? week : null;
   }
-  function buildTrainingDay(accountId: string, dateStr: string, weekNumber: number, body: Record<string, unknown>, existing: import("./types").TrainingPlanDayRecord | undefined, now: Date): import("./types").TrainingPlanDayRecord {
-    const WORKOUT_TYPES = ["run", "cross_training", "rest", "recovery", "race"] as const;
+  function buildTrainingDay(accountId: string, dateStr: string, slot: import("./types").TrainingDaySlot, weekNumber: number, body: Record<string, unknown>, existing: import("./types").TrainingPlanDayRecord | undefined, now: Date, allowFreezeToggle: boolean): import("./types").TrainingPlanDayRecord {
+    const WORKOUT_TYPES = ["run", "cross_training", "rest", "recovery", "race", "swim"] as const;
+    const DISTANCE_UNITS = ["miles", "km", "meters", "yards"] as const;
     const COMPLETION_STATUSES = ["pending", "done", "missed", "modified"] as const;
     const MISSED_REASONS = ["sick", "injured", "too_busy", "weather", "low_motivation", "other"] as const;
     const workoutType = typeof body.workoutType === "string" && (WORKOUT_TYPES as readonly string[]).includes(body.workoutType) ? (body.workoutType as typeof WORKOUT_TYPES[number]) : (existing?.workoutType ?? "run");
@@ -2539,23 +2540,36 @@ async function handleApi(
     const missedReason = completionStatus === "missed" && typeof body.missedReason === "string" && (MISSED_REASONS as readonly string[]).includes(body.missedReason)
       ? (body.missedReason as typeof MISSED_REASONS[number])
       : completionStatus === "missed" ? (existing?.missedReason ?? null) : null;
+    // A shoe must actually be in THIS account's own library - never someone else's shoe id.
+    const shoeId = body.shoeId !== undefined
+      ? (typeof body.shoeId === "string" && db.getShoe(body.shoeId)?.accountId === accountId ? body.shoeId : null)
+      : existing?.shoeId ?? null;
+    // A linked group run must be a real occurrence this account is actually RSVP'd/attending -
+    // "link this day to my group run" only makes sense if you're really going.
+    const linkedEventOccurrenceId = body.linkedEventOccurrenceId !== undefined
+      ? (typeof body.linkedEventOccurrenceId === "string" && db.listAttendance(accountId).some((a) => a.occurrenceId === body.linkedEventOccurrenceId) ? body.linkedEventOccurrenceId : null)
+      : existing?.linkedEventOccurrenceId ?? null;
     return {
-      id: `${accountId}-day-${dateStr}`,
+      id: `${accountId}-day-${dateStr}-${slot}`,
       accountId,
       date: dateStr,
+      slot,
       weekNumber,
       workoutType,
       title: str(body.title, 60) ?? existing?.title ?? "",
-      distanceMiles: body.distanceMiles !== undefined ? num(body.distanceMiles) : existing?.distanceMiles ?? null,
-      shoeNotes: body.shoeNotes !== undefined ? str(body.shoeNotes, 80) : existing?.shoeNotes ?? null,
+      distanceValue: body.distanceValue !== undefined ? num(body.distanceValue) : existing?.distanceValue ?? null,
+      distanceUnit: typeof body.distanceUnit === "string" && (DISTANCE_UNITS as readonly string[]).includes(body.distanceUnit) ? (body.distanceUnit as typeof DISTANCE_UNITS[number]) : (existing?.distanceUnit ?? "miles"),
+      shoeId,
       fuelNotes: body.fuelNotes !== undefined ? str(body.fuelNotes, 200) : existing?.fuelNotes ?? null,
       hydrationNotes: body.hydrationNotes !== undefined ? str(body.hydrationNotes, 200) : existing?.hydrationNotes ?? null,
       linkedRouteId: body.linkedRouteId !== undefined ? (typeof body.linkedRouteId === "string" && db.getRoute(body.linkedRouteId) ? body.linkedRouteId : null) : existing?.linkedRouteId ?? null,
+      linkedEventOccurrenceId,
       notes: body.notes !== undefined ? (str(body.notes, 500) ?? "") : existing?.notes ?? "",
       completionStatus,
       missedReason,
       completionNotes: body.completionNotes !== undefined ? str(body.completionNotes, 500) : existing?.completionNotes ?? null,
       completedRunId: existing?.completedRunId ?? null,
+      frozen: allowFreezeToggle && typeof body.frozen === "boolean" ? body.frozen : existing?.frozen ?? false,
       updatedAt: now.toISOString(),
     };
   }
@@ -2619,19 +2633,20 @@ async function handleApi(
     return ok(res, { days }), true;
   }
   // PUT /api/coach/athletes/:athleteId/training-plan/days/:date - a coach prescribing an actual day's workout.
-  const coachDayWriteMatch = /^\/api\/coach\/athletes\/([^/]+)\/training-plan\/days\/(\d{4}-\d{2}-\d{2})$/.exec(url.pathname);
+  const coachDayWriteMatch = /^\/api\/coach\/athletes\/([^/]+)\/training-plan\/days\/(\d{4}-\d{2}-\d{2})(?:\/(am|pm))?$/.exec(url.pathname);
   if (coachDayWriteMatch && method === "PUT") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const athleteId = decodeURIComponent(coachDayWriteMatch[1]);
     if (!db.isActiveCoachOf(sess.accountId, athleteId)) return err(res, { status: 403, error: "not_their_coach" }), true;
     const dateStr = coachDayWriteMatch[2];
+    const slot = (coachDayWriteMatch[3] as "am" | "pm" | undefined) ?? "primary";
     const plan = db.getTrainingPlan(athleteId);
     if (!plan) return err(res, { status: 404, error: "no_plan", message: "This athlete hasn't set up a training plan yet." }), true;
     const weekNumber = planWeekForDate(plan, dateStr);
     if (weekNumber === null) return err(res, { status: 400, error: "invalid_date", message: "That date falls outside this plan's range." }), true;
     const body = (await readJson(req)) as Record<string, unknown>;
-    const day = db.setTrainingPlanDay(buildTrainingDay(athleteId, dateStr, weekNumber, body, db.getTrainingPlanDay(athleteId, dateStr), now));
+    const day = db.setTrainingPlanDay(buildTrainingDay(athleteId, dateStr, slot, weekNumber, body, db.getTrainingPlanDay(athleteId, dateStr, slot), now, true));
     await db.persist();
     return ok(res, { day }), true;
   }
@@ -2738,18 +2753,28 @@ async function handleApi(
     if (end) days = days.filter((d) => d.date <= end);
     return ok(res, { days }), true;
   }
-  // PUT /api/profile/training-plan/days/:date - set one day's real content.
-  const dayMatch = /^\/api\/profile\/training-plan\/days\/(\d{4}-\d{2}-\d{2})$/.exec(url.pathname);
+  // PUT /api/profile/training-plan/days/:date or /:date/:slot(am|pm) - set one day's real content.
+  const dayMatch = /^\/api\/profile\/training-plan\/days\/(\d{4}-\d{2}-\d{2})(?:\/(am|pm))?$/.exec(url.pathname);
   if (dayMatch && method === "PUT") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const dateStr = dayMatch[1];
+    const slot = (dayMatch[2] as "am" | "pm" | undefined) ?? "primary";
     const plan = db.getTrainingPlan(sess.accountId);
     if (!plan) return err(res, { status: 404, error: "no_plan", message: "Create a training plan before adding daily content." }), true;
     const weekNumber = planWeekForDate(plan, dateStr);
     if (weekNumber === null) return err(res, { status: 400, error: "invalid_date", message: "That date falls outside this plan's range." }), true;
+    const existing = db.getTrainingPlanDay(sess.accountId, dateStr, slot);
     const body = (await readJson(req)) as Record<string, unknown>;
-    const day = db.setTrainingPlanDay(buildTrainingDay(sess.accountId, dateStr, weekNumber, body, db.getTrainingPlanDay(sess.accountId, dateStr), now));
+    // A coach's freeze blocks every athlete edit to this day/slot, full stop - the coach can still edit it themselves via the coach endpoint.
+    if (existing?.frozen) return err(res, { status: 403, error: "day_frozen", message: "Your coach has locked this day — contact them if it needs to change." }), true;
+    // An athlete with an ACTIVE coach can't directly edit the prescribed workout - they propose a change instead. Linking a group run and logging plan-vs-actual (did I actually do it) are always the athlete's own call, never gated.
+    const hasActiveCoach = db.listCoachRelationshipsFor(sess.accountId).some((r) => r.athleteId === sess.accountId && r.status === "active");
+    const ALWAYS_ALLOWED = new Set(["linkedEventOccurrenceId", "completionStatus", "missedReason", "completionNotes"]);
+    if (hasActiveCoach && Object.keys(body).some((k) => !ALWAYS_ALLOWED.has(k))) {
+      return err(res, { status: 403, error: "coach_managed", message: "Your coach manages this workout — propose a change instead of editing it directly." }), true;
+    }
+    const day = db.setTrainingPlanDay(buildTrainingDay(sess.accountId, dateStr, slot, weekNumber, body, existing, now, false));
     await db.persist();
     return ok(res, { day }), true;
   }
