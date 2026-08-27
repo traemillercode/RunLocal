@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 interface SheetProps {
   open: boolean;
@@ -10,6 +10,25 @@ interface SheetProps {
 
 /** Mobile bottom sheet with backdrop. Centered panel on larger screens. */
 export function Sheet({ open, onClose, title, subtitle, children }: SheetProps) {
+  // Focus-return on close (a11y B5a): remember the element that opened this
+  // sheet while it is open, and give focus back to it once the sheet unmounts.
+  // Without this, closing the sheet strands focus on <body>. The ref is
+  // captured the moment `open` flips true (the trigger is still focused then),
+  // and restored on the next frame after the sheet's DOM is removed.
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (open) {
+      const active = document.activeElement;
+      returnFocusRef.current = active instanceof HTMLElement ? active : null;
+    } else {
+      const trigger = returnFocusRef.current;
+      returnFocusRef.current = null;
+      if (trigger && typeof trigger.focus === "function") {
+        requestAnimationFrame(() => trigger.focus());
+      }
+    }
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
