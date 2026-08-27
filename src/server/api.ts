@@ -2039,6 +2039,7 @@ async function handleApi(
         body: preview.slice(0, 140),
         createdAt: now.toISOString(),
         readAt: null,
+        link: { kind: "conversation", id: convo.id },
       });
     }
     await db.persist();
@@ -2673,7 +2674,7 @@ async function handleApi(
     db.addDiscussion(record);
     const recipients = new Set(db.listDiscussions(requestedCanonical).filter(d => d.authorId !== account.id && !db.isBlocked(account.id,d.authorId)).map(d => d.authorId));
     if (parentId) { const parent=db.getDiscussion(parentId); if(parent && parent.authorId !== account.id && !db.isBlocked(account.id,parent.authorId)) recipients.add(parent.authorId); }
-    for (const recipient of recipients) if (db.getNotificationPreferences(recipient).community_updates) db.addNotification({id:newId(),accountId:recipient,category:"community_updates",title:"New run-day discussion activity",body:"Someone added to a run you joined.",createdAt:now.toISOString(),readAt:null});
+    for (const recipient of recipients) if (db.getNotificationPreferences(recipient).community_updates) db.addNotification({id:newId(),accountId:recipient,category:"community_updates",title:"New run-day discussion activity",body:"Someone added to a run you joined.",createdAt:now.toISOString(),readAt:null,link:{kind:"event",id:event.id}});
     await db.persist(); return ok(res, { discussion: publicDto(record) }), true;
   }
 
@@ -2968,7 +2969,7 @@ async function handleAdmin(
   // GET /api/admin/pending — owner-only pending-user queue (redacted rows)
   if (method === "GET" && url.pathname === "/api/admin/credentials") { const a=authorizeAdmin(db,ctx,"admin.pending_list",null,now);if(!a.ok)return sendErr(a),true;return ok(res,{credentials:db.listCredentials().filter(c=>c.status==="pending_review").map(c=>({id:c.id,accountId:c.accountId,type:c.type,certifyingBody:c.certifyingBody,issuedOn:c.issuedOn,expiresOn:c.expiresOn}))}),true; }
   const credentialDecision=/^\/api\/admin\/credentials\/([a-f0-9]{32})\/(approve|reject)$/.exec(url.pathname);
-  if (credentialDecision && method === "POST") { const [,id,decision]=credentialDecision; const a=authorizeAdmin(db,ctx,decision==="approve"?"admin.approve":"admin.reject",id,now);if(!a.ok)return sendErr(a),true;const b=await readJson(req) as Record<string,unknown>;if(decision==="reject"&&(typeof b.reason!=="string"||b.reason.trim().length<5))return err(res,{status:400,error:"reason_required"}),true;const c=db.updateCredential(id,{status:decision==="approve"?"verified":"rejected",verifiedBy:a.data.admin,verifiedAt:now.toISOString(),decisionReason:typeof b.reason==="string"?b.reason.trim().slice(0,500):null,updatedAt:now.toISOString()});if(!c)return err(res,{status:404,error:"not_found"}),true;if(db.getNotificationPreferences(c.accountId).account_alerts)db.addNotification({id:newId(),accountId:c.accountId,category:"account_alerts",title:decision==="approve"?"Credential approved":"Credential rejected",body:decision==="approve"?`Your ${c.type.replace(/_/g," ")} credential was verified.`:(c.decisionReason??"Your credential submission was rejected."),createdAt:now.toISOString(),readAt:null});await db.persist();return ok(res,{credential:{id:c.id,status:c.status}}),true; }
+  if (credentialDecision && method === "POST") { const [,id,decision]=credentialDecision; const a=authorizeAdmin(db,ctx,decision==="approve"?"admin.approve":"admin.reject",id,now);if(!a.ok)return sendErr(a),true;const b=await readJson(req) as Record<string,unknown>;if(decision==="reject"&&(typeof b.reason!=="string"||b.reason.trim().length<5))return err(res,{status:400,error:"reason_required"}),true;const c=db.updateCredential(id,{status:decision==="approve"?"verified":"rejected",verifiedBy:a.data.admin,verifiedAt:now.toISOString(),decisionReason:typeof b.reason==="string"?b.reason.trim().slice(0,500):null,updatedAt:now.toISOString()});if(!c)return err(res,{status:404,error:"not_found"}),true;if(db.getNotificationPreferences(c.accountId).account_alerts)db.addNotification({id:newId(),accountId:c.accountId,category:"account_alerts",title:decision==="approve"?"Credential approved":"Credential rejected",body:decision==="approve"?`Your ${c.type.replace(/_/g," ")} credential was verified.`:(c.decisionReason??"Your credential submission was rejected."),createdAt:now.toISOString(),readAt:null,link:{kind:"verify",id:c.accountId}});await db.persist();return ok(res,{credential:{id:c.id,status:c.status}}),true; }
   // GET /api/admin/credentials/:id/proof — audited admin proof view. The
   // proof bytes are private uploads: only an authorized admin (with a reason)
   // can retrieve them, and they never appear in any JSON payload.
@@ -3018,7 +3019,7 @@ async function handleAdmin(
     if (!appeal) return err(res, { status: 404, error: "not_found" }), true;
     if (appeal.status !== "open") return err(res, { status: 409, error: "already_decided" }), true;
     const updated = db.updateAppeal(id, { status: decision === "reinstate" ? "reinstated" : "upheld", decidedAt: now.toISOString(), decidedBy: a.data.admin, decisionReason })!;
-    if (db.getNotificationPreferences(updated.accountId).account_alerts) db.addNotification({ id: newId(), accountId: updated.accountId, category: "account_alerts", title: decision === "reinstate" ? "Appeal accepted" : "Appeal decision", body: decisionReason, createdAt: now.toISOString(), readAt: null });
+    if (db.getNotificationPreferences(updated.accountId).account_alerts) db.addNotification({ id: newId(), accountId: updated.accountId, category: "account_alerts", title: decision === "reinstate" ? "Appeal accepted" : "Appeal decision", body: decisionReason, createdAt: now.toISOString(), readAt: null, link: { kind: "verify", id: updated.accountId } });
     if (decision === "reinstate") {
       const target = db.getAccount(appeal.accountId);
       if (target && !target.deletedAt) db.updateAccount(target.id, { underReview: false });

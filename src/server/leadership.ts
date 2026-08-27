@@ -351,6 +351,7 @@ export function notifyLeadersOfMembershipRequest(db: Db, group: GroupModRecord, 
       body: `Someone requested to join ${group.name}. Review it in your leader queue.`,
       createdAt: now.toISOString(),
       readAt: null,
+      link: { kind: "group_manage", id: group.id },
     });
     sent++;
   }

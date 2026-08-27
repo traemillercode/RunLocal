@@ -10,10 +10,10 @@
  * `NotificationsCenter` is the pure presentational body (props only, no hooks)
  * so UI tests can render the real markup with react-dom/server.
  */
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import * as api from "../lib/api";
-import { notificationTime } from "../lib/notifications";
+import { notificationTime, notificationLinkPath } from "../lib/notifications";
 import { useAccount } from "../state/account";
 import { useNotifications } from "../state/notifications";
 import { Icon } from "../components/ui";
@@ -66,6 +66,7 @@ export function NotificationsCenter({
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
 }) {
+  const navigate = useNavigate();
   return (
     <Page>
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-start">
@@ -102,6 +103,8 @@ export function NotificationsCenter({
                 type="button"
                 onClick={() => {
                   if (!n.readAt) onMarkRead(n.id);
+                  const path = notificationLinkPath(n.link);
+                  if (path) navigate(path);
                 }}
                 className="flex w-full items-start gap-3 px-5 py-3.5 text-left active:bg-slate-50"
                 aria-label={n.readAt ? `${n.title} (read)` : `${n.title} (unread)`}
@@ -117,6 +120,7 @@ export function NotificationsCenter({
                   <span className="mt-0.5 block text-[13px] leading-relaxed text-slate-600">{n.body}</span>
                   <span className="mt-1 block text-[11px] text-slate-400">{notificationTime(n.createdAt)}</span>
                 </span>
+                {notificationLinkPath(n.link) ? <Icon name="chevronRight" className="mt-1.5 h-4 w-4 shrink-0 text-slate-300" /> : null}
               </button>
             </li>
           ))}

@@ -74,7 +74,8 @@ export async function checkUsernameAvailability(username: string): Promise<ApiRe
 }
 
 export type NotificationPreferences = { run_reminders:boolean; community_updates:boolean; account_alerts:boolean; messages?:boolean; };
-export type InAppNotification = { id:string; category:keyof NotificationPreferences; title:string; body:string; createdAt:string; readAt:string|null };
+export type NotificationLink = { kind: "conversation" | "verify" | "group_manage" | "event" | "forum_post"; id: string };
+export type InAppNotification = { id:string; category:keyof NotificationPreferences; title:string; body:string; createdAt:string; readAt:string|null; link?: NotificationLink | null };
 export const getNotificationPreferences = () => request<{preferences: NotificationPreferences}>("/api/notifications/preferences");
 export const updateNotificationPreferences = (patch: Partial<NotificationPreferences>) => request<{preferences: NotificationPreferences}>("/api/notifications/preferences", {method:"PATCH", body:JSON.stringify(patch)});
 export const getNotifications = () => request<{notifications:InAppNotification[]; unreadCount:number}>("/api/notifications");

@@ -774,6 +774,7 @@ export function adminSetStatus(
         body: status === "verified" ? "Your identity is verified — you're all set to join runs and connect with other runners." : (rejectionReason ?? "Your verification submission was not approved."),
         createdAt: now.toISOString(),
         readAt: null,
+        link: { kind: "verify", id: updated.id },
       });
     }
     if (status === "verified") {

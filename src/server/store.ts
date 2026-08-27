@@ -1084,7 +1084,7 @@ export class Db {
       this.updateAttendance(a.id, { remindedAt: now.toISOString() });
       if (this.getNotificationPreferences(a.accountId).run_reminders) {
         const minutesAway = Math.round((startsMs - nowMs) / 60_000);
-        this.addNotification({ id: newId(), accountId: a.accountId, category: "run_reminders", title: "Your run is coming up", body: `Starting in about ${minutesAway} minute${minutesAway === 1 ? "" : "s"} — see you out there.`, createdAt: now.toISOString(), readAt: null });
+        this.addNotification({ id: newId(), accountId: a.accountId, category: "run_reminders", title: "Your run is coming up", body: `Starting in about ${minutesAway} minute${minutesAway === 1 ? "" : "s"} — see you out there.`, createdAt: now.toISOString(), readAt: null, link: { kind: "event", id: a.eventId } });
         notified++;
       }
     }
