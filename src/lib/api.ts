@@ -868,7 +868,35 @@ export function adminClearAnnouncement(reason: string): Promise<ApiResult<{ ok: 
 export type ActivityProvider = "strava" | "garmin" | "coros" | "suunto";
 export type ShareMode = "auto" | "manual" | "private";
 export interface PublicActivityCard { id: string; type: string; distanceMeters: number; durationSeconds: number; provider: ActivityProvider; attribution: string; sharedAt: string; }
+/**
+ * GET /api/activity/feed — the city-scoped activity feed. Session optional:
+ * the server returns only cards the owner would share with the current viewer
+ * (per-owner show_past_activity privacy + bidirectional blocks; shareMode
+ * "private" cards are owner-only). Guests see whatever the privacy model
+ * allows (show_past_activity defaults to public).
+ */
 export function getActivityFeed(city: string): Promise<ApiResult<{ cards: PublicActivityCard[] }>> { return request(`/api/activity/feed?city=${encodeURIComponent(city)}`); }
+/** POST /api/activity/manual — verified runners log a completed run manually. */
+export interface ManualActivityInput {
+  /** Provider attribution stamped on the card. Defaults to "strava" (the only provider enabled by default); shareMode is always "manual" server-side. */
+  provider?: ActivityProvider;
+  distanceMeters: number;
+  durationSeconds: number;
+  /** ISO completion timestamp (optional; the server defaults to now). */
+  startedAt?: string;
+  /** Optional caption, truncated server-side to 280 chars. */
+  caption?: string;
+}
+export function postManualActivity(input: ManualActivityInput): Promise<ApiResult<{ card: PublicActivityCard }>> {
+  return request("/api/activity/manual", {
+    method: "POST",
+    body: JSON.stringify({
+      provider: input.provider ?? "strava",
+      activity: { distanceMeters: input.distanceMeters, durationSeconds: input.durationSeconds, completedAt: input.startedAt },
+      caption: input.caption,
+    }),
+  });
+}
 export type ProviderStatus = { provider: ActivityProvider; offered: boolean; configured: boolean; connected: boolean; state: "unavailable" | "coming_soon" | "not_configured" | "available" | "connected"; authorizeUrl?: string; missing?: string[] };
 export function getProviderStatus(provider: ActivityProvider): Promise<ApiResult<ProviderStatus>> { return request(`/api/connections/${provider}`); }
 export function disconnectConnection(provider: ActivityProvider, deleteActivities: boolean): Promise<ApiResult<{ disconnected: boolean; deletedActivities: boolean }>> { return request(`/api/connections/${provider}/disconnect`, { method: "POST", body: JSON.stringify({ deleteActivities }) }); }
@@ -1053,6 +1081,14 @@ export interface ConnectionGoingRow {
 /** GET /api/events/:eventId/occurrences/:occurrenceId/connections-going — verified signed-in only. */
 export function getConnectionsGoing(eventId: string, occurrenceId: string): Promise<ApiResult<ConnectionGoingRow[]>> {
   return request(`/api/events/${encodeURIComponent(eventId)}/occurrences/${encodeURIComponent(occurrenceId)}/connections-going`);
+}
+/** One card of the connections activity feed: card + the owner's public-safe identity. */
+export interface ConnectionActivityCard extends PublicActivityCard {
+  owner: { accountId: string; name: string; username: string | null; profilePhotoUrl: string | null };
+}
+/** GET /api/connections/activity — signed-in only; cards from the caller's ACCEPTED connections, filtered by show_past_activity + shareMode + blocks server-side. */
+export function getConnectionsActivity(): Promise<ApiResult<{ cards: ConnectionActivityCard[] }>> {
+  return request("/api/connections/activity");
 }
 
 // ------------------------------------------------------------ privacy settings
@@ -1300,8 +1336,13 @@ export interface RunnerActivityRow {
   section: string;
   createdAt: string;
 }
-/** GET /api/runners/:id/activity — gated by show_past_activity server-side. */
-export function getRunnerActivity(runnerId: string): Promise<ApiResult<{ activity: RunnerActivityRow[] }>> {
+/** GET /api/runners/:id/activity — forum posts + activity cards, both gated by show_past_activity server-side (per-card shareMode "private" is owner-only). */
+export interface RunnerActivityResponse {
+  activity: RunnerActivityRow[];
+  /** The runner's activity cards (manual/auto records) visible to this viewer. */
+  activityCards: PublicActivityCard[];
+}
+export function getRunnerActivity(runnerId: string): Promise<ApiResult<RunnerActivityResponse>> {
   return request(`/api/runners/${encodeURIComponent(runnerId)}/activity`);
 }
 

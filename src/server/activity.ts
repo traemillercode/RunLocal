@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import type { Db } from "./store";
+import { canView } from "./privacy";
 
 export type Provider = "strava" | "garmin" | "coros" | "suunto";
 export type ShareMode = "auto" | "manual" | "private";
@@ -29,5 +31,20 @@ export function oauthState(accountId:string,provider:Provider){const nonce=rando
 export function stateValid(state:string,accountId:string,provider:Provider){const entry=pendingStates.get(state); if(!entry||entry.expires<Date.now()||entry.accountId!==accountId||entry.provider!==provider)return false; pendingStates.delete(state); return true;}
 export function configError(provider:Provider){return {error:"provider_not_configured",provider,missing:missing(provider)};}
 export function publicActivityCard(a:Activity){return cardForActivity(a);}
+/**
+ * THE per-activity visibility gate — every endpoint that renders activity
+ * cards (public feed, runner profile activity, connections activity) MUST
+ * filter through this. No ad-hoc checks.
+ *
+ *   - shareMode "private" → owner only (self always passes; guests never).
+ *   - shareMode "manual"/"auto" → visible when canView(viewer, owner,
+ *     show_past_activity) passes. canView already handles blocked pairs
+ *     (bidirectional, beats everything), self, guests (public only), and the
+ *     connections_only resolution.
+ */
+export function activityVisibleTo(db: Db, viewerId: string | null, a: Activity): boolean {
+  if (a.shareMode === "private") return viewerId !== null && viewerId === a.accountId;
+  return canView(db, viewerId, a.accountId, "show_past_activity");
+}
 export function canShare(account: {status:string}, mode:ShareMode){return account.status==="verified"&&mode!=="private";}
 export function autoCard(a:Activity){return a.shareMode==="auto"?cardForActivity(a):null;}
