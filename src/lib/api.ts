@@ -336,6 +336,12 @@ export function adminDeleteRecord(id: string, reason: string): Promise<ApiResult
 export function adminUndoRejection(id: string, reason: string): Promise<ApiResult<{ ok: true; account: import("./accounts").PublicAccount }>> {
   return adminRequest(`/api/admin/records/${id}/undo_reject`, reason, { method: "POST" });
 }
+export function adminPurgePreview(reason: string): Promise<ApiResult<{ count: number; emails: string[] }>> {
+  return adminRequest("/api/admin/purge-preview", reason);
+}
+export function adminPurgeAll(confirmText: string, expectedCount: number, reason: string): Promise<ApiResult<{ deletedCount: number; deletedEmails: string[] }>> {
+  return adminRequest("/api/admin/purge-all", reason, { method: "POST", body: JSON.stringify({ confirmText, expectedCount }) });
+}
 
 export function adminAudit(limit = 100, reason: string): Promise<ApiResult<{ entries: AuditEntryView[] }>> {
   return adminRequest(`/api/admin/audit?limit=${limit}`, reason);

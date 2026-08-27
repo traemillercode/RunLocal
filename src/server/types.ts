@@ -242,6 +242,7 @@ export type AdminAction =
   | "admin.sponsor_delete"
   | "admin.geofence_allowlist_add"
   | "admin.geofence_allowlist_remove"
+  | "admin.purge_all"
   | "admin.invitation_revoke"
   | "admin.view_credential_proof"
   | "admin.appeal_list"

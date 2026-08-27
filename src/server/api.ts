@@ -22,6 +22,8 @@ import {
   adminConfigured,
   adminEmail,
   adminExportRows,
+  adminPurgePreview,
+  adminPurgeAllExceptOwner,
   adminAuditLog,
   adminDeleteAccount,
   adminUndoRejection,
@@ -3391,6 +3393,25 @@ async function handleAdmin(
   }
 
   // GET /api/admin/export.csv?q=
+  // GET /api/admin/purge-preview — owner-only, shows exactly who would be
+  // deleted without deleting anything.
+  if (method === "GET" && url.pathname === "/api/admin/purge-preview") {
+    const result = adminPurgePreview(db, ctx, now);
+    if (!result.ok) return sendErr(result), true;
+    return ok(res, result.data), true;
+  }
+  // POST /api/admin/purge-all — owner-only, irreversible. Requires the
+  // literal confirmation string and the expected count to still match at
+  // execution time (see adminPurgeAllExceptOwner for the full safety gate).
+  if (method === "POST" && url.pathname === "/api/admin/purge-all") {
+    const body = (await readJson(req)) as { confirmText?: unknown; expectedCount?: unknown };
+    const confirmText = typeof body.confirmText === "string" ? body.confirmText : "";
+    const expectedCount = typeof body.expectedCount === "number" ? body.expectedCount : -1;
+    const result = adminPurgeAllExceptOwner(db, ctx, confirmText, expectedCount, now);
+    if (!result.ok) return sendErr(result), true;
+    return ok(res, result.data), true;
+  }
+
   if (method === "GET" && url.pathname === "/api/admin/export.csv") {
     const q = url.searchParams.get("q") ?? "";
     const result = adminExportRows(db, ctx, q, now);

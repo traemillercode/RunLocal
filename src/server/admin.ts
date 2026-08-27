@@ -831,6 +831,60 @@ export function adminDeleteAccount(
   return { ok: true, data: { id: rec.id } };
 }
 
+/**
+ * Preview for the "purge everyone except the owner" action - owner-only,
+ * lists exactly who would be deleted without deleting anything. The
+ * protected email is ALWAYS the server-configured owner email
+ * (RUN_LOCAL_OWNER_EMAIL) - never a client-supplied value, so there's no way
+ * to typo your way into deleting the wrong account or protecting the wrong one.
+ */
+export function adminPurgePreview(db: Db, ctx: AdminCtx, now = new Date()): AdminResult<{ count: number; emails: string[] }> {
+  const auth = authorizeOwner(db, ctx, "admin.purge_all", null, now);
+  if (!auth.ok) return auth;
+  const protectedEmail = ownerEmail().trim().toLowerCase();
+  const targets = db.listAccounts().filter((a) => a.email.trim().toLowerCase() !== protectedEmail);
+  return { ok: true, data: { count: targets.length, emails: targets.map((a) => a.email) } };
+}
+
+/**
+ * Deletes every account except the owner's. Irreversible, so this requires
+ * two things beyond normal admin auth: an exact literal confirmation string
+ * ("DELETE ALL"), and the caller's expectedCount must match the CURRENT real
+ * count at execution time - if someone signed up between the preview and
+ * this call, the count won't match and the action safely refuses rather than
+ * deleting a possibly-different set than what was actually previewed.
+ * Reuses the same per-account cleanup as adminDeleteAccount (selfie/photo
+ * uploads, sessions) so bulk deletion behaves identically to deleting one
+ * account at a time, not a separate, less-tested code path.
+ */
+export function adminPurgeAllExceptOwner(db: Db, ctx: AdminCtx, confirmText: string, expectedCount: number, now = new Date()): AdminResult<{ deletedCount: number; deletedEmails: string[] }> {
+  const auth = authorizeOwner(db, ctx, "admin.purge_all", null, now);
+  if (!auth.ok) return auth;
+  if (confirmText !== "DELETE ALL") {
+    return { ok: false, status: 400, error: "confirmation_required", message: 'Type exactly "DELETE ALL" to confirm.' };
+  }
+  const protectedEmail = ownerEmail().trim().toLowerCase();
+  const targets = db.listAccounts().filter((a) => a.email.trim().toLowerCase() !== protectedEmail);
+  if (targets.length !== expectedCount) {
+    return {
+      ok: false,
+      status: 409,
+      error: "count_changed",
+      message: `Expected ${expectedCount} accounts but found ${targets.length} now - someone may have signed up. Reload the preview and try again.`,
+    };
+  }
+  const deletedEmails: string[] = [];
+  for (const rec of targets) {
+    if (rec.selfieRef) void db.deletePrivateUpload(rec.selfieRef);
+    if (rec.profilePhotoRef) void db.deletePublicUpload(rec.profilePhotoRef);
+    db.removeAccount(rec.id);
+    db.deleteSessionsForAccount(rec.id);
+    deletedEmails.push(rec.email);
+  }
+  void db.persist();
+  return { ok: true, data: { deletedCount: deletedEmails.length, deletedEmails } };
+}
+
 export function adminExportRows(
   db: Db,
   ctx: AdminCtx,
