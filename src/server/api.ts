@@ -88,7 +88,7 @@ import {
   citySetGroupRrca,
   citySetContentHighlight,
 } from "./dashboard";
-import { normalizeActivity, publicActivityCard, type Provider, type ShareMode } from "./activity";
+import { normalizeActivity, publicActivityCard, activityVisibleTo, type Provider, type ShareMode } from "./activity";
 import { decideSubmission,
   mySubmissions,
   publicApprovedContent,
@@ -1118,8 +1118,23 @@ async function handleApi(
   }
 
   if (method === "GET" && url.pathname === "/api/activity/feed") {
+    // Viewer-aware public feed: session optional. A card is included ONLY when
+    // the owner would share it with THIS viewer — activityVisibleTo enforces
+    // shareMode (private -> owner only) and canView(viewer, owner,
+    // show_past_activity), which already applies per-owner privacy and
+    // bidirectional blocks. Guests keep seeing whatever the privacy model
+    // allows (show_past_activity defaults to public) — no session required.
     const cityId = url.searchParams.get("city") ?? "";
-    const cards = db.listActivities().filter(a => a.shareMode !== "private").flatMap(a => { const owner=db.getAccount(a.accountId); return owner?.cityId===cityId ? [publicActivityCard(a)] : []; });
+    const sess = requireSession(db, cookies);
+    const viewerId = sess && !db.getAccount(sess.accountId)?.deletedAt ? sess.accountId : null;
+    const cards = db
+      .listActivities()
+      .filter((a) => activityVisibleTo(db, viewerId, a))
+      .flatMap((a) => {
+        const owner = db.getAccount(a.accountId);
+        return owner && owner.cityId === cityId && publicRunnerProfile(owner, now) !== null ? [publicActivityCard(a)] : [];
+      })
+      .sort((x, y) => y.sharedAt.localeCompare(x.sharedAt));
     return ok(res, { cards }), true;
   }
   if (method === "POST" && url.pathname === "/api/activity/manual") {
@@ -2239,6 +2254,31 @@ async function handleApi(
     return ok(res, { left: true }), true;
   }
 
+  // ---- GET /api/connections/activity: activity cards from the caller's
+  // ACCEPTED connections only ------------------------------------------------
+  // Same accepted-connection resolution as GET /api/connections; each card is
+  // included only when activityVisibleTo(caller, card) passes (shareMode
+  // private -> owner only; manual/auto -> canView(caller, owner,
+  // show_past_activity), which applies blocks). Auth required — a guest has no
+  // connections. Cards carry the owner's public-safe identity for attribution.
+  if (method === "GET" && url.pathname === "/api/connections/activity") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const viewer = db.getAccount(sess.accountId);
+    if (!viewer || viewer.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const connectedIds = new Set(db.listAcceptedConnections(sess.accountId).map((c) => (c.requesterId === sess.accountId ? c.addresseeId : c.requesterId)));
+    const cards = db
+      .listActivities()
+      .filter((a) => connectedIds.has(a.accountId) && activityVisibleTo(db, sess.accountId, a))
+      .flatMap((a) => {
+        const owner = db.getAccount(a.accountId);
+        if (!owner || publicRunnerProfile(owner, now) === null) return [];
+        return [{ ...publicActivityCard(a), owner: { accountId: owner.id, name: owner.name, username: owner.username ?? null, profilePhotoUrl: owner.profilePhotoRef ? `/uploads/public/${owner.profilePhotoRef}` : null } }];
+      })
+      .sort((x, y) => y.sharedAt.localeCompare(x.sharedAt));
+    return ok(res, { cards }), true;
+  }
+
   // ---- connection lifecycle mutations --------------------------------------
   // POST /api/connections/:id/request — :id is the TARGET ACCOUNT id.
   // POST /api/connections/:id/accept|decline — :id is the REQUEST id; the
@@ -2590,16 +2630,20 @@ async function handleApi(
       .sort((a, b) => b.tag.createdAt.localeCompare(a.tag.createdAt));
     return ok(res, { tagged }), true;
   }
-  // GET /api/runners/:id/activity — the runner's public forum posts, gated by
-  // canView(viewer, owner, show_past_activity). Public read (guests pass only
-  // when the setting is public — the default). Empty when nothing is visible.
+  // GET /api/runners/:id/activity — the runner's public forum posts PLUS their
+  // activity cards (manual/auto/strava records via cardForActivity), gated by
+  // canView(viewer, owner, show_past_activity) at the endpoint level and by
+  // activityVisibleTo per card (shareMode private -> owner only). Public read
+  // (guests pass only when the setting is public — the default). Empty when
+  // nothing is visible. Forum-posts payload shape is backward-compatible; the
+  // activityCards array rides alongside it.
   const runnerActivity = /^\/api\/runners\/([a-f0-9]{32})\/activity$/.exec(url.pathname);
   if (runnerActivity && method === "GET") {
     const owner = db.getAccount(runnerActivity[1]);
     if (!owner || owner.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
     const sess = requireSession(db, cookies);
-    const viewerId = sess ? sess.accountId : null;
-    if (!canView(db, viewerId, owner.id, "show_past_activity")) return ok(res, { activity: [] }), true;
+    const viewerId = sess && !db.getAccount(sess.accountId)?.deletedAt ? sess.accountId : null;
+    if (!canView(db, viewerId, owner.id, "show_past_activity")) return ok(res, { activity: [], activityCards: [] }), true;
     const activity = db
       .listForumPosts()
       .filter((f) => f.authorAccountId === owner.id && f.state === "visible")
@@ -2609,7 +2653,12 @@ async function handleApi(
       })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map((f) => ({ id: f.id, title: f.title, excerpt: f.body.slice(0, 200), section: f.section, createdAt: f.createdAt }));
-    return ok(res, { activity }), true;
+    const activityCards = db
+      .listActivities()
+      .filter((a) => a.accountId === owner.id && activityVisibleTo(db, viewerId, a))
+      .map(publicActivityCard)
+      .sort((x, y) => y.sharedAt.localeCompare(x.sharedAt));
+    return ok(res, { activity, activityCards }), true;
   }
 
   // ---- strictly private PersonalRun records -------------------------------
