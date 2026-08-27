@@ -73,17 +73,18 @@ const baseProps: ViewProps = {
 const renderView = (over: Partial<ViewProps> = {}) =>
   renderToStaticMarkup(<MemoryRouter><ConnectionsView {...baseProps} {...over} /></MemoryRouter>);
 
-describe("Connections page — three-tab shell", () => {
-  it("renders the three in-page tabs with tablist/tab semantics", () => {
+describe("Connections page — four-tab shell", () => {
+  it("renders the four in-page tabs with tablist/tab semantics", () => {
     const html = renderView();
     expect(html).toContain('role="tablist"');
-    expect(html.match(/role="tab"/g)?.length).toBe(3);
+    expect(html.match(/role="tab"/g)?.length).toBe(4);
     expect(html).toContain("Requests");
     expect(html).toContain("My Connections");
     expect(html).toContain("Find People");
-    // Requests is the default active tab; the other two are not.
+    expect(html).toContain("Activity");
+    // Requests is the default active tab; the other three are not.
     expect(html).toContain('aria-selected="true"');
-    expect((html.match(/aria-selected="false"/g) ?? []).length).toBe(2);
+    expect((html.match(/aria-selected="false"/g) ?? []).length).toBe(3);
     // The active panel carries role="tabpanel".
     expect(html).toContain('role="tabpanel"');
   });

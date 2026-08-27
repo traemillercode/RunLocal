@@ -390,3 +390,131 @@ export function SoloRunSheet({ open, onClose, cityId, onScheduled }: { open: boo
     </Sheet>
   );
 }
+
+// ------------------------------------------------------------ Log a run (B2)
+
+export type ActivityDistanceUnit = "km" | "mi";
+export interface LogRunFormFields {
+  /** Numeric distance (value only). */
+  distance: string;
+  unit: ActivityDistanceUnit;
+  /** Hours as a string from the numeric input ("" or "0" allowed). */
+  hours: string;
+  /** Minutes 0–59. */
+  minutes: string;
+  /** Optional ISO datetime-local string ("" = the server uses now). */
+  startedAt: string;
+  /** Optional caption, server-truncated to 280 chars. */
+  caption: string;
+}
+export const EMPTY_LOG_RUN: LogRunFormFields = { distance: "", unit: "km", hours: "", minutes: "", startedAt: "", caption: "" };
+const MILES_PER_METER = 1609.344;
+
+/**
+ * Build the exact postManualActivity payload from the form, or null when the
+ * input is invalid (missing/zero distance, non-numeric, bad time). The server
+ * re-validates everything regardless — this just catches obvious client errors
+ * so we never send a pointless request.
+ */
+export function buildManualActivityInput(f: LogRunFormFields): api.ManualActivityInput | null {
+  const distance = Number(f.distance);
+  if (!Number.isFinite(distance) || distance <= 0) return null;
+  const hours = Number(f.hours);
+  const minutes = Number(f.minutes);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || hours < 0 || minutes < 0 || minutes > 59) return null;
+  const durationSeconds = Math.round((hours || 0) * 3600 + (minutes || 0) * 60);
+  if (durationSeconds <= 0) return null;
+  return {
+    distanceMeters: Math.round(f.unit === "mi" ? distance * MILES_PER_METER : distance * 1000),
+    durationSeconds,
+    startedAt: f.startedAt ? `${f.startedAt}:00Z` : undefined,
+    caption: f.caption.trim() || undefined,
+  };
+}
+
+/**
+ * "Log a run" bottom sheet — a VERIFIED runner records a completed run by hand
+ * (distance, duration, optional date, optional caption). Manual posting only;
+ * provider OAuth import is out of scope until the owner supplies creds. Entry
+ * is gated to verified runners by the callers (unverified users get the
+ * VerifiedGateSheet, never this form). Submit -> client postManualActivity.
+ */
+export function LogRunSheet({ open, onClose, onLogged }: { open: boolean; onClose: () => void; onLogged?: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [f, setF] = useState<LogRunFormFields>(EMPTY_LOG_RUN);
+  useEffect(() => {
+    if (open) {
+      setF(EMPTY_LOG_RUN);
+      setError(null);
+      setBusy(false);
+    }
+  }, [open]);
+  const set = (k: keyof LogRunFormFields) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setF({ ...f, [k]: e.target.value });
+  const save = async () => {
+    if (busy) return;
+    const input = buildManualActivityInput(f);
+    if (!input) {
+      setError("Enter a distance and a duration (e.g. 5 km in 30 min) to log a run.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const r = await api.postManualActivity(input);
+    setBusy(false);
+    if (r.ok) {
+      toast("Run logged to your profile.", "success");
+      onClose();
+      onLogged?.();
+      return;
+    }
+    setError(r.error.message ?? "Couldn't log this run. Try again.");
+  };
+  return (
+    <Sheet open={open} onClose={onClose} title="Log a run" subtitle="Record a run you finished — it shows as an activity card on your public profile and in Connections.">
+      <div className="space-y-4">
+        <Field label="Distance">
+          <div className="flex gap-2">
+            <input className={inputCls} inputMode="decimal" placeholder="e.g. 5" value={f.distance} onChange={set("distance")} />
+            <div className="flex shrink-0 rounded-xl bg-slate-100 p-1" role="group" aria-label="Distance unit">
+              {(["km", "mi"] as const).map((u) => (
+                <button
+                  key={u}
+                  type="button"
+                  aria-pressed={f.unit === u}
+                  onClick={() => setF({ ...f, unit: u })}
+                  className={`min-h-11 rounded-lg px-3 text-xs font-bold ${f.unit === u ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+                >
+                  {u}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Field>
+        <Field label="Duration">
+          <div className="flex gap-2">
+            <input className={inputCls} inputMode="numeric" placeholder="Hours" aria-label="Hours" value={f.hours} onChange={set("hours")} />
+            <input className={inputCls} inputMode="numeric" placeholder="Minutes" aria-label="Minutes" value={f.minutes} onChange={set("minutes")} />
+          </div>
+        </Field>
+        <Field label="Date (optional)">
+          <input type="datetime-local" className={inputCls} value={f.startedAt} onChange={set("startedAt")} />
+          <span className="mt-1 block text-xs text-slate-400">Defaults to now when left blank.</span>
+        </Field>
+        <Field label="Caption (optional)">
+          <textarea className={`${inputCls} h-20 resize-none py-2.5`} maxLength={280} placeholder="How'd it go?" value={f.caption} onChange={set("caption")} />
+          <span className="mt-1 block text-right text-xs text-slate-400">{f.caption.length}/280</span>
+        </Field>
+        <Err msg={error} />
+        <PillButton variant="primary" className="w-full" disabled={busy} onClick={() => void save()}>
+          <Icon name="check" className="h-4 w-4" /> {busy ? "Saving…" : "Log run"}
+        </PillButton>
+        <p className="text-center text-xs text-slate-400">
+          Logged manually — posted as your own activity on your public profile and visible to connections (respecting your past-activity privacy).
+        </p>
+      </div>
+    </Sheet>
+  );
+}

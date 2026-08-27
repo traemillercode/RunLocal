@@ -93,14 +93,14 @@ describe("EventsPage — Schedule my own run CTA", () => {
 
 describe("MyRunsHeader — Add solo run", () => {
   it("renders an Add solo run button beside the ICS export", () => {
-    const html = renderToStaticMarkup(<MyRunsHeader view="list" onViewChange={() => {}} onAddSolo={() => {}} />);
+    const html = renderToStaticMarkup(<MyRunsHeader view="list" onViewChange={() => {}} onAddSolo={() => {}} onLogRun={() => {}} />);
     expect(html).toContain('aria-label="Add solo run"');
     expect(html).toContain(">Add solo run</button>");
     expect(html).toContain('href="/api/my/runs/ical?tzOffsetMinutes='); // still beside the export
   });
   it("locks the page wiring: header opens the shared sheet; the sheet schedules and refreshes in place", async () => {
     const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/pages/MyRunsPage.tsx", import.meta.url), "utf8"));
-    expect(source).toContain("<MyRunsHeader view={view} onViewChange={setView} onAddSolo={() => setSoloOpen(true)} />");
+    expect(source).toContain("<MyRunsHeader view={view} onViewChange={setView} onAddSolo={() => setSoloOpen(true)} onLogRun={() => setLogRunOpen(true)} />");
     expect(source).toContain('<SoloRunSheet open={soloOpen} onClose={() => setSoloOpen(false)} cityId={cityId} onScheduled={load} />');
     // City id comes from the signed-in account (never a hardcoded city).
     expect(source).toContain('me.account.cityId ?? ""');

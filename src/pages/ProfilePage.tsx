@@ -14,6 +14,8 @@ import * as api from "../lib/api";
 import type { AppStore } from "../lib/store";
 import { useAccount } from "../state/account";
 import { useSelectedCity } from "../state/city";
+import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
+import { LogRunSheet } from "../components/SubmissionSheets";
 import { TrustProfileSection } from "../components/TrustProfileSection";
 import {
   RunnerProfileTabs,
@@ -21,7 +23,7 @@ import {
   RunnerTaggedPanel,
   type RunnerProfileTab,
 } from "./RunnerProfilePage";
-import type { RunnerActivityRow, RunnerTaggedRow } from "../lib/api";
+import type { PublicActivityCard, RunnerActivityRow, RunnerTaggedRow } from "../lib/api";
 
 function initials(name: string): string {
   return name
@@ -436,11 +438,15 @@ export function ProfileGroupsCard({ signedIn }: { signedIn: boolean }) {
  * account, home city) live on SettingsPage; /profile never renders them.
  */
 export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
-  const { me, backendAvailable } = useAccount();
+  const { me, role, backendAvailable } = useAccount();
   const { hasHomeCity } = useSelectedCity();
   const [tab, setTab] = useState<RunnerProfileTab>("activity");
   const [activity, setActivity] = useState<RunnerActivityRow[] | null>(null);
+  const [cards, setCards] = useState<PublicActivityCard[] | null>(null);
   const [tagged, setTagged] = useState<RunnerTaggedRow[] | null>(null);
+  // Log-a-run composition (verified only) + its gate for unverified profiles.
+  const [logRunOpen, setLogRunOpen] = useState(false);
+  const [logGateOpen, setLogGateOpen] = useState(false);
 
   const rsvps = useMemo(() => {
     const all = resolveWeekEvents(city.events, new Date());
@@ -458,7 +464,7 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
   useEffect(() => {
     if (!accountId) return;
     let alive = true;
-    void api.getRunnerActivity(accountId).then((r) => { if (alive) setActivity(r.ok ? r.data.activity : []); });
+    void api.getRunnerActivity(accountId).then((r) => { if (alive) { setActivity(r.ok ? r.data.activity : []); setCards(r.ok ? r.data.activityCards : []); } });
     void api.getRunnerTagged(accountId).then((r) => { if (alive) setTagged(r.ok ? r.data.tagged : []); });
     return () => { alive = false; };
   }, [accountId]);
@@ -596,11 +602,37 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
         <>
           <RunnerProfileTabs tab={tab} onSelect={setTab} />
           {tab === "activity" ? (
-            <RunnerActivityPanel rows={activity} loading={activity === null} />
+            <RunnerActivityPanel
+              rows={activity}
+              cards={cards}
+              loading={activity === null}
+              ownView
+              onLogRun={() => (verified ? setLogRunOpen(true) : setLogGateOpen(true))}
+            />
           ) : (
             <RunnerTaggedPanel rows={tagged} isOwn busyTagId={null} onToggleHide={() => {}} />
           )}
         </>
+      ) : null}
+
+      {logRunOpen ? (
+        <LogRunSheet
+          open
+          onClose={() => setLogRunOpen(false)}
+          onLogged={() => {
+            void api.getRunnerActivity(signedIn!.id).then((r) => { if (r.ok) { setActivity(r.data.activity); setCards(r.data.activityCards); } });
+          }}
+        />
+      ) : null}
+      {logGateOpen ? (
+        <VerifiedGateSheet
+          open
+          onClose={() => setLogGateOpen(false)}
+          role={role}
+          actionLabel="logging runs"
+          pendingLabel="Your profile is still in review."
+          rejectionReason={me?.status === "signed_in" ? me.account.rejectionReason ?? null : null}
+        />
       ) : null}
 
       {/* Groups & clubs — directory entry + My Groups with pending counts */}
