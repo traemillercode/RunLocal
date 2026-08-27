@@ -1187,6 +1187,63 @@ export function setTrainingPlanWeek(weekNumber: number, input: { targetMiles?: n
   return request(`/api/profile/training-plan/weeks/${weekNumber}`, { method: "PUT", body: JSON.stringify(input) });
 }
 
+export type TrainingDayWorkoutType = "run" | "cross_training" | "rest" | "recovery" | "race";
+export interface TrainingPlanDayView {
+  id: string;
+  accountId: string;
+  date: string;
+  weekNumber: number;
+  workoutType: TrainingDayWorkoutType;
+  title: string;
+  distanceMiles: number | null;
+  shoeNotes: string | null;
+  fuelNotes: string | null;
+  hydrationNotes: string | null;
+  linkedRouteId: string | null;
+  notes: string;
+  completedRunId: string | null;
+  updatedAt: string;
+}
+export type TrainingPlanDayInput = Partial<Omit<TrainingPlanDayView, "id" | "accountId" | "date" | "weekNumber" | "completedRunId" | "updatedAt">>;
+
+export function getTrainingPlanDays(range?: { start?: string; end?: string }): Promise<ApiResult<{ days: TrainingPlanDayView[] }>> {
+  const q = range ? `?${new URLSearchParams({ ...(range.start ? { start: range.start } : {}), ...(range.end ? { end: range.end } : {}) })}` : "";
+  return request(`/api/profile/training-plan/days${q}`);
+}
+export function setTrainingPlanDay(date: string, input: TrainingPlanDayInput): Promise<ApiResult<{ day: TrainingPlanDayView }>> {
+  return request(`/api/profile/training-plan/days/${date}`, { method: "PUT", body: JSON.stringify(input) });
+}
+
+// ---- coach access to an athlete's plan ----
+export interface CoachRelationshipView {
+  id: string;
+  role: "coach" | "athlete";
+  status: "pending" | "active" | "declined";
+  requestedByMe: boolean;
+  otherAccountId: string | null;
+  otherName: string;
+  createdAt: string;
+}
+export function listCoachRelationships(): Promise<ApiResult<{ relationships: CoachRelationshipView[] }>> {
+  return request("/api/coach/relationships");
+}
+export function requestCoachRelationship(targetAccountId: string, asCoach: boolean): Promise<ApiResult<{ relationship: { id: string } }>> {
+  return request(`/api/coach/${encodeURIComponent(targetAccountId)}/request`, { method: "POST", body: JSON.stringify({ asCoach }) });
+}
+export function respondToCoachRelationship(relationshipId: string, accept: boolean): Promise<ApiResult<{ relationship: { id: string; status: string } }>> {
+  return request(`/api/coach/${encodeURIComponent(relationshipId)}/${accept ? "accept" : "decline"}`, { method: "POST" });
+}
+export function getAthleteTrainingPlan(athleteId: string): Promise<ApiResult<{ plan: TrainingPlanView | null }>> {
+  return request(`/api/coach/athletes/${encodeURIComponent(athleteId)}/training-plan`);
+}
+export function getAthleteTrainingPlanDays(athleteId: string, range?: { start?: string; end?: string }): Promise<ApiResult<{ days: TrainingPlanDayView[] }>> {
+  const q = range ? `?${new URLSearchParams({ ...(range.start ? { start: range.start } : {}), ...(range.end ? { end: range.end } : {}) })}` : "";
+  return request(`/api/coach/athletes/${encodeURIComponent(athleteId)}/training-plan/days${q}`);
+}
+export function setAthleteTrainingPlanDay(athleteId: string, date: string, input: TrainingPlanDayInput): Promise<ApiResult<{ day: TrainingPlanDayView }>> {
+  return request(`/api/coach/athletes/${encodeURIComponent(athleteId)}/training-plan/days/${date}`, { method: "PUT", body: JSON.stringify(input) });
+}
+
 export function getPrivacy(): Promise<ApiResult<{ settings: PrivacySettings }>> {
   return request("/api/profile/privacy");
 }

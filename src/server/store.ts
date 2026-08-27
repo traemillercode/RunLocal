@@ -329,6 +329,8 @@ export class Db {
   private messages = new Map<string, import("./types").MessageRecord>();
   private trainingPlans = new Map<string, import("./types").TrainingPlanRecord>();
   private trainingPlanWeeks = new Map<string, import("./types").TrainingPlanWeekRecord>();
+  private coachRelationships = new Map<string, import("./types").CoachRelationshipRecord>();
+  private trainingPlanDays = new Map<string, import("./types").TrainingPlanDayRecord>();
   private forumVotes = new Map<string, import("./types").ForumVoteRecord>();
   private accountReports = new Map<string, import("./types").AccountReportRecord>();
   private routes = new Map<string, import("./types").RouteRecord>();
@@ -460,6 +462,8 @@ export class Db {
       for (const m of parsed.messages ?? []) this.messages.set(m.id, { ...m, deletedAt: m.deletedAt ?? null, reactions: m.reactions ?? {}, mediaRef: m.mediaRef ?? null, editedAt: m.editedAt ?? null });
       for (const t of parsed.trainingPlans ?? []) this.trainingPlans.set(t.accountId, t);
       for (const w of parsed.trainingPlanWeeks ?? []) this.trainingPlanWeeks.set(w.id, w);
+      for (const c of parsed.coachRelationships ?? []) this.coachRelationships.set(c.id, c);
+      for (const d of parsed.trainingPlanDays ?? []) this.trainingPlanDays.set(d.id, d);
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
       for (const r of parsed.accountReports ?? []) this.accountReports.set(r.id, r);
       for (const rt of parsed.routes ?? []) this.routes.set(rt.id, { ...rt, hasElevationData: rt.hasElevationData ?? rt.elevationGainFt > 0 });
@@ -524,6 +528,8 @@ export class Db {
       messages: [...this.messages.values()],
       trainingPlans: [...this.trainingPlans.values()],
       trainingPlanWeeks: [...this.trainingPlanWeeks.values()],
+      coachRelationships: [...this.coachRelationships.values()],
+      trainingPlanDays: [...this.trainingPlanDays.values()],
       forumVotes: [...this.forumVotes.values()],
       accountReports: [...this.accountReports.values()],
       routes: [...this.routes.values()],
@@ -1227,10 +1233,11 @@ export class Db {
     return plan;
   }
   deleteTrainingPlan(accountId: string): boolean {
-    // Weekly content belongs to the plan - deleting the plan without
-    // clearing its weeks would leave orphaned rows that reappear (with
+    // Weekly and daily content belongs to the plan - deleting the plan
+    // without clearing them would leave orphaned rows that reappear (with
     // stale content) if the person ever creates a new plan later.
     for (const w of this.listTrainingPlanWeeks(accountId)) this.trainingPlanWeeks.delete(w.id);
+    for (const d of this.listTrainingPlanDays(accountId)) this.trainingPlanDays.delete(d.id);
     return this.trainingPlans.delete(accountId);
   }
   listTrainingPlanWeeks(accountId: string): import("./types").TrainingPlanWeekRecord[] {
@@ -1242,6 +1249,68 @@ export class Db {
   setTrainingPlanWeek(week: import("./types").TrainingPlanWeekRecord): import("./types").TrainingPlanWeekRecord {
     this.trainingPlanWeeks.set(week.id, week);
     return week;
+  }
+  /** True if coachId has an ACTIVE (accepted) coaching relationship with athleteId - the actual permission check used to gate plan/week access. Pending or declined never grants access. */
+  isActiveCoachOf(coachId: string, athleteId: string): boolean {
+    return [...this.coachRelationships.values()].some((c) => c.coachId === coachId && c.athleteId === athleteId && c.status === "active");
+  }
+  getCoachRelationship(id: string): import("./types").CoachRelationshipRecord | undefined {
+    return this.coachRelationships.get(id);
+  }
+  /** Every relationship involving this account, as either coach or athlete - their own inbox of requests + active relationships. */
+  listCoachRelationshipsFor(accountId: string): import("./types").CoachRelationshipRecord[] {
+    return [...this.coachRelationships.values()].filter((c) => c.coachId === accountId || c.athleteId === accountId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  /**
+   * Requests a coaching relationship. Refuses a duplicate pending/active
+   * request between the same two people in the same direction (returns the
+   * existing one instead of creating a second), and refuses coaching
+   * yourself. Either side can be the requester.
+   */
+  requestCoachRelationship(coachId: string, athleteId: string, requestedBy: "coach" | "athlete", now: Date): import("./types").CoachRelationshipRecord | null {
+    if (coachId === athleteId) return null;
+    const existing = [...this.coachRelationships.values()].find((c) => c.coachId === coachId && c.athleteId === athleteId && (c.status === "pending" || c.status === "active"));
+    if (existing) return existing;
+    const rec: import("./types").CoachRelationshipRecord = {
+      id: newId(),
+      coachId,
+      athleteId,
+      status: "pending",
+      requestedBy,
+      createdAt: now.toISOString(),
+      respondedAt: null,
+    };
+    this.coachRelationships.set(rec.id, rec);
+    return rec;
+  }
+  /** Only the party who did NOT send the request may respond - enforced by the caller (see the API handler), not here. */
+  respondToCoachRelationship(id: string, accept: boolean, now: Date): import("./types").CoachRelationshipRecord | undefined {
+    const rec = this.coachRelationships.get(id);
+    if (!rec || rec.status !== "pending") return undefined;
+    const updated: import("./types").CoachRelationshipRecord = { ...rec, status: accept ? "active" : "declined", respondedAt: now.toISOString() };
+    this.coachRelationships.set(id, updated);
+    return updated;
+  }
+  endCoachRelationship(id: string): boolean {
+    return this.coachRelationships.delete(id);
+  }
+  getTrainingPlanDay(accountId: string, date: string): import("./types").TrainingPlanDayRecord | undefined {
+    return this.trainingPlanDays.get(`${accountId}-day-${date}`);
+  }
+  /** Every day for an account, sorted chronologically - the raw feed the calendar view (and PDF export, later) renders from. */
+  listTrainingPlanDays(accountId: string): import("./types").TrainingPlanDayRecord[] {
+    return [...this.trainingPlanDays.values()].filter((d) => d.accountId === accountId).sort((a, b) => a.date.localeCompare(b.date));
+  }
+  /** Just the days within a specific week - what the current week-focused UI actually needs, without the caller filtering the full list every time. */
+  listTrainingPlanDaysInWeek(accountId: string, weekNumber: number): import("./types").TrainingPlanDayRecord[] {
+    return this.listTrainingPlanDays(accountId).filter((d) => d.weekNumber === weekNumber);
+  }
+  setTrainingPlanDay(day: import("./types").TrainingPlanDayRecord): import("./types").TrainingPlanDayRecord {
+    this.trainingPlanDays.set(day.id, day);
+    return day;
+  }
+  deleteTrainingPlanDay(accountId: string, date: string): boolean {
+    return this.trainingPlanDays.delete(`${accountId}-day-${date}`);
   }
   /** Toggles the caller's upvote on a post — voting again removes it. Returns whether it's now upvoted. */
   toggleForumVote(accountId: string, postId: string, now: Date): boolean {

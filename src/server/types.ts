@@ -468,6 +468,8 @@ export interface PersistedDb {
   messages?: MessageRecord[];
   trainingPlans?: TrainingPlanRecord[];
   trainingPlanWeeks?: TrainingPlanWeekRecord[];
+  trainingPlanDays?: TrainingPlanDayRecord[];
+  coachRelationships?: CoachRelationshipRecord[];
   routeWaypoints?: RouteWaypointRecord[];
   sponsors?: SponsorRecord[];
   forumVotes?: ForumVoteRecord[];
@@ -666,6 +668,26 @@ export interface SponsorRecord {
   updatedAt: string;
 }
 
+/**
+ * A coach's access to a specific athlete's training plan - consent-based
+ * (either side can propose it, the other must accept) rather than a global
+ * "coach" role, since coaching is a relationship with particular people,
+ * not a site-wide privilege (the same way group_leader is scoped to one
+ * group, not the whole app). An active relationship lets the coach view
+ * and edit that one athlete's plan/weeks - never a blanket "see everyone."
+ */
+export type CoachRelationshipStatus = "pending" | "active" | "declined";
+export interface CoachRelationshipRecord {
+  id: string;
+  coachId: string;
+  athleteId: string;
+  status: CoachRelationshipStatus;
+  /** Who sent the original request - shown back to both sides for context. */
+  requestedBy: "coach" | "athlete";
+  createdAt: string;
+  respondedAt: string | null;
+}
+
 export interface ConnectionRecord {
   id: string;
   /** The account that initiated the request. */
@@ -734,6 +756,40 @@ export interface TrainingPlanWeekRecord {
   longRunMiles: number | null;
   /** Free-text workout notes - e.g. "Tempo Tuesday, long run Saturday, rest Monday/Friday." */
   notes: string;
+  updatedAt: string;
+}
+
+export type TrainingDayWorkoutType = "run" | "cross_training" | "rest" | "recovery" | "race";
+
+/**
+ * One actual calendar day's plan content - the real detail everything else
+ * (calendar view, PDF export, "what do I do today" widgets, linking a
+ * logged run) is built on. TrainingPlanWeekRecord stays as a lighter
+ * week-level rollup (total miles, a coach's one-line summary for the week);
+ * this is where the specific, actionable content lives. Keyed by real
+ * calendar date rather than (weekNumber, dayOfWeek), so a day survives even
+ * if the plan's start date or length is edited later.
+ */
+export interface TrainingPlanDayRecord {
+  id: string;
+  accountId: string;
+  /** ISO yyyy-mm-dd - the actual calendar date this content applies to. */
+  date: string;
+  /** Denormalized for fast weekly grouping/filtering without recomputing from startDate every time. */
+  weekNumber: number;
+  workoutType: TrainingDayWorkoutType;
+  /** Short label shown on the calendar, e.g. "Tempo run" or "Easy 5mi" or "Yoga". Empty for a plain rest day. */
+  title: string;
+  distanceMiles: number | null;
+  /** Free-text gear/fuel/hydration guidance - deliberately simple text fields rather than a rigid gear-catalog model, since a coach or self-coached runner needs to write this quickly, not manage an inventory. */
+  shoeNotes: string | null;
+  fuelNotes: string | null;
+  hydrationNotes: string | null;
+  /** Optional link to a real route in Routes - shown as a real map/elevation reference for the day, not just a name. */
+  linkedRouteId: string | null;
+  notes: string;
+  /** Set once a real logged/RSVP'd run is linked to this day (see runs -> plan-day linking) - lets the calendar show "done" vs. "planned" distinctly. */
+  completedRunId: string | null;
   updatedAt: string;
 }
 

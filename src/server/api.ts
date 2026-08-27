@@ -2299,6 +2299,56 @@ async function handleApi(
     return ok(res, { status: "blocked" }), true;
   }
 
+  // ---- coach-athlete relationships (consent-based, scoped per person - not a global role) ----
+  // POST /api/coach/:id/request — :id is the TARGET ACCOUNT id. Body { asCoach: boolean }:
+  //   true = caller wants to coach the target; false = caller wants the target to coach them.
+  // POST /api/coach/:id/accept|decline — :id is the RELATIONSHIP id; only the non-requesting party may respond.
+  // GET /api/coach/relationships — every relationship (pending/active/declined) involving the caller.
+  const coachAction = /^\/api\/coach\/([^/]+)\/(request|accept|decline)$/.exec(url.pathname);
+  if (coachAction && method === "POST") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const param = decodeURIComponent(coachAction[1]);
+    const action = coachAction[2];
+    if (action === "request") {
+      const target = db.getAccount(param);
+      if (!target || target.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
+      const body = (await readJson(req)) as { asCoach?: unknown };
+      const asCoach = body.asCoach === true;
+      const rec = db.requestCoachRelationship(asCoach ? sess.accountId : param, asCoach ? param : sess.accountId, asCoach ? "coach" : "athlete", now);
+      if (!rec) return err(res, { status: 400, error: "cannot_coach_self" }), true;
+      await db.persist();
+      return ok(res, { relationship: rec }), true;
+    }
+    // accept/decline: only the party who did NOT send the request may respond.
+    const rec = db.getCoachRelationship(param);
+    if (!rec || rec.status !== "pending") return err(res, { status: 404, error: "not_found" }), true;
+    const isRequester = (rec.requestedBy === "coach" && rec.coachId === sess.accountId) || (rec.requestedBy === "athlete" && rec.athleteId === sess.accountId);
+    if (isRequester) return err(res, { status: 403, error: "cannot_respond_to_own_request" }), true;
+    const isParticipant = rec.coachId === sess.accountId || rec.athleteId === sess.accountId;
+    if (!isParticipant) return err(res, { status: 404, error: "not_found" }), true;
+    const updated = db.respondToCoachRelationship(param, action === "accept", now);
+    await db.persist();
+    return ok(res, { relationship: updated }), true;
+  }
+  if (method === "GET" && url.pathname === "/api/coach/relationships") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rows = db.listCoachRelationshipsFor(sess.accountId).map((r) => {
+      const other = db.getAccount(r.coachId === sess.accountId ? r.athleteId : r.coachId);
+      return {
+        id: r.id,
+        role: r.coachId === sess.accountId ? ("coach" as const) : ("athlete" as const),
+        status: r.status,
+        requestedByMe: (r.requestedBy === "coach" && r.coachId === sess.accountId) || (r.requestedBy === "athlete" && r.athleteId === sess.accountId),
+        otherAccountId: other?.id ?? null,
+        otherName: other?.name ?? "Someone",
+        createdAt: r.createdAt,
+      };
+    });
+    return ok(res, { relationships: rows }), true;
+  }
+
   // ---- GET /api/people/search: verified-account name search -----------------
   // Search-index filter only: `searchable_by_name = false` hides the user from
   // search for EVERYONE (connections included), while profile-by-id and
@@ -2426,6 +2476,115 @@ async function handleApi(
   // (see currentTrainingWeek in store.ts) — never stored, so it can't drift
   // stale. Optional link to a specific race in Races for context.
   const TRAINING_PLAN_TYPES = ["5k", "10k", "half_marathon", "marathon", "ultra", "other"] as const;
+  /** Validates a date falls within [startDate, startDate + totalWeeks*7 - 1 days] and returns its 1-indexed week number - unlike currentTrainingWeek, this does NOT clamp, since an out-of-range date must be rejected, not silently treated as week 1 or the last week. */
+  function planWeekForDate(plan: { startDate: string; totalWeeks: number }, dateStr: string): number | null {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+    const start = new Date(`${plan.startDate}T00:00:00Z`);
+    const date = new Date(`${dateStr}T00:00:00Z`);
+    const daysSince = Math.round((date.getTime() - start.getTime()) / 86_400_000);
+    if (daysSince < 0) return null;
+    const week = Math.floor(daysSince / 7) + 1;
+    return week <= plan.totalWeeks ? week : null;
+  }
+  function buildTrainingDay(accountId: string, dateStr: string, weekNumber: number, body: Record<string, unknown>, existing: import("./types").TrainingPlanDayRecord | undefined, now: Date): import("./types").TrainingPlanDayRecord {
+    const WORKOUT_TYPES = ["run", "cross_training", "rest", "recovery", "race"] as const;
+    const workoutType = typeof body.workoutType === "string" && (WORKOUT_TYPES as readonly string[]).includes(body.workoutType) ? (body.workoutType as typeof WORKOUT_TYPES[number]) : (existing?.workoutType ?? "run");
+    const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : null);
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+    return {
+      id: `${accountId}-day-${dateStr}`,
+      accountId,
+      date: dateStr,
+      weekNumber,
+      workoutType,
+      title: str(body.title, 60) ?? existing?.title ?? "",
+      distanceMiles: body.distanceMiles !== undefined ? num(body.distanceMiles) : existing?.distanceMiles ?? null,
+      shoeNotes: body.shoeNotes !== undefined ? str(body.shoeNotes, 80) : existing?.shoeNotes ?? null,
+      fuelNotes: body.fuelNotes !== undefined ? str(body.fuelNotes, 200) : existing?.fuelNotes ?? null,
+      hydrationNotes: body.hydrationNotes !== undefined ? str(body.hydrationNotes, 200) : existing?.hydrationNotes ?? null,
+      linkedRouteId: body.linkedRouteId !== undefined ? (typeof body.linkedRouteId === "string" && db.getRoute(body.linkedRouteId) ? body.linkedRouteId : null) : existing?.linkedRouteId ?? null,
+      notes: body.notes !== undefined ? (str(body.notes, 500) ?? "") : existing?.notes ?? "",
+      completedRunId: existing?.completedRunId ?? null,
+      updatedAt: now.toISOString(),
+    };
+  }
+  // ---- coach access to an athlete's plan - separate, explicit endpoints
+  // rather than overloading /api/profile/training-plan with a query param,
+  // so "my own data" and "someone else's data I have permission to see"
+  // are never the same code path. Coaches can VIEW the plan's shape
+  // (type/length/dates/race - the athlete's own commitment) but only WRITE
+  // weekly content (the actual workouts) - the real coaching relationship.
+  const coachPlanMatch = /^\/api\/coach\/athletes\/([^/]+)\/training-plan$/.exec(url.pathname);
+  if (coachPlanMatch && method === "GET") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const athleteId = decodeURIComponent(coachPlanMatch[1]);
+    if (!db.isActiveCoachOf(sess.accountId, athleteId)) return err(res, { status: 403, error: "not_their_coach" }), true;
+    const plan = db.getTrainingPlan(athleteId);
+    if (!plan) return ok(res, { plan: null }), true;
+    const race = plan.linkedRaceId ? db.getRace(plan.linkedRaceId) : undefined;
+    return ok(res, { plan: { ...plan, currentWeek: currentTrainingWeek(plan, now), linkedRaceName: race?.name ?? null } }), true;
+  }
+  const coachWeeksMatch = /^\/api\/coach\/athletes\/([^/]+)\/training-plan\/weeks$/.exec(url.pathname);
+  if (coachWeeksMatch && method === "GET") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const athleteId = decodeURIComponent(coachWeeksMatch[1]);
+    if (!db.isActiveCoachOf(sess.accountId, athleteId)) return err(res, { status: 403, error: "not_their_coach" }), true;
+    return ok(res, { weeks: db.listTrainingPlanWeeks(athleteId) }), true;
+  }
+  const coachWeekWriteMatch = /^\/api\/coach\/athletes\/([^/]+)\/training-plan\/weeks\/(\d+)$/.exec(url.pathname);
+  if (coachWeekWriteMatch && method === "PUT") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const athleteId = decodeURIComponent(coachWeekWriteMatch[1]);
+    if (!db.isActiveCoachOf(sess.accountId, athleteId)) return err(res, { status: 403, error: "not_their_coach" }), true;
+    const weekNumber = Number(coachWeekWriteMatch[2]);
+    const plan = db.getTrainingPlan(athleteId);
+    if (!plan) return err(res, { status: 404, error: "no_plan", message: "This athlete hasn't set up a training plan yet." }), true;
+    if (!Number.isInteger(weekNumber) || weekNumber < 1 || weekNumber > plan.totalWeeks) {
+      return err(res, { status: 400, error: "invalid_week", message: `Week must be between 1 and ${plan.totalWeeks} for this plan.` }), true;
+    }
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const targetMiles = typeof body.targetMiles === "number" && Number.isFinite(body.targetMiles) && body.targetMiles >= 0 ? body.targetMiles : null;
+    const longRunMiles = typeof body.longRunMiles === "number" && Number.isFinite(body.longRunMiles) && body.longRunMiles >= 0 ? body.longRunMiles : null;
+    const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, 500) : "";
+    const week = db.setTrainingPlanWeek({ id: `${athleteId}-week-${weekNumber}`, accountId: athleteId, weekNumber, targetMiles, longRunMiles, notes, updatedAt: now.toISOString() });
+    await db.persist();
+    return ok(res, { week }), true;
+  }
+  // GET /api/coach/athletes/:athleteId/training-plan/days?start=&end= - same read-gate as weeks.
+  const coachDaysMatch = /^\/api\/coach\/athletes\/([^/]+)\/training-plan\/days$/.exec(url.pathname);
+  if (coachDaysMatch && method === "GET") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const athleteId = decodeURIComponent(coachDaysMatch[1]);
+    if (!db.isActiveCoachOf(sess.accountId, athleteId)) return err(res, { status: 403, error: "not_their_coach" }), true;
+    const start = url.searchParams.get("start");
+    const end = url.searchParams.get("end");
+    let days = db.listTrainingPlanDays(athleteId);
+    if (start) days = days.filter((d) => d.date >= start);
+    if (end) days = days.filter((d) => d.date <= end);
+    return ok(res, { days }), true;
+  }
+  // PUT /api/coach/athletes/:athleteId/training-plan/days/:date - a coach prescribing an actual day's workout.
+  const coachDayWriteMatch = /^\/api\/coach\/athletes\/([^/]+)\/training-plan\/days\/(\d{4}-\d{2}-\d{2})$/.exec(url.pathname);
+  if (coachDayWriteMatch && method === "PUT") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const athleteId = decodeURIComponent(coachDayWriteMatch[1]);
+    if (!db.isActiveCoachOf(sess.accountId, athleteId)) return err(res, { status: 403, error: "not_their_coach" }), true;
+    const dateStr = coachDayWriteMatch[2];
+    const plan = db.getTrainingPlan(athleteId);
+    if (!plan) return err(res, { status: 404, error: "no_plan", message: "This athlete hasn't set up a training plan yet." }), true;
+    const weekNumber = planWeekForDate(plan, dateStr);
+    if (weekNumber === null) return err(res, { status: 400, error: "invalid_date", message: "That date falls outside this plan's range." }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const day = db.setTrainingPlanDay(buildTrainingDay(athleteId, dateStr, weekNumber, body, db.getTrainingPlanDay(athleteId, dateStr), now));
+    await db.persist();
+    return ok(res, { day }), true;
+  }
+
   if (url.pathname === "/api/profile/training-plan") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
@@ -2514,6 +2673,34 @@ async function handleApi(
     });
     await db.persist();
     return ok(res, { week }), true;
+  }
+
+  // GET /api/profile/training-plan/days?start=YYYY-MM-DD&end=YYYY-MM-DD -
+  // real calendar-date range, for the calendar view. Omit both to get every day.
+  if (method === "GET" && url.pathname === "/api/profile/training-plan/days") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const start = url.searchParams.get("start");
+    const end = url.searchParams.get("end");
+    let days = db.listTrainingPlanDays(sess.accountId);
+    if (start) days = days.filter((d) => d.date >= start);
+    if (end) days = days.filter((d) => d.date <= end);
+    return ok(res, { days }), true;
+  }
+  // PUT /api/profile/training-plan/days/:date - set one day's real content.
+  const dayMatch = /^\/api\/profile\/training-plan\/days\/(\d{4}-\d{2}-\d{2})$/.exec(url.pathname);
+  if (dayMatch && method === "PUT") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const dateStr = dayMatch[1];
+    const plan = db.getTrainingPlan(sess.accountId);
+    if (!plan) return err(res, { status: 404, error: "no_plan", message: "Create a training plan before adding daily content." }), true;
+    const weekNumber = planWeekForDate(plan, dateStr);
+    if (weekNumber === null) return err(res, { status: 400, error: "invalid_date", message: "That date falls outside this plan's range." }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const day = db.setTrainingPlanDay(buildTrainingDay(sess.accountId, dateStr, weekNumber, body, db.getTrainingPlanDay(sess.accountId, dateStr), now));
+    await db.persist();
+    return ok(res, { day }), true;
   }
 
   // ---- runner tags on content (posts/events/runs) --------------------------
