@@ -559,7 +559,7 @@ function EventCard({ event, now, hero, going, pending, onJoin, onLeave }: EventC
    PAGE
    ───────────────────────────────────────────────────────────────────────────── */
 
-export default function DepartureBoard({ events }: { events: RunEvent[] }) {
+export default function DepartureBoard({ events, onHostRun }: { events: RunEvent[]; onHostRun: () => void }) {
   const [now, setNow] = useState(() => new Date());
   const [filter, setFilter] = useState<EventType | "all">("all");
   const [rsvps, setRsvps] = useState<Set<string>>(() => new Set());
@@ -681,6 +681,7 @@ export default function DepartureBoard({ events }: { events: RunEvent[] }) {
         </div>
         <button
           type="button"
+          onClick={onHostRun}
           className="kb-focus flex h-9 items-center gap-1.5 rounded-full bg-[#14171C] px-4 font-bold text-white"
           style={{ fontSize: "13px", letterSpacing: "-0.01em" }}
         >

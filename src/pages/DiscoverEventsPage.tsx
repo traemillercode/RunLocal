@@ -7,6 +7,9 @@ import { resolveWeekEvents, mergeWeekEventSources, occurrenceHasStarted, occurre
 import * as api from "../lib/api";
 import { usePublicContent } from "../state/content";
 import { useModerated } from "../state/moderated";
+import { useAccount } from "../state/account";
+import { IndependentEventSheet } from "../components/SubmissionSheets";
+import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import type { City } from "../types";
 
 /**
@@ -22,8 +25,16 @@ import type { City } from "../types";
 export function DiscoverEventsPage({ city }: { city: City }) {
   const { events: userEvents } = usePublicContent();
   const { hidden } = useModerated();
+  const { role, me } = useAccount();
   const [canonicalEvents, setCanonicalEvents] = useState<api.CanonicalEvent[] | null>(null);
   const [summaries, setSummaries] = useState<Record<string, api.AttendanceSummaryEntry>>({});
+  const [hostSheetOpen, setHostSheetOpen] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
+
+  const openHostRun = () => {
+    if (role === "verified") setHostSheetOpen(true);
+    else setGateOpen(true);
+  };
 
   useEffect(() => {
     let alive = true;
@@ -58,12 +69,21 @@ export function DiscoverEventsPage({ city }: { city: City }) {
 
   return (
     <div>
-      <DepartureBoard events={mapped} />
+      <DepartureBoard events={mapped} onHostRun={openHostRun} />
       <div className="mx-auto max-w-md px-4 py-3 text-center">
         <Link to="/events/manage" className="text-[13px] font-semibold text-slate-500 underline underline-offset-2">
           Manage runs, independent runs & submissions →
         </Link>
       </div>
+      <IndependentEventSheet open={hostSheetOpen} onClose={() => setHostSheetOpen(false)} cityId={city.id} />
+      <VerifiedGateSheet
+        open={gateOpen}
+        onClose={() => setGateOpen(false)}
+        role={role}
+        actionLabel="hosting a run"
+        pendingLabel="Your profile is still in review."
+        rejectionReason={me?.status === "signed_in" ? me.account.rejectionReason ?? null : null}
+      />
     </div>
   );
 }
