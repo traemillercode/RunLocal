@@ -75,6 +75,45 @@ describe("Shoe library", () => {
     expect(shoes.find((s) => s.id === a.id)!.isDefault).toBe(false);
     expect(shoes.find((s) => s.id === "shoe-b")!.isDefault).toBe(true);
   });
+
+  it("the real HTTP endpoints: add, auto-default the first one, list, set a new default, and delete", async () => {
+    const db = createMemoryStore();
+    const u = account(db, "shoehttp@example.com");
+    const first = await call(db, "POST", "/api/profile/shoes", u.cookie, { name: "Pegasus 40" });
+    expect(first.status).toBe(200);
+    expect(first.body.shoe.isDefault).toBe(true); // first shoe auto-defaults
+
+    const second = await call(db, "POST", "/api/profile/shoes", u.cookie, { name: "Vaporfly" });
+    expect(second.body.shoe.isDefault).toBe(false); // not auto-default once one exists
+
+    const list = await call(db, "GET", "/api/profile/shoes", u.cookie);
+    expect(list.body.shoes).toHaveLength(2);
+
+    const setDefault = await call(db, "POST", `/api/profile/shoes/${second.body.shoe.id}/default`, u.cookie);
+    expect(setDefault.status).toBe(200);
+    const afterDefault = await call(db, "GET", "/api/profile/shoes", u.cookie);
+    expect(afterDefault.body.shoes.find((s: any) => s.id === first.body.shoe.id).isDefault).toBe(false);
+    expect(afterDefault.body.shoes.find((s: any) => s.id === second.body.shoe.id).isDefault).toBe(true);
+
+    const del = await call(db, "DELETE", `/api/profile/shoes/${first.body.shoe.id}`, u.cookie);
+    expect(del.status).toBe(200);
+    const afterDelete = await call(db, "GET", "/api/profile/shoes", u.cookie);
+    expect(afterDelete.body.shoes).toHaveLength(1);
+  });
+
+  it("cannot set another account's shoe as your default, or delete it", async () => {
+    const db = createMemoryStore();
+    const owner = account(db, "shoeowner2@example.com");
+    const intruder = account(db, "intruder2@example.com");
+    const shoe = await call(db, "POST", "/api/profile/shoes", owner.cookie, { name: "Owner's shoe" });
+    const setDefault = await call(db, "POST", `/api/profile/shoes/${shoe.body.shoe.id}/default`, intruder.cookie);
+    expect(setDefault.status).toBe(404);
+    const del = await call(db, "DELETE", `/api/profile/shoes/${shoe.body.shoe.id}`, intruder.cookie);
+    expect(del.status).toBe(404);
+    // Still there, untouched.
+    const list = await call(db, "GET", "/api/profile/shoes", owner.cookie);
+    expect(list.body.shoes).toHaveLength(1);
+  });
 });
 
 describe("Group-run linking", () => {

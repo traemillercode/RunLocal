@@ -16,9 +16,19 @@ const TRAINING_PLAN_LABELS: Record<api.TrainingPlanType, string> = {
 const WORKOUT_META: Record<api.TrainingDayWorkoutType, { label: string; color: string; dot: string }> = {
   run: { label: "Run", color: "bg-[#FF5741]/10 text-[#14171C]", dot: "bg-[#FF5741]" },
   cross_training: { label: "Cross-training", color: "bg-sky-50 text-sky-900", dot: "bg-sky-500" },
+  swim: { label: "Swim", color: "bg-cyan-50 text-cyan-900", dot: "bg-cyan-500" },
   rest: { label: "Rest", color: "bg-slate-100 text-slate-500", dot: "bg-slate-300" },
   recovery: { label: "Recovery", color: "bg-emerald-50 text-emerald-800", dot: "bg-emerald-500" },
   race: { label: "Race day", color: "bg-amber-50 text-amber-900", dot: "bg-amber-500" },
+};
+
+const UNITS_FOR_TYPE: Record<api.TrainingDayWorkoutType, api.TrainingDistanceUnit[]> = {
+  run: ["miles", "km"],
+  cross_training: ["miles", "km"],
+  swim: ["meters", "yards"],
+  rest: ["miles", "km"],
+  recovery: ["miles", "km"],
+  race: ["miles", "km"],
 };
 
 function toDateStr(d: Date): string {
@@ -38,32 +48,41 @@ function addDays(d: Date, n: number): Date {
 
 /**
  * The real training plan view - a month calendar (like Outlook/Google
- * Calendar's month view) rather than a flat list of weeks. Each day shows
- * its workout type at a glance; tapping a day opens a detail panel below
- * the grid to view/edit that day's real content (shoes, fuel, hydration,
- * route, notes) without navigating away - fixing the earlier flat-list UX,
- * where saving didn't return you anywhere sensible. The panel just... stays.
+ * Calendar's month view). Each day cell shows real mileage or "Rest," a
+ * lock icon when a coach has frozen it, and a "2" badge when there are both
+ * AM and PM workouts. Tapping a day opens a detail panel below the grid to
+ * view/edit that day's real content without navigating away.
  */
 export function TrainingPlanDetailPage() {
   const toast = useToast();
   const [plan, setPlan] = useState<api.TrainingPlanView | null | undefined>(undefined);
-  const [days, setDays] = useState<Record<string, api.TrainingPlanDayView>>({});
+  const [daysByDate, setDaysByDate] = useState<Record<string, api.TrainingPlanDayView[]>>({});
+  const [shoes, setShoes] = useState<api.ShoeView[]>([]);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   useEffect(() => {
     void api.getTrainingPlan().then((r) => { if (r.ok) setPlan(r.data.plan); });
+    void api.listShoes().then((r) => { if (r.ok) setShoes(r.data.shoes); });
   }, []);
 
   useEffect(() => {
     void api.getTrainingPlanDays().then((r) => {
-      if (r.ok) setDays(Object.fromEntries(r.data.days.map((d) => [d.date, d])));
+      if (!r.ok) return;
+      const byDate: Record<string, api.TrainingPlanDayView[]> = {};
+      for (const d of r.data.days) (byDate[d.date] ??= []).push(d);
+      setDaysByDate(byDate);
     });
   }, [plan]);
 
   const onSaved = (day: api.TrainingPlanDayView) => {
-    setDays((prev) => ({ ...prev, [day.date]: day }));
+    setDaysByDate((prev) => {
+      const existing = (prev[day.date] ?? []).filter((d) => d.slot !== day.slot);
+      return { ...prev, [day.date]: [...existing, day].sort((a, b) => (a.slot === "pm" ? 1 : 0) - (b.slot === "pm" ? 1 : 0)) };
+    });
     toast("Day saved.", "success");
+    // Fixes the earlier flagged bug: the edit panel collapses back to the calendar after a save, rather than staying open indefinitely.
+    setSelectedDate(null);
   };
 
   const gridStart = useMemo(() => {
@@ -92,6 +111,7 @@ export function TrainingPlanDetailPage() {
   const planStart = plan.startDate;
   const planEnd = toDateStr(addDays(new Date(`${plan.startDate}T00:00:00Z`), plan.totalWeeks * 7 - 1));
   const today = toDateStr(new Date());
+  const selectedDays = selectedDate ? daysByDate[selectedDate] ?? [] : [];
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 pb-24">
@@ -122,36 +142,62 @@ export function TrainingPlanDetailPage() {
           const dateStr = toDateStr(d);
           const inMonth = d.getUTCMonth() === viewMonth.getUTCMonth();
           const inPlan = dateStr >= planStart && dateStr <= planEnd;
-          const day = days[dateStr];
-          const meta = day ? WORKOUT_META[day.workoutType] : null;
+          const dayList = daysByDate[dateStr] ?? [];
+          const primary = dayList[0];
+          const meta = primary ? WORKOUT_META[primary.workoutType] : null;
+          const anyFrozen = dayList.some((d2) => d2.frozen);
           return (
             <button
               key={dateStr}
               type="button"
               disabled={!inPlan}
               onClick={() => setSelectedDate(dateStr)}
-              className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-[12px] ${
+              className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] ${
                 !inMonth ? "text-slate-300" : !inPlan ? "text-slate-300" : "text-slate-800"
               } ${selectedDate === dateStr ? "ring-2 ring-[#14171C]" : ""} ${meta ? meta.color : inPlan ? "bg-slate-50" : ""} ${dateStr === today ? "font-extrabold" : ""}`}
             >
-              <span>{d.getUTCDate()}</span>
-              {meta ? <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} /> : null}
-              {day?.completionStatus === "done" ? <Icon name="check" className="absolute h-3 w-3 translate-x-2 -translate-y-2 text-emerald-600" /> : null}
-              {day?.completionStatus === "missed" ? <span className="absolute translate-x-2 -translate-y-2 text-[9px] font-black text-rose-500">✕</span> : null}
+              <span className="text-[12px]">{d.getUTCDate()}</span>
+              {primary ? (
+                <span className="text-[9px] font-bold leading-none">
+                  {primary.workoutType === "rest" ? "Rest" : primary.distanceValue != null ? `${primary.distanceValue}${primary.distanceUnit === "miles" ? "mi" : primary.distanceUnit === "km" ? "km" : primary.distanceUnit === "meters" ? "m" : "yd"}` : meta?.label}
+                </span>
+              ) : null}
+              {dayList.length > 1 ? <span className="absolute left-1 top-1 grid h-3.5 w-3.5 place-items-center rounded-full bg-[#14171C] text-[8px] font-black text-white">2</span> : null}
+              {anyFrozen ? <Icon name="shield" className="absolute right-1 top-1 h-3 w-3 text-slate-400" /> : null}
+              {primary?.completionStatus === "done" ? <Icon name="check" className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 text-emerald-600" /> : null}
+              {primary?.completionStatus === "missed" ? <span className="absolute bottom-0.5 right-0.5 text-[8px] font-black text-rose-500">✕</span> : null}
             </button>
           );
         })}
       </div>
 
       {selectedDate ? (
-        <DayPanel
-          key={selectedDate}
-          date={selectedDate}
-          weekLabel={days[selectedDate]?.weekNumber}
-          day={days[selectedDate] ?? null}
-          onSaved={onSaved}
-          onClose={() => setSelectedDate(null)}
-        />
+        <div className="mt-4 space-y-3">
+          {selectedDays.length === 0 || selectedDays.length === 1 ? (
+            <DayPanel
+              key={`${selectedDate}-${selectedDays[0]?.slot ?? "primary"}`}
+              date={selectedDate}
+              slot={selectedDays[0]?.slot ?? "primary"}
+              day={selectedDays[0] ?? null}
+              shoes={shoes}
+              onSaved={onSaved}
+              onClose={() => setSelectedDate(null)}
+            />
+          ) : (
+            selectedDays.map((d) => (
+              <DayPanel key={`${selectedDate}-${d.slot}`} date={selectedDate} slot={d.slot} day={d} shoes={shoes} onSaved={onSaved} onClose={() => setSelectedDate(null)} />
+            ))
+          )}
+          {selectedDays.length < 2 ? (
+            <button
+              type="button"
+              onClick={() => setDaysByDate((prev) => ({ ...prev, [selectedDate]: [...(prev[selectedDate] ?? []), { slot: selectedDays.length === 0 ? "primary" : selectedDays[0].slot === "am" ? "pm" : "am" } as api.TrainingPlanDayView] }))}
+              className="w-full rounded-xl border border-dashed border-slate-300 py-2.5 text-[13px] font-bold text-slate-500"
+            >
+              + Add a second workout (AM/PM)
+            </button>
+          ) : null}
+        </div>
       ) : (
         <p className="mt-5 text-center text-[13px] text-slate-400">Tap a day to see or plan its workout.</p>
       )}
@@ -161,20 +207,27 @@ export function TrainingPlanDetailPage() {
 
 function DayPanel({
   date,
+  slot,
   day,
+  shoes,
   onSaved,
   onClose,
 }: {
   date: string;
-  weekLabel: number | undefined;
+  slot: api.TrainingDaySlot;
   day: api.TrainingPlanDayView | null;
+  shoes: api.ShoeView[];
   onSaved: (day: api.TrainingPlanDayView) => void;
   onClose: () => void;
 }) {
   const [workoutType, setWorkoutType] = useState<api.TrainingDayWorkoutType>(day?.workoutType ?? "run");
   const [title, setTitle] = useState(day?.title ?? "");
-  const [distanceMiles, setDistanceMiles] = useState(day?.distanceMiles?.toString() ?? "");
-  const [shoeNotes, setShoeNotes] = useState(day?.shoeNotes ?? "");
+  const [distanceValue, setDistanceValue] = useState(day?.distanceValue?.toString() ?? "");
+  const [distanceUnit, setDistanceUnit] = useState<api.TrainingDistanceUnit>(day?.distanceUnit ?? "miles");
+  const [shoeId, setShoeId] = useState(day?.shoeId ?? shoes.find((s) => s.isDefault)?.id ?? "");
+  const [addingShoe, setAddingShoe] = useState(false);
+  const [newShoeName, setNewShoeName] = useState("");
+  const [localShoes, setLocalShoes] = useState(shoes);
   const [fuelNotes, setFuelNotes] = useState(day?.fuelNotes ?? "");
   const [hydrationNotes, setHydrationNotes] = useState(day?.hydrationNotes ?? "");
   const [notes, setNotes] = useState(day?.notes ?? "");
@@ -183,32 +236,47 @@ function DayPanel({
   const [missedReason, setMissedReason] = useState<api.TrainingDayMissedReason>(day?.missedReason ?? "too_busy");
   const [completionNotes, setCompletionNotes] = useState(day?.completionNotes ?? "");
   const [loggingSaving, setLoggingSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isPastOrToday = date <= toDateStr(new Date());
+  const frozen = day?.frozen === true;
 
   const save = async () => {
     setSaving(true);
+    setError(null);
     const r = await api.setTrainingPlanDay(date, {
       workoutType,
       title: title.trim(),
-      distanceMiles: distanceMiles.trim() ? Number(distanceMiles) : null,
-      shoeNotes: shoeNotes.trim() || null,
+      distanceValue: distanceValue.trim() ? Number(distanceValue) : null,
+      distanceUnit,
+      shoeId: shoeId || null,
       fuelNotes: fuelNotes.trim() || null,
       hydrationNotes: hydrationNotes.trim() || null,
       notes: notes.trim(),
-    });
+    }, slot);
     setSaving(false);
     if (r.ok) onSaved(r.data.day);
+    else setError(r.error.code === "coach_managed" ? "Your coach manages this workout — propose a change instead of editing it directly." : r.error.code === "day_frozen" ? "Your coach has locked this day." : r.error.message ?? "Couldn't save.");
   };
 
-  /** Plan-vs-actual: separate from editing the planned content itself, since "did this happen" is a different question answered on a different timeline (after the fact) than "what's planned" (before). */
+  const addNewShoe = async () => {
+    if (!newShoeName.trim()) return;
+    const r = await api.addShoe(newShoeName.trim());
+    if (r.ok) {
+      setLocalShoes((prev) => [...prev, r.data.shoe]);
+      setShoeId(r.data.shoe.id);
+      setAddingShoe(false);
+      setNewShoeName("");
+    }
+  };
+
   const saveLog = async (status: "done" | "missed" | "modified") => {
     setLoggingSaving(true);
     const r = await api.setTrainingPlanDay(date, {
       completionStatus: status,
       missedReason: status === "missed" ? missedReason : null,
       completionNotes: completionNotes.trim() || null,
-    });
+    }, slot);
     setLoggingSaving(false);
     if (r.ok) { onSaved(r.data.day); setCompletionStatus(r.data.day.completionStatus); }
   };
@@ -217,18 +285,24 @@ function DayPanel({
   const dateLabel = new Date(`${date}T00:00:00Z`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
 
   return (
-    <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
+    <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-[15px] font-bold text-slate-900">{dateLabel}</p>
+        <p className="text-[15px] font-bold text-slate-900">
+          {dateLabel} {slot !== "primary" ? <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold uppercase text-slate-500">{slot}</span> : null}
+          {frozen ? <Icon name="shield" className="ml-1.5 inline h-3.5 w-3.5 text-slate-400" /> : null}
+        </p>
         <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100" aria-label="Close"><Icon name="close" className="h-4 w-4" /></button>
       </div>
+
+      {frozen ? <p className="mb-3 rounded-xl bg-slate-50 p-2.5 text-[12px] font-semibold text-slate-500">Your coach has locked this day — logging progress and linking a group run still work.</p> : null}
+      {error ? <p role="alert" className="mb-3 rounded-xl bg-rose-50 p-2.5 text-[12px] font-semibold text-rose-700">{error}</p> : null}
 
       <div className="flex flex-wrap gap-1.5">
         {(Object.keys(WORKOUT_META) as api.TrainingDayWorkoutType[]).map((t) => (
           <button
             key={t}
             type="button"
-            onClick={() => setWorkoutType(t)}
+            onClick={() => { setWorkoutType(t); if (!UNITS_FOR_TYPE[t].includes(distanceUnit)) setDistanceUnit(UNITS_FOR_TYPE[t][0]); }}
             className={`rounded-full px-3 py-1.5 text-[12px] font-bold ${workoutType === t ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-600"}`}
           >
             {WORKOUT_META[t].label}
@@ -238,13 +312,26 @@ function DayPanel({
 
       {workoutType !== "rest" ? (
         <div className="mt-3 space-y-2.5">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={workoutType === "swim" ? "e.g. Interval swim" : "e.g. Tempo run"} className={fieldCls} maxLength={60} />
           <div className="flex gap-2">
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Tempo run" className={`flex-1 ${fieldCls}`} maxLength={60} />
-            <input type="number" min="0" value={distanceMiles} onChange={(e) => setDistanceMiles(e.target.value)} placeholder="Miles" className={`w-24 ${fieldCls}`} />
+            <input type="number" min="0" value={distanceValue} onChange={(e) => setDistanceValue(e.target.value)} placeholder="Distance" className={`flex-1 ${fieldCls}`} />
+            <select value={distanceUnit} onChange={(e) => setDistanceUnit(e.target.value as api.TrainingDistanceUnit)} className={`w-28 ${fieldCls}`}>
+              {UNITS_FOR_TYPE[workoutType].map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
           </div>
           {workoutType === "run" || workoutType === "race" ? (
             <>
-              <input value={shoeNotes} onChange={(e) => setShoeNotes(e.target.value)} placeholder="Shoes (optional)" className={fieldCls} maxLength={80} />
+              <select value={addingShoe ? "__new__" : shoeId} onChange={(e) => { if (e.target.value === "__new__") setAddingShoe(true); else { setAddingShoe(false); setShoeId(e.target.value); } }} className={fieldCls}>
+                <option value="">No shoe picked</option>
+                {localShoes.map((s) => <option key={s.id} value={s.id}>{s.name}{s.isDefault ? " (default)" : ""}</option>)}
+                <option value="__new__">+ Add a new shoe</option>
+              </select>
+              {addingShoe ? (
+                <div className="flex gap-2">
+                  <input value={newShoeName} onChange={(e) => setNewShoeName(e.target.value)} placeholder="e.g. Nike Pegasus 40" className={`flex-1 ${fieldCls}`} maxLength={60} />
+                  <button type="button" onClick={() => void addNewShoe()} className="shrink-0 rounded-lg bg-[#14171C] px-3 text-[13px] font-bold text-white">Add</button>
+                </div>
+              ) : null}
               <div className="flex gap-2">
                 <input value={fuelNotes} onChange={(e) => setFuelNotes(e.target.value)} placeholder="Gels / fuel (optional)" className={`flex-1 ${fieldCls}`} maxLength={200} />
                 <input value={hydrationNotes} onChange={(e) => setHydrationNotes(e.target.value)} placeholder="Water (optional)" className={`flex-1 ${fieldCls}`} maxLength={200} />

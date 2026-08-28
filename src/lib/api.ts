@@ -1223,35 +1223,59 @@ export function setTrainingPlanWeek(weekNumber: number, input: { targetMiles?: n
   return request(`/api/profile/training-plan/weeks/${weekNumber}`, { method: "PUT", body: JSON.stringify(input) });
 }
 
-export type TrainingDayWorkoutType = "run" | "cross_training" | "rest" | "recovery" | "race";
+export type TrainingDayWorkoutType = "run" | "cross_training" | "rest" | "recovery" | "race" | "swim";
 export type TrainingDayMissedReason = "sick" | "injured" | "too_busy" | "weather" | "low_motivation" | "other";
+export type TrainingDaySlot = "primary" | "am" | "pm";
+export type TrainingDistanceUnit = "miles" | "km" | "meters" | "yards";
 export interface TrainingPlanDayView {
   id: string;
   accountId: string;
   date: string;
+  slot: TrainingDaySlot;
   weekNumber: number;
   workoutType: TrainingDayWorkoutType;
   title: string;
-  distanceMiles: number | null;
-  shoeNotes: string | null;
+  distanceValue: number | null;
+  distanceUnit: TrainingDistanceUnit;
+  shoeId: string | null;
   fuelNotes: string | null;
   hydrationNotes: string | null;
   linkedRouteId: string | null;
+  linkedEventOccurrenceId: string | null;
   notes: string;
   completionStatus: "pending" | "done" | "missed" | "modified";
   missedReason: TrainingDayMissedReason | null;
   completionNotes: string | null;
   completedRunId: string | null;
+  frozen: boolean;
   updatedAt: string;
 }
-export type TrainingPlanDayInput = Partial<Omit<TrainingPlanDayView, "id" | "accountId" | "date" | "weekNumber" | "completedRunId" | "updatedAt">>;
+export type TrainingPlanDayInput = Partial<Omit<TrainingPlanDayView, "id" | "accountId" | "date" | "slot" | "weekNumber" | "completedRunId" | "updatedAt">>;
 
+function dayPath(date: string, slot?: TrainingDaySlot): string {
+  return slot && slot !== "primary" ? `${date}/${slot}` : date;
+}
 export function getTrainingPlanDays(range?: { start?: string; end?: string }): Promise<ApiResult<{ days: TrainingPlanDayView[] }>> {
   const q = range ? `?${new URLSearchParams({ ...(range.start ? { start: range.start } : {}), ...(range.end ? { end: range.end } : {}) })}` : "";
   return request(`/api/profile/training-plan/days${q}`);
 }
-export function setTrainingPlanDay(date: string, input: TrainingPlanDayInput): Promise<ApiResult<{ day: TrainingPlanDayView }>> {
-  return request(`/api/profile/training-plan/days/${date}`, { method: "PUT", body: JSON.stringify(input) });
+export function setTrainingPlanDay(date: string, input: TrainingPlanDayInput, slot?: TrainingDaySlot): Promise<ApiResult<{ day: TrainingPlanDayView }>> {
+  return request(`/api/profile/training-plan/days/${dayPath(date, slot)}`, { method: "PUT", body: JSON.stringify(input) });
+}
+
+// ---- shoe library ----
+export interface ShoeView { id: string; accountId: string; name: string; isDefault: boolean; createdAt: string; }
+export function listShoes(): Promise<ApiResult<{ shoes: ShoeView[] }>> {
+  return request("/api/profile/shoes");
+}
+export function addShoe(name: string, isDefault?: boolean): Promise<ApiResult<{ shoe: ShoeView }>> {
+  return request("/api/profile/shoes", { method: "POST", body: JSON.stringify({ name, isDefault: isDefault === true }) });
+}
+export function setDefaultShoe(shoeId: string): Promise<ApiResult<{ ok: true }>> {
+  return request(`/api/profile/shoes/${encodeURIComponent(shoeId)}/default`, { method: "POST" });
+}
+export function deleteShoe(shoeId: string): Promise<ApiResult<{ ok: true }>> {
+  return request(`/api/profile/shoes/${encodeURIComponent(shoeId)}`, { method: "DELETE" });
 }
 
 // ---- coach access to an athlete's plan ----
@@ -1280,8 +1304,8 @@ export function getAthleteTrainingPlanDays(athleteId: string, range?: { start?: 
   const q = range ? `?${new URLSearchParams({ ...(range.start ? { start: range.start } : {}), ...(range.end ? { end: range.end } : {}) })}` : "";
   return request(`/api/coach/athletes/${encodeURIComponent(athleteId)}/training-plan/days${q}`);
 }
-export function setAthleteTrainingPlanDay(athleteId: string, date: string, input: TrainingPlanDayInput): Promise<ApiResult<{ day: TrainingPlanDayView }>> {
-  return request(`/api/coach/athletes/${encodeURIComponent(athleteId)}/training-plan/days/${date}`, { method: "PUT", body: JSON.stringify(input) });
+export function setAthleteTrainingPlanDay(athleteId: string, date: string, input: TrainingPlanDayInput, slot?: TrainingDaySlot): Promise<ApiResult<{ day: TrainingPlanDayView }>> {
+  return request(`/api/coach/athletes/${encodeURIComponent(athleteId)}/training-plan/days/${dayPath(date, slot)}`, { method: "PUT", body: JSON.stringify(input) });
 }
 
 export function getPrivacy(): Promise<ApiResult<{ settings: PrivacySettings }>> {

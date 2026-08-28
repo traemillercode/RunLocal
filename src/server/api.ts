@@ -2651,6 +2651,43 @@ async function handleApi(
     return ok(res, { day }), true;
   }
 
+  // ---- shoe library ----
+  if (method === "GET" && url.pathname === "/api/profile/shoes") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    return ok(res, { shoes: db.listShoes(sess.accountId) }), true;
+  }
+  if (method === "POST" && url.pathname === "/api/profile/shoes") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { name?: unknown; isDefault?: unknown };
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 60) : "";
+    if (!name) return err(res, { status: 400, error: "invalid_name", message: "Give the shoe a name." }), true;
+    // The very first shoe someone adds becomes their default automatically - no reason to make them take a second step.
+    const isDefault = body.isDefault === true || db.listShoes(sess.accountId).length === 0;
+    const shoe = db.addShoe({ id: newId(), accountId: sess.accountId, name, isDefault, createdAt: now.toISOString() });
+    await db.persist();
+    return ok(res, { shoe }), true;
+  }
+  const shoeDefaultMatch = /^\/api\/profile\/shoes\/([^/]+)\/default$/.exec(url.pathname);
+  if (shoeDefaultMatch && method === "POST") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const okSet = db.setShoeDefault(sess.accountId, decodeURIComponent(shoeDefaultMatch[1]));
+    if (!okSet) return err(res, { status: 404, error: "not_found" }), true;
+    await db.persist();
+    return ok(res, { ok: true }), true;
+  }
+  const shoeDeleteMatch = /^\/api\/profile\/shoes\/([^/]+)$/.exec(url.pathname);
+  if (shoeDeleteMatch && method === "DELETE") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const okDel = db.deleteShoe(sess.accountId, decodeURIComponent(shoeDeleteMatch[1]));
+    if (!okDel) return err(res, { status: 404, error: "not_found" }), true;
+    await db.persist();
+    return ok(res, { ok: true }), true;
+  }
+
   if (url.pathname === "/api/profile/training-plan") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
