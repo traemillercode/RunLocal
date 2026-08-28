@@ -3624,6 +3624,37 @@ async function handleApi(
     if (mine.length) await db.persist();
     return ok(res, { rsvped: false, occurrenceId: occ.event ? publicOccurrenceId(occ.event, occ.eventId, occ.runDate) : occ.occurrenceId, runDate: occ.runDate, startsAt: occ.startsAt }), true;
   }
+  // POST /api/events/attendance-summary — bulk per-occurrence host/attendee/goingCount,
+  // capped to 4 attendees server-side, for a whole week's board in one call instead of
+  // one request per card. Body: { occurrenceIds: string[] } (capped to 100 per call).
+  if (url.pathname === "/api/events/attendance-summary" && method === "POST") {
+    const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const b = (await readJson(req)) as { occurrenceIds?: unknown };
+    const ids = Array.isArray(b.occurrenceIds) ? b.occurrenceIds.filter((x): x is string => typeof x === "string").slice(0, 100) : [];
+    const idSet = new Set(ids);
+    const initialsFor = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+    const byOccurrence = new Map<string, { hostAccountId: string | null; goingAccountIds: string[] }>();
+    for (const a of db.listAttendance()) {
+      if (!a.occurrenceId || !idSet.has(a.occurrenceId)) continue;
+      const bucket = byOccurrence.get(a.occurrenceId) ?? { hostAccountId: null, goingAccountIds: [] };
+      if (a.role === "host") bucket.hostAccountId = a.accountId;
+      else bucket.goingAccountIds.push(a.accountId);
+      byOccurrence.set(a.occurrenceId, bucket);
+    }
+    const summaries: Record<string, { host: { accountId: string; name: string; initials: string } | null; attendees: { accountId: string; name: string; initials: string }[]; goingCount: number }> = {};
+    for (const id of ids) {
+      const bucket = byOccurrence.get(id) ?? { hostAccountId: null, goingAccountIds: [] };
+      const hostAccount = bucket.hostAccountId ? db.getAccount(bucket.hostAccountId) : undefined;
+      const host = hostAccount && !hostAccount.deletedAt ? { accountId: hostAccount.id, name: hostAccount.name, initials: initialsFor(hostAccount.name) } : null;
+      const attendees = bucket.goingAccountIds
+        .map((accountId) => db.getAccount(accountId))
+        .filter((a): a is import("./types").AccountRecord => !!a && !a.deletedAt)
+        .slice(0, 4)
+        .map((a) => ({ accountId: a.id, name: a.name, initials: initialsFor(a.name) }));
+      summaries[id] = { host, attendees, goingCount: bucket.goingAccountIds.length };
+    }
+    return ok(res, { summaries }), true;
+  }
   // ---- ratings (server-eligible: shared RSVP/host attendance only) --------
   if (url.pathname === "/api/ratings" && method === "POST") {
     const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;

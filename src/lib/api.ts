@@ -1532,6 +1532,10 @@ export function keepMyRun(runId: string, kept: boolean): Promise<ApiResult<{ kep
 export function rsvpEvent(eventId: string, rsvp: boolean = true, runDate?: string, runId?: string): Promise<ApiResult<{ rsvped: boolean; occurrenceId?: string | null; runDate?: string | null; startsAt?: string | null }>> {
   return request("/api/events/rsvp", { method: "POST", body: JSON.stringify({ eventId, rsvp, ...(runDate ? { runDate } : {}), ...(runId ? { runId } : {}) }) });
 }
+export interface AttendanceSummaryEntry { host: { accountId: string; name: string; initials: string } | null; attendees: { accountId: string; name: string; initials: string }[]; goingCount: number; }
+export function getAttendanceSummary(occurrenceIds: string[]): Promise<ApiResult<{ summaries: Record<string, AttendanceSummaryEntry> }>> {
+  return request("/api/events/attendance-summary", { method: "POST", body: JSON.stringify({ occurrenceIds }) });
+}
 export interface DiscussionView { id:string; kind:"thread"|"comment"; parentId:string|null; occurrenceId:string; eventId:string; cityId:string; title:string|null; body:string; authorId:string; createdAt:string; updatedAt:string; }
 export function getOccurrenceDiscussion(eventId:string, occurrenceId:string): Promise<ApiResult<{discussion:DiscussionView[]}>> { return request(`/api/events/${encodeURIComponent(eventId)}/occurrences/${encodeURIComponent(occurrenceId)}/discussion`); }
 export function createDiscussion(eventId:string, occurrenceId:string, input:{title?:string;body:string;parentId?:string}): Promise<ApiResult<{discussion:DiscussionView}>> { return request(`/api/events/${encodeURIComponent(eventId)}/occurrences/${encodeURIComponent(occurrenceId)}/discussion`, {method:"POST",body:JSON.stringify(input)}); }

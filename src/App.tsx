@@ -17,6 +17,7 @@ import { useAccount } from "./state/account";
 import * as api from "./lib/api";
 import { AdminPage } from "./pages/AdminPage";
 import { EventsPage } from "./pages/EventsPage";
+import { DiscoverEventsPage } from "./pages/DiscoverEventsPage";
 import { EventDetailPage } from "./pages/EventDetailPage";
 import { ForumPage } from "./pages/ForumPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -118,7 +119,8 @@ function Shell() {
               }
             >
             <Routes>
-            <Route path="/" element={me?.status === "signed_in" ? <EventsPage city={city} store={store} /> : <MarketingPage />} />
+            <Route path="/" element={me?.status === "signed_in" ? <DiscoverEventsPage city={city} /> : <MarketingPage />} />
+            <Route path="/events/manage" element={me?.status === "signed_in" ? <EventsPage city={city} store={store} /> : <MarketingPage />} />
             <Route path="/landing" element={<MarketingPage />} />
             <Route path="/events" element={<EventsPage city={city} store={store} />} />
             <Route path="/events/:eventId" element={<EventDetailPage city={city} store={store} />} />
