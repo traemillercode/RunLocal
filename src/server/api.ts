@@ -2619,7 +2619,11 @@ async function handleApi(
       completionStatus,
       missedReason,
       completionNotes: body.completionNotes !== undefined ? str(body.completionNotes, 500) : existing?.completionNotes ?? null,
-      completedRunId: existing?.completedRunId ?? null,
+      // Links this day to a real logged activity (see "Log a run") - must actually belong to this
+      // account, closing the gap where this field existed but nothing ever set it to a real value.
+      completedRunId: body.completedRunId !== undefined
+        ? (typeof body.completedRunId === "string" && db.getActivity(body.completedRunId)?.accountId === accountId ? body.completedRunId : null)
+        : existing?.completedRunId ?? null,
       frozen: allowFreezeToggle && typeof body.frozen === "boolean" ? body.frozen : existing?.frozen ?? false,
       recurrenceId: existing?.recurrenceId ?? null,
       // Directly editing any prescriptive field on a day that came from a recurrence rule marks it
@@ -3071,6 +3075,42 @@ async function handleApi(
     if (start) days = days.filter((d) => d.date >= start);
     if (end) days = days.filter((d) => d.date <= end);
     return ok(res, { days }), true;
+  }
+  // GET /api/profile/training-plan/summary?start=&end= - the actual "end of week/month update":
+  // every plan day in range, plus which logged activities were linked to the plan vs. solo/extra
+  // runs that weren't - the same endpoint serves a day, week, or month view; the caller just
+  // picks the date range, so there's no separate "granularity" concept to keep in sync.
+  if (method === "GET" && url.pathname === "/api/profile/training-plan/summary") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const start = url.searchParams.get("start") ?? "0000-01-01";
+    const end = url.searchParams.get("end") ?? "9999-12-31";
+    const planDays = db.listTrainingPlanDays(sess.accountId).filter((d) => d.date >= start && d.date <= end);
+    const strengthEntries = db.listStrengthEntries(sess.accountId).filter((e) => e.date >= start && e.date <= end);
+    const linkedActivityIds = new Set(planDays.map((d) => d.completedRunId).filter((id): id is string => id !== null));
+    const activitiesInRange = db.listActivities(sess.accountId).filter((a) => {
+      const activityDate = a.completedAt.slice(0, 10);
+      return activityDate >= start && activityDate <= end;
+    });
+    const linkedActivities = activitiesInRange.filter((a) => linkedActivityIds.has(a.id));
+    const unlinkedActivities = activitiesInRange.filter((a) => !linkedActivityIds.has(a.id));
+    const toMilesLocal = (v: number, u: string) => (u === "miles" ? v : u === "km" ? v * 0.621371 : u === "meters" ? v * 0.000621371 : v * 0.000568182);
+    const plannedMiles = planDays.reduce((sum, d) => sum + (d.distanceValue ? toMilesLocal(d.distanceValue, d.distanceUnit) : 0), 0);
+    const loggedMiles = activitiesInRange.reduce((sum, a) => sum + a.distanceMeters * 0.000621371, 0);
+    return ok(res, {
+      planDays,
+      strengthEntries,
+      linkedActivities,
+      unlinkedActivities,
+      totals: {
+        plannedMiles: Math.round(plannedMiles * 10) / 10,
+        loggedMiles: Math.round(loggedMiles * 10) / 10,
+        daysDone: planDays.filter((d) => d.completionStatus === "done").length,
+        daysMissed: planDays.filter((d) => d.completionStatus === "missed").length,
+        daysModified: planDays.filter((d) => d.completionStatus === "modified").length,
+        daysPending: planDays.filter((d) => d.completionStatus === "pending" && d.workoutType !== "rest").length,
+      },
+    }), true;
   }
   // PUT /api/profile/training-plan/days/:date or /:date/:slot(am|pm) - set one day's real content.
   const dayMatch = /^\/api\/profile\/training-plan\/days\/(\d{4}-\d{2}-\d{2})(?:\/(am|pm))?$/.exec(url.pathname);

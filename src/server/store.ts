@@ -1060,6 +1060,7 @@ export class Db {
 
   // ------------------------------------------------------------- activities
   listActivities(accountId?: string) { return [...this.activities.values()].filter(a => !accountId || a.accountId === accountId); }
+  getActivity(id: string) { return this.activities.get(id); }
   addActivity(a: import("./activity").Activity) { this.activities.set(a.id, a); return a; }
   removeActivities(accountId: string, provider: import("./activity").Provider) { for (const [id,a] of this.activities) if (a.accountId===accountId && a.provider===provider) this.activities.delete(id); }
   getToken(accountId: string, provider: import("./activity").Provider) { return this.oauthTokens.get(`${accountId}:${provider}`); }
