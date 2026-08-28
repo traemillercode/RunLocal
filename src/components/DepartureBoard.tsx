@@ -51,7 +51,6 @@ export interface RunEvent {
 const INK = "#14171C";
 const INK_SOFT = "#1E2229";
 const CORAL = "#FF5741";
-const PAPER = "#F6F6F3";
 const LINE = "#E4E4DF";
 
 const SPRING = "cubic-bezier(0.34, 1.4, 0.64, 1)";
@@ -161,7 +160,8 @@ const minutesUntil = (date: Date, now: Date): number =>
 
 interface KickerProps {
   children: ReactNode;
-  color: string;
+  /** For genuinely dynamic or non-brand colors only - a fixed brand color (ink/coral) should go through className instead (e.g. "text-[#FF5741]"). */
+  color?: string;
   className?: string;
 }
 
@@ -216,11 +216,9 @@ function AvatarStack({ attendees, count, inverted, justJoined }: AvatarStackProp
       <div className="flex items-center">
         {justJoined && (
           <span
-            className="kb-anim relative flex h-7 w-7 items-center justify-center rounded-full font-bold"
+            className="kb-anim relative flex h-7 w-7 items-center justify-center rounded-full bg-[#FF5741] font-bold text-[#14171C]"
             style={{
               fontSize: "10px",
-              background: CORAL,
-              color: INK,
               boxShadow: `0 0 0 2px ${ringColor}`,
               animation: `kbSpringIn 420ms ${SPRING} both`,
               zIndex: 5,
@@ -275,7 +273,7 @@ function RouteSliver({ path, inverted }: RouteSliverProps) {
         <path
           d={path}
           fill="none"
-          stroke={CORAL}
+          className="stroke-[#FF5741]"
           strokeWidth="3"
           strokeLinecap="round"
           opacity="0.9"
@@ -465,15 +463,13 @@ function EventCard({ event, now, hero, going, pending, onJoin, onLeave }: EventC
       <div className={`flex min-w-0 flex-1 flex-col justify-between gap-4 ${hero ? "p-5 sm:p-6" : "p-4 sm:p-5"}`}>
         <div className="min-w-0">
           <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-            <Kicker color={CORAL}>{TYPE_LABEL[event.type]}</Kicker>
+            <Kicker className="text-[#FF5741]">{TYPE_LABEL[event.type]}</Kicker>
             {imminent && (
               <span
-                className="rounded-full px-2 py-0.5 font-bold uppercase"
+                className="rounded-full bg-[#FF5741] px-2 py-0.5 font-bold uppercase text-[#14171C]"
                 style={{
                   fontSize: "10px",
                   letterSpacing: "0.12em",
-                  background: CORAL,
-                  color: INK,
                 }}
               >
                 Starts in {mins}m
@@ -637,7 +633,7 @@ export default function DepartureBoard({ events }: { events: RunEvent[] }) {
   const totalGoing = EVENTS.reduce((n: number, e: RunEvent) => n + e.goingCount, 0);
 
   return (
-    <div className="min-h-screen w-full" style={{ background: PAPER, color: INK }}>
+    <div className="min-h-screen w-full bg-[#F6F6F3] text-[#14171C]">
       <style>{`
         @keyframes kbPulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.9 } }
         @keyframes kbSpringIn {
@@ -662,8 +658,8 @@ export default function DepartureBoard({ events }: { events: RunEvent[] }) {
 
       {/* ── Masthead ──────────────────────────────────────────────────── */}
       <header
-        className="sticky top-0 z-30 flex h-14 items-center justify-between px-4 sm:px-8"
-        style={{ background: "rgba(246,246,243,0.88)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${LINE}` }}
+        className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-[#E4E4DF] px-4 sm:px-8"
+        style={{ background: "rgba(246,246,243,0.88)", backdropFilter: "blur(12px)" }}
       >
         <div className="flex items-center gap-3">
           <span
@@ -682,8 +678,8 @@ export default function DepartureBoard({ events }: { events: RunEvent[] }) {
         </div>
         <button
           type="button"
-          className="kb-focus flex h-9 items-center gap-1.5 rounded-full px-4 font-bold text-white"
-          style={{ background: INK, fontSize: "13px", letterSpacing: "-0.01em" }}
+          className="kb-focus flex h-9 items-center gap-1.5 rounded-full bg-[#14171C] px-4 font-bold text-white"
+          style={{ fontSize: "13px", letterSpacing: "-0.01em" }}
         >
           <Icon name="plus" className="h-3.5 w-3.5" />
           Host a run
@@ -694,7 +690,7 @@ export default function DepartureBoard({ events }: { events: RunEvent[] }) {
         {/* ── Rail ────────────────────────────────────────────────────── */}
         <div className="min-w-0 flex-1">
           <div className="mb-6">
-            <Kicker color={CORAL}>This week in Columbia</Kicker>
+            <Kicker className="text-[#FF5741]">This week in Columbia</Kicker>
             <h1
               className="mt-2 font-extrabold"
               style={{ fontSize: "34px", lineHeight: 1, letterSpacing: "-0.04em" }}
@@ -729,8 +725,7 @@ export default function DepartureBoard({ events }: { events: RunEvent[] }) {
 
           {bands.length === 0 ? (
             <div
-              className="rounded-2xl border border-dashed p-10 text-center"
-              style={{ borderColor: LINE }}
+              className="rounded-2xl border border-dashed border-[#E4E4DF] p-10 text-center"
             >
               <p className="font-extrabold" style={{ fontSize: "17px", letterSpacing: "-0.02em" }}>
                 Nothing on the board yet
@@ -747,8 +742,8 @@ export default function DepartureBoard({ events }: { events: RunEvent[] }) {
                   className="sticky top-14 z-20 -mx-1 flex items-center gap-3 px-1 py-3"
                   style={{ background: "rgba(246,246,243,0.92)", backdropFilter: "blur(8px)" }}
                 >
-                  <Kicker color={INK}>{band.label}</Kicker>
-                  <div className="h-px flex-1" style={{ background: LINE }} />
+                  <Kicker className="text-[#14171C]">{band.label}</Kicker>
+                  <div className="h-px flex-1 bg-[#E4E4DF]" />
                   <span
                     className="font-semibold tabular-nums"
                     style={{ fontSize: "11px", color: "#9A9A92" }}
@@ -784,8 +779,8 @@ export default function DepartureBoard({ events }: { events: RunEvent[] }) {
         {/* ── Sidebar ─────────────────────────────────────────────────── */}
         <aside className="w-full shrink-0 lg:w-64">
           <div className="sticky top-24 flex flex-col gap-3">
-            <div className="rounded-2xl p-5" style={{ background: INK, color: "#FFFFFF" }}>
-              <Kicker color={CORAL}>Your week</Kicker>
+            <div className="rounded-2xl bg-[#14171C] p-5" style={{ color: "#FFFFFF" }}>
+              <Kicker className="text-[#FF5741]">Your week</Kicker>
               <p
                 className="mt-3 font-extrabold tabular-nums leading-none"
                 style={{ fontSize: "44px", letterSpacing: "-0.05em" }}
@@ -799,8 +794,7 @@ export default function DepartureBoard({ events }: { events: RunEvent[] }) {
 
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
               <div
-                className="rounded-2xl p-4"
-                style={{ background: "#FFFFFF", border: `1px solid ${LINE}` }}
+                className="rounded-2xl border border-[#E4E4DF] bg-white p-4"
               >
                 <Kicker color="#9A9A92">Scheduled</Kicker>
                 <p
@@ -814,8 +808,7 @@ export default function DepartureBoard({ events }: { events: RunEvent[] }) {
                 </p>
               </div>
               <div
-                className="rounded-2xl p-4"
-                style={{ background: "#FFFFFF", border: `1px solid ${LINE}` }}
+                className="rounded-2xl border border-[#E4E4DF] bg-white p-4"
               >
                 <Kicker color="#9A9A92">Turnout</Kicker>
                 <p
@@ -838,9 +831,8 @@ export default function DepartureBoard({ events }: { events: RunEvent[] }) {
       {toast && (
         <div
           role="status"
-          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-3 font-semibold text-white"
+          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[#14171C] px-5 py-3 font-semibold text-white"
           style={{
-            background: INK,
             fontSize: "13px",
             boxShadow: "0 12px 32px -12px rgba(20,23,28,0.5)",
             animation: `kbRise 300ms ${SPRING} both`,
