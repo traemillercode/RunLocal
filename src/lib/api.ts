@@ -1228,6 +1228,17 @@ export type TrainingRunLabel = "easy" | "tempo" | "long_run" | "workout" | "reco
 export type TrainingDayMissedReason = "sick" | "injured" | "too_busy" | "weather" | "low_motivation" | "other";
 export type TrainingDaySlot = "primary" | "am" | "pm";
 export type TrainingDistanceUnit = "miles" | "km" | "meters" | "yards";
+export type IntervalMeasure = "distance" | "duration";
+export interface IntervalStructure {
+  repeatCount: number;
+  workMeasure: IntervalMeasure;
+  workValue: number;
+  workUnit: TrainingDistanceUnit | null;
+  hasRest: boolean;
+  restMeasure: IntervalMeasure | null;
+  restValue: number | null;
+  restUnit: TrainingDistanceUnit | null;
+}
 export interface TrainingPlanDayView {
   id: string;
   accountId: string;
@@ -1239,6 +1250,7 @@ export interface TrainingPlanDayView {
   title: string;
   distanceValue: number | null;
   distanceUnit: TrainingDistanceUnit;
+  intervalStructure: IntervalStructure | null;
   shoeId: string | null;
   plannedGelCount: number | null;
   plannedDrinkMixId: string | null;

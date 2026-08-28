@@ -2563,6 +2563,26 @@ async function handleApi(
       db.adjustShoeMileage(updated.shoeId, toMiles(updated.distanceValue, updated.distanceUnit));
     }
   }
+  /** Validates a proposed interval structure - every numeric field bounded and sane, units restricted to what makes sense for the chosen measure (duration never carries a distance unit and vice versa). Returns null for anything malformed rather than partially accepting it. */
+  function validateIntervalStructure(raw: unknown): import("./types").IntervalStructure | null {
+    if (!raw || typeof raw !== "object") return null;
+    const r = raw as Record<string, unknown>;
+    const DISTANCE_UNITS_LOCAL = ["miles", "km", "meters", "yards"] as const;
+    const repeatCount = typeof r.repeatCount === "number" && Number.isInteger(r.repeatCount) && r.repeatCount >= 1 && r.repeatCount <= 100 ? r.repeatCount : null;
+    const workMeasure = r.workMeasure === "distance" || r.workMeasure === "duration" ? r.workMeasure : null;
+    const workValue = typeof r.workValue === "number" && Number.isFinite(r.workValue) && r.workValue > 0 ? r.workValue : null;
+    if (repeatCount === null || workMeasure === null || workValue === null) return null;
+    const workUnit = workMeasure === "distance" && typeof r.workUnit === "string" && (DISTANCE_UNITS_LOCAL as readonly string[]).includes(r.workUnit) ? (r.workUnit as typeof DISTANCE_UNITS_LOCAL[number]) : null;
+    if (workMeasure === "distance" && workUnit === null) return null;
+    const hasRest = r.hasRest === true;
+    if (!hasRest) return { repeatCount, workMeasure, workValue, workUnit, hasRest: false, restMeasure: null, restValue: null, restUnit: null };
+    const restMeasure = r.restMeasure === "distance" || r.restMeasure === "duration" ? r.restMeasure : null;
+    const restValue = typeof r.restValue === "number" && Number.isFinite(r.restValue) && r.restValue > 0 ? r.restValue : null;
+    if (restMeasure === null || restValue === null) return null;
+    const restUnit = restMeasure === "distance" && typeof r.restUnit === "string" && (DISTANCE_UNITS_LOCAL as readonly string[]).includes(r.restUnit) ? (r.restUnit as typeof DISTANCE_UNITS_LOCAL[number]) : null;
+    if (restMeasure === "distance" && restUnit === null) return null;
+    return { repeatCount, workMeasure, workValue, workUnit, hasRest: true, restMeasure, restValue, restUnit };
+  }
   function buildTrainingDay(accountId: string, dateStr: string, slot: import("./types").TrainingDaySlot, weekNumber: number, body: Record<string, unknown>, existing: import("./types").TrainingPlanDayRecord | undefined, now: Date, allowFreezeToggle: boolean): import("./types").TrainingPlanDayRecord {
     const WORKOUT_TYPES = ["run", "cross_training", "rest", "recovery", "race", "swim"] as const;
     const RUN_LABELS = ["easy", "tempo", "long_run", "workout", "recovery_run", "race_pace", "intervals"] as const;
@@ -2605,6 +2625,8 @@ async function handleApi(
       title: str(body.title, 60) ?? existing?.title ?? "",
       distanceValue: body.distanceValue !== undefined ? num(body.distanceValue) : existing?.distanceValue ?? null,
       distanceUnit: typeof body.distanceUnit === "string" && (DISTANCE_UNITS as readonly string[]).includes(body.distanceUnit) ? (body.distanceUnit as typeof DISTANCE_UNITS[number]) : (existing?.distanceUnit ?? "miles"),
+      // Explicit null clears a previously-set interval structure (switching back to a simple distance day).
+      intervalStructure: body.intervalStructure !== undefined ? (body.intervalStructure === null ? null : validateIntervalStructure(body.intervalStructure)) : existing?.intervalStructure ?? null,
       shoeId,
       plannedGelCount: body.plannedGelCount !== undefined ? num(body.plannedGelCount) : existing?.plannedGelCount ?? null,
       plannedDrinkMixId,

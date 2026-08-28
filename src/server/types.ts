@@ -865,6 +865,27 @@ export interface TrainingPlanStrengthEntryRecord {
 }
 export type TrainingDistanceUnit = "miles" | "km" | "meters" | "yards";
 
+/**
+ * Structured interval workout - "6x400m," "10x100m sprints," or
+ * "5x(1:00 work / 30s rest)." Work and rest are each EITHER a distance or a
+ * duration (never both at once) - a track repeat is measured in meters, a
+ * tempo interval in minutes, and mixing units within one field would be
+ * meaningless. Rest is optional (some interval sets are continuous, no
+ * recovery between reps).
+ */
+export type IntervalMeasure = "distance" | "duration";
+export interface IntervalStructure {
+  repeatCount: number;
+  workMeasure: IntervalMeasure;
+  /** Distance value when workMeasure is "distance" (unit is workUnit, restricted to meters/yards/miles/km); seconds when workMeasure is "duration". */
+  workValue: number;
+  workUnit: TrainingDistanceUnit | null;
+  hasRest: boolean;
+  restMeasure: IntervalMeasure | null;
+  restValue: number | null;
+  restUnit: TrainingDistanceUnit | null;
+}
+
 export interface TrainingPlanDayRecord {
   id: string;
   accountId: string;
@@ -882,6 +903,16 @@ export interface TrainingPlanDayRecord {
   distanceValue: number | null;
   /** Miles/km for run-family workouts; meters/yards for swim - a runner and a swimmer need genuinely different units, not a converted mile value pretending to be a pool distance. */
   distanceUnit: TrainingDistanceUnit;
+  /**
+   * Structured interval detail - "6x400m" or "5x(1:00 work/30s rest)" -
+   * separate from distanceValue, which stays the day's TOTAL distance
+   * (used for mileage tracking and calendar display exactly as before).
+   * A distance-based interval's total can be computed and used to prefill
+   * distanceValue as a convenience; a time-based interval's total distance
+   * is genuinely unknown until actually run, so distanceValue stays
+   * whatever the runner enters separately (or null).
+   */
+  intervalStructure: IntervalStructure | null;
   /** Planned fueling for this workout - what to eat/drink and roughly when, e.g. "1 gel at mile 6, Tailwind throughout." References the runner's own nutrition library items where applicable (see NutritionItemRecord), tracked separately as plannedGelCount/plannedDrinkMixId for real aggregate reporting rather than only free text. */
   plannedGelCount: number | null;
   plannedDrinkMixId: string | null;
