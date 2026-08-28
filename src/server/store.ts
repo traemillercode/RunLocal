@@ -335,6 +335,7 @@ export class Db {
   private nutritionItems = new Map<string, import("./types").NutritionItemRecord>();
   private trainingPlanStrengthEntries = new Map<string, import("./types").TrainingPlanStrengthEntryRecord>();
   private trainingPlanRecurrences = new Map<string, import("./types").TrainingPlanRecurrenceRecord>();
+  private weeklyPlanEmails = new Map<string, import("./types").WeeklyPlanEmailRecord>();
   private trainingPlanChangeProposals = new Map<string, import("./types").TrainingPlanChangeProposalRecord>();
   private forumVotes = new Map<string, import("./types").ForumVoteRecord>();
   private accountReports = new Map<string, import("./types").AccountReportRecord>();
@@ -474,6 +475,7 @@ export class Db {
       for (const n of parsed.nutritionItems ?? []) this.nutritionItems.set(n.id, n);
       for (const e of parsed.trainingPlanStrengthEntries ?? []) this.trainingPlanStrengthEntries.set(e.id, e);
       for (const r of parsed.trainingPlanRecurrences ?? []) this.trainingPlanRecurrences.set(r.id, r);
+      for (const w of parsed.weeklyPlanEmails ?? []) this.weeklyPlanEmails.set(w.id, w);
       for (const p of parsed.trainingPlanChangeProposals ?? []) this.trainingPlanChangeProposals.set(p.id, p);
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
       for (const r of parsed.accountReports ?? []) this.accountReports.set(r.id, r);
@@ -545,6 +547,7 @@ export class Db {
       nutritionItems: [...this.nutritionItems.values()],
       trainingPlanStrengthEntries: [...this.trainingPlanStrengthEntries.values()],
       trainingPlanRecurrences: [...this.trainingPlanRecurrences.values()],
+      weeklyPlanEmails: [...this.weeklyPlanEmails.values()],
       trainingPlanChangeProposals: [...this.trainingPlanChangeProposals.values()],
       forumVotes: [...this.forumVotes.values()],
       accountReports: [...this.accountReports.values()],
@@ -1117,6 +1120,42 @@ export class Db {
     return notified;
   }
   removeAttendance(id: string) { this.attendance.delete(id); }
+  /** The date of the week-start day (0=Sun..1=Mon) that the given date falls within - e.g. weekStartDay=1 (Monday) and a Wednesday date returns that week's Monday. */
+  weekStartDateFor(dateStr: string, weekStartDay: 0 | 1): string {
+    const d = new Date(`${dateStr}T00:00:00Z`);
+    const diff = (d.getUTCDay() - weekStartDay + 7) % 7;
+    d.setUTCDate(d.getUTCDate() - diff);
+    return d.toISOString().slice(0, 10);
+  }
+  getWeeklyPlanEmail(accountId: string, weekStartDate: string): import("./types").WeeklyPlanEmailRecord | undefined {
+    return this.weeklyPlanEmails.get(`${accountId}-weekemail-${weekStartDate}`);
+  }
+  recordWeeklyPlanEmail(rec: import("./types").WeeklyPlanEmailRecord): import("./types").WeeklyPlanEmailRecord {
+    this.weeklyPlanEmails.set(rec.id, rec);
+    return rec;
+  }
+  /**
+   * Pure query, no side effects (mirrors checkRunReminders' shape): every
+   * account whose own week-start day is TODAY and who has an active
+   * training plan and hasn't already had a weekly email recorded for this
+   * week (manual or automatic - either way, idempotent). Actually building
+   * and sending the email happens elsewhere (see weeklyPlanEmail.ts), since
+   * that needs the email templating/sending code this store layer
+   * deliberately doesn't know about.
+   */
+  listAccountsDueForWeeklyPlanEmail(now: Date): { accountId: string; weekStartDate: string }[] {
+    const todayStr = now.toISOString().slice(0, 10);
+    const due: { accountId: string; weekStartDate: string }[] = [];
+    for (const plan of this.trainingPlans.values()) {
+      const account = this.accounts.get(plan.accountId);
+      if (!account || account.deletedAt) continue;
+      const weekStart = this.weekStartDateFor(todayStr, account.weekStartDay);
+      if (weekStart !== todayStr) continue; // only fires on the week-start day itself
+      if (this.getWeeklyPlanEmail(plan.accountId, weekStart)) continue; // already sent (manual or automatic) - idempotent
+      due.push({ accountId: plan.accountId, weekStartDate: weekStart });
+    }
+    return due;
+  }
   /**
    * Read one account's event/occurrence visibility override. Returns
    * "inherit" when the account has no matching attendance row (or the row

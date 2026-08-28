@@ -475,6 +475,7 @@ export interface PersistedDb {
   nutritionItems?: NutritionItemRecord[];
   trainingPlanStrengthEntries?: TrainingPlanStrengthEntryRecord[];
   trainingPlanRecurrences?: TrainingPlanRecurrenceRecord[];
+  weeklyPlanEmails?: WeeklyPlanEmailRecord[];
   trainingPlanChangeProposals?: TrainingPlanChangeProposalRecord[];
   coachRelationships?: CoachRelationshipRecord[];
   routeWaypoints?: RouteWaypointRecord[];
@@ -776,6 +777,26 @@ export interface TrainingPlanRecurrenceRecord {
   distanceUnit: TrainingDistanceUnit;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A record of a weekly plan email having gone out - the coach (or a
+ * self-coached athlete) can manually send one when they finalize the week;
+ * if nobody does by the scheduled check, the automatic fallback sends one
+ * anyway using whatever's currently on the calendar. Keyed by
+ * (accountId, weekStartDate) so it's idempotent: a manual send earlier in
+ * the week means the automatic check skips that week entirely.
+ */
+export interface WeeklyPlanEmailRecord {
+  id: string;
+  /** The ATHLETE receiving the email - always, whether a coach or the athlete themself triggered it. */
+  accountId: string;
+  weekStartDate: string;
+  notes: string;
+  sentAt: string;
+  sentBy: "self" | "coach" | "automatic";
+  /** Set only when sentBy === "coach". */
+  coachId: string | null;
 }
 
 export interface TrainingPlanWeekRecord {

@@ -29,6 +29,7 @@ import { resolveStaticPath, staticHeaders } from "./src/server/static";
 import { Db } from "./src/server/store";
 import { apiHandler, pruneSessionsWith } from "./src/server/api";
 import { purgeEligible } from "./src/server/retention";
+import { sendWeeklyPlanEmail } from "./src/server/weeklyPlanEmail";
 import { seedContentRegistry, seedSampleFlags } from "./src/server/contentSeed";
 import { materializeSeedEvents } from "./src/server/events";
 import { materializeSeedRaces } from "./src/server/races";
@@ -82,6 +83,23 @@ async function runReminderCheck() {
 await runReminderCheck();
 const reminderInterval = setInterval(() => void runReminderCheck(), 10 * 60 * 1000);
 reminderInterval.unref();
+
+async function runWeeklyPlanEmailCheck() {
+  const due = db.listAccountsDueForWeeklyPlanEmail(new Date());
+  let sent = 0;
+  for (const { accountId, weekStartDate } of due) {
+    const result = await sendWeeklyPlanEmail(db, accountId, weekStartDate, "", "automatic", null, new Date());
+    if (result.ok) sent++;
+  }
+  if (due.length > 0) {
+    await db.persist();
+    console.log(`[weekly-plan-email] ${sent}/${due.length} automatic weekly plan email(s) sent`);
+  }
+}
+await runWeeklyPlanEmailCheck();
+// Hourly is plenty - this only needs day-level granularity (fires once per account per week-start day), unlike run reminders which need to catch a specific upcoming time window.
+const weeklyPlanEmailInterval = setInterval(() => void runWeeklyPlanEmailCheck(), 60 * 60 * 1000);
+weeklyPlanEmailInterval.unref();
 
 const server = createServer(async (req, res) => {
   try {

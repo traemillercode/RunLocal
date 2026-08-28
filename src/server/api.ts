@@ -106,6 +106,7 @@ import { decideSubmission,
 import { listAdminContent, editContentTitle, hideContent, restoreContent, archiveContent, deleteContent, listAdminDiscussions, editDiscussion, deleteDiscussion, setAnnouncement, clearAnnouncement } from "./contentAdmin";
 import { publicSponsors, publicSponsorPayment, listAdminSponsors, createSponsor, updateSponsor, deleteSponsor, submitSponsorInquiry, checkSponsorAvailability } from "./sponsors";
 import { createSponsorCheckout, createPublicSponsorCheckout, handleStripeWebhook, activateSponsorFromEvent, stripeConfigured, sponsorTotalPriceUsd } from "./payments";
+import { sendWeeklyPlanEmail } from "./weeklyPlanEmail";
 import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
 import { repairApprovedSubmissions } from "./submissionBackfill";
 import {
@@ -2921,6 +2922,45 @@ async function handleApi(
     if (!okDel) return err(res, { status: 404, error: "not_found" }), true;
     await db.persist();
     return ok(res, { ok: true }), true;
+  }
+
+  // POST /api/profile/training-plan/weekly-email - self-coached: send this week's plan to my own email now.
+  if (method === "POST" && url.pathname === "/api/profile/training-plan/weekly-email") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { weekStartDate?: unknown; notes?: unknown };
+    const weekStartDate = typeof body.weekStartDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.weekStartDate) ? body.weekStartDate : null;
+    if (!weekStartDate) return err(res, { status: 400, error: "invalid_date", message: "Pick a valid week start date." }), true;
+    const notes = typeof body.notes === "string" ? body.notes.slice(0, 1000) : "";
+    const result = await sendWeeklyPlanEmail(db, sess.accountId, weekStartDate, notes, "self", null, now);
+    await db.persist();
+    if (!result.ok) return err(res, { status: 502, error: "email_failed", message: "Couldn't send the email right now — try again." }), true;
+    return ok(res, { sent: true }), true;
+  }
+  // POST /api/coach/athletes/:athleteId/weekly-email - coach presents the week to a specific athlete.
+  const coachWeeklyEmailMatch = /^\/api\/coach\/athletes\/([^/]+)\/weekly-email$/.exec(url.pathname);
+  if (coachWeeklyEmailMatch && method === "POST") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const athleteId = decodeURIComponent(coachWeeklyEmailMatch[1]);
+    if (!db.isActiveCoachOf(sess.accountId, athleteId)) return err(res, { status: 403, error: "not_their_coach" }), true;
+    const body = (await readJson(req)) as { weekStartDate?: unknown; notes?: unknown };
+    const weekStartDate = typeof body.weekStartDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.weekStartDate) ? body.weekStartDate : null;
+    if (!weekStartDate) return err(res, { status: 400, error: "invalid_date", message: "Pick a valid week start date." }), true;
+    const notes = typeof body.notes === "string" ? body.notes.slice(0, 1000) : "";
+    const result = await sendWeeklyPlanEmail(db, athleteId, weekStartDate, notes, "coach", sess.accountId, now);
+    await db.persist();
+    if (!result.ok) return err(res, { status: 502, error: "email_failed", message: "Couldn't send the email right now — try again." }), true;
+    return ok(res, { sent: true }), true;
+  }
+  // GET /api/profile/training-plan/weekly-emails - history, for showing "sent" status in the UI.
+  if (method === "GET" && url.pathname === "/api/profile/training-plan/weekly-emails") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const weekStartDate = url.searchParams.get("weekStartDate");
+    if (!weekStartDate) return err(res, { status: 400, error: "missing_week" }), true;
+    const rec = db.getWeeklyPlanEmail(sess.accountId, weekStartDate);
+    return ok(res, { email: rec ?? null }), true;
   }
 
   // GET /api/profile/training-plan/days?start=YYYY-MM-DD&end=YYYY-MM-DD -
