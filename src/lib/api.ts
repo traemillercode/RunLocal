@@ -5,6 +5,8 @@
  * whether the backend is configured. No verification data is stored
  * client-side; sessions are HttpOnly cookies set by the server.
  */
+import { reportErrorShown } from "./friction";
+import { trackFirstRsvpOnce } from "./telemetry";
 import type { Me, OpRole } from "./accounts";
 import { normalizeErrorCode, normalizeErrorMessage } from "./errors";
 
@@ -36,14 +38,35 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
     }
     if (!res.ok) {
       const b = body && typeof body === "object" ? body as { error?: unknown; message?: unknown } : {};
-      return { ok: false, error: new ApiError(res.status, normalizeErrorCode(b.error), normalizeErrorMessage(b.message, normalizeErrorMessage(b.error))) };
+      const apiError = new ApiError(res.status, normalizeErrorCode(b.error), normalizeErrorMessage(b.message, normalizeErrorMessage(b.error)));
+      // FRICTION signal. Instrumented here rather than at each call site
+      // because this is the one chokepoint every server error passes through;
+      // the toast layer can't be used for this since its tones don't
+      // distinguish a real failure from a neutral notice. Records the code and
+      // endpoint only - never the response body, which can contain user content.
+      reportApiFailure(apiError.code, apiError.status, path);
+      return { ok: false, error: apiError };
     }
     return { ok: true, data: body as T };
   } catch {
+    reportApiFailure("network_error", 0, path);
     return {
       ok: false,
       error: new ApiError(0, "network_error", "Could not reach the Kimbio server. Check your connection."),
     };
+  }
+}
+
+/**
+ * Fire-and-forget FRICTION reporting. Dynamically imported so this module
+ * stays usable in non-browser test contexts and so a declining user never
+ * loads the telemetry path at all. Never throws and never blocks the request.
+ */
+function reportApiFailure(code: string, status: number, path: string): void {
+  try {
+    reportErrorShown(`${code} (${status})`, { code, path });
+  } catch {
+    // instrumentation must never affect the request result
   }
 }
 
@@ -1529,8 +1552,18 @@ export function getMyRuns(tzOffsetMinutes: number = new Date().getTimezoneOffset
 export function keepMyRun(runId: string, kept: boolean): Promise<ApiResult<{ kept: boolean }>> { return request("/api/my/runs/keep", { method: "POST", body: JSON.stringify({ runId, kept }) }); }
 
 /** Server-side RSVP — the shared-attendance basis for rating eligibility. */
-export function rsvpEvent(eventId: string, rsvp: boolean = true, runDate?: string, runId?: string): Promise<ApiResult<{ rsvped: boolean; occurrenceId?: string | null; runDate?: string | null; startsAt?: string | null }>> {
-  return request("/api/events/rsvp", { method: "POST", body: JSON.stringify({ eventId, rsvp, ...(runDate ? { runDate } : {}), ...(runId ? { runId } : {}) }) });
+export async function rsvpEvent(eventId: string, rsvp: boolean = true, runDate?: string, runId?: string): Promise<ApiResult<{ rsvped: boolean; occurrenceId?: string | null; runDate?: string | null; startsAt?: string | null }>> {
+  const result = await request<{ rsvped: boolean; occurrenceId?: string | null; runDate?: string | null; startsAt?: string | null }>(
+    "/api/events/rsvp",
+    { method: "POST", body: JSON.stringify({ eventId, rsvp, ...(runDate ? { runDate } : {}), ...(runId ? { runId } : {}) }) },
+  );
+  // ACTIVATION signal - only on a real join, never on a cancellation. Wired
+  // here rather than in a page component so both the DepartureBoard and the
+  // management list report it identically.
+  if (result.ok && rsvp && result.data.rsvped) {
+    trackFirstRsvpOnce({ eventId });
+  }
+  return result;
 }
 export interface AttendanceSummaryEntry { host: { accountId: string; name: string; initials: string } | null; attendees: { accountId: string; name: string; initials: string }[]; goingCount: number; }
 export function getAttendanceSummary(occurrenceIds: string[]): Promise<ApiResult<{ summaries: Record<string, AttendanceSummaryEntry> }>> {

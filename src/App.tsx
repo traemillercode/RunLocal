@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { initTelemetry } from "./lib/telemetry";
+import { installRageClickDetector, useRouteTelemetry } from "./lib/friction";
 import { BottomNav } from "./components/BottomNav";
 import { CitySheet, Header } from "./components/Header";
 import { DesktopSidebar } from "./components/DesktopSidebar";
@@ -185,12 +187,28 @@ function Shell() {
     </div>
   );
 }
+/**
+ * Starts telemetry for a returning user who already consented, installs the
+ * rage-click detector, and fires a page view on every route change. Renders
+ * nothing. Lives inside BrowserRouter because useRouteTelemetry needs
+ * useLocation; every function it calls no-ops without consent.
+ */
+function TelemetryBootstrap() {
+  useEffect(() => {
+    void initTelemetry();
+    return installRageClickDetector();
+  }, []);
+  useRouteTelemetry();
+  return null;
+}
+
 export default function App() {
   return (
     <ToastProvider>
       <AccountProvider>
         <NotificationsProvider>
           <BrowserRouter>
+            <TelemetryBootstrap />
             <Shell />
             <CookieBanner />
           </BrowserRouter>
