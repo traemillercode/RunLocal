@@ -1229,15 +1229,26 @@ export type TrainingDayMissedReason = "sick" | "injured" | "too_busy" | "weather
 export type TrainingDaySlot = "primary" | "am" | "pm";
 export type TrainingDistanceUnit = "miles" | "km" | "meters" | "yards";
 export type IntervalMeasure = "distance" | "duration";
+export type DurationUnit = "seconds" | "minutes";
+export type PaceZoneTarget = "easy" | "marathon" | "threshold" | "interval";
+export type RecoveryType = "jog" | "walk" | "stand";
 export interface IntervalStructure {
+  warmupValue: number | null;
+  warmupUnit: TrainingDistanceUnit | null;
   repeatCount: number;
   workMeasure: IntervalMeasure;
   workValue: number;
   workUnit: TrainingDistanceUnit | null;
+  workDurationUnit: DurationUnit | null;
+  workPaceTarget: PaceZoneTarget | null;
   hasRest: boolean;
+  restType: RecoveryType | null;
   restMeasure: IntervalMeasure | null;
   restValue: number | null;
   restUnit: TrainingDistanceUnit | null;
+  restDurationUnit: DurationUnit | null;
+  cooldownValue: number | null;
+  cooldownUnit: TrainingDistanceUnit | null;
 }
 export interface TrainingPlanDayView {
   id: string;

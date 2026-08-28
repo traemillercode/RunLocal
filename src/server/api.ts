@@ -2568,20 +2568,41 @@ async function handleApi(
     if (!raw || typeof raw !== "object") return null;
     const r = raw as Record<string, unknown>;
     const DISTANCE_UNITS_LOCAL = ["miles", "km", "meters", "yards"] as const;
+    const DURATION_UNITS = ["seconds", "minutes"] as const;
+    const PACE_ZONES = ["easy", "marathon", "threshold", "interval"] as const;
+    const RECOVERY_TYPES = ["jog", "walk", "stand"] as const;
+    const distanceVal = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null);
+    const distanceUnit = (v: unknown) => (typeof v === "string" && (DISTANCE_UNITS_LOCAL as readonly string[]).includes(v) ? (v as typeof DISTANCE_UNITS_LOCAL[number]) : null);
+
+    // Warm-up/cool-down: distance-only, both fields present or both absent (a value with no unit is meaningless).
+    const warmupValue = distanceVal(r.warmupValue);
+    const warmupUnit = warmupValue !== null ? distanceUnit(r.warmupUnit) : null;
+    if (warmupValue !== null && warmupUnit === null) return null;
+    const cooldownValue = distanceVal(r.cooldownValue);
+    const cooldownUnit = cooldownValue !== null ? distanceUnit(r.cooldownUnit) : null;
+    if (cooldownValue !== null && cooldownUnit === null) return null;
+
     const repeatCount = typeof r.repeatCount === "number" && Number.isInteger(r.repeatCount) && r.repeatCount >= 1 && r.repeatCount <= 100 ? r.repeatCount : null;
     const workMeasure = r.workMeasure === "distance" || r.workMeasure === "duration" ? r.workMeasure : null;
     const workValue = typeof r.workValue === "number" && Number.isFinite(r.workValue) && r.workValue > 0 ? r.workValue : null;
     if (repeatCount === null || workMeasure === null || workValue === null) return null;
-    const workUnit = workMeasure === "distance" && typeof r.workUnit === "string" && (DISTANCE_UNITS_LOCAL as readonly string[]).includes(r.workUnit) ? (r.workUnit as typeof DISTANCE_UNITS_LOCAL[number]) : null;
+    const workUnit = workMeasure === "distance" ? distanceUnit(r.workUnit) : null;
     if (workMeasure === "distance" && workUnit === null) return null;
+    const workDurationUnit = workMeasure === "duration" && typeof r.workDurationUnit === "string" && (DURATION_UNITS as readonly string[]).includes(r.workDurationUnit) ? (r.workDurationUnit as typeof DURATION_UNITS[number]) : (workMeasure === "duration" ? "seconds" : null);
+    const workPaceTarget = typeof r.workPaceTarget === "string" && (PACE_ZONES as readonly string[]).includes(r.workPaceTarget) ? (r.workPaceTarget as typeof PACE_ZONES[number]) : null;
+
     const hasRest = r.hasRest === true;
-    if (!hasRest) return { repeatCount, workMeasure, workValue, workUnit, hasRest: false, restMeasure: null, restValue: null, restUnit: null };
+    if (!hasRest) return { warmupValue, warmupUnit, repeatCount, workMeasure, workValue, workUnit, workDurationUnit, workPaceTarget, hasRest: false, restType: null, restMeasure: null, restValue: null, restUnit: null, restDurationUnit: null, cooldownValue, cooldownUnit };
+
+    const restType = typeof r.restType === "string" && (RECOVERY_TYPES as readonly string[]).includes(r.restType) ? (r.restType as typeof RECOVERY_TYPES[number]) : "jog";
     const restMeasure = r.restMeasure === "distance" || r.restMeasure === "duration" ? r.restMeasure : null;
     const restValue = typeof r.restValue === "number" && Number.isFinite(r.restValue) && r.restValue > 0 ? r.restValue : null;
     if (restMeasure === null || restValue === null) return null;
-    const restUnit = restMeasure === "distance" && typeof r.restUnit === "string" && (DISTANCE_UNITS_LOCAL as readonly string[]).includes(r.restUnit) ? (r.restUnit as typeof DISTANCE_UNITS_LOCAL[number]) : null;
+    const restUnit = restMeasure === "distance" ? distanceUnit(r.restUnit) : null;
     if (restMeasure === "distance" && restUnit === null) return null;
-    return { repeatCount, workMeasure, workValue, workUnit, hasRest: true, restMeasure, restValue, restUnit };
+    const restDurationUnit = restMeasure === "duration" && typeof r.restDurationUnit === "string" && (DURATION_UNITS as readonly string[]).includes(r.restDurationUnit) ? (r.restDurationUnit as typeof DURATION_UNITS[number]) : (restMeasure === "duration" ? "seconds" : null);
+
+    return { warmupValue, warmupUnit, repeatCount, workMeasure, workValue, workUnit, workDurationUnit, workPaceTarget, hasRest: true, restType, restMeasure, restValue, restUnit, restDurationUnit, cooldownValue, cooldownUnit };
   }
   function buildTrainingDay(accountId: string, dateStr: string, slot: import("./types").TrainingDaySlot, weekNumber: number, body: Record<string, unknown>, existing: import("./types").TrainingPlanDayRecord | undefined, now: Date, allowFreezeToggle: boolean): import("./types").TrainingPlanDayRecord {
     const WORKOUT_TYPES = ["run", "cross_training", "rest", "recovery", "race", "swim"] as const;

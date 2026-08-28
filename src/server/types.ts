@@ -874,16 +874,35 @@ export type TrainingDistanceUnit = "miles" | "km" | "meters" | "yards";
  * recovery between reps).
  */
 export type IntervalMeasure = "distance" | "duration";
+export type DurationUnit = "seconds" | "minutes";
+/** Ties a work interval's target directly to the pace zones already computed by the pace calculator (easy/marathon/threshold/interval), matching how real coaches actually describe a workout ("at 5K pace") rather than a raw number the runner has to look up separately. */
+export type PaceZoneTarget = "easy" | "marathon" | "threshold" | "interval";
+/** Recovery type matters practically, not just cosmetically - a jog recovery, a walk, and standing rest are different instructions to actually execute, confirmed as a real distinction in both Final Surge and TrainingPeaks. */
+export type RecoveryType = "jog" | "walk" | "stand";
+
 export interface IntervalStructure {
+  /** Optional warm-up before the main set - distance only (the overwhelmingly common real-world pattern is "2 mile warmup," not a timed warmup). */
+  warmupValue: number | null;
+  warmupUnit: TrainingDistanceUnit | null;
+
   repeatCount: number;
   workMeasure: IntervalMeasure;
-  /** Distance value when workMeasure is "distance" (unit is workUnit, restricted to meters/yards/miles/km); seconds when workMeasure is "duration". */
   workValue: number;
   workUnit: TrainingDistanceUnit | null;
+  /** Only set when workMeasure is "duration" - lets a coach write "4:00" instead of forcing everything into raw seconds. */
+  workDurationUnit: DurationUnit | null;
+  workPaceTarget: PaceZoneTarget | null;
+
   hasRest: boolean;
+  restType: RecoveryType | null;
   restMeasure: IntervalMeasure | null;
   restValue: number | null;
   restUnit: TrainingDistanceUnit | null;
+  restDurationUnit: DurationUnit | null;
+
+  /** Optional cool-down after the main set - same distance-only reasoning as warm-up. */
+  cooldownValue: number | null;
+  cooldownUnit: TrainingDistanceUnit | null;
 }
 
 export interface TrainingPlanDayRecord {

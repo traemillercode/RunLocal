@@ -283,14 +283,22 @@ function DayPanel({
   const [distanceValue, setDistanceValue] = useState(day?.distanceValue?.toString() ?? "");
   const [distanceUnit, setDistanceUnit] = useState<api.TrainingDistanceUnit>(day?.distanceUnit ?? "miles");
   const [structureMode, setStructureMode] = useState<"simple" | "intervals">(day?.intervalStructure ? "intervals" : "simple");
+  const [warmupValue, setWarmupValue] = useState(day?.intervalStructure?.warmupValue?.toString() ?? "");
+  const [warmupUnit, setWarmupUnit] = useState<api.TrainingDistanceUnit>(day?.intervalStructure?.warmupUnit ?? "miles");
   const [repeatCount, setRepeatCount] = useState(day?.intervalStructure?.repeatCount?.toString() ?? "6");
   const [workMeasure, setWorkMeasure] = useState<api.IntervalMeasure>(day?.intervalStructure?.workMeasure ?? "distance");
   const [workValue, setWorkValue] = useState(day?.intervalStructure?.workValue?.toString() ?? "400");
   const [workUnit, setWorkUnit] = useState<api.TrainingDistanceUnit>(day?.intervalStructure?.workUnit ?? "meters");
+  const [workDurationUnit, setWorkDurationUnit] = useState<api.DurationUnit>(day?.intervalStructure?.workDurationUnit ?? "seconds");
+  const [workPaceTarget, setWorkPaceTarget] = useState<api.PaceZoneTarget | "">(day?.intervalStructure?.workPaceTarget ?? "");
   const [hasRest, setHasRest] = useState(day?.intervalStructure?.hasRest ?? true);
+  const [restType, setRestType] = useState<api.RecoveryType>(day?.intervalStructure?.restType ?? "jog");
   const [restMeasure, setRestMeasure] = useState<api.IntervalMeasure>(day?.intervalStructure?.restMeasure ?? "distance");
   const [restValue, setRestValue] = useState(day?.intervalStructure?.restValue?.toString() ?? "200");
   const [restUnit, setRestUnit] = useState<api.TrainingDistanceUnit>(day?.intervalStructure?.restUnit ?? "meters");
+  const [restDurationUnit, setRestDurationUnit] = useState<api.DurationUnit>(day?.intervalStructure?.restDurationUnit ?? "seconds");
+  const [cooldownValue, setCooldownValue] = useState(day?.intervalStructure?.cooldownValue?.toString() ?? "");
+  const [cooldownUnit, setCooldownUnit] = useState<api.TrainingDistanceUnit>(day?.intervalStructure?.cooldownUnit ?? "miles");
   const [shoeId, setShoeId] = useState(day?.shoeId ?? shoes.find((s) => s.isDefault)?.id ?? "");
   const [addingShoe, setAddingShoe] = useState(false);
   const [newShoeName, setNewShoeName] = useState("");
@@ -330,14 +338,22 @@ function DayPanel({
     setSaving(true);
     setError(null);
     const intervalStructure: api.IntervalStructure | null = structureMode === "intervals" && repeatCount.trim() && workValue.trim() ? {
+      warmupValue: warmupValue.trim() ? Number(warmupValue) : null,
+      warmupUnit: warmupValue.trim() ? warmupUnit : null,
       repeatCount: Number(repeatCount),
       workMeasure,
       workValue: Number(workValue),
       workUnit: workMeasure === "distance" ? workUnit : null,
+      workDurationUnit: workMeasure === "duration" ? workDurationUnit : null,
+      workPaceTarget: workPaceTarget || null,
       hasRest,
+      restType: hasRest ? restType : null,
       restMeasure: hasRest ? restMeasure : null,
       restValue: hasRest && restValue.trim() ? Number(restValue) : null,
       restUnit: hasRest && restMeasure === "distance" ? restUnit : null,
+      restDurationUnit: hasRest && restMeasure === "duration" ? restDurationUnit : null,
+      cooldownValue: cooldownValue.trim() ? Number(cooldownValue) : null,
+      cooldownUnit: cooldownValue.trim() ? cooldownUnit : null,
     } : null;
     // A distance-based interval's total is knowable up front - prefill distanceValue as a
     // convenience so mileage tracking and the calendar cell still show a real number; a
@@ -345,9 +361,18 @@ function DayPanel({
     let effectiveDistanceValue = distanceValue.trim() ? Number(distanceValue) : null;
     let effectiveDistanceUnit = distanceUnit;
     if (intervalStructure && intervalStructure.workMeasure === "distance" && intervalStructure.workUnit) {
-      const restContribution = intervalStructure.hasRest && intervalStructure.restMeasure === "distance" ? (intervalStructure.restValue ?? 0) : 0;
-      effectiveDistanceValue = intervalStructure.repeatCount * (intervalStructure.workValue + restContribution);
-      effectiveDistanceUnit = intervalStructure.workUnit;
+      const toUnit = intervalStructure.workUnit;
+      const convert = (v: number, from: api.TrainingDistanceUnit) => {
+        if (from === toUnit) return v;
+        const toMiles = (val: number, u: api.TrainingDistanceUnit) => (u === "miles" ? val : u === "km" ? val * 0.621371 : u === "meters" ? val * 0.000621371 : val * 0.000568182);
+        const fromMilesTo = (miles: number, u: api.TrainingDistanceUnit) => (u === "miles" ? miles : u === "km" ? miles / 0.621371 : u === "meters" ? miles / 0.000621371 : miles / 0.000568182);
+        return fromMilesTo(toMiles(v, from), toUnit);
+      };
+      const restContribution = intervalStructure.hasRest && intervalStructure.restMeasure === "distance" && intervalStructure.restValue && intervalStructure.restUnit ? convert(intervalStructure.restValue, intervalStructure.restUnit) : 0;
+      const warmupContribution = intervalStructure.warmupValue && intervalStructure.warmupUnit ? convert(intervalStructure.warmupValue, intervalStructure.warmupUnit) : 0;
+      const cooldownContribution = intervalStructure.cooldownValue && intervalStructure.cooldownUnit ? convert(intervalStructure.cooldownValue, intervalStructure.cooldownUnit) : 0;
+      effectiveDistanceValue = Math.round((intervalStructure.repeatCount * (intervalStructure.workValue + restContribution) + warmupContribution + cooldownContribution) * 100) / 100;
+      effectiveDistanceUnit = toUnit;
     }
     const r = await api.setTrainingPlanDay(date, {
       workoutType,
@@ -446,7 +471,17 @@ function DayPanel({
               </select>
             </div>
           ) : (
-            <div className="space-y-2.5 rounded-xl bg-slate-50 p-3">
+            <div className="space-y-3 rounded-xl bg-slate-50 p-3">
+              <div>
+                <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">Warm-up (optional)</p>
+                <div className="flex gap-2">
+                  <input type="number" min="0" value={warmupValue} onChange={(e) => setWarmupValue(e.target.value)} placeholder="Distance" className={`min-w-0 flex-1 ${fieldCls}`} />
+                  <select value={warmupUnit} onChange={(e) => setWarmupUnit(e.target.value as api.TrainingDistanceUnit)} className={`w-24 ${fieldCls}`}>
+                    {(["miles", "km", "meters", "yards"] as const).map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+              </div>
+
               <div className="flex items-center gap-2">
                 <span className="text-[13px] font-bold text-slate-700">Repeat</span>
                 <input type="number" min="1" max="100" value={repeatCount} onChange={(e) => setRepeatCount(e.target.value)} className={`min-w-0 w-20 ${fieldCls}`} />
@@ -460,13 +495,25 @@ function DayPanel({
                   <button type="button" onClick={() => setWorkMeasure("duration")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${workMeasure === "duration" ? "bg-[#14171C] text-white" : "bg-white text-slate-600"}`}>Time</button>
                 </div>
                 <div className="mt-1.5 flex gap-2">
-                  <input type="number" min="0" value={workValue} onChange={(e) => setWorkValue(e.target.value)} placeholder={workMeasure === "duration" ? "Seconds" : "Distance"} className={`min-w-0 flex-1 ${fieldCls}`} />
+                  <input type="number" min="0" value={workValue} onChange={(e) => setWorkValue(e.target.value)} placeholder={workMeasure === "duration" ? "Duration" : "Distance"} className={`min-w-0 flex-1 ${fieldCls}`} />
                   {workMeasure === "distance" ? (
                     <select value={workUnit} onChange={(e) => setWorkUnit(e.target.value as api.TrainingDistanceUnit)} className={`w-24 ${fieldCls}`}>
                       {(["meters", "yards", "miles", "km"] as const).map((u) => <option key={u} value={u}>{u}</option>)}
                     </select>
-                  ) : <span className="flex w-24 items-center justify-center text-[13px] font-semibold text-slate-500">seconds</span>}
+                  ) : (
+                    <select value={workDurationUnit} onChange={(e) => setWorkDurationUnit(e.target.value as api.DurationUnit)} className={`w-24 ${fieldCls}`}>
+                      <option value="seconds">seconds</option>
+                      <option value="minutes">minutes</option>
+                    </select>
+                  )}
                 </div>
+                <select value={workPaceTarget} onChange={(e) => setWorkPaceTarget(e.target.value as api.PaceZoneTarget | "")} className={`mt-1.5 ${fieldCls}`}>
+                  <option value="">No pace target</option>
+                  <option value="easy">Easy pace</option>
+                  <option value="marathon">Marathon pace</option>
+                  <option value="threshold">Threshold pace</option>
+                  <option value="interval">Interval pace</option>
+                </select>
               </div>
 
               <label className="flex items-center gap-2 text-[13px] font-semibold text-slate-600">
@@ -478,23 +525,47 @@ function DayPanel({
                 <div>
                   <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">Rest interval</p>
                   <div className="flex gap-1.5">
-                    <button type="button" onClick={() => setRestMeasure("distance")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${restMeasure === "distance" ? "bg-[#14171C] text-white" : "bg-white text-slate-600"}`}>Distance</button>
-                    <button type="button" onClick={() => setRestMeasure("duration")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${restMeasure === "duration" ? "bg-[#14171C] text-white" : "bg-white text-slate-600"}`}>Time</button>
+                    <button type="button" onClick={() => setRestType("jog")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${restType === "jog" ? "bg-[#14171C] text-white" : "bg-white text-slate-600"}`}>Jog</button>
+                    <button type="button" onClick={() => setRestType("walk")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${restType === "walk" ? "bg-[#14171C] text-white" : "bg-white text-slate-600"}`}>Walk</button>
+                    <button type="button" onClick={() => setRestType("stand")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${restType === "stand" ? "bg-[#14171C] text-white" : "bg-white text-slate-600"}`}>Stand</button>
+                  </div>
+                  <div className="mt-1.5 flex gap-1.5">
+                    <button type="button" onClick={() => setRestMeasure("distance")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${restMeasure === "distance" ? "bg-slate-700 text-white" : "bg-white text-slate-600"}`}>Distance</button>
+                    <button type="button" onClick={() => setRestMeasure("duration")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${restMeasure === "duration" ? "bg-slate-700 text-white" : "bg-white text-slate-600"}`}>Time</button>
                   </div>
                   <div className="mt-1.5 flex gap-2">
-                    <input type="number" min="0" value={restValue} onChange={(e) => setRestValue(e.target.value)} placeholder={restMeasure === "duration" ? "Seconds" : "Distance"} className={`min-w-0 flex-1 ${fieldCls}`} />
+                    <input type="number" min="0" value={restValue} onChange={(e) => setRestValue(e.target.value)} placeholder={restMeasure === "duration" ? "Duration" : "Distance"} className={`min-w-0 flex-1 ${fieldCls}`} />
                     {restMeasure === "distance" ? (
                       <select value={restUnit} onChange={(e) => setRestUnit(e.target.value as api.TrainingDistanceUnit)} className={`w-24 ${fieldCls}`}>
                         {(["meters", "yards", "miles", "km"] as const).map((u) => <option key={u} value={u}>{u}</option>)}
                       </select>
-                    ) : <span className="flex w-24 items-center justify-center text-[13px] font-semibold text-slate-500">seconds</span>}
+                    ) : (
+                      <select value={restDurationUnit} onChange={(e) => setRestDurationUnit(e.target.value as api.DurationUnit)} className={`w-24 ${fieldCls}`}>
+                        <option value="seconds">seconds</option>
+                        <option value="minutes">minutes</option>
+                      </select>
+                    )}
                   </div>
                 </div>
               ) : null}
 
+              <div>
+                <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">Cool-down (optional)</p>
+                <div className="flex gap-2">
+                  <input type="number" min="0" value={cooldownValue} onChange={(e) => setCooldownValue(e.target.value)} placeholder="Distance" className={`min-w-0 flex-1 ${fieldCls}`} />
+                  <select value={cooldownUnit} onChange={(e) => setCooldownUnit(e.target.value as api.TrainingDistanceUnit)} className={`w-24 ${fieldCls}`}>
+                    {(["miles", "km", "meters", "yards"] as const).map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+              </div>
+
               {workMeasure === "distance" && repeatCount.trim() && workValue.trim() ? (
                 <p className="text-[12px] font-semibold text-slate-500">
-                  Total: {Number(repeatCount) * (Number(workValue) + (hasRest && restMeasure === "distance" && restValue.trim() ? Number(restValue) : 0))} {workUnit}
+                  Main set: {Number(repeatCount)} x {workValue}{workUnit}{hasRest && restMeasure === "distance" && restValue.trim() ? ` (${restValue}${restUnit} ${restType})` : hasRest ? ` (${restType} recovery)` : ""}
+                </p>
+              ) : workMeasure === "duration" && repeatCount.trim() && workValue.trim() ? (
+                <p className="text-[12px] font-semibold text-slate-500">
+                  Main set: {Number(repeatCount)} x {workValue}{workDurationUnit === "minutes" ? "min" : "s"}{hasRest && restValue.trim() ? ` (${restValue}${restMeasure === "duration" ? (restDurationUnit === "minutes" ? "min" : "s") : restUnit} ${restType})` : ""}
                 </p>
               ) : null}
             </div>

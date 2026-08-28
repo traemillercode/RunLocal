@@ -151,3 +151,18 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
 @media (prefers-reduced-motion: reduce) {
   .tour-overlay, .tour-card { animation: none; }
 }
+
+/* ── Manual number inputs, no spinner ─────────────────────────────
+   The browser's native up/down spin buttons on <input type="number">
+   were clipping the typed digits in narrow flex layouts. Removing them
+   globally rather than per-input, so this can never regress on a new
+   field - typing stays numeric (mobile still gets the numeric keyboard
+   via type="number"), just without the spinner UI. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}

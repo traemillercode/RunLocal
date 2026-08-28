@@ -49,7 +49,12 @@ describe("Interval structure - track/distance repeats", () => {
       intervalStructure: { repeatCount: 6, workMeasure: "distance", workValue: 400, workUnit: "meters", hasRest: true, restMeasure: "distance", restValue: 200, restUnit: "meters" },
     });
     expect(r.status).toBe(200);
-    expect(r.body.day.intervalStructure).toEqual({ repeatCount: 6, workMeasure: "distance", workValue: 400, workUnit: "meters", hasRest: true, restMeasure: "distance", restValue: 200, restUnit: "meters" });
+    expect(r.body.day.intervalStructure).toEqual({
+      warmupValue: null, warmupUnit: null,
+      repeatCount: 6, workMeasure: "distance", workValue: 400, workUnit: "meters", workDurationUnit: null, workPaceTarget: null,
+      hasRest: true, restType: "jog", restMeasure: "distance", restValue: 200, restUnit: "meters", restDurationUnit: null,
+      cooldownValue: null, cooldownUnit: null,
+    });
   });
 
   it("rejects a distance measure with no unit - a distance without a unit is meaningless", async () => {
@@ -62,6 +67,77 @@ describe("Interval structure - track/distance repeats", () => {
     expect(r.body.day.intervalStructure).toBeNull();
   });
 });
+
+describe("Warm-up, cool-down, pace target, and recovery type - the crucial elements real platforms include", () => {
+  it("accepts a full real workout: 2mi warmup, 5x1000m at threshold pace with a walk recovery, 1mi cooldown", async () => {
+    const db = createMemoryStore();
+    const u = await setupPlan(db);
+    const r = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, {
+      workoutType: "run",
+      intervalStructure: {
+        warmupValue: 2, warmupUnit: "miles",
+        repeatCount: 5, workMeasure: "distance", workValue: 1000, workUnit: "meters", workPaceTarget: "threshold",
+        hasRest: true, restType: "walk", restMeasure: "distance", restValue: 400, restUnit: "meters",
+        cooldownValue: 1, cooldownUnit: "miles",
+      },
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.day.intervalStructure.warmupValue).toBe(2);
+    expect(r.body.day.intervalStructure.workPaceTarget).toBe("threshold");
+    expect(r.body.day.intervalStructure.restType).toBe("walk");
+    expect(r.body.day.intervalStructure.cooldownValue).toBe(1);
+  });
+
+  it("a warmup value with no unit is rejected entirely, not silently accepted without a unit", async () => {
+    const db = createMemoryStore();
+    const u = await setupPlan(db);
+    const r = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, {
+      intervalStructure: { warmupValue: 2, repeatCount: 4, workMeasure: "duration", workValue: 60, hasRest: false },
+    });
+    expect(r.body.day.intervalStructure).toBeNull();
+  });
+
+  it("recovery type defaults to jog when not specified, matching the most common real-world case", async () => {
+    const db = createMemoryStore();
+    const u = await setupPlan(db);
+    const r = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, {
+      intervalStructure: { repeatCount: 4, workMeasure: "distance", workValue: 400, workUnit: "meters", hasRest: true, restMeasure: "duration", restValue: 90 },
+    });
+    expect(r.body.day.intervalStructure.restType).toBe("jog");
+  });
+
+  it("rejects a bogus pace target outside the real four zones", async () => {
+    const db = createMemoryStore();
+    const u = await setupPlan(db);
+    const r = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, {
+      intervalStructure: { repeatCount: 4, workMeasure: "distance", workValue: 400, workUnit: "meters", workPaceTarget: "sonic_speed", hasRest: false },
+    });
+    expect(r.body.day.intervalStructure.workPaceTarget).toBeNull();
+  });
+});
+
+describe("Duration in minutes, not just seconds", () => {
+  it("accepts a real minutes-based interval: 4x4:00 at marathon pace with 2:00 rest", async () => {
+    const db = createMemoryStore();
+    const u = await setupPlan(db);
+    const r = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, {
+      intervalStructure: { repeatCount: 4, workMeasure: "duration", workValue: 4, workDurationUnit: "minutes", workPaceTarget: "marathon", hasRest: true, restMeasure: "duration", restValue: 2, restDurationUnit: "minutes" },
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.day.intervalStructure.workDurationUnit).toBe("minutes");
+    expect(r.body.day.intervalStructure.restDurationUnit).toBe("minutes");
+  });
+
+  it("a duration measure with no explicit unit defaults to seconds, not left null", async () => {
+    const db = createMemoryStore();
+    const u = await setupPlan(db);
+    const r = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, {
+      intervalStructure: { repeatCount: 5, workMeasure: "duration", workValue: 60, hasRest: false },
+    });
+    expect(r.body.day.intervalStructure.workDurationUnit).toBe("seconds");
+  });
+});
+
 
 describe("Interval structure - time-based work/rest", () => {
   it("accepts a real duration-based interval set: 5x(60s work / 30s rest)", async () => {
