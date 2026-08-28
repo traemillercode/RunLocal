@@ -2389,6 +2389,19 @@ async function handleApi(
     });
     return ok(res, { relationships: rows }), true;
   }
+  // POST /api/coach/relationships/:id/end - either the coach or the athlete can end an
+  // ACTIVE relationship at any time (unlike accept/decline, which only apply to a pending one,
+  // and can only be actioned by the non-requesting party).
+  const endRelMatch = /^\/api\/coach\/relationships\/([^/]+)\/end$/.exec(url.pathname);
+  if (endRelMatch && method === "POST") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rel = db.getCoachRelationship(endRelMatch[1]);
+    if (!rel || (rel.coachId !== sess.accountId && rel.athleteId !== sess.accountId)) return err(res, { status: 404, error: "not_found" }), true;
+    db.endCoachRelationship(rel.id);
+    await db.persist();
+    return ok(res, { ok: true }), true;
+  }
 
   // ---- GET /api/people/search: verified-account name search -----------------
   // Search-index filter only: `searchable_by_name = false` hides the user from
@@ -2696,6 +2709,90 @@ async function handleApi(
     return ok(res, { day }), true;
   }
 
+  // ---- strength/gym entries (unlimited per day, separate from the capped run slots) ----
+  if (method === "GET" && url.pathname === "/api/profile/training-plan/strength") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const date = url.searchParams.get("date") ?? undefined;
+    return ok(res, { entries: db.listStrengthEntries(sess.accountId, date) }), true;
+  }
+  if (method === "POST" && url.pathname === "/api/profile/training-plan/strength") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { date?: unknown; title?: unknown; durationMinutes?: unknown; notes?: unknown };
+    const date = typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : "";
+    if (!date) return err(res, { status: 400, error: "invalid_date" }), true;
+    const title = typeof body.title === "string" ? body.title.trim().slice(0, 60) : "";
+    if (!title) return err(res, { status: 400, error: "invalid_title", message: "Give it a title." }), true;
+    const entry = db.setStrengthEntry({
+      id: newId(),
+      accountId: sess.accountId,
+      date,
+      title,
+      durationMinutes: typeof body.durationMinutes === "number" && Number.isFinite(body.durationMinutes) && body.durationMinutes >= 0 ? body.durationMinutes : null,
+      notes: typeof body.notes === "string" ? body.notes.trim().slice(0, 500) : "",
+      completionStatus: "pending",
+      updatedAt: now.toISOString(),
+    });
+    await db.persist();
+    return ok(res, { entry }), true;
+  }
+  const strengthEntryMatch = /^\/api\/profile\/training-plan\/strength\/([^/]+)$/.exec(url.pathname);
+  if (strengthEntryMatch && method === "PUT") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const existing = db.getStrengthEntry(strengthEntryMatch[1]);
+    if (!existing || existing.accountId !== sess.accountId) return err(res, { status: 404, error: "not_found" }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const STATUSES = ["pending", "done", "missed"] as const;
+    const updated = db.setStrengthEntry({
+      ...existing,
+      title: typeof body.title === "string" ? body.title.trim().slice(0, 60) : existing.title,
+      durationMinutes: body.durationMinutes !== undefined ? (typeof body.durationMinutes === "number" && Number.isFinite(body.durationMinutes) && body.durationMinutes >= 0 ? body.durationMinutes : null) : existing.durationMinutes,
+      notes: typeof body.notes === "string" ? body.notes.trim().slice(0, 500) : existing.notes,
+      completionStatus: typeof body.completionStatus === "string" && (STATUSES as readonly string[]).includes(body.completionStatus) ? (body.completionStatus as typeof STATUSES[number]) : existing.completionStatus,
+      updatedAt: now.toISOString(),
+    });
+    await db.persist();
+    return ok(res, { entry: updated }), true;
+  }
+  if (strengthEntryMatch && method === "DELETE") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const okDel = db.deleteStrengthEntry(sess.accountId, strengthEntryMatch[1]);
+    if (!okDel) return err(res, { status: 404, error: "not_found" }), true;
+    await db.persist();
+    return ok(res, { ok: true }), true;
+  }
+
+  // ---- nutrition item library (gels, drink mixes, chews) ----
+  if (method === "GET" && url.pathname === "/api/profile/nutrition-items") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    return ok(res, { items: db.listNutritionItems(sess.accountId) }), true;
+  }
+  if (method === "POST" && url.pathname === "/api/profile/nutrition-items") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { kind?: unknown; name?: unknown };
+    const KINDS = ["gel", "drink_mix", "chew", "other"] as const;
+    const kind = typeof body.kind === "string" && (KINDS as readonly string[]).includes(body.kind) ? (body.kind as typeof KINDS[number]) : "gel";
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 60) : "";
+    if (!name) return err(res, { status: 400, error: "invalid_name", message: "Give it a name." }), true;
+    const item = db.addNutritionItem({ id: newId(), accountId: sess.accountId, kind, name, createdAt: now.toISOString() });
+    await db.persist();
+    return ok(res, { item }), true;
+  }
+  const nutritionDeleteMatch = /^\/api\/profile\/nutrition-items\/([^/]+)$/.exec(url.pathname);
+  if (nutritionDeleteMatch && method === "DELETE") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const okDel = db.deleteNutritionItem(sess.accountId, decodeURIComponent(nutritionDeleteMatch[1]));
+    if (!okDel) return err(res, { status: 404, error: "not_found" }), true;
+    await db.persist();
+    return ok(res, { ok: true }), true;
+  }
+
   // ---- shoe library ----
   if (method === "GET" && url.pathname === "/api/profile/shoes") {
     const sess = requireSession(db, cookies);
@@ -3000,6 +3097,72 @@ async function handleApi(
     applyShoeMileageDelta(existing, day);
     await db.persist();
     return ok(res, { day }), true;
+  }
+
+  // POST /api/profile/training-plan/days/:date/propose (or :date/:slot/propose) - a coached
+  // athlete's actual path forward after hitting coach_managed. Body: { coachId, proposedChanges, note }.
+  const proposeMatch = /^\/api\/profile\/training-plan\/days\/(\d{4}-\d{2}-\d{2})(?:\/(am|pm))?\/propose$/.exec(url.pathname);
+  if (proposeMatch && method === "POST") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const dateStr = proposeMatch[1];
+    const slot: import("./types").TrainingDaySlot = (proposeMatch[2] as "am" | "pm" | undefined) ?? "primary";
+    const body = (await readJson(req)) as { coachId?: unknown; proposedChanges?: unknown; note?: unknown };
+    const coachId = typeof body.coachId === "string" ? body.coachId : "";
+    if (!db.isActiveCoachOf(coachId, sess.accountId)) return err(res, { status: 400, error: "not_your_coach", message: "That's not an active coach of yours." }), true;
+    const proposedChanges = body.proposedChanges && typeof body.proposedChanges === "object" ? (body.proposedChanges as Record<string, unknown>) : {};
+    if (Object.keys(proposedChanges).length === 0) return err(res, { status: 400, error: "empty_proposal", message: "Nothing to propose." }), true;
+    const rec = db.createChangeProposal({
+      id: newId(),
+      athleteId: sess.accountId,
+      coachId,
+      date: dateStr,
+      slot,
+      proposedChanges,
+      note: typeof body.note === "string" ? body.note.trim().slice(0, 500) : "",
+      status: "pending",
+      createdAt: now.toISOString(),
+      respondedAt: null,
+    });
+    await db.persist();
+    return ok(res, { proposal: rec }), true;
+  }
+  // GET /api/coach/proposals - every proposal from any of the caller's athletes, most recent first.
+  if (method === "GET" && url.pathname === "/api/coach/proposals") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rows = db.listChangeProposalsFor(sess.accountId).filter((p) => p.coachId === sess.accountId).map((p) => ({ ...p, athleteName: db.getAccount(p.athleteId)?.name ?? "An athlete" }));
+    return ok(res, { proposals: rows }), true;
+  }
+  // GET /api/profile/training-plan/proposals - an athlete's own proposals (to track what's pending).
+  if (method === "GET" && url.pathname === "/api/profile/training-plan/proposals") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rows = db.listChangeProposalsFor(sess.accountId).filter((p) => p.athleteId === sess.accountId);
+    return ok(res, { proposals: rows }), true;
+  }
+  // POST /api/coach/proposals/:id/approve|decline - approving actually applies the proposed
+  // changes to the real day (bypassing the coach_managed gate, since the coach IS the one approving).
+  const proposalRespondMatch = /^\/api\/coach\/proposals\/([^/]+)\/(approve|decline)$/.exec(url.pathname);
+  if (proposalRespondMatch && method === "POST") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const proposal = db.getChangeProposal(proposalRespondMatch[1]);
+    if (!proposal || proposal.coachId !== sess.accountId) return err(res, { status: 404, error: "not_found" }), true;
+    if (proposal.status !== "pending") return err(res, { status: 409, error: "already_resolved" }), true;
+    const approve = proposalRespondMatch[2] === "approve";
+    if (approve) {
+      const plan = db.getTrainingPlan(proposal.athleteId);
+      const weekNumber = plan ? planWeekForDate(plan, proposal.date) : null;
+      if (weekNumber !== null) {
+        const existing = db.getTrainingPlanDay(proposal.athleteId, proposal.date, proposal.slot);
+        const day = db.setTrainingPlanDay(buildTrainingDay(proposal.athleteId, proposal.date, proposal.slot, weekNumber, proposal.proposedChanges, existing, now, false));
+        applyShoeMileageDelta(existing, day);
+      }
+    }
+    db.respondToChangeProposal(proposal.id, approve, now);
+    await db.persist();
+    return ok(res, { ok: true, applied: approve }), true;
   }
 
   // ---- runner tags on content (posts/events/runs) --------------------------
