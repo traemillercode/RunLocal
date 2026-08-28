@@ -287,6 +287,24 @@ function DayPanel({
   const [completionNotes, setCompletionNotes] = useState(day?.completionNotes ?? "");
   const [loggingSaving, setLoggingSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [myRuns, setMyRuns] = useState<api.MyRunView[] | null>(null);
+  const [linkedOccurrenceId, setLinkedOccurrenceId] = useState(day?.linkedEventOccurrenceId ?? "");
+  const [linkSaving, setLinkSaving] = useState(false);
+
+  useEffect(() => {
+    void api.getMyRuns().then((r) => { if (r.ok) setMyRuns(r.data.runs); });
+  }, []);
+
+  // Only real group runs (RSVP'd, not a solo entry) on this exact date can be linked - matches
+  // exactly what the server itself validates (a real attendance row for that occurrence).
+  const runsThisDay = (myRuns ?? []).filter((r) => r.kind === "rsvp" && r.occurrenceId && (r.runDate ?? r.date) === date);
+
+  const linkGroupRun = async (occurrenceId: string) => {
+    setLinkSaving(true);
+    const r = await api.setTrainingPlanDay(date, { linkedEventOccurrenceId: occurrenceId || null }, slot);
+    setLinkSaving(false);
+    if (r.ok) { setLinkedOccurrenceId(occurrenceId); onSaved(r.data.day); }
+  };
 
   const isPastOrToday = date <= toDateStr(new Date());
   const frozen = day?.frozen === true;
@@ -345,7 +363,7 @@ function DayPanel({
         <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100" aria-label="Close"><Icon name="close" className="h-4 w-4" /></button>
       </div>
 
-      {frozen ? <p className="mb-3 rounded-xl bg-slate-50 p-2.5 text-[12px] font-semibold text-slate-500">Your coach has locked this day — logging progress and linking a group run still work.</p> : null}
+      {frozen ? <p className="mb-3 rounded-xl bg-slate-50 p-2.5 text-[12px] font-semibold text-slate-500">Your coach has locked this day completely — nothing can be changed here, including logging progress or linking a group run, until they unlock it.</p> : null}
       {error ? <p role="alert" className="mb-3 rounded-xl bg-rose-50 p-2.5 text-[12px] font-semibold text-rose-700">{error}</p> : null}
 
       <div className="flex flex-wrap gap-1.5">
@@ -412,7 +430,34 @@ function DayPanel({
         {saving ? "Saving…" : "Save day"}
       </button>
 
-      {isPastOrToday && workoutType !== "rest" ? (
+      {runsThisDay.length > 0 && !frozen ? (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <p className="mb-2 text-[13px] font-bold text-slate-700">Link to a group run</p>
+          <p className="mb-2 text-[11px] text-slate-500">You're RSVP'd to {runsThisDay.length === 1 ? "this run" : "these runs"} on this day — link one so your plan shows exactly when and where.</p>
+          <div className="space-y-1.5">
+            {runsThisDay.map((run) => {
+              const linked = linkedOccurrenceId === run.occurrenceId;
+              return (
+                <button
+                  key={run.occurrenceId}
+                  type="button"
+                  disabled={linkSaving}
+                  onClick={() => void linkGroupRun(linked ? "" : (run.occurrenceId ?? ""))}
+                  className={`flex w-full items-center justify-between rounded-xl p-3 text-left ${linked ? "bg-[#FF5741]/10 ring-1 ring-[#FF5741]/40" : "bg-slate-50"}`}
+                >
+                  <span>
+                    <span className="block text-[13px] font-bold text-slate-900">{run.title}</span>
+                    <span className="block text-[12px] text-slate-500">{run.time} · {run.location}</span>
+                  </span>
+                  {linked ? <Icon name="check" className="h-4 w-4 shrink-0 text-[#FF5741]" /> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {isPastOrToday && workoutType !== "rest" && !frozen ? (
         <div className="mt-4 border-t border-slate-100 pt-4">
           <p className="mb-2 text-[13px] font-bold text-slate-700">Did you do it?</p>
           <div className="flex gap-1.5">
