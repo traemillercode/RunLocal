@@ -230,13 +230,12 @@ export function TrainingPlanDetailPage() {
             ))
           )}
           {selectedDays.length < 2 ? (
-            <button
-              type="button"
-              onClick={() => setDaysByDate((prev) => ({ ...prev, [selectedDate]: [...(prev[selectedDate] ?? []), { slot: selectedDays.length === 0 ? "primary" : selectedDays[0].slot === "am" ? "pm" : "am" } as api.TrainingPlanDayView] }))}
-              className="w-full rounded-xl border border-dashed border-slate-300 py-2.5 text-[13px] font-bold text-slate-500"
-            >
-              + Add a second workout (AM/PM)
-            </button>
+            <SecondWorkoutPrompt
+              onAdd={(time) => {
+                const slot: api.TrainingDaySlot = Number(time.slice(0, 2)) < 12 ? "am" : "pm";
+                setDaysByDate((prev) => ({ ...prev, [selectedDate]: [...(prev[selectedDate] ?? []), { slot, scheduledTime: time } as api.TrainingPlanDayView] }));
+              }}
+            />
           ) : null}
         </div>
       ) : (
@@ -266,6 +265,30 @@ export function TrainingPlanDetailPage() {
   );
 }
 
+/** A real time input for a second workout - AM/PM is derived from the time chosen, never picked manually, matching how you'd actually think about your day. */
+function SecondWorkoutPrompt({ onAdd }: { onAdd: (time: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [time, setTime] = useState("17:00");
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="w-full rounded-xl border border-dashed border-slate-300 py-2.5 text-[13px] font-bold text-slate-500">
+        + Add a second workout
+      </button>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-dashed border-slate-300 p-3">
+      <p className="mb-2 text-[13px] font-bold text-slate-700">What time?</p>
+      <div className="flex gap-2">
+        <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
+        <button type="button" onClick={() => onAdd(time)} className="rounded-lg bg-[#14171C] px-4 text-[13px] font-bold text-white">Add</button>
+      </div>
+      <p className="mt-1.5 text-[11px] text-slate-400">{Number(time.slice(0, 2)) < 12 ? "Morning" : "Afternoon/evening"} workout</p>
+    </div>
+  );
+}
+
 function DayPanel({
   date,
   slot,
@@ -283,6 +306,7 @@ function DayPanel({
 }) {
   const [workoutType, setWorkoutType] = useState<api.TrainingDayWorkoutType>(day?.workoutType ?? "run");
   const [title, setTitle] = useState(day?.title ?? "");
+  const [scheduledTime, setScheduledTime] = useState(day?.scheduledTime ?? "");
   const [runLabel, setRunLabel] = useState<api.TrainingRunLabel | "">(day?.runLabel ?? "");
   const [distanceValue, setDistanceValue] = useState(day?.distanceValue?.toString() ?? "");
   const [distanceUnit, setDistanceUnit] = useState<api.TrainingDistanceUnit>(day?.distanceUnit ?? "miles");
@@ -381,6 +405,7 @@ function DayPanel({
     const r = await api.setTrainingPlanDay(date, {
       workoutType,
       runLabel: runLabel || null,
+      scheduledTime: scheduledTime || null,
       title: title.trim(),
       distanceValue: effectiveDistanceValue,
       distanceUnit: effectiveDistanceUnit,
@@ -424,7 +449,7 @@ function DayPanel({
     <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-[15px] font-bold text-slate-900">
-          {dateLabel} {slot !== "primary" ? <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold uppercase text-slate-500">{slot}</span> : null}
+          {dateLabel} {slot !== "primary" ? <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold uppercase text-slate-500">{day?.scheduledTime ? new Date(`2000-01-01T${day.scheduledTime}`).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : slot}</span> : null}
           {frozen ? <Icon name="shield" className="ml-1.5 inline h-3.5 w-3.5 text-slate-400" /> : null}
         </p>
         <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100" aria-label="Close"><Icon name="close" className="h-4 w-4" /></button>
@@ -461,6 +486,10 @@ function DayPanel({
             </select>
           ) : null}
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={workoutType === "swim" ? "e.g. Interval swim" : "e.g. Tempo run"} className={fieldCls} maxLength={60} />
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-semibold text-slate-500">Time (optional)</span>
+            <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2.5 text-[13px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
+          </div>
 
           <div className="flex gap-1.5">
             <button type="button" onClick={() => setStructureMode("simple")} className={`flex-1 rounded-lg py-2 text-[12px] font-bold ${structureMode === "simple" ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-600"}`}>Simple distance</button>
@@ -605,30 +634,39 @@ function DayPanel({
         {saving ? "Saving…" : "Save day"}
       </button>
 
-      {runsThisDay.length > 0 && !frozen ? (
+      {!frozen && workoutType !== "rest" ? (
         <div className="mt-4 border-t border-slate-100 pt-4">
           <p className="mb-2 text-[13px] font-bold text-slate-700">Link to a group run</p>
-          <p className="mb-2 text-[11px] text-slate-500">You're RSVP'd to {runsThisDay.length === 1 ? "this run" : "these runs"} on this day — link one so your plan shows exactly when and where.</p>
-          <div className="space-y-1.5">
-            {runsThisDay.map((run) => {
-              const linked = linkedOccurrenceId === run.occurrenceId;
-              return (
-                <button
-                  key={run.occurrenceId}
-                  type="button"
-                  disabled={linkSaving}
-                  onClick={() => void linkGroupRun(linked ? "" : (run.occurrenceId ?? ""))}
-                  className={`flex w-full items-center justify-between rounded-xl p-3 text-left ${linked ? "bg-[#FF5741]/10 ring-1 ring-[#FF5741]/40" : "bg-slate-50"}`}
-                >
-                  <span>
-                    <span className="block text-[13px] font-bold text-slate-900">{run.title}</span>
-                    <span className="block text-[12px] text-slate-500">{run.time} · {run.location}</span>
-                  </span>
-                  {linked ? <Icon name="check" className="h-4 w-4 shrink-0 text-[#FF5741]" /> : null}
-                </button>
-              );
-            })}
-          </div>
+          {runsThisDay.length > 0 ? (
+            <>
+              <p className="mb-2 text-[11px] text-slate-500">You're RSVP'd to {runsThisDay.length === 1 ? "this run" : "these runs"} on this day — link one so your plan shows exactly when and where.</p>
+              <div className="space-y-1.5">
+                {runsThisDay.map((run) => {
+                  const linked = linkedOccurrenceId === run.occurrenceId;
+                  return (
+                    <button
+                      key={run.occurrenceId}
+                      type="button"
+                      disabled={linkSaving}
+                      onClick={() => void linkGroupRun(linked ? "" : (run.occurrenceId ?? ""))}
+                      className={`flex w-full items-center justify-between rounded-xl p-3 text-left ${linked ? "bg-[#FF5741]/10 ring-1 ring-[#FF5741]/40" : "bg-slate-50"}`}
+                    >
+                      <span>
+                        <span className="block text-[13px] font-bold text-slate-900">{run.title}</span>
+                        <span className="block text-[12px] text-slate-500">{run.time} · {run.location}</span>
+                      </span>
+                      {linked ? <Icon name="check" className="h-4 w-4 shrink-0 text-[#FF5741]" /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <p className="rounded-xl bg-slate-50 p-3 text-[12px] text-slate-500">
+              No group runs you're RSVP'd to on this day yet.{" "}
+              <Link to="/" className="font-bold text-[#14171C] underline underline-offset-2">RSVP to one from Events</Link> and it'll show up here to link.
+            </p>
+          )}
         </div>
       ) : null}
 

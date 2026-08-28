@@ -1255,6 +1255,7 @@ export interface TrainingPlanDayView {
   accountId: string;
   date: string;
   slot: TrainingDaySlot;
+  scheduledTime: string | null;
   weekNumber: number;
   workoutType: TrainingDayWorkoutType;
   runLabel: TrainingRunLabel | null;

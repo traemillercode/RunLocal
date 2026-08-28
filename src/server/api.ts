@@ -2640,6 +2640,9 @@ async function handleApi(
       accountId,
       date: dateStr,
       slot,
+      scheduledTime: body.scheduledTime !== undefined
+        ? (typeof body.scheduledTime === "string" && /^([01]\d|2[0-3]):([0-5]\d)$/.test(body.scheduledTime) ? body.scheduledTime : null)
+        : existing?.scheduledTime ?? null,
       weekNumber,
       workoutType,
       runLabel,

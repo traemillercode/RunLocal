@@ -921,8 +921,10 @@ export interface TrainingPlanDayRecord {
   accountId: string;
   /** ISO yyyy-mm-dd - the actual calendar date this content applies to. */
   date: string;
-  /** "primary" for a single workout that day; "am"/"pm" when there are two - each is its own full record, not a sub-object, so either can be edited/frozen/completed independently. */
+  /** "primary" for a single workout that day; "am"/"pm" when there are two - each is its own full record, not a sub-object, so either can be edited/frozen/completed independently. Derived automatically from scheduledTime (before/after noon) when a real time is set, rather than chosen manually. */
   slot: TrainingDaySlot;
+  /** HH:MM (24-hour) - the actual time this workout is scheduled for. Optional; when set, it's what determines whether this is the "am" or "pm" slot, rather than an arbitrary manual choice. */
+  scheduledTime: string | null;
   /** Denormalized for fast weekly grouping/filtering without recomputing from startDate every time. */
   weekNumber: number;
   workoutType: TrainingDayWorkoutType;

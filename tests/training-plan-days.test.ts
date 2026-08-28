@@ -165,4 +165,20 @@ describe("Day-level training plan content", () => {
     // Falls back to null rather than storing a value outside the fixed set.
     expect(r.body.day.missedReason).toBeNull();
   });
+
+  it("scheduledTime accepts a valid HH:MM time, rejects malformed input, and preserves an existing value when omitted", async () => {
+    const db = createMemoryStore();
+    const u = account(db, "timedrunner@example.com");
+    await call(db, "PUT", "/api/profile/training-plan", u.cookie, { planType: "marathon", totalWeeks: 4, startDate: "2026-08-03" });
+    const valid = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { workoutType: "run", scheduledTime: "06:30" });
+    expect(valid.body.day.scheduledTime).toBe("06:30");
+
+    const invalid = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { scheduledTime: "25:99" });
+    expect(invalid.body.day.scheduledTime).toBeNull();
+
+    const preserved = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { scheduledTime: "07:00" });
+    const untouched = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { title: "Easy run" });
+    expect(preserved.body.day.scheduledTime).toBe("07:00");
+    expect(untouched.body.day.scheduledTime).toBe("07:00");
+  });
 });
