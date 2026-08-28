@@ -138,6 +138,10 @@ export function TrainingPlanDetailPage() {
         <Icon name="settings" className="h-4 w-4" />
         Manage recurring schedules
       </Link>
+      <Link to="/pace-calculator" className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 text-[13px] font-bold text-slate-600">
+        <Icon name="rsvp" className="h-4 w-4" />
+        Pace calculator — what should I run?
+      </Link>
       <Link to="/training-summary" className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 text-[13px] font-bold text-slate-600">
         <Icon name="rsvp" className="h-4 w-4" />
         View weekly summary
