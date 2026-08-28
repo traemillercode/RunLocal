@@ -22,7 +22,7 @@ export function CoachRosterPage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-6 pb-24">
+    <div className="desktop-reading-narrow mx-auto max-w-lg px-4 py-6 pb-24">
       <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">Coaching</p>
       <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Your athletes</h1>
       <p className="mt-1 text-sm text-slate-500">This week's status for everyone you're coaching.</p>

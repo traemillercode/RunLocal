@@ -49,7 +49,7 @@ export function CoachAthletePlanPage() {
   if (!athleteId) return null;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 pb-24">
+    <div className="desktop-reading-narrow mx-auto max-w-2xl px-4 py-6 pb-24">
       <Link to="/coach-roster" className="mb-3 inline-flex items-center gap-1 text-[13px] font-semibold text-slate-500">
         <Icon name="chevronRight" className="h-3.5 w-3.5 rotate-180" /> Back to roster
       </Link>

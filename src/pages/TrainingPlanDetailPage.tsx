@@ -116,7 +116,7 @@ export function TrainingPlanDetailPage() {
   const selectedDays = selectedDate ? daysByDate[selectedDate] ?? [] : [];
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 pb-24">
+    <div className="desktop-browse-layout mx-auto max-w-2xl px-4 py-6 pb-24">
       <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">Training plan</p>
       <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">
         {plan.planType === "other" ? plan.customLabel || "Custom" : TRAINING_PLAN_LABELS[plan.planType]}
@@ -126,84 +126,90 @@ export function TrainingPlanDetailPage() {
         {plan.linkedRaceName ? ` · Training for ${plan.linkedRaceName}` : plan.customRaceName ? ` · Training for ${plan.customRaceName} (pending)` : ""}
       </p>
 
-      <button
-        type="button"
-        onClick={() => setRecurrenceOpen(true)}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 py-2.5 text-[13px] font-bold text-slate-600"
-      >
-        <Icon name="calendar" className="h-4 w-4" />
-        Repeat a workout across multiple days
-      </button>
-      <Link to="/recurring-schedules" className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 text-[13px] font-bold text-slate-600">
-        <Icon name="settings" className="h-4 w-4" />
-        Manage recurring schedules
-      </Link>
-      <Link to="/pace-calculator" className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 text-[13px] font-bold text-slate-600">
-        <Icon name="rsvp" className="h-4 w-4" />
-        Pace calculator — what should I run?
-      </Link>
-      <Link to="/training-summary" className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 text-[13px] font-bold text-slate-600">
-        <Icon name="rsvp" className="h-4 w-4" />
-        View weekly summary
-      </Link>
-      <Link to="/coach-roster" className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 text-[13px] font-bold text-slate-600">
-        <Icon name="users" className="h-4 w-4" />
-        Your coaching roster
-      </Link>
-      <Link to="/coaching" className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 text-[13px] font-bold text-slate-600">
-        <Icon name="users" className="h-4 w-4" />
-        Coaching requests
-      </Link>
-
-      <div className="mt-5 flex items-center justify-between">
-        <button type="button" onClick={() => setViewMonth((m) => addMonths(m, -1))} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 active:bg-slate-200" aria-label="Previous month">
-          <Icon name="chevronRight" className="h-4 w-4 rotate-180 text-slate-600" />
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <button
+          type="button"
+          onClick={() => setRecurrenceOpen(true)}
+          className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-2 py-3 text-center text-[12px] font-bold text-slate-600"
+        >
+          <Icon name="calendar" className="h-4 w-4" />
+          Repeat a workout
         </button>
-        <p className="text-[15px] font-bold text-slate-900">{viewMonth.toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" })}</p>
-        <button type="button" onClick={() => setViewMonth((m) => addMonths(m, 1))} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 active:bg-slate-200" aria-label="Next month">
-          <Icon name="chevronRight" className="h-4 w-4 text-slate-600" />
-        </button>
+        <Link to="/recurring-schedules" className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-slate-50 px-2 py-3 text-center text-[12px] font-bold text-slate-600">
+          <Icon name="settings" className="h-4 w-4" />
+          Recurring schedules
+        </Link>
+        <Link to="/pace-calculator" className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-slate-50 px-2 py-3 text-center text-[12px] font-bold text-slate-600">
+          <Icon name="rsvp" className="h-4 w-4" />
+          Pace calculator
+        </Link>
+        <Link to="/training-summary" className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-slate-50 px-2 py-3 text-center text-[12px] font-bold text-slate-600">
+          <Icon name="rsvp" className="h-4 w-4" />
+          Weekly summary
+        </Link>
+        <Link to="/coach-roster" className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-slate-50 px-2 py-3 text-center text-[12px] font-bold text-slate-600">
+          <Icon name="users" className="h-4 w-4" />
+          Coaching roster
+        </Link>
+        <Link to="/coaching" className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-slate-50 px-2 py-3 text-center text-[12px] font-bold text-slate-600">
+          <Icon name="users" className="h-4 w-4" />
+          Coaching requests
+        </Link>
       </div>
 
-      <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase text-slate-400">
-        {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <div key={i}>{d}</div>)}
-      </div>
-      <div className="mt-1 grid grid-cols-7 gap-1">
-        {gridDays.map((d) => {
-          const dateStr = toDateStr(d);
-          const inMonth = d.getUTCMonth() === viewMonth.getUTCMonth();
-          const inPlan = dateStr >= planStart && dateStr <= planEnd;
-          const dayList = daysByDate[dateStr] ?? [];
-          const primary = dayList[0];
-          const meta = primary ? WORKOUT_META[primary.workoutType] : null;
-          const anyFrozen = dayList.some((d2) => d2.frozen);
-          return (
-            <button
-              key={dateStr}
-              type="button"
-              disabled={!inPlan}
-              onClick={() => setSelectedDate(dateStr)}
-              className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] ${
-                !inMonth ? "text-slate-300" : !inPlan ? "text-slate-300" : "text-slate-800"
-              } ${selectedDate === dateStr ? "ring-2 ring-[#14171C]" : ""} ${meta ? meta.color : inPlan ? "bg-slate-50" : ""} ${dateStr === today ? "font-extrabold" : ""}`}
-            >
-              <span className="text-[12px]">{d.getUTCDate()}</span>
-              {primary ? (
-                <span className="text-[9px] font-bold leading-none">
-                  {primary.workoutType === "rest" ? "Rest" : primary.distanceValue != null ? `${primary.distanceValue}${primary.distanceUnit === "miles" ? "mi" : primary.distanceUnit === "km" ? "km" : primary.distanceUnit === "meters" ? "m" : "yd"}` : meta?.label}
-                </span>
-              ) : null}
-              {dayList.length > 1 ? <span className="absolute left-1 top-1 grid h-3.5 w-3.5 place-items-center rounded-full bg-[#14171C] text-[8px] font-black text-white">2</span> : null}
-              {anyFrozen ? <Icon name="shield" className="absolute right-1 top-1 h-3 w-3 text-slate-400" /> : null}
-              {primary?.completionStatus === "done" ? <Icon name="check" className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 text-emerald-600" /> : null}
-              {primary?.completionStatus === "missed" ? <span className="absolute bottom-0.5 right-0.5 text-[8px] font-black text-rose-500">✕</span> : null}
+      <div className="lg:grid lg:grid-cols-[1fr_380px] lg:items-start lg:gap-6">
+        <div>
+          <div className="mt-5 flex items-center justify-between">
+            <button type="button" onClick={() => setViewMonth((m) => addMonths(m, -1))} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 active:bg-slate-200" aria-label="Previous month">
+              <Icon name="chevronRight" className="h-4 w-4 rotate-180 text-slate-600" />
             </button>
-          );
-        })}
-      </div>
+            <p className="text-[15px] font-bold text-slate-900">{viewMonth.toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" })}</p>
+            <button type="button" onClick={() => setViewMonth((m) => addMonths(m, 1))} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 active:bg-slate-200" aria-label="Next month">
+              <Icon name="chevronRight" className="h-4 w-4 text-slate-600" />
+            </button>
+          </div>
 
+          <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase text-slate-400">
+            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <div key={i}>{d}</div>)}
+          </div>
+          <div className="mt-1 grid grid-cols-7 gap-1">
+            {gridDays.map((d) => {
+              const dateStr = toDateStr(d);
+              const inMonth = d.getUTCMonth() === viewMonth.getUTCMonth();
+              const inPlan = dateStr >= planStart && dateStr <= planEnd;
+              const dayList = daysByDate[dateStr] ?? [];
+              const primary = dayList[0];
+              const meta = primary ? WORKOUT_META[primary.workoutType] : null;
+              const anyFrozen = dayList.some((d2) => d2.frozen);
+              return (
+                <button
+                  key={dateStr}
+                  type="button"
+                  disabled={!inPlan}
+                  onClick={() => setSelectedDate(dateStr)}
+                  className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] ${
+                    !inMonth ? "text-slate-300" : !inPlan ? "text-slate-300" : "text-slate-800"
+                  } ${selectedDate === dateStr ? "ring-2 ring-[#14171C]" : ""} ${meta ? meta.color : inPlan ? "bg-slate-50" : ""} ${dateStr === today ? "font-extrabold" : ""}`}
+                >
+                  <span className="text-[12px]">{d.getUTCDate()}</span>
+                  {primary ? (
+                    <span className="text-[9px] font-bold leading-none">
+                      {primary.workoutType === "rest" ? "Rest" : primary.distanceValue != null ? `${primary.distanceValue}${primary.distanceUnit === "miles" ? "mi" : primary.distanceUnit === "km" ? "km" : primary.distanceUnit === "meters" ? "m" : "yd"}` : meta?.label}
+                    </span>
+                  ) : null}
+                  {dayList.length > 1 ? <span className="absolute left-1 top-1 grid h-3.5 w-3.5 place-items-center rounded-full bg-[#14171C] text-[8px] font-black text-white">2</span> : null}
+                  {anyFrozen ? <Icon name="shield" className="absolute right-1 top-1 h-3 w-3 text-slate-400" /> : null}
+                  {primary?.completionStatus === "done" ? <Icon name="check" className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 text-emerald-600" /> : null}
+                  {primary?.completionStatus === "missed" ? <span className="absolute bottom-0.5 right-0.5 text-[8px] font-black text-rose-500">✕</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="lg:sticky lg:top-4">
       {selectedDate ? (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 space-y-3 lg:mt-5">
           {selectedDays.length === 0 || selectedDays.length === 1 ? (
             <DayPanel
               key={`${selectedDate}-${selectedDays[0]?.slot ?? "primary"}`}
@@ -232,6 +238,8 @@ export function TrainingPlanDetailPage() {
       ) : (
         <p className="mt-5 text-center text-[13px] text-slate-400">Tap a day to see or plan its workout.</p>
       )}
+        </div>
+      </div>
 
       {recurrenceOpen ? (
         <RecurrenceSchedulerSheet

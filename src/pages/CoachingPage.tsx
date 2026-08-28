@@ -36,7 +36,7 @@ export function CoachingPage() {
   const active = relationships?.filter((r) => r.status === "active") ?? [];
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-6 pb-24">
+    <div className="desktop-reading-narrow mx-auto max-w-lg px-4 py-6 pb-24">
       <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">Coaching</p>
       <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Requests & relationships</h1>
 
