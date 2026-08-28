@@ -44,6 +44,17 @@ export interface AccountRecord {
   /** 0 = Sunday, 1 = Monday - which day a "week" starts on for run-history/dashboard views (not the training plan's own week numbering, which stays anchored to the plan's own startDate regardless of this). Defaults to Sunday, the US convention. */
   weekStartDay: 0 | 1;
   /**
+   * Self-declared coach identity - separate from the actual coach-athlete
+   * relationship mechanism (request/accept), which stays exactly as built.
+   * This is purely the DISCOVERY layer: turning it on puts the account in
+   * the coach directory and shows a badge on their profile. An account can
+   * be a coach and an athlete at the same time (coaching others while
+   * having their own coach).
+   */
+  isAvailableAsCoach: boolean;
+  /** Short public bio shown on the profile and in the coach directory - distances coached, philosophy, specialties. Only meaningful when isAvailableAsCoach is true, but kept even if toggled off so re-enabling doesn't lose it. */
+  coachBio: string | null;
+  /**
    * Unique public handle, normalized lowercase (see `src/lib/username.ts`).
    * `null` for legacy accounts created before usernames existed — they remain
    * fully functional and can claim one via /api/profile/username. Uniqueness

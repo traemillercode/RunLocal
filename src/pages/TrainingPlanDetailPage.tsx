@@ -126,7 +126,7 @@ export function TrainingPlanDetailPage() {
         {plan.linkedRaceName ? ` · Training for ${plan.linkedRaceName}` : plan.customRaceName ? ` · Training for ${plan.customRaceName} (pending)` : ""}
       </p>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
         <button
           type="button"
           onClick={() => setRecurrenceOpen(true)}
@@ -146,6 +146,10 @@ export function TrainingPlanDetailPage() {
         <Link to="/training-summary" className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-slate-50 px-2 py-3 text-center text-[12px] font-bold text-slate-600">
           <Icon name="rsvp" className="h-4 w-4" />
           Weekly summary
+        </Link>
+        <Link to="/coaches" className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-[#FF5741]/10 px-2 py-3 text-center text-[12px] font-bold text-[#14171C]">
+          <Icon name="users" className="h-4 w-4" />
+          Find a coach
         </Link>
         <Link to="/coach-roster" className="flex flex-col items-center justify-center gap-1.5 rounded-xl bg-slate-50 px-2 py-3 text-center text-[12px] font-bold text-slate-600">
           <Icon name="users" className="h-4 w-4" />

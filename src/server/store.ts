@@ -417,6 +417,8 @@ export class Db {
         // stored reason). Only the audited admin reject path sets it.
         a.rejectionReason = a.rejectionReason ?? null;
         a.weekStartDay = a.weekStartDay ?? 0;
+        a.isAvailableAsCoach = a.isAvailableAsCoach ?? false;
+        a.coachBio = a.coachBio ?? null;
         this.accounts.set(a.id, a);
       }
       for (const s of parsed.sessions ?? []) this.sessions.set(s.id, s);
@@ -639,6 +641,8 @@ export class Db {
       name: input.name.trim().slice(0, 60),
       email: input.email.trim().toLowerCase(),
       weekStartDay: 0,
+      isAvailableAsCoach: false,
+      coachBio: null,
       // Uniqueness/validation live in the API layer (single-threaded store:
       // check-then-write is atomic in-process). The store keeps the value as
       // given — callers are expected to pass the normalized form.

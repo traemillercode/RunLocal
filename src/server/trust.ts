@@ -259,6 +259,8 @@ export interface PublicRunnerProfile {
   instagramUrl: string | null;
   facebookUrl: string | null;
   tiktokUrl: string | null;
+  isAvailableAsCoach: boolean;
+  coachBio: string | null;
 }
 export function publicRunnerProfile(rec: AccountRecord, now = new Date()): PublicRunnerProfile | null {
   if (rec.deletedAt || isSuspended(rec, now)) return null;
@@ -281,6 +283,8 @@ export function publicRunnerProfile(rec: AccountRecord, now = new Date()): Publi
     instagramUrl: showSocial ? (rec.instagramUrl ?? null) : null,
     facebookUrl: showSocial ? (rec.facebookUrl ?? null) : null,
     tiktokUrl: showSocial ? (rec.tiktokUrl ?? null) : null,
+    isAvailableAsCoach: rec.isAvailableAsCoach === true,
+    coachBio: rec.coachBio ?? null,
   };
 }
 

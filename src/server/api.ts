@@ -2498,7 +2498,7 @@ async function handleApi(
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
     const body = (await readJson(req)) as Record<string, unknown>;
-    const allowed = ["name", "bio", "customTitle", "paceLabel", "runningGoal", "trainingBlock", "upcomingRaces", "instagramUrl", "facebookUrl", "tiktokUrl", "showSocialLinks"];
+    const allowed = ["name", "bio", "customTitle", "paceLabel", "runningGoal", "trainingBlock", "upcomingRaces", "instagramUrl", "facebookUrl", "tiktokUrl", "showSocialLinks", "coachBio", "isAvailableAsCoach"];
     const patch: Record<string, string | null | boolean> = {};
     for (const [k, v] of Object.entries(body)) {
       if (!allowed.includes(k)) return err(res, { status: 400, error: "invalid_field", message: `Unknown profile field: ${k}` }), true;
@@ -2507,9 +2507,9 @@ async function handleApi(
         patch.name = v.trim().slice(0, 60);
         continue;
       }
-      if (k === "showSocialLinks") {
-        if (typeof v !== "boolean") return err(res, { status: 400, error: "invalid_field", message: "showSocialLinks must be a boolean" }), true;
-        patch.showSocialLinks = v;
+      if (k === "showSocialLinks" || k === "isAvailableAsCoach") {
+        if (typeof v !== "boolean") return err(res, { status: 400, error: "invalid_field", message: `${k} must be a boolean` }), true;
+        patch[k] = v;
         continue;
       }
       if (v !== null && typeof v !== "string") return err(res, { status: 400, error: "invalid_field", message: `${k} must be a string or null` }), true;
@@ -3253,6 +3253,24 @@ async function handleApi(
       return { relationshipId: r.id, athleteId: r.athleteId, athleteName: athlete?.name ?? "An athlete", weekStartDate: currentWeekStart, ...score };
     });
     return ok(res, { athletes: rows }), true;
+  }
+  // GET /api/coaches - the coach directory: everyone who's self-declared available to coach,
+  // with their bio and whether they also hold the existing verified coach_certification credential
+  // (a real, higher-trust signal, surfaced here rather than duplicated as a separate system).
+  if (method === "GET" && url.pathname === "/api/coaches") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const rows = db.listAccounts()
+      .filter((a) => !a.deletedAt && a.isAvailableAsCoach === true && a.id !== sess.accountId)
+      .map((a) => ({
+        accountId: a.id,
+        name: a.name,
+        username: a.username,
+        coachBio: a.coachBio,
+        isVerifiedCoach: db.listCredentials(a.id).some((c) => c.type === "coach_certification" && c.status === "verified"),
+      }))
+      .sort((a, b) => (a.isVerifiedCoach === b.isVerifiedCoach ? a.name.localeCompare(b.name) : a.isVerifiedCoach ? -1 : 1));
+    return ok(res, { coaches: rows }), true;
   }
   // PUT /api/profile/training-plan/days/:date or /:date/:slot(am|pm) - set one day's real content.
   const dayMatch = /^\/api\/profile\/training-plan\/days\/(\d{4}-\d{2}-\d{2})(?:\/(am|pm))?$/.exec(url.pathname);

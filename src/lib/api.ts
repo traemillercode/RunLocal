@@ -1330,6 +1330,10 @@ export interface RosterAthleteView { relationshipId: string; athleteId: string; 
 export function getCoachRoster(): Promise<ApiResult<{ athletes: RosterAthleteView[] }>> {
   return request("/api/coach/roster");
 }
+export interface CoachDirectoryEntry { accountId: string; name: string; username: string | null; coachBio: string | null; isVerifiedCoach: boolean; }
+export function getCoachDirectory(): Promise<ApiResult<{ coaches: CoachDirectoryEntry[] }>> {
+  return request("/api/coaches");
+}
 export function setTrainingPlanDay(date: string, input: TrainingPlanDayInput, slot?: TrainingDaySlot): Promise<ApiResult<{ day: TrainingPlanDayView }>> {
   return request(`/api/profile/training-plan/days/${dayPath(date, slot)}`, { method: "PUT", body: JSON.stringify(input) });
 }

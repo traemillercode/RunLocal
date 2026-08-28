@@ -36,6 +36,7 @@ import { CoachRosterPage } from "./pages/CoachRosterPage";
 import { CoachingPage } from "./pages/CoachingPage";
 import { CoachAthletePlanPage } from "./pages/CoachAthletePlanPage";
 import { RecurrenceManagementPage } from "./pages/RecurrenceManagementPage";
+import { CoachDirectoryPage } from "./pages/CoachDirectoryPage";
 import { PaceCalculatorPage } from "./pages/PaceCalculatorPage";
 import { RecoveryPage } from "./pages/RecoveryPage";
 import { ConfirmationPage } from "./pages/ConfirmationPage";
@@ -148,6 +149,7 @@ function Shell() {
             <Route path="/coaching" element={<CoachingPage />} />
             <Route path="/coach-roster/:athleteId" element={<CoachAthletePlanPage />} />
             <Route path="/recurring-schedules" element={<RecurrenceManagementPage />} />
+            <Route path="/coaches" element={<CoachDirectoryPage />} />
             <Route path="/pace-calculator" element={<PaceCalculatorPage />} />
             <Route path="/legal" element={<LegalPage />} />
             <Route path="/login" element={<LoginPage />} />
