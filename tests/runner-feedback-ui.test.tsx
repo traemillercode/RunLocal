@@ -15,6 +15,7 @@
  *  - the page stays guest-accessible (loading shell, no account gate).
  */
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import {
   RunnerFeedbackEvents,
@@ -142,7 +143,7 @@ describe("RunnerFeedbackSheet + RunnerProfilePage — composition", () => {
   });
   it("page stays guest-accessible: loading shell renders without any account gate", () => {
     useAccountMock.mockReturnValue({ role: "verified", me: { status: "signed_in", account: { id: "a".repeat(32) } } });
-    const html = renderToStaticMarkup(<RunnerProfilePage id={"b".repeat(32)} />);
+    const html = renderToStaticMarkup(<MemoryRouter><RunnerProfilePage id={"b".repeat(32)} /></MemoryRouter>);
     expect(html).toContain("Runner profile");
     expect(html).toContain("Public community profile");
     // effects don't run under SSR, so the page is still loading — the

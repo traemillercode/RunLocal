@@ -73,6 +73,7 @@ import { listMyRuns, setMyRunKept, publicOccurrenceId, parseTzOffsetMinutes } fr
 import { buildMyRunsIcs, myRunsIcsFilename } from "./ical";
 import { publicSettings, updateSettings, saveCity, deleteCity, storeCmsUpload, providerEnabled, integrations, publicRefAllowed, cityStatus, cityExists, cityNotOpenError, publicCities, CMS_REF_PATTERN, refContentType, DEFAULT_SETTINGS } from "./cms";
 import { validateImageBytes } from "./image-validation";
+import { isPacePolicy, pacePolicyFromLabel } from "../types";
 import {
   dashboardOverview,
   liftSuspension,
@@ -2132,6 +2133,9 @@ async function handleApi(
     const location = typeof body.location === "string" ? body.location.trim().slice(0, 120) : "";
     if (!location) return err(res, { status: 400, error: "invalid_location", message: "Give a meeting location." }), true;
     const distanceLabel = typeof body.distanceLabel === "string" ? body.distanceLabel.trim().slice(0, 40) : "";
+    // Unrecognised values are rejected to null rather than 400: pace is optional
+    // context, and a bad enum should not block a host from posting a run.
+    const pacePolicy = isPacePolicy(body.pacePolicy) ? body.pacePolicy : pacePolicyFromLabel(distanceLabel);
     const dayOfWeek = (new Date(`${scheduleDate}T00:00:00`).getDay() + 6) % 7; // JS: Sun=0..Sat=6 -> our Mon=0..Sun=6
     const event: import("./types").RunEventRecord = {
       id: newId(),
@@ -2145,6 +2149,7 @@ async function handleApi(
       time,
       location,
       distanceLabel: distanceLabel || "Distance TBD",
+      pacePolicy,
       invite: "RSVP requested",
       externalUrl: null,
       provenance: "community",

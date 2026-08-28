@@ -7,11 +7,12 @@
  * operator reason. Public rendering respects hide/archive for
  * community-submitted content.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { apiHandler } from "../src/server/api";
 import { createMemoryStore, type Db } from "../src/server/store";
 import { DEFAULT_OWNER_EMAIL } from "../src/server/owner";
+import { ADMIN_EMAIL_VAR, ADMIN_KEY_VAR } from "../src/server/admin";
 import { publicModerated } from "../src/server/dashboard";
 import { publicApprovedContent } from "../src/server/submissions";
 import { publicGroups } from "../src/server/groups";
@@ -42,6 +43,19 @@ function call(db: Db, method: string, path: string, opts: { body?: unknown; cook
   } as unknown as ServerResponse;
   return apiHandler(req(method, path, opts), res, db).then(() => out);
 }
+
+// The key-admin session (`runlocal_admin`) only authenticates when the admin key
+// and email are configured in the environment, matching how the server is
+// actually deployed. Without these the session resolves to no operator and every
+// admin route below returns an error body with no payload.
+beforeEach(() => {
+  process.env[ADMIN_KEY_VAR] = "content-admin-test-key";
+  process.env[ADMIN_EMAIL_VAR] = "admin@runlocal.app";
+});
+afterEach(() => {
+  delete process.env[ADMIN_KEY_VAR];
+  delete process.env[ADMIN_EMAIL_VAR];
+});
 
 const RACE = {
   cityId: "columbia-mo", name: "River 5K", distances: "5K / 10K", date: "2027-06-01",

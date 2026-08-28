@@ -183,7 +183,13 @@ describe("submission sheets (UI)", () => {
     expect(html).toContain("One-time");
     expect(html).toContain("Day of the week");
     expect(html).toContain("Time");
-    expect(html).toContain("Distance / pace");
+    // Distance and pace are separate inputs: distance is a measurement the host
+    // types, pace is a policy chosen from a closed set. One combined box is why
+    // the legacy data has both jammed together ("3-5 mi, no-drop pace").
+    expect(html).toContain("Distance");
+    expect(html).toContain("Pace");
+    expect(html).toContain("No-drop");
+    expect(html).toContain("Splits by pace");
     // Independent runs are reserved for verified runners who aren't group leaders.
     expect(html).toContain("host shows as Independent Runner");
   });

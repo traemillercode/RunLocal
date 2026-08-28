@@ -9,6 +9,7 @@ import * as api from "../lib/api";
 import { Icon, PillButton, Sheet } from "./ui";
 import { useAccount } from "../state/account";
 import { useToast } from "../lib/toast";
+import { PACE_POLICIES, PACE_POLICY_LABELS } from "../types";
 
 const inputCls =
   "h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
@@ -214,7 +215,7 @@ export function IndependentEventSheet({ open, onClose, onSubmitted, cityId }: { 
   const navigate = useNavigate();
   const [done, setDone] = useState(false);
   useEffect(() => { if (open) setDone(false); }, [open]);
-  const [f, setF] = useState({ type: "recurring", title: "", date: "", dayOfWeek: "0", time: "6:00 PM", location: "", distanceLabel: "", invite: "Open to all", externalUrl: "", description: "" });
+  const [f, setF] = useState({ type: "recurring", title: "", date: "", dayOfWeek: "0", time: "6:00 PM", location: "", distanceLabel: "", pacePolicy: "", invite: "Open to all", externalUrl: "", description: "" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const isGroupLeader = me?.status === "signed_in" && me.account.role === "group_leader";
   const save = async () => {
@@ -223,12 +224,12 @@ export function IndependentEventSheet({ open, onClose, onSubmitted, cityId }: { 
         cityId, type: f.type as "one_time" | "recurring", title: f.title,
         date: f.type === "one_time" ? f.date || null : null,
         dayOfWeek: f.type === "recurring" ? Number(f.dayOfWeek) : null,
-        time: f.time, location: f.location, distanceLabel: f.distanceLabel, invite: f.invite,
+        time: f.time, location: f.location, distanceLabel: f.distanceLabel, pacePolicy: f.pacePolicy || null, invite: f.invite,
         externalUrl: f.externalUrl || undefined, description: f.description,
       }),
     );
     if (ok) {
-      setF({ type: "recurring", title: "", date: "", dayOfWeek: "0", time: "6:00 PM", location: "", distanceLabel: "", invite: "Open to all", externalUrl: "", description: "" });
+      setF({ type: "recurring", title: "", date: "", dayOfWeek: "0", time: "6:00 PM", location: "", distanceLabel: "", pacePolicy: "", invite: "Open to all", externalUrl: "", description: "" });
       setDone(true);
       onSubmitted?.();
     }
@@ -263,7 +264,13 @@ export function IndependentEventSheet({ open, onClose, onSubmitted, cityId }: { 
         )}
         <Field label="Time"><input className={inputCls} placeholder="6:00 PM" value={f.time} onChange={set("time")} /></Field>
         <Field label="Location"><input className={inputCls} placeholder="Meeting spot" value={f.location} onChange={set("location")} /></Field>
-        <Field label="Distance / pace"><input className={inputCls} placeholder="e.g. 3–5 mi, no-drop pace" value={f.distanceLabel} onChange={set("distanceLabel")} /></Field>
+        <Field label="Distance"><input className={inputCls} placeholder="e.g. 3–5 mi" value={f.distanceLabel} onChange={set("distanceLabel")} /></Field>
+        <Field label="Pace">
+          <select className={inputCls} value={f.pacePolicy} onChange={set("pacePolicy")}>
+            <option value="">Not specified</option>
+            {PACE_POLICIES.map((p) => <option key={p} value={p}>{PACE_POLICY_LABELS[p]}</option>)}
+          </select>
+        </Field>
         <Field label="Invite">
           <select className={inputCls} value={f.invite} onChange={set("invite")}>
             <option>Open to all</option>

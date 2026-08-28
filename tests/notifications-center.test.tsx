@@ -1,7 +1,8 @@
 /**
  * UI-level tests for the notification center (/notifications).
  *
- * The center body (`NotificationsCenter`) is presentational, so the real
+ * The center body (`NotificationsCenter`) renders notification rows as links and
+ * calls useNavigate, so it must be rendered inside a Router. The real
  * markup is rendered with react-dom/server against props — no providers, no
  * effects. The page-level guest gate is tested through `NotificationsPage`
  * with `useAccount` / `useNotifications` mocked.
@@ -74,7 +75,9 @@ const noop = () => {};
 describe("notification center body (UI)", () => {
   it("renders the empty state with honest opt-in copy, not invented events", () => {
     const html = renderToStaticMarkup(
-      <NotificationsCenter notifications={[]} unreadCount={0} loading={false} error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} />,
+      <MemoryRouter>
+        <NotificationsCenter notifications={[]} unreadCount={0} loading={false} error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} />
+      </MemoryRouter>,
     );
     expect(html).toContain("No notifications yet");
     // The copy describes the real producer (Community updates) as an opt-in.
@@ -90,7 +93,9 @@ describe("notification center body (UI)", () => {
   it("renders real notification rows with read state and timestamps", () => {
     const items = [notification("one", null), notification("two", "2026-08-02T00:00:00.000Z")];
     const html = renderToStaticMarkup(
-      <NotificationsCenter notifications={items} unreadCount={1} loading={false} error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} />,
+      <MemoryRouter>
+        <NotificationsCenter notifications={items} unreadCount={1} loading={false} error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} />
+      </MemoryRouter>,
     );
     expect(html).toContain("Discussion activity one");
     expect(html).toContain("Discussion activity two");
@@ -106,7 +111,9 @@ describe("notification center body (UI)", () => {
 
   it("disables Mark all read when nothing is unread", () => {
     const html = renderToStaticMarkup(
-      <NotificationsCenter notifications={[notification("one", "2026-08-02T00:00:00.000Z")]} unreadCount={0} loading={false} error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} />,
+      <MemoryRouter>
+        <NotificationsCenter notifications={[notification("one", "2026-08-02T00:00:00.000Z")]} unreadCount={0} loading={false} error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} />
+      </MemoryRouter>,
     );
     expect(html).toContain("Mark all read");
     expect(html).toContain("disabled");
@@ -114,7 +121,9 @@ describe("notification center body (UI)", () => {
 
   it("shows a loading state before the first fetch resolves", () => {
     const html = renderToStaticMarkup(
-      <NotificationsCenter notifications={[]} unreadCount={0} loading error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} />,
+      <MemoryRouter>
+        <NotificationsCenter notifications={[]} unreadCount={0} loading error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} />
+      </MemoryRouter>,
     );
     expect(html).toContain("Loading notifications…");
     expect(html).not.toContain("No notifications yet");

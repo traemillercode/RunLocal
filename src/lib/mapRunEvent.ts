@@ -3,6 +3,7 @@ import { occurrenceIdFor, bareEventId } from "./dates";
 import type { RunEvent as DepartureRunEvent, Person } from "../components/DepartureBoard";
 import type { AttendanceSummaryEntry } from "./api";
 import type { City } from "../types";
+import { PACE_POLICY_LABELS } from "../types";
 
 function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -38,9 +39,11 @@ const TONE_COUNT = 4;
  *  - type: no classification field exists yet on a stored event; everything
  *    maps to "group" until a real track/long/trail distinction is added to
  *    the event record itself.
- *  - paceLow/paceHigh: no pace range is stored at the event level anywhere
- *    (only a free-text per-ACCOUNT paceLabel exists) - always "All"/"paces",
- *    which is honest given what's actually stored, not a placeholder.
+ *  - paceLow/paceHigh: the event record stores a pace POLICY (no-drop, all
+ *    paces, splits by pace...), not a numeric range - that is what Columbia
+ *    hosts actually advertise. The policy label goes in paceLow and paceHigh
+ *    is left empty, so the card renders one badge rather than a fake range.
+ *    Events whose host stated no policy fall back to "Not stated".
  *  - routePath: routes are stored as GPX (RouteRecord.gpxRef), not an SVG
  *    path in this component's 60x200 viewBox. No decoder exists yet, so
  *    this is always null until one is built server-side, exactly as the
@@ -68,8 +71,8 @@ export function mapRunEvent(event: DatedRunEvent, city: City, summary: Attendanc
     startsAt,
     venue: event.location,
     area: city.name,
-    paceLow: "All",
-    paceHigh: "paces",
+    paceLow: event.pacePolicy ? PACE_POLICY_LABELS[event.pacePolicy] : "Not stated",
+    paceHigh: "",
     detail: event.distanceLabel,
     host,
     attendees,

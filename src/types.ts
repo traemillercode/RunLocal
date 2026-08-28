@@ -40,6 +40,49 @@ export interface RunGroup {
 
 export type InviteLabel = "Open to all" | "Members + guests" | "RSVP requested";
 
+/**
+ * How a group run treats pace — the question runners actually ask before
+ * showing up ("will I get dropped?"). Deliberately a policy, not a numeric
+ * range: Columbia hosts advertise "no-drop" and "all paces", never "7:45-9:00",
+ * so a numeric field would sit empty. Stored as a closed set so the discovery
+ * board can filter on it and the card can render one consistent badge.
+ */
+export const PACE_POLICIES = ["no_drop", "all_paces", "splits_by_pace", "walkers_welcome", "easy", "workout"] as const;
+export type PacePolicy = (typeof PACE_POLICIES)[number];
+
+/** Human labels — the single source of truth for form options and card badges. */
+export const PACE_POLICY_LABELS: Record<PacePolicy, string> = {
+  no_drop: "No-drop",
+  all_paces: "All paces",
+  splits_by_pace: "Splits by pace",
+  walkers_welcome: "Walkers welcome",
+  easy: "Easy effort",
+  workout: "Workout effort",
+};
+
+export function isPacePolicy(value: unknown): value is PacePolicy {
+  return typeof value === "string" && (PACE_POLICIES as readonly string[]).includes(value);
+}
+
+/**
+ * Derives a policy from the legacy free-text `distanceLabel`, which asked for
+ * "Distance / pace" in one box and so carries both ("3-5 mi, no-drop pace").
+ * Used by the one-time backfill and as a read-time fallback for records written
+ * before the field existed. Returns null when the text says nothing about pace,
+ * rather than guessing a policy the host never stated.
+ */
+export function pacePolicyFromLabel(label: string | null | undefined): PacePolicy | null {
+  const t = (label ?? "").toLowerCase();
+  if (!t) return null;
+  if (t.includes("no-drop") || t.includes("no drop")) return "no_drop";
+  if (t.includes("splits by pace") || t.includes("split by pace")) return "splits_by_pace";
+  if (t.includes("walker")) return "walkers_welcome";
+  if (t.includes("all paces") || t.includes("any pace")) return "all_paces";
+  if (t.includes("interval") || t.includes("tempo") || t.includes("workout") || t.includes("repeat")) return "workout";
+  if (t.includes("easy") || t.includes("conversational") || t.includes("recovery")) return "easy";
+  return null;
+}
+
 export interface RunEvent {
   id: string;
   groupId: string;
@@ -49,6 +92,8 @@ export interface RunEvent {
   time: string; // "6:00 PM"
   location: string;
   distanceLabel: string;
+  /** How the run treats pace. Null/undefined when the host stated nothing. */
+  pacePolicy?: PacePolicy | null;
   invite: InviteLabel;
   /** External details page (club site etc.), when the host provides one. */
   externalUrl?: string;

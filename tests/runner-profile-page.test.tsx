@@ -124,7 +124,7 @@ describe("RunnerProfilePage — guest-accessible page", () => {
   it("SSR-renders the loading shell without any account gate", () => {
     // useEffect does not run under renderToStaticMarkup, so the initial
     // loading state renders — proving the page has no auth/role requirement.
-    const html = renderToStaticMarkup(<RunnerProfilePage id={"c".repeat(32)} />);
+    const html = renderToStaticMarkup(<MemoryRouter><RunnerProfilePage id={"c".repeat(32)} /></MemoryRouter>);
     expect(html).toContain("Runner profile");
     expect(html).toContain("Public community profile");
     expect(html).not.toContain("sign in");

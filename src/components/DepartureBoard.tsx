@@ -405,7 +405,10 @@ function EventCard({ event, now, hero, going, pending, onJoin, onLeave }: EventC
   const gutterFg = going || hovered ? INK : "#FFFFFF";
   const gutterMuted = going || hovered ? "rgba(20,23,28,0.65)" : "rgba(255,255,255,0.5)";
 
-  const pace = event.paceLow === "All" ? "All paces" : `${event.paceLow}–${event.paceHigh}`;
+  // paceHigh is empty when paceLow carries a policy label ("No-drop") rather
+  // than the low end of a numeric range. Only join the two when there is a
+  // genuine range to show.
+  const pace = event.paceHigh ? `${event.paceLow}–${event.paceHigh}` : event.paceLow;
 
   return (
     <article

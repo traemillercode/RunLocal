@@ -12,7 +12,7 @@
  *  - Login IP history is a rolling 90-day window (pruned on every login).
  */
 
-import type { GroupType, InviteLabel } from "../types";
+import type { GroupType, InviteLabel, PacePolicy } from "../types";
 
 export type AccountStatus = "pending" | "verified" | "rejected";
 /** Server-tracked stage of the verification funnel. */
@@ -370,6 +370,12 @@ export interface AuditEntry {
 export interface RunEventRecord {
   id: string; seedRefId: string | null; cityId: string; groupId: string; title: string;
   dayOfWeek: number; /** One-time submissions carry an exact date; recurring records leave this null. */ scheduleDate?: string | null; recurrenceType?: "one_time" | "recurring"; time: string; location: string; distanceLabel: string; invite: InviteLabel; externalUrl: string | null;
+  /**
+   * How this run treats pace. Optional: records written before the field
+   * existed have no value, and readers fall back to deriving one from
+   * distanceLabel rather than showing nothing.
+   */
+  pacePolicy?: PacePolicy | null;
   provenance: "seed" | "community" | "admin"; status: "draft" | "approved" | "published" | "hidden" | "archived";
   hidden: boolean; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; archivedAt: string | null;
   /** When set, this occurrence needs at least this many RSVPs before it counts as a confirmed group run rather than a proposal. Undefined/0 = no threshold, always confirmed. */

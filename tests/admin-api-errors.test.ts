@@ -1,8 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { apiHandler } from "../src/server/api";
 import { createMemoryStore, type Db } from "../src/server/store";
 import { DEFAULT_OWNER_EMAIL } from "../src/server/owner";
+import { ADMIN_EMAIL_VAR, ADMIN_KEY_VAR } from "../src/server/admin";
+// The key-admin session (`runlocal_admin`) only authenticates when the admin key
+// and email are configured in the environment, matching how the server is
+// actually deployed. Without these the session resolves to no operator and every
+// admin route below returns an error body with no payload.
+beforeEach(() => {
+  process.env[ADMIN_KEY_VAR] = "admin-api-errors-test-key";
+  process.env[ADMIN_EMAIL_VAR] = "admin@runlocal.app";
+});
+afterEach(() => {
+  delete process.env[ADMIN_KEY_VAR];
+  delete process.env[ADMIN_EMAIL_VAR];
+});
+
 function request(method: string, path: string, cookie = "", reason = "reviewing verification"): IncomingMessage {
   const headers: Record<string, string> = { "x-forwarded-proto": "https", "x-audit-reason": reason };
   if (cookie) headers.cookie = cookie;
