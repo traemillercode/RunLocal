@@ -610,7 +610,7 @@ export default function DepartureBoard({ events, onHostRun }: { events: RunEvent
         next.delete(event.id);
         return next;
       });
-      setToast(e instanceof Error && e.message ? e.message : "Couldn't save your RSVP. Check your connection and try again.");
+      setToast(e instanceof Error && e.message ? e.message : "Something went wrong saving your RSVP - try again in a moment.");
     } finally {
       setPendingId(null);
     }
