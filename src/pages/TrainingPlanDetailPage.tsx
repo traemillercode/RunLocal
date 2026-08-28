@@ -366,7 +366,7 @@ function DayPanel({
             <>
               <select value={addingShoe ? "__new__" : shoeId} onChange={(e) => { if (e.target.value === "__new__") setAddingShoe(true); else { setAddingShoe(false); setShoeId(e.target.value); } }} className={fieldCls}>
                 <option value="">No shoe picked</option>
-                {localShoes.map((s) => <option key={s.id} value={s.id}>{s.name}{s.isDefault ? " (default)" : ""}</option>)}
+                {localShoes.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.totalMiles.toFixed(1)} mi{s.isDefault ? " (default)" : ""}</option>)}
                 <option value="__new__">+ Add a new shoe</option>
               </select>
               {addingShoe ? (
@@ -375,6 +375,7 @@ function DayPanel({
                   <button type="button" onClick={() => void addNewShoe()} className="shrink-0 rounded-lg bg-[#14171C] px-3 text-[13px] font-bold text-white">Add</button>
                 </div>
               ) : null}
+              <Link to="/shoes" className="block text-[12px] font-semibold text-slate-500 underline underline-offset-2">Manage shoes & mileage →</Link>
               <div className="flex gap-2">
                 <input value={fuelNotes} onChange={(e) => setFuelNotes(e.target.value)} placeholder="Gels / fuel (optional)" className={`flex-1 ${fieldCls}`} maxLength={200} />
                 <input value={hydrationNotes} onChange={(e) => setHydrationNotes(e.target.value)} placeholder="Water (optional)" className={`flex-1 ${fieldCls}`} maxLength={200} />

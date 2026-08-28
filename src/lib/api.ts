@@ -1305,7 +1305,7 @@ export function deleteRecurrence(id: string): Promise<ApiResult<{ ok: true }>> {
 }
 
 // ---- shoe library ----
-export interface ShoeView { id: string; accountId: string; name: string; isDefault: boolean; createdAt: string; }
+export interface ShoeView { id: string; accountId: string; name: string; isDefault: boolean; totalMiles: number; createdAt: string; }
 export function listShoes(): Promise<ApiResult<{ shoes: ShoeView[] }>> {
   return request("/api/profile/shoes");
 }
