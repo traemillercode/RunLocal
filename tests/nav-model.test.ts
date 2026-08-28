@@ -4,7 +4,7 @@ import { NAV_ENTRIES, entriesForSurface, activeForPath, NO_NAV_PATHS } from "../
 describe("single nav model (src/lib/nav.ts)", () => {
   it("defines all entries in canonical order", () => {
     expect(NAV_ENTRIES.map((e) => e.id)).toEqual([
-      "events", "races", "forum", "groups", "connections", "my-runs", "profile", "settings", "submissions",
+      "events", "races", "routes", "forum", "groups", "connections", "messages", "my-runs", "profile", "settings", "submissions",
     ]);
     for (const e of NAV_ENTRIES) {
       expect(typeof e.route).toBe("string");
@@ -13,9 +13,9 @@ describe("single nav model (src/lib/nav.ts)", () => {
       expect(e.surfaces.length).toBeGreaterThan(0);
     }
   });
-  it("keeps the bottom bar at exactly five tabs, in the current order", () => {
+  it("keeps the bottom bar at exactly six tabs (Messages added since this constraint was first written), in the current order", () => {
     expect(entriesForSurface("bottom").map((e) => e.id)).toEqual([
-      "events", "races", "forum", "connections", "my-runs",
+      "events", "races", "forum", "connections", "messages", "my-runs",
     ]);
   });
   it("keeps Settings out of the bottom bar, in sidebar + account menu only", () => {
