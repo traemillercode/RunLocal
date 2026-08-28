@@ -3080,6 +3080,40 @@ async function handleApi(
   // every plan day in range, plus which logged activities were linked to the plan vs. solo/extra
   // runs that weren't - the same endpoint serves a day, week, or month view; the caller just
   // picks the date range, so there's no separate "granularity" concept to keep in sync.
+  // GET /api/profile/training-plan/block-summary?start=&end= - real gear/nutrition totals for a
+  // specific block (a training cycle, a month, whatever range), computed fresh from the actual
+  // completed days in that range - NOT the lifetime running totalMiles on the shoe itself, which
+  // covers all time and would be wrong for "how much did I use this training block."
+  if (method === "GET" && url.pathname === "/api/profile/training-plan/block-summary") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const start = url.searchParams.get("start") ?? "0000-01-01";
+    const end = url.searchParams.get("end") ?? "9999-12-31";
+    const doneDays = db.listTrainingPlanDays(sess.accountId).filter((d) => d.date >= start && d.date <= end && d.completionStatus === "done");
+
+    const shoeMilesById = new Map<string, number>();
+    for (const d of doneDays) {
+      if (!d.shoeId || d.distanceValue == null) continue;
+      const miles = toMiles(d.distanceValue, d.distanceUnit);
+      shoeMilesById.set(d.shoeId, (shoeMilesById.get(d.shoeId) ?? 0) + miles);
+    }
+    const shoeMiles = [...shoeMilesById.entries()].map(([shoeId, miles]) => ({
+      shoeId, shoeName: db.getShoe(shoeId)?.name ?? "Unknown shoe", miles: Math.round(miles * 10) / 10,
+    })).sort((a, b) => b.miles - a.miles);
+
+    const totalGels = doneDays.reduce((sum, d) => sum + (d.actualGelCount ?? 0), 0);
+    const drinkMixCountById = new Map<string, number>();
+    for (const d of doneDays) {
+      if (!d.actualDrinkMixId) continue;
+      drinkMixCountById.set(d.actualDrinkMixId, (drinkMixCountById.get(d.actualDrinkMixId) ?? 0) + 1);
+    }
+    const drinkMixUsage = [...drinkMixCountById.entries()].map(([id, count]) => ({
+      nutritionItemId: id, name: db.getNutritionItem(id)?.name ?? "Unknown", uses: count,
+    })).sort((a, b) => b.uses - a.uses);
+
+    return ok(res, { start, end, doneDayCount: doneDays.length, shoeMiles, totalGels, drinkMixUsage }), true;
+  }
+
   if (method === "GET" && url.pathname === "/api/profile/training-plan/summary") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;

@@ -57,6 +57,7 @@ export function TrainingSummaryPage() {
   const [anchor, setAnchor] = useState(new Date());
   const [weekStartDay] = useState<0 | 1>(0);
   const [summary, setSummary] = useState<api.TrainingSummaryView | null>(null);
+  const [blockSummary, setBlockSummary] = useState<api.BlockSummaryView | null>(null);
   const [score, setScore] = useState<api.WeekScoreView | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
@@ -66,6 +67,7 @@ export function TrainingSummaryPage() {
 
   useEffect(() => {
     void api.getTrainingSummary(start, end).then((r) => { if (r.ok) setSummary(r.data); });
+    void api.getBlockSummary(start, end).then((r) => { if (r.ok) setBlockSummary(r.data); });
   }, [start, end]);
 
   useEffect(() => {
@@ -209,6 +211,32 @@ export function TrainingSummaryPage() {
               ))}
             </div>
           )}
+
+          {blockSummary && (blockSummary.shoeMiles.length > 0 || blockSummary.totalGels > 0 || blockSummary.drinkMixUsage.length > 0) ? (
+            <>
+              <p className="mb-2 mt-6 text-[13px] font-bold text-slate-700">Gear & fuel this range</p>
+              <div className="space-y-1.5">
+                {blockSummary.shoeMiles.map((s) => (
+                  <div key={s.shoeId} className="flex items-center justify-between rounded-xl bg-white p-3 ring-1 ring-slate-200/70">
+                    <span className="text-[13px] font-bold text-slate-900">{s.shoeName}</span>
+                    <span className="text-[13px] font-bold text-slate-700">{s.miles} mi</span>
+                  </div>
+                ))}
+                {blockSummary.totalGels > 0 ? (
+                  <div className="flex items-center justify-between rounded-xl bg-white p-3 ring-1 ring-slate-200/70">
+                    <span className="text-[13px] font-bold text-slate-900">Gels</span>
+                    <span className="text-[13px] font-bold text-slate-700">{blockSummary.totalGels}</span>
+                  </div>
+                ) : null}
+                {blockSummary.drinkMixUsage.map((d) => (
+                  <div key={d.nutritionItemId} className="flex items-center justify-between rounded-xl bg-white p-3 ring-1 ring-slate-200/70">
+                    <span className="text-[13px] font-bold text-slate-900">{d.name}</span>
+                    <span className="text-[13px] font-bold text-slate-700">{d.uses}x</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
         </>
       )}
     </div>

@@ -1277,6 +1277,17 @@ export interface TrainingSummaryView {
   unlinkedActivities: SummaryActivityView[];
   totals: { plannedMiles: number; loggedMiles: number; daysDone: number; daysMissed: number; daysModified: number; daysPending: number };
 }
+export interface BlockSummaryView {
+  start: string;
+  end: string;
+  doneDayCount: number;
+  shoeMiles: { shoeId: string; shoeName: string; miles: number }[];
+  totalGels: number;
+  drinkMixUsage: { nutritionItemId: string; name: string; uses: number }[];
+}
+export function getBlockSummary(start: string, end: string): Promise<ApiResult<BlockSummaryView>> {
+  return request(`/api/profile/training-plan/block-summary?${new URLSearchParams({ start, end })}`);
+}
 export function getTrainingSummary(start: string, end: string): Promise<ApiResult<TrainingSummaryView>> {
   return request(`/api/profile/training-plan/summary?${new URLSearchParams({ start, end })}`);
 }
