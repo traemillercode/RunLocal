@@ -9,6 +9,7 @@ import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { TrustSummary } from "../components/TrustProfileSection";
 import { ActivityCardList } from "../components/ActivityCards";
 import { LogRunSheet } from "../components/SubmissionSheets";
+import { CoachRequestBlock } from "../components/CoachRequestBlock";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
 import type { AccountRole } from "../lib/accounts";
@@ -691,7 +692,8 @@ export function RunnerProfilePage({ id }: { id: string }) {
               onOpenRemove={() => setRemoveOpen(true)}
               onMessage={startMessage}
             />
-          ) : (
+          ) : null}
+          {!isSelf ? <CoachRequestBlock targetAccountId={data.profile.id} targetName={data.profile.name} /> : (
             <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-slate-100 p-4">
               <p className="text-[13px] font-semibold text-slate-600">This is your own profile.</p>
               <Link to="/settings" className="shrink-0 text-[13px] font-bold text-[#14171C] underline underline-offset-2">

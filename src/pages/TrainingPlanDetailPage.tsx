@@ -142,6 +142,10 @@ export function TrainingPlanDetailPage() {
         <Icon name="users" className="h-4 w-4" />
         Your coaching roster
       </Link>
+      <Link to="/coaching" className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 text-[13px] font-bold text-slate-600">
+        <Icon name="users" className="h-4 w-4" />
+        Coaching requests
+      </Link>
 
       <div className="mt-5 flex items-center justify-between">
         <button type="button" onClick={() => setViewMonth((m) => addMonths(m, -1))} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 active:bg-slate-200" aria-label="Previous month">

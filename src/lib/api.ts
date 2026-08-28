@@ -1366,6 +1366,9 @@ export function requestCoachRelationship(targetAccountId: string, asCoach: boole
 export function respondToCoachRelationship(relationshipId: string, accept: boolean): Promise<ApiResult<{ relationship: { id: string; status: string } }>> {
   return request(`/api/coach/${encodeURIComponent(relationshipId)}/${accept ? "accept" : "decline"}`, { method: "POST" });
 }
+export function endCoachRelationship(relationshipId: string): Promise<ApiResult<{ ok: true }>> {
+  return request(`/api/coach/relationships/${encodeURIComponent(relationshipId)}/end`, { method: "POST" });
+}
 export function getAthleteTrainingPlan(athleteId: string): Promise<ApiResult<{ plan: TrainingPlanView | null }>> {
   return request(`/api/coach/athletes/${encodeURIComponent(athleteId)}/training-plan`);
 }
