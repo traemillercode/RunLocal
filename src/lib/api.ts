@@ -1268,6 +1268,18 @@ export function getTrainingPlanDays(range?: { start?: string; end?: string }): P
   const q = range ? `?${new URLSearchParams({ ...(range.start ? { start: range.start } : {}), ...(range.end ? { end: range.end } : {}) })}` : "";
   return request(`/api/profile/training-plan/days${q}`);
 }
+
+export interface SummaryActivityView { id: string; type: string; distanceMeters: number; durationSeconds: number; completedAt: string; caption?: string | null; }
+export interface TrainingSummaryView {
+  planDays: TrainingPlanDayView[];
+  strengthEntries: { id: string; date: string; title: string; completionStatus: string }[];
+  linkedActivities: SummaryActivityView[];
+  unlinkedActivities: SummaryActivityView[];
+  totals: { plannedMiles: number; loggedMiles: number; daysDone: number; daysMissed: number; daysModified: number; daysPending: number };
+}
+export function getTrainingSummary(start: string, end: string): Promise<ApiResult<TrainingSummaryView>> {
+  return request(`/api/profile/training-plan/summary?${new URLSearchParams({ start, end })}`);
+}
 export function setTrainingPlanDay(date: string, input: TrainingPlanDayInput, slot?: TrainingDaySlot): Promise<ApiResult<{ day: TrainingPlanDayView }>> {
   return request(`/api/profile/training-plan/days/${dayPath(date, slot)}`, { method: "PUT", body: JSON.stringify(input) });
 }
