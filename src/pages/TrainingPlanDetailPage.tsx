@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import * as api from "../lib/api";
 import { useToast } from "../lib/toast";
 import { Icon } from "../components/ui";
+import { RecurrenceSchedulerSheet } from "../components/RecurrenceSchedulerSheet";
 
 const TRAINING_PLAN_LABELS: Record<api.TrainingPlanType, string> = {
   "5k": "5K",
@@ -60,6 +61,7 @@ export function TrainingPlanDetailPage() {
   const [shoes, setShoes] = useState<api.ShoeView[]>([]);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [recurrenceOpen, setRecurrenceOpen] = useState(false);
 
   useEffect(() => {
     void api.getTrainingPlan().then((r) => { if (r.ok) setPlan(r.data.plan); });
@@ -123,6 +125,15 @@ export function TrainingPlanDetailPage() {
         Week {plan.currentWeek} of {plan.totalWeeks}
         {plan.linkedRaceName ? ` · Training for ${plan.linkedRaceName}` : plan.customRaceName ? ` · Training for ${plan.customRaceName} (pending)` : ""}
       </p>
+
+      <button
+        type="button"
+        onClick={() => setRecurrenceOpen(true)}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 py-2.5 text-[13px] font-bold text-slate-600"
+      >
+        <Icon name="calendar" className="h-4 w-4" />
+        Repeat a workout across multiple days
+      </button>
 
       <div className="mt-5 flex items-center justify-between">
         <button type="button" onClick={() => setViewMonth((m) => addMonths(m, -1))} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 active:bg-slate-200" aria-label="Previous month">
@@ -201,6 +212,24 @@ export function TrainingPlanDetailPage() {
       ) : (
         <p className="mt-5 text-center text-[13px] text-slate-400">Tap a day to see or plan its workout.</p>
       )}
+
+      {recurrenceOpen ? (
+        <RecurrenceSchedulerSheet
+          planStart={planStart}
+          planEnd={planEnd}
+          onClose={() => setRecurrenceOpen(false)}
+          onCreated={(generatedCount) => {
+            setRecurrenceOpen(false);
+            toast(`Scheduled ${generatedCount} day${generatedCount === 1 ? "" : "s"}.`, "success");
+            void api.getTrainingPlanDays().then((r) => {
+              if (!r.ok) return;
+              const byDate: Record<string, api.TrainingPlanDayView[]> = {};
+              for (const d of r.data.days) (byDate[d.date] ??= []).push(d);
+              setDaysByDate(byDate);
+            });
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -222,6 +251,7 @@ function DayPanel({
 }) {
   const [workoutType, setWorkoutType] = useState<api.TrainingDayWorkoutType>(day?.workoutType ?? "run");
   const [title, setTitle] = useState(day?.title ?? "");
+  const [runLabel, setRunLabel] = useState<api.TrainingRunLabel | "">(day?.runLabel ?? "");
   const [distanceValue, setDistanceValue] = useState(day?.distanceValue?.toString() ?? "");
   const [distanceUnit, setDistanceUnit] = useState<api.TrainingDistanceUnit>(day?.distanceUnit ?? "miles");
   const [shoeId, setShoeId] = useState(day?.shoeId ?? shoes.find((s) => s.isDefault)?.id ?? "");
@@ -246,6 +276,7 @@ function DayPanel({
     setError(null);
     const r = await api.setTrainingPlanDay(date, {
       workoutType,
+      runLabel: runLabel || null,
       title: title.trim(),
       distanceValue: distanceValue.trim() ? Number(distanceValue) : null,
       distanceUnit,
@@ -312,6 +343,18 @@ function DayPanel({
 
       {workoutType !== "rest" ? (
         <div className="mt-3 space-y-2.5">
+          {workoutType === "run" || workoutType === "race" ? (
+            <select value={runLabel} onChange={(e) => setRunLabel(e.target.value as api.TrainingRunLabel | "")} className={fieldCls}>
+              <option value="">Run type…</option>
+              <option value="easy">Easy</option>
+              <option value="tempo">Tempo</option>
+              <option value="long_run">Long run</option>
+              <option value="workout">Workout</option>
+              <option value="intervals">Intervals</option>
+              <option value="recovery_run">Recovery run</option>
+              <option value="race_pace">Race pace</option>
+            </select>
+          ) : null}
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={workoutType === "swim" ? "e.g. Interval swim" : "e.g. Tempo run"} className={fieldCls} maxLength={60} />
           <div className="flex gap-2">
             <input type="number" min="0" value={distanceValue} onChange={(e) => setDistanceValue(e.target.value)} placeholder="Distance" className={`flex-1 ${fieldCls}`} />

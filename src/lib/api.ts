@@ -1224,6 +1224,7 @@ export function setTrainingPlanWeek(weekNumber: number, input: { targetMiles?: n
 }
 
 export type TrainingDayWorkoutType = "run" | "cross_training" | "rest" | "recovery" | "race" | "swim";
+export type TrainingRunLabel = "easy" | "tempo" | "long_run" | "workout" | "recovery_run" | "race_pace" | "intervals";
 export type TrainingDayMissedReason = "sick" | "injured" | "too_busy" | "weather" | "low_motivation" | "other";
 export type TrainingDaySlot = "primary" | "am" | "pm";
 export type TrainingDistanceUnit = "miles" | "km" | "meters" | "yards";
@@ -1234,10 +1235,16 @@ export interface TrainingPlanDayView {
   slot: TrainingDaySlot;
   weekNumber: number;
   workoutType: TrainingDayWorkoutType;
+  runLabel: TrainingRunLabel | null;
   title: string;
   distanceValue: number | null;
   distanceUnit: TrainingDistanceUnit;
   shoeId: string | null;
+  plannedGelCount: number | null;
+  plannedDrinkMixId: string | null;
+  nutritionPlanNotes: string | null;
+  actualGelCount: number | null;
+  actualDrinkMixId: string | null;
   fuelNotes: string | null;
   hydrationNotes: string | null;
   linkedRouteId: string | null;
@@ -1248,9 +1255,11 @@ export interface TrainingPlanDayView {
   completionNotes: string | null;
   completedRunId: string | null;
   frozen: boolean;
+  recurrenceId: string | null;
+  recurrenceOverridden: boolean;
   updatedAt: string;
 }
-export type TrainingPlanDayInput = Partial<Omit<TrainingPlanDayView, "id" | "accountId" | "date" | "slot" | "weekNumber" | "completedRunId" | "updatedAt">>;
+export type TrainingPlanDayInput = Partial<Omit<TrainingPlanDayView, "id" | "accountId" | "date" | "slot" | "weekNumber" | "completedRunId" | "recurrenceId" | "recurrenceOverridden" | "updatedAt">>;
 
 function dayPath(date: string, slot?: TrainingDaySlot): string {
   return slot && slot !== "primary" ? `${date}/${slot}` : date;
@@ -1261,6 +1270,38 @@ export function getTrainingPlanDays(range?: { start?: string; end?: string }): P
 }
 export function setTrainingPlanDay(date: string, input: TrainingPlanDayInput, slot?: TrainingDaySlot): Promise<ApiResult<{ day: TrainingPlanDayView }>> {
   return request(`/api/profile/training-plan/days/${dayPath(date, slot)}`, { method: "PUT", body: JSON.stringify(input) });
+}
+
+// ---- recurring workout scheduling ----
+export interface RecurrenceView {
+  id: string;
+  accountId: string;
+  daysOfWeek: number[];
+  startDate: string;
+  endDate: string;
+  workoutType: TrainingDayWorkoutType;
+  runLabel: TrainingRunLabel | null;
+  title: string;
+  distanceValue: number | null;
+  distanceUnit: TrainingDistanceUnit;
+  createdAt: string;
+  updatedAt: string;
+}
+export type RecurrenceInput = {
+  daysOfWeek: number[]; startDate: string; endDate: string;
+  workoutType?: TrainingDayWorkoutType; runLabel?: TrainingRunLabel | null; title?: string; distanceValue?: number | null; distanceUnit?: TrainingDistanceUnit;
+};
+export function listRecurrences(): Promise<ApiResult<{ recurrences: RecurrenceView[] }>> {
+  return request("/api/profile/training-plan/recurrences");
+}
+export function createRecurrence(input: RecurrenceInput): Promise<ApiResult<{ recurrence: RecurrenceView; generatedCount: number }>> {
+  return request("/api/profile/training-plan/recurrences", { method: "POST", body: JSON.stringify(input) });
+}
+export function updateRecurrenceAllInstances(id: string, input: Partial<RecurrenceInput>): Promise<ApiResult<{ recurrence: RecurrenceView; generatedCount: number }>> {
+  return request(`/api/profile/training-plan/recurrences/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(input) });
+}
+export function deleteRecurrence(id: string): Promise<ApiResult<{ ok: true }>> {
+  return request(`/api/profile/training-plan/recurrences/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 // ---- shoe library ----
