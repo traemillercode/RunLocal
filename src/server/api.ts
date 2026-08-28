@@ -2607,6 +2607,11 @@ async function handleApi(
       completionNotes: body.completionNotes !== undefined ? str(body.completionNotes, 500) : existing?.completionNotes ?? null,
       completedRunId: existing?.completedRunId ?? null,
       frozen: allowFreezeToggle && typeof body.frozen === "boolean" ? body.frozen : existing?.frozen ?? false,
+      recurrenceId: existing?.recurrenceId ?? null,
+      // Directly editing any prescriptive field on a day that came from a recurrence rule marks it
+      // overridden, so a later "edit all instances" on that rule never silently clobbers this one.
+      recurrenceOverridden: existing?.recurrenceOverridden === true
+        || (existing?.recurrenceId != null && ["workoutType", "runLabel", "title", "distanceValue", "distanceUnit"].some((k) => body[k] !== undefined)),
       updatedAt: now.toISOString(),
     };
   }
@@ -2815,6 +2820,107 @@ async function handleApi(
     });
     await db.persist();
     return ok(res, { week }), true;
+  }
+
+  /** Generates real day records for every date in the rule's range that falls on one of its days-of-week AND within the plan's own date span. Never touches a day already marked recurrenceOverridden - that instance was edited directly and must survive regeneration untouched. */
+  function generateRecurrenceInstances(accountId: string, plan: { startDate: string; totalWeeks: number }, recurrence: import("./types").TrainingPlanRecurrenceRecord, now: Date): number {
+    let count = 0;
+    const start = new Date(`${recurrence.startDate}T00:00:00Z`);
+    const end = new Date(`${recurrence.endDate}T00:00:00Z`);
+    for (const d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      if (!recurrence.daysOfWeek.includes(d.getUTCDay())) continue;
+      const dateStr = d.toISOString().slice(0, 10);
+      const weekNumber = planWeekForDate(plan, dateStr);
+      if (weekNumber === null) continue; // outside the plan's own span - skip rather than error, so a recurrence can run longer than the plan without failing entirely
+      const existing = db.getTrainingPlanDay(accountId, dateStr, "primary");
+      if (existing?.recurrenceOverridden) continue;
+      const generated = buildTrainingDay(accountId, dateStr, "primary", weekNumber, {
+        workoutType: recurrence.workoutType, runLabel: recurrence.runLabel, title: recurrence.title, distanceValue: recurrence.distanceValue, distanceUnit: recurrence.distanceUnit,
+      }, existing, now, false);
+      db.setTrainingPlanDay({ ...generated, recurrenceId: recurrence.id });
+      count++;
+    }
+    return count;
+  }
+
+  // POST /api/profile/training-plan/recurrences - Outlook-style "repeat this workout" rule.
+  if (method === "POST" && url.pathname === "/api/profile/training-plan/recurrences") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const plan = db.getTrainingPlan(sess.accountId);
+    if (!plan) return err(res, { status: 404, error: "no_plan", message: "Create a training plan before scheduling recurring workouts." }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const daysOfWeek = Array.isArray(body.daysOfWeek) ? body.daysOfWeek.filter((n): n is number => typeof n === "number" && n >= 0 && n <= 6) : [];
+    if (daysOfWeek.length === 0) return err(res, { status: 400, error: "invalid_days", message: "Pick at least one day of the week." }), true;
+    const startDate = typeof body.startDate === "string" ? body.startDate : "";
+    const endDate = typeof body.endDate === "string" ? body.endDate : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < startDate) {
+      return err(res, { status: 400, error: "invalid_range", message: "Pick a valid start and end date." }), true;
+    }
+    const WORKOUT_TYPES = ["run", "cross_training", "rest", "recovery", "race", "swim"] as const;
+    const RUN_LABELS = ["easy", "tempo", "long_run", "workout", "recovery_run", "race_pace", "intervals"] as const;
+    const DISTANCE_UNITS = ["miles", "km", "meters", "yards"] as const;
+    const workoutType = typeof body.workoutType === "string" && (WORKOUT_TYPES as readonly string[]).includes(body.workoutType) ? (body.workoutType as typeof WORKOUT_TYPES[number]) : "run";
+    const rec: import("./types").TrainingPlanRecurrenceRecord = {
+      id: newId(),
+      accountId: sess.accountId,
+      daysOfWeek,
+      startDate,
+      endDate,
+      workoutType,
+      runLabel: typeof body.runLabel === "string" && (RUN_LABELS as readonly string[]).includes(body.runLabel) ? (body.runLabel as typeof RUN_LABELS[number]) : null,
+      title: typeof body.title === "string" ? body.title.trim().slice(0, 60) : "",
+      distanceValue: typeof body.distanceValue === "number" && Number.isFinite(body.distanceValue) && body.distanceValue >= 0 ? body.distanceValue : null,
+      distanceUnit: typeof body.distanceUnit === "string" && (DISTANCE_UNITS as readonly string[]).includes(body.distanceUnit) ? (body.distanceUnit as typeof DISTANCE_UNITS[number]) : "miles",
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    };
+    db.setRecurrence(rec);
+    const generatedCount = generateRecurrenceInstances(sess.accountId, plan, rec, now);
+    await db.persist();
+    return ok(res, { recurrence: rec, generatedCount }), true;
+  }
+  if (method === "GET" && url.pathname === "/api/profile/training-plan/recurrences") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    return ok(res, { recurrences: db.listRecurrences(sess.accountId) }), true;
+  }
+  // PUT /api/profile/training-plan/recurrences/:id - "edit all instances": updates the rule and
+  // regenerates every non-overridden day still tied to it. The classic Outlook "this vs all" choice -
+  // "this instance only" is just a normal PUT to the single day, which already flips recurrenceOverridden.
+  const recurrenceEditMatch = /^\/api\/profile\/training-plan\/recurrences\/([^/]+)$/.exec(url.pathname);
+  if (recurrenceEditMatch && method === "PUT") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const existing = db.getRecurrence(recurrenceEditMatch[1]);
+    if (!existing || existing.accountId !== sess.accountId) return err(res, { status: 404, error: "not_found" }), true;
+    const plan = db.getTrainingPlan(sess.accountId);
+    if (!plan) return err(res, { status: 404, error: "no_plan" }), true;
+    const body = (await readJson(req)) as Record<string, unknown>;
+    const WORKOUT_TYPES = ["run", "cross_training", "rest", "recovery", "race", "swim"] as const;
+    const RUN_LABELS = ["easy", "tempo", "long_run", "workout", "recovery_run", "race_pace", "intervals"] as const;
+    const DISTANCE_UNITS = ["miles", "km", "meters", "yards"] as const;
+    const updated: import("./types").TrainingPlanRecurrenceRecord = {
+      ...existing,
+      workoutType: typeof body.workoutType === "string" && (WORKOUT_TYPES as readonly string[]).includes(body.workoutType) ? (body.workoutType as typeof WORKOUT_TYPES[number]) : existing.workoutType,
+      runLabel: typeof body.runLabel === "string" && (RUN_LABELS as readonly string[]).includes(body.runLabel) ? (body.runLabel as typeof RUN_LABELS[number]) : existing.runLabel,
+      title: typeof body.title === "string" ? body.title.trim().slice(0, 60) : existing.title,
+      distanceValue: typeof body.distanceValue === "number" && Number.isFinite(body.distanceValue) && body.distanceValue >= 0 ? body.distanceValue : existing.distanceValue,
+      distanceUnit: typeof body.distanceUnit === "string" && (DISTANCE_UNITS as readonly string[]).includes(body.distanceUnit) ? (body.distanceUnit as typeof DISTANCE_UNITS[number]) : existing.distanceUnit,
+      updatedAt: now.toISOString(),
+    };
+    db.setRecurrence(updated);
+    const generatedCount = generateRecurrenceInstances(sess.accountId, plan, updated, now);
+    await db.persist();
+    return ok(res, { recurrence: updated, generatedCount }), true;
+  }
+  if (recurrenceEditMatch && method === "DELETE") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const okDel = db.deleteRecurrence(sess.accountId, recurrenceEditMatch[1]);
+    if (!okDel) return err(res, { status: 404, error: "not_found" }), true;
+    await db.persist();
+    return ok(res, { ok: true }), true;
   }
 
   // GET /api/profile/training-plan/days?start=YYYY-MM-DD&end=YYYY-MM-DD -
