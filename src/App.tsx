@@ -32,6 +32,7 @@ import { SponsorInquiryPage } from "./pages/SponsorInquiryPage";
 import { TrainingPlanDetailPage } from "./pages/TrainingPlanDetailPage";
 import { ShoeLibraryPage } from "./pages/ShoeLibraryPage";
 import { TrainingSummaryPage } from "./pages/TrainingSummaryPage";
+import { CoachRosterPage } from "./pages/CoachRosterPage";
 import { RecoveryPage } from "./pages/RecoveryPage";
 import { ConfirmationPage } from "./pages/ConfirmationPage";
 import { ProviderCallbackPage } from "./pages/ProviderCallbackPage";
@@ -139,6 +140,7 @@ function Shell() {
             <Route path="/training-plan" element={<TrainingPlanDetailPage />} />
             <Route path="/shoes" element={<ShoeLibraryPage />} />
             <Route path="/training-summary" element={<TrainingSummaryPage />} />
+            <Route path="/coach-roster" element={<CoachRosterPage />} />
             <Route path="/legal" element={<LegalPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/recovery" element={<RecoveryPage sessionError={recoveryError} />} />

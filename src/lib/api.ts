@@ -1280,6 +1280,22 @@ export interface TrainingSummaryView {
 export function getTrainingSummary(start: string, end: string): Promise<ApiResult<TrainingSummaryView>> {
   return request(`/api/profile/training-plan/summary?${new URLSearchParams({ start, end })}`);
 }
+
+export type WeekColor = "green" | "yellow" | "red";
+export interface WeekScoreView { weekStartDate: string; runColor: WeekColor; strengthColor: WeekColor; overallColor: WeekColor; reviewRequired: boolean; reviewed: boolean; priorWeekBlocking: boolean; priorWeekStartDate: string; }
+export function getWeekScore(weekStartDate: string): Promise<ApiResult<WeekScoreView>> {
+  return request(`/api/profile/training-plan/week-score?${new URLSearchParams({ weekStartDate })}`);
+}
+export function submitWeeklyReview(weekStartDate: string, notes: string): Promise<ApiResult<{ review: unknown }>> {
+  return request("/api/profile/training-plan/week-review", { method: "POST", body: JSON.stringify({ weekStartDate, notes }) });
+}
+export function getAthleteWeekScore(athleteId: string, weekStartDate: string): Promise<ApiResult<{ runColor: WeekColor; strengthColor: WeekColor; overallColor: WeekColor; reviewed: boolean }>> {
+  return request(`/api/coach/athletes/${encodeURIComponent(athleteId)}/week-score?${new URLSearchParams({ weekStartDate })}`);
+}
+export interface RosterAthleteView { relationshipId: string; athleteId: string; athleteName: string; weekStartDate: string; runColor: WeekColor; strengthColor: WeekColor; overallColor: WeekColor; }
+export function getCoachRoster(): Promise<ApiResult<{ athletes: RosterAthleteView[] }>> {
+  return request("/api/coach/roster");
+}
 export function setTrainingPlanDay(date: string, input: TrainingPlanDayInput, slot?: TrainingDaySlot): Promise<ApiResult<{ day: TrainingPlanDayView }>> {
   return request(`/api/profile/training-plan/days/${dayPath(date, slot)}`, { method: "PUT", body: JSON.stringify(input) });
 }

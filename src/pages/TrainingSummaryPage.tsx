@@ -57,12 +57,35 @@ export function TrainingSummaryPage() {
   const [anchor, setAnchor] = useState(new Date());
   const [weekStartDay] = useState<0 | 1>(0);
   const [summary, setSummary] = useState<api.TrainingSummaryView | null>(null);
+  const [score, setScore] = useState<api.WeekScoreView | null>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   const { start, end, label } = rangeFor(mode, anchor, weekStartDay);
 
   useEffect(() => {
     void api.getTrainingSummary(start, end).then((r) => { if (r.ok) setSummary(r.data); });
   }, [start, end]);
+
+  useEffect(() => {
+    if (mode !== "week") { setScore(null); return; }
+    void api.getWeekScore(start).then((r) => { if (r.ok) setScore(r.data); });
+  }, [mode, start]);
+
+  const submitReview = async () => {
+    if (!score || !reviewNotes.trim()) return;
+    setReviewSubmitting(true);
+    setReviewError(null);
+    const r = await api.submitWeeklyReview(score.priorWeekStartDate, reviewNotes.trim());
+    setReviewSubmitting(false);
+    if (r.ok) {
+      setReviewNotes("");
+      void api.getWeekScore(start).then((res) => { if (res.ok) setScore(res.data); });
+    } else {
+      setReviewError(r.error.message ?? "Couldn't submit that.");
+    }
+  };
 
   const loggableDays = summary?.planDays.filter((d) => d.workoutType !== "rest") ?? [];
 
@@ -87,6 +110,35 @@ export function TrainingSummaryPage() {
         <p className="text-[15px] font-bold text-slate-900">{label}</p>
         <button type="button" onClick={() => setAnchor((a) => shiftAnchor(mode, a, 1))} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100"><Icon name="chevronRight" className="h-4 w-4 text-slate-600" /></button>
       </div>
+
+      {score ? (
+        <div className="mt-3 flex items-center justify-center gap-2">
+          <span className={`rounded-full px-3 py-1 text-[12px] font-extrabold uppercase tracking-wide ${
+            score.overallColor === "green" ? "bg-emerald-100 text-emerald-800" : score.overallColor === "yellow" ? "bg-amber-100 text-amber-800" : "bg-rose-100 text-rose-800"
+          }`}>
+            {score.overallColor} week
+          </span>
+          <span className="text-[11px] text-slate-400">Runs: {score.runColor} · Strength: {score.strengthColor}</span>
+        </div>
+      ) : null}
+
+      {score?.priorWeekBlocking ? (
+        <div className="mt-4 rounded-2xl border-2 border-rose-200 bg-rose-50 p-4">
+          <p className="text-[14px] font-extrabold text-rose-900">Last week needs a review</p>
+          <p className="mt-1 text-[13px] text-rose-800">The week of {new Date(`${score.priorWeekStartDate}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })} scored red. Confirm you've looked at it and note what's changing before moving on.</p>
+          <textarea
+            rows={3}
+            value={reviewNotes}
+            onChange={(e) => setReviewNotes(e.target.value)}
+            placeholder="What's going to be different this week?"
+            className="mt-3 w-full rounded-lg border border-rose-300 bg-white px-3 py-2 text-[14px] outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-300"
+          />
+          {reviewError ? <p role="alert" className="mt-2 text-[12px] font-semibold text-rose-700">{reviewError}</p> : null}
+          <button type="button" disabled={reviewSubmitting || !reviewNotes.trim()} onClick={() => void submitReview()} className="mt-3 h-10 w-full rounded-full bg-rose-600 text-[13px] font-bold text-white disabled:opacity-50">
+            {reviewSubmitting ? "Submitting…" : "Confirm reviewed"}
+          </button>
+        </div>
+      ) : null}
 
       {!summary ? (
         <p className="mt-8 text-center text-sm text-slate-400">Loading…</p>
