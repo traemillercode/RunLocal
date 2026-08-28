@@ -93,7 +93,7 @@ export function RecurrenceSchedulerSheet({ planStart, planEnd, onCreated, onClos
             ) : null}
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" className={fieldCls} maxLength={60} />
             <div className="flex gap-2">
-              <input type="number" min="0" value={distanceValue} onChange={(e) => setDistanceValue(e.target.value)} placeholder="Distance" className={`flex-1 ${fieldCls}`} />
+              <input type="number" min="0" value={distanceValue} onChange={(e) => setDistanceValue(e.target.value)} placeholder="Distance" className={`min-w-0 flex-1 ${fieldCls}`} />
               <select value={distanceUnit} onChange={(e) => setDistanceUnit(e.target.value as api.TrainingDistanceUnit)} className={`w-28 ${fieldCls}`}>
                 {(workoutType === "swim" ? (["meters", "yards"] as const) : (["miles", "km"] as const)).map((u) => <option key={u} value={u}>{u}</option>)}
               </select>

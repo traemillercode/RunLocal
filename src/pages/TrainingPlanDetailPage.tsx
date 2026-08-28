@@ -403,7 +403,7 @@ function DayPanel({
           ) : null}
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={workoutType === "swim" ? "e.g. Interval swim" : "e.g. Tempo run"} className={fieldCls} maxLength={60} />
           <div className="flex gap-2">
-            <input type="number" min="0" value={distanceValue} onChange={(e) => setDistanceValue(e.target.value)} placeholder="Distance" className={`flex-1 ${fieldCls}`} />
+            <input type="number" min="0" value={distanceValue} onChange={(e) => setDistanceValue(e.target.value)} placeholder="Distance" className={`min-w-0 flex-1 ${fieldCls}`} />
             <select value={distanceUnit} onChange={(e) => setDistanceUnit(e.target.value as api.TrainingDistanceUnit)} className={`w-28 ${fieldCls}`}>
               {UNITS_FOR_TYPE[workoutType].map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
@@ -417,14 +417,14 @@ function DayPanel({
               </select>
               {addingShoe ? (
                 <div className="flex gap-2">
-                  <input value={newShoeName} onChange={(e) => setNewShoeName(e.target.value)} placeholder="e.g. Nike Pegasus 40" className={`flex-1 ${fieldCls}`} maxLength={60} />
+                  <input value={newShoeName} onChange={(e) => setNewShoeName(e.target.value)} placeholder="e.g. Nike Pegasus 40" className={`min-w-0 flex-1 ${fieldCls}`} maxLength={60} />
                   <button type="button" onClick={() => void addNewShoe()} className="shrink-0 rounded-lg bg-[#14171C] px-3 text-[13px] font-bold text-white">Add</button>
                 </div>
               ) : null}
               <Link to="/shoes" className="block text-[12px] font-semibold text-slate-500 underline underline-offset-2">Manage shoes & mileage →</Link>
               <div className="flex gap-2">
-                <input value={fuelNotes} onChange={(e) => setFuelNotes(e.target.value)} placeholder="Gels / fuel (optional)" className={`flex-1 ${fieldCls}`} maxLength={200} />
-                <input value={hydrationNotes} onChange={(e) => setHydrationNotes(e.target.value)} placeholder="Water (optional)" className={`flex-1 ${fieldCls}`} maxLength={200} />
+                <input value={fuelNotes} onChange={(e) => setFuelNotes(e.target.value)} placeholder="Gels / fuel (optional)" className={`min-w-0 flex-1 ${fieldCls}`} maxLength={200} />
+                <input value={hydrationNotes} onChange={(e) => setHydrationNotes(e.target.value)} placeholder="Water (optional)" className={`min-w-0 flex-1 ${fieldCls}`} maxLength={200} />
               </div>
             </>
           ) : null}
