@@ -2526,12 +2526,39 @@ async function handleApi(
     const week = Math.floor(daysSince / 7) + 1;
     return week <= plan.totalWeeks ? week : null;
   }
+  /** Converts any supported distance unit to miles - shoe mileage is always tracked in miles internally (see ShoeRecord.totalMiles) so totals stay comparable regardless of what unit a given workout was logged in. */
+  function toMiles(value: number, unit: import("./types").TrainingDistanceUnit): number {
+    switch (unit) {
+      case "miles": return value;
+      case "km": return value * 0.621371;
+      case "meters": return value * 0.000621371;
+      case "yards": return value * 0.000568182;
+    }
+  }
+  /**
+   * Reverses the old day's contribution to its shoe's mileage (if it was
+   * "done" with a shoe and distance) and applies the new day's contribution
+   * - handles every real transition: newly marked done, un-done, distance
+   * edited after being done, or the shoe itself changed on a completed day.
+   */
+  function applyShoeMileageDelta(previous: import("./types").TrainingPlanDayRecord | undefined, updated: import("./types").TrainingPlanDayRecord): void {
+    if (previous?.completionStatus === "done" && previous.shoeId && previous.distanceValue) {
+      db.adjustShoeMileage(previous.shoeId, -toMiles(previous.distanceValue, previous.distanceUnit));
+    }
+    if (updated.completionStatus === "done" && updated.shoeId && updated.distanceValue) {
+      db.adjustShoeMileage(updated.shoeId, toMiles(updated.distanceValue, updated.distanceUnit));
+    }
+  }
   function buildTrainingDay(accountId: string, dateStr: string, slot: import("./types").TrainingDaySlot, weekNumber: number, body: Record<string, unknown>, existing: import("./types").TrainingPlanDayRecord | undefined, now: Date, allowFreezeToggle: boolean): import("./types").TrainingPlanDayRecord {
     const WORKOUT_TYPES = ["run", "cross_training", "rest", "recovery", "race", "swim"] as const;
+    const RUN_LABELS = ["easy", "tempo", "long_run", "workout", "recovery_run", "race_pace", "intervals"] as const;
     const DISTANCE_UNITS = ["miles", "km", "meters", "yards"] as const;
     const COMPLETION_STATUSES = ["pending", "done", "missed", "modified"] as const;
     const MISSED_REASONS = ["sick", "injured", "too_busy", "weather", "low_motivation", "other"] as const;
     const workoutType = typeof body.workoutType === "string" && (WORKOUT_TYPES as readonly string[]).includes(body.workoutType) ? (body.workoutType as typeof WORKOUT_TYPES[number]) : (existing?.workoutType ?? "run");
+    const runLabel = (workoutType === "run" || workoutType === "race") && typeof body.runLabel === "string" && (RUN_LABELS as readonly string[]).includes(body.runLabel)
+      ? (body.runLabel as typeof RUN_LABELS[number])
+      : (workoutType === "run" || workoutType === "race") ? (existing?.runLabel ?? null) : null;
     const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : null);
     const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
     const completionStatus = typeof body.completionStatus === "string" && (COMPLETION_STATUSES as readonly string[]).includes(body.completionStatus) ? (body.completionStatus as typeof COMPLETION_STATUSES[number]) : (existing?.completionStatus ?? "pending");
@@ -2544,6 +2571,10 @@ async function handleApi(
     const shoeId = body.shoeId !== undefined
       ? (typeof body.shoeId === "string" && db.getShoe(body.shoeId)?.accountId === accountId ? body.shoeId : null)
       : existing?.shoeId ?? null;
+    // A drink mix reference must be a real item in this account's own nutrition library.
+    const validDrinkMix = (v: unknown) => (typeof v === "string" && db.getNutritionItem(v)?.accountId === accountId ? v : null);
+    const plannedDrinkMixId = body.plannedDrinkMixId !== undefined ? validDrinkMix(body.plannedDrinkMixId) : existing?.plannedDrinkMixId ?? null;
+    const actualDrinkMixId = body.actualDrinkMixId !== undefined ? validDrinkMix(body.actualDrinkMixId) : existing?.actualDrinkMixId ?? null;
     // A linked group run must be a real occurrence this account is actually RSVP'd/attending -
     // "link this day to my group run" only makes sense if you're really going.
     const linkedEventOccurrenceId = body.linkedEventOccurrenceId !== undefined
@@ -2556,10 +2587,16 @@ async function handleApi(
       slot,
       weekNumber,
       workoutType,
+      runLabel,
       title: str(body.title, 60) ?? existing?.title ?? "",
       distanceValue: body.distanceValue !== undefined ? num(body.distanceValue) : existing?.distanceValue ?? null,
       distanceUnit: typeof body.distanceUnit === "string" && (DISTANCE_UNITS as readonly string[]).includes(body.distanceUnit) ? (body.distanceUnit as typeof DISTANCE_UNITS[number]) : (existing?.distanceUnit ?? "miles"),
       shoeId,
+      plannedGelCount: body.plannedGelCount !== undefined ? num(body.plannedGelCount) : existing?.plannedGelCount ?? null,
+      plannedDrinkMixId,
+      nutritionPlanNotes: body.nutritionPlanNotes !== undefined ? str(body.nutritionPlanNotes, 300) : existing?.nutritionPlanNotes ?? null,
+      actualGelCount: body.actualGelCount !== undefined ? num(body.actualGelCount) : existing?.actualGelCount ?? null,
+      actualDrinkMixId,
       fuelNotes: body.fuelNotes !== undefined ? str(body.fuelNotes, 200) : existing?.fuelNotes ?? null,
       hydrationNotes: body.hydrationNotes !== undefined ? str(body.hydrationNotes, 200) : existing?.hydrationNotes ?? null,
       linkedRouteId: body.linkedRouteId !== undefined ? (typeof body.linkedRouteId === "string" && db.getRoute(body.linkedRouteId) ? body.linkedRouteId : null) : existing?.linkedRouteId ?? null,
@@ -2646,7 +2683,9 @@ async function handleApi(
     const weekNumber = planWeekForDate(plan, dateStr);
     if (weekNumber === null) return err(res, { status: 400, error: "invalid_date", message: "That date falls outside this plan's range." }), true;
     const body = (await readJson(req)) as Record<string, unknown>;
-    const day = db.setTrainingPlanDay(buildTrainingDay(athleteId, dateStr, slot, weekNumber, body, db.getTrainingPlanDay(athleteId, dateStr, slot), now, true));
+    const priorCoachDay = db.getTrainingPlanDay(athleteId, dateStr, slot);
+    const day = db.setTrainingPlanDay(buildTrainingDay(athleteId, dateStr, slot, weekNumber, body, priorCoachDay, now, true));
+    applyShoeMileageDelta(priorCoachDay, day);
     await db.persist();
     return ok(res, { day }), true;
   }
@@ -2665,7 +2704,7 @@ async function handleApi(
     if (!name) return err(res, { status: 400, error: "invalid_name", message: "Give the shoe a name." }), true;
     // The very first shoe someone adds becomes their default automatically - no reason to make them take a second step.
     const isDefault = body.isDefault === true || db.listShoes(sess.accountId).length === 0;
-    const shoe = db.addShoe({ id: newId(), accountId: sess.accountId, name, isDefault, createdAt: now.toISOString() });
+    const shoe = db.addShoe({ id: newId(), accountId: sess.accountId, name, isDefault, totalMiles: 0, createdAt: now.toISOString() });
     await db.persist();
     return ok(res, { shoe }), true;
   }
@@ -2812,6 +2851,7 @@ async function handleApi(
       return err(res, { status: 403, error: "coach_managed", message: "Your coach manages this workout — propose a change instead of editing it directly." }), true;
     }
     const day = db.setTrainingPlanDay(buildTrainingDay(sess.accountId, dateStr, slot, weekNumber, body, existing, now, false));
+    applyShoeMileageDelta(existing, day);
     await db.persist();
     return ok(res, { day }), true;
   }

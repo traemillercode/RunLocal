@@ -40,7 +40,7 @@ describe("Day-level training plan content", () => {
     const db = createMemoryStore();
     const u = account(db, "runner@example.com");
     await call(db, "PUT", "/api/profile/training-plan", u.cookie, { planType: "marathon", totalWeeks: 4, startDate: "2026-08-03" });
-    const shoe = db.addShoe({ id: "shoe-1", accountId: u.id, name: "Trail shoes", isDefault: true, createdAt: new Date().toISOString() });
+    const shoe = db.addShoe({ id: "shoe-1", accountId: u.id, name: "Trail shoes", isDefault: true, totalMiles: 0, createdAt: new Date().toISOString() });
     const r = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-08", u.cookie, {
       workoutType: "run", title: "Long run", distanceValue: 12, distanceUnit: "miles", shoeId: shoe.id, fuelNotes: "1 gel at mile 6", hydrationNotes: "Handheld bottle", notes: "Hilly route",
     });

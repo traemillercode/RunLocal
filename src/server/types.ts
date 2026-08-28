@@ -470,6 +470,8 @@ export interface PersistedDb {
   trainingPlanWeeks?: TrainingPlanWeekRecord[];
   trainingPlanDays?: TrainingPlanDayRecord[];
   shoes?: ShoeRecord[];
+  nutritionItems?: NutritionItemRecord[];
+  trainingPlanStrengthEntries?: TrainingPlanStrengthEntryRecord[];
   trainingPlanChangeProposals?: TrainingPlanChangeProposalRecord[];
   coachRelationships?: CoachRelationshipRecord[];
   routeWaypoints?: RouteWaypointRecord[];
@@ -773,6 +775,25 @@ export type TrainingDayWorkoutType = "run" | "cross_training" | "rest" | "recove
  * if the plan's start date or length is edited later.
  */
 export type TrainingDaySlot = "primary" | "am" | "pm";
+/** Sub-classification for a run-type day - shown as a real label (Tempo, Long run, etc.) rather than free text, matching how real training platforms categorize runs. Only meaningful when workoutType is "run" or "race". */
+export type TrainingRunLabel = "easy" | "tempo" | "long_run" | "workout" | "recovery_run" | "race_pace" | "intervals";
+
+/**
+ * A strength/gym/mobility entry for a day - deliberately NOT part of the
+ * run-slot system (which caps at 2, matching "max two runs a day"). There
+ * can be any number of these per day, each its own record with its own id,
+ * since gym work doesn't have the same natural cap a run does.
+ */
+export interface TrainingPlanStrengthEntryRecord {
+  id: string;
+  accountId: string;
+  date: string;
+  title: string;
+  durationMinutes: number | null;
+  notes: string;
+  completionStatus: "pending" | "done" | "missed";
+  updatedAt: string;
+}
 export type TrainingDistanceUnit = "miles" | "km" | "meters" | "yards";
 
 export interface TrainingPlanDayRecord {
@@ -785,11 +806,20 @@ export interface TrainingPlanDayRecord {
   /** Denormalized for fast weekly grouping/filtering without recomputing from startDate every time. */
   weekNumber: number;
   workoutType: TrainingDayWorkoutType;
+  /** Real sub-classification (Tempo, Long run, Easy, etc.) - only meaningful for run/race workouts, matching how real training platforms categorize runs rather than relying on free-text title alone. */
+  runLabel: TrainingRunLabel | null;
   /** Short label shown on the calendar, e.g. "Tempo run" or "Easy 5mi" or "Yoga". Empty for a plain rest day. */
   title: string;
   distanceValue: number | null;
   /** Miles/km for run-family workouts; meters/yards for swim - a runner and a swimmer need genuinely different units, not a converted mile value pretending to be a pool distance. */
   distanceUnit: TrainingDistanceUnit;
+  /** Planned fueling for this workout - what to eat/drink and roughly when, e.g. "1 gel at mile 6, Tailwind throughout." References the runner's own nutrition library items where applicable (see NutritionItemRecord), tracked separately as plannedGelCount/plannedDrinkMixId for real aggregate reporting rather than only free text. */
+  plannedGelCount: number | null;
+  plannedDrinkMixId: string | null;
+  nutritionPlanNotes: string | null;
+  /** What was actually consumed - only meaningful once logged (see completionStatus). Feeds the real training-block summary totals; planned and actual can differ, and reporting should reflect what really happened. */
+  actualGelCount: number | null;
+  actualDrinkMixId: string | null;
   /** References a ShoeRecord in the runner's own shoe library - null shows no shoe (e.g. swim/cross-training days, or a run day where none was picked). */
   shoeId: string | null;
   fuelNotes: string | null;
@@ -842,6 +872,18 @@ export interface ShoeRecord {
   accountId: string;
   name: string;
   isDefault: boolean;
+  /** Cumulative miles logged with this shoe - incremented automatically when a day using this shoe is marked "done" (see completeDayForShoeMileage in api.ts), the same way Strava tracks gear mileage. Always stored in miles internally regardless of what unit the runner logged the workout in, so totals are comparable. */
+  totalMiles: number;
+  createdAt: string;
+}
+
+/** A runner's own library of nutrition products - add "Maurten Gel 100" or "Tailwind Endurance Fuel" once, reuse it across days and get real aggregate totals, the same pattern as the shoe library. */
+export type NutritionItemKind = "gel" | "drink_mix" | "chew" | "other";
+export interface NutritionItemRecord {
+  id: string;
+  accountId: string;
+  kind: NutritionItemKind;
+  name: string;
   createdAt: string;
 }
 

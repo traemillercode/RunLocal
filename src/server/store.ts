@@ -332,6 +332,8 @@ export class Db {
   private coachRelationships = new Map<string, import("./types").CoachRelationshipRecord>();
   private trainingPlanDays = new Map<string, import("./types").TrainingPlanDayRecord>();
   private shoes = new Map<string, import("./types").ShoeRecord>();
+  private nutritionItems = new Map<string, import("./types").NutritionItemRecord>();
+  private trainingPlanStrengthEntries = new Map<string, import("./types").TrainingPlanStrengthEntryRecord>();
   private trainingPlanChangeProposals = new Map<string, import("./types").TrainingPlanChangeProposalRecord>();
   private forumVotes = new Map<string, import("./types").ForumVoteRecord>();
   private accountReports = new Map<string, import("./types").AccountReportRecord>();
@@ -466,7 +468,9 @@ export class Db {
       for (const w of parsed.trainingPlanWeeks ?? []) this.trainingPlanWeeks.set(w.id, w);
       for (const c of parsed.coachRelationships ?? []) this.coachRelationships.set(c.id, c);
       for (const d of parsed.trainingPlanDays ?? []) this.trainingPlanDays.set(d.id, d);
-      for (const s of parsed.shoes ?? []) this.shoes.set(s.id, s);
+      for (const s of parsed.shoes ?? []) this.shoes.set(s.id, { ...s, totalMiles: s.totalMiles ?? 0 });
+      for (const n of parsed.nutritionItems ?? []) this.nutritionItems.set(n.id, n);
+      for (const e of parsed.trainingPlanStrengthEntries ?? []) this.trainingPlanStrengthEntries.set(e.id, e);
       for (const p of parsed.trainingPlanChangeProposals ?? []) this.trainingPlanChangeProposals.set(p.id, p);
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
       for (const r of parsed.accountReports ?? []) this.accountReports.set(r.id, r);
@@ -535,6 +539,8 @@ export class Db {
       coachRelationships: [...this.coachRelationships.values()],
       trainingPlanDays: [...this.trainingPlanDays.values()],
       shoes: [...this.shoes.values()],
+      nutritionItems: [...this.nutritionItems.values()],
+      trainingPlanStrengthEntries: [...this.trainingPlanStrengthEntries.values()],
       trainingPlanChangeProposals: [...this.trainingPlanChangeProposals.values()],
       forumVotes: [...this.forumVotes.values()],
       accountReports: [...this.accountReports.values()],
@@ -1345,6 +1351,48 @@ export class Db {
     const target = this.shoes.get(shoeId);
     if (!target || target.accountId !== accountId) return false;
     return this.shoes.delete(shoeId);
+  }
+  /**
+   * Adjusts a shoe's cumulative mileage by a delta in miles (negative to
+   * reverse a prior addition - e.g. a day gets un-marked done, or the shoe
+   * on a completed day changes). No-ops silently if the shoe doesn't exist
+   * or was deleted, since this always runs as a side effect of a day-save,
+   * not a user-facing action that should itself fail.
+   */
+  adjustShoeMileage(shoeId: string, deltaMiles: number): void {
+    const shoe = this.shoes.get(shoeId);
+    if (!shoe) return;
+    this.shoes.set(shoeId, { ...shoe, totalMiles: Math.max(0, shoe.totalMiles + deltaMiles) });
+  }
+  listNutritionItems(accountId: string): import("./types").NutritionItemRecord[] {
+    return [...this.nutritionItems.values()].filter((n) => n.accountId === accountId).sort((a, b) => a.name.localeCompare(b.name));
+  }
+  getNutritionItem(id: string): import("./types").NutritionItemRecord | undefined {
+    return this.nutritionItems.get(id);
+  }
+  addNutritionItem(item: import("./types").NutritionItemRecord): import("./types").NutritionItemRecord {
+    this.nutritionItems.set(item.id, item);
+    return item;
+  }
+  deleteNutritionItem(accountId: string, id: string): boolean {
+    const target = this.nutritionItems.get(id);
+    if (!target || target.accountId !== accountId) return false;
+    return this.nutritionItems.delete(id);
+  }
+  listStrengthEntries(accountId: string, date?: string): import("./types").TrainingPlanStrengthEntryRecord[] {
+    return [...this.trainingPlanStrengthEntries.values()].filter((e) => e.accountId === accountId && (!date || e.date === date)).sort((a, b) => a.date.localeCompare(b.date));
+  }
+  getStrengthEntry(id: string): import("./types").TrainingPlanStrengthEntryRecord | undefined {
+    return this.trainingPlanStrengthEntries.get(id);
+  }
+  setStrengthEntry(entry: import("./types").TrainingPlanStrengthEntryRecord): import("./types").TrainingPlanStrengthEntryRecord {
+    this.trainingPlanStrengthEntries.set(entry.id, entry);
+    return entry;
+  }
+  deleteStrengthEntry(accountId: string, id: string): boolean {
+    const target = this.trainingPlanStrengthEntries.get(id);
+    if (!target || target.accountId !== accountId) return false;
+    return this.trainingPlanStrengthEntries.delete(id);
   }
   /** Every proposal involving this person, as either athlete or coach - their own inbox. */
   listChangeProposalsFor(accountId: string): import("./types").TrainingPlanChangeProposalRecord[] {

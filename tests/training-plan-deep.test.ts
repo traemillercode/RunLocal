@@ -60,7 +60,7 @@ describe("Shoe library", () => {
     const owner = account(db, "shoeowner@example.com");
     const intruder = account(db, "intruder@example.com");
     await call(db, "PUT", "/api/profile/training-plan", intruder.cookie, { planType: "5k", totalWeeks: 4, startDate: "2026-08-03" });
-    const otherShoe = db.addShoe({ id: "not-yours", accountId: owner.id, name: "Owner's shoe", isDefault: true, createdAt: new Date().toISOString() });
+    const otherShoe = db.addShoe({ id: "not-yours", accountId: owner.id, name: "Owner's shoe", isDefault: true, totalMiles: 0, createdAt: new Date().toISOString() });
     const r = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", intruder.cookie, { workoutType: "run", shoeId: otherShoe.id });
     expect(r.status).toBe(200);
     expect(r.body.day.shoeId).toBeNull();
@@ -69,8 +69,8 @@ describe("Shoe library", () => {
   it("setting a new default un-defaults the previous one", () => {
     const db = createMemoryStore();
     const u = account(db, "shoefan@example.com");
-    const a = db.addShoe({ id: "shoe-a", accountId: u.id, name: "Shoe A", isDefault: true, createdAt: new Date().toISOString() });
-    db.addShoe({ id: "shoe-b", accountId: u.id, name: "Shoe B", isDefault: true, createdAt: new Date().toISOString() });
+    const a = db.addShoe({ id: "shoe-a", accountId: u.id, name: "Shoe A", isDefault: true, totalMiles: 0, createdAt: new Date().toISOString() });
+    db.addShoe({ id: "shoe-b", accountId: u.id, name: "Shoe B", isDefault: true, totalMiles: 0, createdAt: new Date().toISOString() });
     const shoes = db.listShoes(u.id);
     expect(shoes.find((s) => s.id === a.id)!.isDefault).toBe(false);
     expect(shoes.find((s) => s.id === "shoe-b")!.isDefault).toBe(true);
@@ -113,6 +113,43 @@ describe("Shoe library", () => {
     // Still there, untouched.
     const list = await call(db, "GET", "/api/profile/shoes", owner.cookie);
     expect(list.body.shoes).toHaveLength(1);
+  });
+
+  it("marking a run done adds its distance to the shoe's cumulative mileage, converted to miles", async () => {
+    const db = createMemoryStore();
+    const u = account(db, "mileage@example.com");
+    await call(db, "PUT", "/api/profile/training-plan", u.cookie, { planType: "marathon", totalWeeks: 4, startDate: "2026-08-03" });
+    const shoe = await call(db, "POST", "/api/profile/shoes", u.cookie, { name: "Pegasus" });
+    await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { workoutType: "run", distanceValue: 10, distanceUnit: "km", shoeId: shoe.body.shoe.id });
+    const done = await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { completionStatus: "done" });
+    expect(done.status).toBe(200);
+    expect(db.getShoe(shoe.body.shoe.id)!.totalMiles).toBeCloseTo(6.21371, 3);
+  });
+
+  it("un-marking a done run reverses its mileage contribution - never double-counts or leaves stale totals", async () => {
+    const db = createMemoryStore();
+    const u = account(db, "mileage2@example.com");
+    await call(db, "PUT", "/api/profile/training-plan", u.cookie, { planType: "marathon", totalWeeks: 4, startDate: "2026-08-03" });
+    const shoe = await call(db, "POST", "/api/profile/shoes", u.cookie, { name: "Pegasus" });
+    await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { workoutType: "run", distanceValue: 5, distanceUnit: "miles", shoeId: shoe.body.shoe.id });
+    await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { completionStatus: "done" });
+    expect(db.getShoe(shoe.body.shoe.id)!.totalMiles).toBe(5);
+    await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { completionStatus: "missed", missedReason: "sick" });
+    expect(db.getShoe(shoe.body.shoe.id)!.totalMiles).toBe(0);
+  });
+
+  it("changing the shoe on an already-completed day moves the mileage from the old shoe to the new one", async () => {
+    const db = createMemoryStore();
+    const u = account(db, "mileage3@example.com");
+    await call(db, "PUT", "/api/profile/training-plan", u.cookie, { planType: "marathon", totalWeeks: 4, startDate: "2026-08-03" });
+    const shoeA = await call(db, "POST", "/api/profile/shoes", u.cookie, { name: "Shoe A" });
+    const shoeB = await call(db, "POST", "/api/profile/shoes", u.cookie, { name: "Shoe B" });
+    await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { workoutType: "run", distanceValue: 8, distanceUnit: "miles", shoeId: shoeA.body.shoe.id });
+    await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { completionStatus: "done" });
+    expect(db.getShoe(shoeA.body.shoe.id)!.totalMiles).toBe(8);
+    await call(db, "PUT", "/api/profile/training-plan/days/2026-08-03", u.cookie, { shoeId: shoeB.body.shoe.id });
+    expect(db.getShoe(shoeA.body.shoe.id)!.totalMiles).toBe(0);
+    expect(db.getShoe(shoeB.body.shoe.id)!.totalMiles).toBe(8);
   });
 });
 
