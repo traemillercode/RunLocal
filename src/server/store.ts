@@ -336,6 +336,7 @@ export class Db {
   private trainingPlanStrengthEntries = new Map<string, import("./types").TrainingPlanStrengthEntryRecord>();
   private trainingPlanRecurrences = new Map<string, import("./types").TrainingPlanRecurrenceRecord>();
   private weeklyPlanEmails = new Map<string, import("./types").WeeklyPlanEmailRecord>();
+  private weeklyReviews = new Map<string, import("./types").WeeklyReviewRecord>();
   private trainingPlanChangeProposals = new Map<string, import("./types").TrainingPlanChangeProposalRecord>();
   private forumVotes = new Map<string, import("./types").ForumVoteRecord>();
   private accountReports = new Map<string, import("./types").AccountReportRecord>();
@@ -476,6 +477,7 @@ export class Db {
       for (const e of parsed.trainingPlanStrengthEntries ?? []) this.trainingPlanStrengthEntries.set(e.id, e);
       for (const r of parsed.trainingPlanRecurrences ?? []) this.trainingPlanRecurrences.set(r.id, r);
       for (const w of parsed.weeklyPlanEmails ?? []) this.weeklyPlanEmails.set(w.id, w);
+      for (const r of parsed.weeklyReviews ?? []) this.weeklyReviews.set(r.id, r);
       for (const p of parsed.trainingPlanChangeProposals ?? []) this.trainingPlanChangeProposals.set(p.id, p);
       for (const v of parsed.forumVotes ?? []) this.forumVotes.set(`${v.accountId}:${v.postId}`, v);
       for (const r of parsed.accountReports ?? []) this.accountReports.set(r.id, r);
@@ -548,6 +550,7 @@ export class Db {
       trainingPlanStrengthEntries: [...this.trainingPlanStrengthEntries.values()],
       trainingPlanRecurrences: [...this.trainingPlanRecurrences.values()],
       weeklyPlanEmails: [...this.weeklyPlanEmails.values()],
+      weeklyReviews: [...this.weeklyReviews.values()],
       trainingPlanChangeProposals: [...this.trainingPlanChangeProposals.values()],
       forumVotes: [...this.forumVotes.values()],
       accountReports: [...this.accountReports.values()],
@@ -1156,6 +1159,51 @@ export class Db {
       due.push({ accountId: plan.accountId, weekStartDate: weekStart });
     }
     return due;
+  }
+  /**
+   * Scores one category (run days, or strength entries) for a week. Only
+   * days that have actually happened count - a future "pending" day isn't
+   * judged yet, since nothing has failed. A past-due "pending" day (never
+   * confirmed either way) counts as missed - silence isn't neutral. Green
+   * needs >=60% done; red triggers at >=40% missed; otherwise yellow. No
+   * relevant days at all (nothing scheduled, or nothing has happened yet)
+   * scores green by default - there's nothing to fail.
+   */
+  private scoreCategory(items: { status: "pending" | "done" | "missed" | "modified"; date: string }[], todayStr: string): import("./types").WeekColor {
+    const relevant = items.filter((i) => i.date <= todayStr);
+    if (relevant.length === 0) return "green";
+    const effective = relevant.map((i) => (i.status === "pending" ? "missed" : i.status));
+    const total = effective.length;
+    const doneCount = effective.filter((s) => s === "done").length;
+    const missedCount = effective.filter((s) => s === "missed").length;
+    if (doneCount / total >= 0.6) return "green";
+    if (missedCount / total >= 0.4) return "red";
+    return "yellow";
+  }
+  /** The actual week score: runs and strength graded separately (a bad lifting week shouldn't hide behind good running, or vice versa), overall taking the worse of the two. */
+  computeWeekScore(accountId: string, weekStartDate: string, now: Date): { runColor: import("./types").WeekColor; strengthColor: import("./types").WeekColor; overallColor: import("./types").WeekColor } {
+    const weekEnd = new Date(`${weekStartDate}T00:00:00Z`);
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+    const weekEndStr = weekEnd.toISOString().slice(0, 10);
+    const todayStr = now.toISOString().slice(0, 10);
+    const runDays = this.listTrainingPlanDays(accountId)
+      .filter((d) => d.date >= weekStartDate && d.date <= weekEndStr && (d.workoutType === "run" || d.workoutType === "race"))
+      .map((d) => ({ status: d.completionStatus, date: d.date }));
+    const strengthItems = this.listStrengthEntries(accountId)
+      .filter((e) => e.date >= weekStartDate && e.date <= weekEndStr)
+      .map((e) => ({ status: e.completionStatus as "pending" | "done" | "missed" | "modified", date: e.date }));
+    const runColor = this.scoreCategory(runDays, todayStr);
+    const strengthColor = this.scoreCategory(strengthItems, todayStr);
+    const severity: Record<import("./types").WeekColor, number> = { green: 0, yellow: 1, red: 2 };
+    const overallColor = severity[runColor] >= severity[strengthColor] ? runColor : strengthColor;
+    return { runColor, strengthColor, overallColor };
+  }
+  getWeeklyReview(accountId: string, weekStartDate: string): import("./types").WeeklyReviewRecord | undefined {
+    return this.weeklyReviews.get(`${accountId}-review-${weekStartDate}`);
+  }
+  recordWeeklyReview(rec: import("./types").WeeklyReviewRecord): import("./types").WeeklyReviewRecord {
+    this.weeklyReviews.set(rec.id, rec);
+    return rec;
   }
   /**
    * Read one account's event/occurrence visibility override. Returns

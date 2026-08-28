@@ -3112,6 +3112,71 @@ async function handleApi(
       },
     }), true;
   }
+  // GET /api/profile/training-plan/week-score?weekStartDate= - the actual red/yellow/green
+  // grade, run and strength scored separately, plus whether the PRIOR week is still blocking
+  // (red and unreviewed) and whether THIS week already has a review on file if it's red.
+  if (method === "GET" && url.pathname === "/api/profile/training-plan/week-score") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const weekStartDate = url.searchParams.get("weekStartDate");
+    if (!weekStartDate || !/^\d{4}-\d{2}-\d{2}$/.test(weekStartDate)) return err(res, { status: 400, error: "invalid_date" }), true;
+    const score = db.computeWeekScore(sess.accountId, weekStartDate, now);
+    const priorWeekStart = new Date(`${weekStartDate}T00:00:00Z`);
+    priorWeekStart.setUTCDate(priorWeekStart.getUTCDate() - 7);
+    const priorWeekStartStr = priorWeekStart.toISOString().slice(0, 10);
+    const priorScore = db.computeWeekScore(sess.accountId, priorWeekStartStr, now);
+    const priorReviewed = db.getWeeklyReview(sess.accountId, priorWeekStartStr) !== undefined;
+    return ok(res, {
+      ...score,
+      weekStartDate,
+      reviewRequired: score.overallColor === "red",
+      reviewed: db.getWeeklyReview(sess.accountId, weekStartDate) !== undefined,
+      priorWeekBlocking: priorScore.overallColor === "red" && !priorReviewed,
+      priorWeekStartDate: priorWeekStartStr,
+    }), true;
+  }
+  // POST /api/profile/training-plan/week-review - the mandatory checkpoint. Only accepted when
+  // the target week actually scored red, and requires real notes - a review isn't a formality.
+  if (method === "POST" && url.pathname === "/api/profile/training-plan/week-review") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { weekStartDate?: unknown; notes?: unknown };
+    const weekStartDate = typeof body.weekStartDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.weekStartDate) ? body.weekStartDate : null;
+    if (!weekStartDate) return err(res, { status: 400, error: "invalid_date" }), true;
+    const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, 1000) : "";
+    if (!notes) return err(res, { status: 400, error: "notes_required", message: "Write what's going to be different this week." }), true;
+    const score = db.computeWeekScore(sess.accountId, weekStartDate, now);
+    if (score.overallColor !== "red") return err(res, { status: 400, error: "not_red", message: "This week wasn't red - no review needed." }), true;
+    const rec = db.recordWeeklyReview({ id: `${sess.accountId}-review-${weekStartDate}`, accountId: sess.accountId, weekStartDate, color: score.overallColor, notes, reviewedAt: now.toISOString() });
+    await db.persist();
+    return ok(res, { review: rec }), true;
+  }
+  // GET /api/coach/athletes/:athleteId/week-score?weekStartDate= - same score, coach-gated.
+  const coachWeekScoreMatch = /^\/api\/coach\/athletes\/([^/]+)\/week-score$/.exec(url.pathname);
+  if (coachWeekScoreMatch && method === "GET") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const athleteId = decodeURIComponent(coachWeekScoreMatch[1]);
+    if (!db.isActiveCoachOf(sess.accountId, athleteId)) return err(res, { status: 403, error: "not_their_coach" }), true;
+    const weekStartDate = url.searchParams.get("weekStartDate");
+    if (!weekStartDate || !/^\d{4}-\d{2}-\d{2}$/.test(weekStartDate)) return err(res, { status: 400, error: "invalid_date" }), true;
+    const score = db.computeWeekScore(athleteId, weekStartDate, now);
+    return ok(res, { ...score, weekStartDate, reviewed: db.getWeeklyReview(athleteId, weekStartDate) !== undefined }), true;
+  }
+  // GET /api/coach/roster - every athlete this coach has, with their current week's color at a glance.
+  if (method === "GET" && url.pathname === "/api/coach/roster") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const weekStartDay = db.getAccount(sess.accountId)?.weekStartDay ?? 0;
+    const currentWeekStart = db.weekStartDateFor(now.toISOString().slice(0, 10), weekStartDay);
+    const athletes = db.listCoachRelationshipsFor(sess.accountId).filter((r) => r.coachId === sess.accountId && r.status === "active");
+    const rows = athletes.map((r) => {
+      const athlete = db.getAccount(r.athleteId);
+      const score = db.computeWeekScore(r.athleteId, currentWeekStart, now);
+      return { relationshipId: r.id, athleteId: r.athleteId, athleteName: athlete?.name ?? "An athlete", weekStartDate: currentWeekStart, ...score };
+    });
+    return ok(res, { athletes: rows }), true;
+  }
   // PUT /api/profile/training-plan/days/:date or /:date/:slot(am|pm) - set one day's real content.
   const dayMatch = /^\/api\/profile\/training-plan\/days\/(\d{4}-\d{2}-\d{2})(?:\/(am|pm))?$/.exec(url.pathname);
   if (dayMatch && method === "PUT") {

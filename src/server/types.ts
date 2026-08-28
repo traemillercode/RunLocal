@@ -476,6 +476,7 @@ export interface PersistedDb {
   trainingPlanStrengthEntries?: TrainingPlanStrengthEntryRecord[];
   trainingPlanRecurrences?: TrainingPlanRecurrenceRecord[];
   weeklyPlanEmails?: WeeklyPlanEmailRecord[];
+  weeklyReviews?: WeeklyReviewRecord[];
   trainingPlanChangeProposals?: TrainingPlanChangeProposalRecord[];
   coachRelationships?: CoachRelationshipRecord[];
   routeWaypoints?: RouteWaypointRecord[];
@@ -787,6 +788,24 @@ export interface TrainingPlanRecurrenceRecord {
  * (accountId, weekStartDate) so it's idempotent: a manual send earlier in
  * the week means the automatic check skips that week entirely.
  */
+export type WeekColor = "green" | "yellow" | "red";
+
+/**
+ * A required checkpoint before moving into the next week when the prior
+ * week scored red - confirms the athlete actually looked at it, plus what's
+ * changing. One per (accountId, weekStartDate); the gate checks for its
+ * existence, not just a boolean, so there's always a real note on file for
+ * why a bad week happened and what's different going forward.
+ */
+export interface WeeklyReviewRecord {
+  id: string;
+  accountId: string;
+  weekStartDate: string;
+  color: WeekColor;
+  notes: string;
+  reviewedAt: string;
+}
+
 export interface WeeklyPlanEmailRecord {
   id: string;
   /** The ATHLETE receiving the email - always, whether a coach or the athlete themself triggered it. */
