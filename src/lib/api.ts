@@ -994,6 +994,8 @@ export interface RunnerProfileView {
   mutualVisible?: boolean;
   /** Structured training plan, when set — takes precedence over the free-text trainingBlock field for display. */
   trainingPlan?: { planType: TrainingPlanType; customLabel: string | null; totalWeeks: number; currentWeek: number; linkedRaceName: string | null } | null;
+  isAvailableAsCoach?: boolean;
+  coachBio?: string | null;
 }
 /** GET /api/runners/:id — guest-accessible public runner profile. */
 export interface RunnerProfileResponse {

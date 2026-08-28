@@ -69,6 +69,11 @@ export function RunnerProfileHeader({ profile }: { profile: RunnerProfileView })
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {profile.isVerified ? <VerifiedBadge /> : null}
             {profile.isTrustedMember ? <TrustedBadge size="sm" /> : null}
+            {profile.isAvailableAsCoach ? (
+              <Chip tone="outline">
+                <Icon name="users" className="h-3 w-3" /> Coach
+              </Chip>
+            ) : null}
             {profile.customTitle ? (
               <Chip tone="outline">
                 <Icon name="flag" className="h-3 w-3" /> {profile.customTitle}
@@ -80,6 +85,7 @@ export function RunnerProfileHeader({ profile }: { profile: RunnerProfileView })
             ) : null}
           </div>
           {profile.bio ? <p className="mt-2 text-[13px] leading-relaxed text-white/80">{profile.bio}</p> : null}
+          {profile.isAvailableAsCoach && profile.coachBio ? <p className="mt-2 rounded-lg bg-white/10 p-2.5 text-[13px] leading-relaxed text-white/90">{profile.coachBio}</p> : null}
         </div>
       </div>
       {(profile.paceLabel || profile.runningGoal || profile.trainingBlock || profile.upcomingRaces) ? (

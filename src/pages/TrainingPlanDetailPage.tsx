@@ -185,6 +185,20 @@ export function TrainingPlanDetailPage() {
               const primary = dayList[0];
               const meta = primary ? WORKOUT_META[primary.workoutType] : null;
               const anyFrozen = dayList.some((d2) => d2.frozen);
+              // A "quality" workout - anything more structured than an easy run or plain rest - gets its own marker so it stands out from an easy day at a glance.
+              const hasQualityWorkout = dayList.some((d2) => d2.intervalStructure || (d2.runLabel && d2.runLabel !== "easy" && d2.runLabel !== "recovery_run"));
+              const unitAbbrev = (u: api.TrainingDistanceUnit) => (u === "miles" ? "mi" : u === "km" ? "km" : u === "meters" ? "m" : "yd");
+              const toMilesLocal = (v: number, u: api.TrainingDistanceUnit) => (u === "miles" ? v : u === "km" ? v * 0.621371 : u === "meters" ? v * 0.000621371 : v * 0.000568182);
+              const fromMilesLocal = (miles: number, u: api.TrainingDistanceUnit) => (u === "miles" ? miles : u === "km" ? miles / 0.621371 : u === "meters" ? miles / 0.000621371 : miles / 0.000568182);
+              // Two runs, both with a real distance - show "3 + 4 = 7mi" rather than just the total, so both are visible at a glance. Converts the second into the first's unit if they differ.
+              const twoRunLabel = dayList.length === 2 && dayList[0].distanceValue != null && dayList[1].distanceValue != null
+                ? (() => {
+                    const [a, b] = dayList;
+                    const bInAUnit = Math.round(fromMilesLocal(toMilesLocal(b.distanceValue!, b.distanceUnit), a.distanceUnit) * 10) / 10;
+                    const sum = Math.round((a.distanceValue! + bInAUnit) * 10) / 10;
+                    return `${a.distanceValue}+${bInAUnit}=${sum}${unitAbbrev(a.distanceUnit)}`;
+                  })()
+                : null;
               return (
                 <button
                   key={dateStr}
@@ -196,12 +210,14 @@ export function TrainingPlanDetailPage() {
                   } ${selectedDate === dateStr ? "ring-2 ring-[#14171C]" : ""} ${meta ? meta.color : inPlan ? "bg-slate-50" : ""} ${dateStr === today ? "font-extrabold" : ""}`}
                 >
                   <span className="text-[12px]">{d.getUTCDate()}</span>
-                  {primary ? (
+                  {twoRunLabel ? (
+                    <span className="text-[8px] font-bold leading-none">{twoRunLabel}</span>
+                  ) : primary ? (
                     <span className="text-[9px] font-bold leading-none">
-                      {primary.workoutType === "rest" ? "Rest" : primary.distanceValue != null ? `${primary.distanceValue}${primary.distanceUnit === "miles" ? "mi" : primary.distanceUnit === "km" ? "km" : primary.distanceUnit === "meters" ? "m" : "yd"}` : meta?.label}
+                      {primary.workoutType === "rest" ? "Rest" : primary.distanceValue != null ? `${primary.distanceValue}${unitAbbrev(primary.distanceUnit)}` : meta?.label}
                     </span>
                   ) : null}
-                  {dayList.length > 1 ? <span className="absolute left-1 top-1 grid h-3.5 w-3.5 place-items-center rounded-full bg-[#14171C] text-[8px] font-black text-white">2</span> : null}
+                  {hasQualityWorkout ? <Icon name="spark" className="absolute left-1 top-1 h-3 w-3 text-[#FF5741]" /> : dayList.length > 1 ? <span className="absolute left-1 top-1 grid h-3.5 w-3.5 place-items-center rounded-full bg-[#14171C] text-[8px] font-black text-white">2</span> : null}
                   {anyFrozen ? <Icon name="shield" className="absolute right-1 top-1 h-3 w-3 text-slate-400" /> : null}
                   {primary?.completionStatus === "done" ? <Icon name="check" className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 text-emerald-600" /> : null}
                   {primary?.completionStatus === "missed" ? <span className="absolute bottom-0.5 right-0.5 text-[8px] font-black text-rose-500">✕</span> : null}
