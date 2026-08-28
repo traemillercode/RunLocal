@@ -77,7 +77,7 @@ export function RunnerFeedbackEvents({
   if (events.length === 0) {
     return (
       <p className="rounded-xl bg-slate-50 p-3 text-[13px] leading-relaxed text-slate-500">
-        You and {runnerName} haven't run the same Run Local event yet — feedback unlocks after a shared run.
+        You and {runnerName} haven't run the same Kimbio event yet — feedback unlocks after a shared run.
       </p>
     );
   }
@@ -306,7 +306,7 @@ export function RunnerFeedbackSheet({
           </span>
           <p className="mt-4 text-[15px] font-bold text-slate-900">Thanks for your feedback.</p>
           <p className="mt-1 text-[13px] leading-relaxed text-slate-500">
-            Run Local admins review everything privately — nothing you wrote appears on {runnerName}'s public profile.
+            Kimbio admins review everything privately — nothing you wrote appears on {runnerName}'s public profile.
           </p>
           <PillButton variant="secondary" className="mt-5 w-full" onClick={onClose}>
             Done
@@ -388,7 +388,7 @@ export function RunnerFeedbackSheet({
         open={open}
         onClose={onClose}
         title="Raise a concern"
-        subtitle={`For safety and conduct issues — goes to Run Local admins only, never public.`}
+        subtitle={`For safety and conduct issues — goes to Kimbio admins only, never public.`}
       >
         <div className="space-y-4">
           {eventSummary}
@@ -461,7 +461,7 @@ export function RunnerFeedbackSheet({
           </button>
         </div>
         <p className="text-[12px] leading-relaxed text-slate-400">
-          Feedback is private: reviewers are never shown publicly, and negative ratings or concerns go to Run Local
+          Feedback is private: reviewers are never shown publicly, and negative ratings or concerns go to Kimbio
           admins only.
         </p>
       </div>

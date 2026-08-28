@@ -72,7 +72,7 @@ describe("RunnerFeedbackEvents — honest event selector states", () => {
   it("shows the empty state at zero shared runs", () => {
     const html = renderToStaticMarkup(<RunnerFeedbackEvents events={[]} runnerName="Taylor" selectedEventId={null} onSelect={() => {}} error={null} />);
     expect(html).toContain("haven"); // "haven't" is HTML-escaped in SSR
-    expect(html).toContain("run the same Run Local event yet");
+    expect(html).toContain("run the same Kimbio event yet");
     expect(html).toContain("feedback unlocks after a shared run");
   });
   it("preselects a single shared run without a dropdown", () => {

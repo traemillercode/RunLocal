@@ -1,6 +1,6 @@
 /**
  * Username rules & normalization — the single source of truth for what a
- * valid Run Local username is.
+ * valid Kimbio username is.
  *
  * ALLOWED CHARACTERS: 3–24 characters; must start with a letter (a–z), then
  * lowercase letters, digits, underscore (`_`) or hyphen (`-`):

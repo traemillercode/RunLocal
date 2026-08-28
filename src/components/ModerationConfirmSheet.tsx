@@ -9,7 +9,7 @@
  *   `role="alert"`. The confirm button is disabled while busy or until the
  *   reason meets the minimum.
  * - Variant B: plain confirm (e.g. Withdraw, Restore, Archive). No reason
- *   field. Report-style confirmations pass a `note` (e.g. "Only Run Local
+ *   field. Report-style confirmations pass a `note` (e.g. "Only Kimbio
  *   admins see your report and your name.") which renders under the buttons.
  *
  * The component is presentational: it renders exactly what the caller passes

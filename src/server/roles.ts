@@ -1,6 +1,6 @@
 /**
  * Role & ownership boundaries — the single source of truth for who may do
- * what on Run Local.
+ * what on Kimbio.
  *
  * Three operational roles exist, all derived SERVER-side from the signed-in
  * account (never from any client-supplied field):

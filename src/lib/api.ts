@@ -1,5 +1,5 @@
 /**
- * Typed client for the Run Local API (/api/*, same origin).
+ * Typed client for the Kimbio API (/api/*, same origin).
  *
  * All calls return explicit discriminated results — the UI never has to guess
  * whether the backend is configured. No verification data is stored
@@ -42,7 +42,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
   } catch {
     return {
       ok: false,
-      error: new ApiError(0, "network_error", "Could not reach the Run Local server. Check your connection."),
+      error: new ApiError(0, "network_error", "Could not reach the Kimbio server. Check your connection."),
     };
   }
 }
@@ -377,7 +377,7 @@ export async function adminExportCsv(query: string, reason: string): Promise<Api
     const filename = res.headers.get("content-disposition")?.match(/filename="([^"]+)"/)?.[1] ?? "runlocal-verifications.csv";
     return { ok: true, data: { blobUrl: URL.createObjectURL(blob), filename } };
   } catch {
-    return { ok: false, error: new ApiError(0, "network_error", "Could not reach the Run Local server.") };
+    return { ok: false, error: new ApiError(0, "network_error", "Could not reach the Kimbio server.") };
   }
 }
 

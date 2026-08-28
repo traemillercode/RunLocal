@@ -4,7 +4,7 @@ import * as api from "../lib/api";
 import { useAccount } from "../state/account";
 
 function GroupPhotoFallback({ name, kind, className }: { name: string; kind: "cover" | "logo"; className: string }) {
-  return <div role="img" aria-label={`${name} ${kind} placeholder`} className={`${className} flex items-center justify-center bg-[#14171C] text-[#FF5741]`}><span className={kind === "cover" ? "text-3xl font-black tracking-tight" : "text-2xl font-black"}>{kind === "cover" ? "Run Local" : name.trim().slice(0, 1).toUpperCase() || "R"}</span></div>;
+  return <div role="img" aria-label={`${name} ${kind} placeholder`} className={`${className} flex items-center justify-center bg-[#14171C] text-[#FF5741]`}><span className={kind === "cover" ? "text-3xl font-black tracking-tight" : "text-2xl font-black"}>{kind === "cover" ? "Kimbio" : name.trim().slice(0, 1).toUpperCase() || "R"}</span></div>;
 }
 
 function GroupPhoto({ name, kind, url, className }: { name: string; kind: "cover" | "logo"; url?: string | null; className: string }) {

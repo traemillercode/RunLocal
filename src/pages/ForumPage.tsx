@@ -1097,10 +1097,10 @@ export function ForumPage({ city }: { city: City }) {
         return {
           title: "Report this post?",
           entity: confirm.title,
-          impact: "Run Local admins will review it against the community guidelines.",
+          impact: "Kimbio admins will review it against the community guidelines.",
           confirmLabel: "Report post",
           requireReason: true,
-          note: "Only Run Local admins see your report and your name.",
+          note: "Only Kimbio admins see your report and your name.",
         };
       case "pin_post":
         return {
@@ -1132,10 +1132,10 @@ export function ForumPage({ city }: { city: City }) {
         return {
           title: "Report this reply?",
           entity: `Reply by ${confirm.author}`,
-          impact: "Run Local admins will review it against the community guidelines.",
+          impact: "Kimbio admins will review it against the community guidelines.",
           confirmLabel: "Report reply",
           requireReason: true,
-          note: "Only Run Local admins see your report and your name.",
+          note: "Only Kimbio admins see your report and your name.",
         };
     }
   }, [confirm]);

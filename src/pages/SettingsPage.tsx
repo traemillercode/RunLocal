@@ -100,7 +100,7 @@ function ChangePasswordSettings({ account }: { account: PublicAccount }) {
     }
     setBusy(true);
     // Passwords go directly to Supabase Auth. They are never sent to the
-    // Run Local API or retained in local state after a successful update.
+    // Kimbio API or retained in local state after a successful update.
     const result = await supabase.updatePassword(password);
     setBusy(false);
     if (!result.ok) {
@@ -288,7 +288,7 @@ export function NotificationPreferencesSection({
       <p className="border-t border-slate-100 px-5 py-3 text-[11px] leading-relaxed text-slate-400">
         Category preferences are saved to your account. Messages default to on since they're core to using the app;
         everything else defaults to off until you turn it on. In-app notifications are private to your
-        account. Browser permission is foreground-only; Run Local does not claim background push.
+        account. Browser permission is foreground-only; Kimbio does not claim background push.
       </p>
     </section>
   );

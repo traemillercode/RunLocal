@@ -573,7 +573,7 @@ export function AdminPage() {
       <div className="mx-auto w-full max-w-md px-4 pb-32 pt-6 desktop-reading">
         <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <h1 className="text-xl font-extrabold text-slate-900">Admin safety tool</h1>
-          <div className="mt-4"><Err msg="The Run Local server is unreachable — the admin API is not available right now. Try again later." /></div>
+          <div className="mt-4"><Err msg="The Kimbio server is unreachable — the admin API is not available right now. Try again later." /></div>
         </div>
       </div>
     );

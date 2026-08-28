@@ -359,7 +359,7 @@ export function createForumPost(
       ok: false,
       status: 400,
       error: "city_required",
-      message: "Choose your home city before posting — Run Local is city-scoped.",
+      message: "Choose your home city before posting — Kimbio is city-scoped.",
     };
   }
   const section = typeof input.section === "string" && (FORUM_SECTIONS as readonly string[]).includes(input.section) ? (input.section as ForumSection) : null;
@@ -486,7 +486,7 @@ export function createForumReply(
       ok: false,
       status: 400,
       error: "city_required",
-      message: "Choose your home city before replying — Run Local is city-scoped.",
+      message: "Choose your home city before replying — Kimbio is city-scoped.",
     };
   }
   const postId = typeof input.postId === "string" ? input.postId.trim() : "";
@@ -583,7 +583,7 @@ function authorizeForumAuthor(db: Db, accountId: string, now = new Date()): { ok
       ok: false,
       status: 400,
       error: "city_required",
-      message: "Choose your home city before editing — Run Local is city-scoped.",
+      message: "Choose your home city before editing — Kimbio is city-scoped.",
     };
   }
   return { ok: true, rec };

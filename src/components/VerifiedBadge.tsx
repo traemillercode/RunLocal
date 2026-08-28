@@ -10,7 +10,7 @@ export function VerifiedBadge({ size = "md" }: { size?: "sm" | "md" }) {
       className={`inline-flex items-center gap-1 rounded-[10px] bg-[#FF5741] font-bold text-[#14171C] ${
         size === "sm" ? "px-1.5 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]"
       }`}
-      title="Identity verified by Run Local"
+      title="Identity verified by Kimbio"
     >
       <Icon name="shield" className={size === "sm" ? "h-3 w-3" : "h-3.5 w-3.5"} />
       Verified

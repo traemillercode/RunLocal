@@ -150,7 +150,7 @@ export function CheckinPage() {
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-slate-100 text-slate-400"><Icon name="calendar" className="h-7 w-7" /></span>
         <h1 className="mt-3 text-xl font-extrabold">Check-in unavailable</h1>
         <p className="mt-1 text-sm text-slate-500">{error}</p>
-        <Link to="/" className="mt-4 inline-block rounded-[10px] bg-[#14171C] px-5 py-3 text-sm font-semibold text-white">Back to Run Local</Link>
+        <Link to="/" className="mt-4 inline-block rounded-[10px] bg-[#14171C] px-5 py-3 text-sm font-semibold text-white">Back to Kimbio</Link>
       </div>
     );
   }

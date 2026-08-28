@@ -15,7 +15,7 @@ export function TrustedBadge({ size = "md" }: { size?: "sm" | "md" }) {
       className={`inline-flex items-center gap-1 rounded-[10px] bg-sky-500 font-bold text-white ${
         size === "sm" ? "px-1.5 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]"
       }`}
-      title="Trusted member — verified by Run Local leadership"
+      title="Trusted member — verified by Kimbio leadership"
     >
       <Icon name="check" className={size === "sm" ? "h-3 w-3" : "h-3.5 w-3.5"} />
       Trusted

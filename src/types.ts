@@ -1,4 +1,4 @@
-// Run Local — city-first data model.
+// Kimbio — city-first data model.
 // Every entity hangs off a City. Adding a new city means adding a City entry
 // and a CityData block; the UI renders whatever city is selected.
 

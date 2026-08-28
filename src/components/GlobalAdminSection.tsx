@@ -350,11 +350,11 @@ export function GlobalAdminSection() {
             <div className="mt-2 grid gap-3">
               <label className="block">
                 <span className={labelCls}>Site title</span>
-                <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} className={inputCls} placeholder="Run Local" />
+                <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} className={inputCls} placeholder="Kimbio" />
               </label>
               <label className="block">
                 <span className={labelCls}>Wordmark</span>
-                <input value={wordmark} onChange={(e) => setWordmark(e.target.value)} maxLength={100} className={inputCls} placeholder="Run Local" />
+                <input value={wordmark} onChange={(e) => setWordmark(e.target.value)} maxLength={100} className={inputCls} placeholder="Kimbio" />
               </label>
               <label className="block">
                 <span className={labelCls}>Tagline</span>

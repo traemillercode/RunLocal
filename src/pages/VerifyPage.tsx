@@ -201,7 +201,7 @@ export function VerifyPage() {
               </li>
               <li className="flex gap-2">
                 <Icon name="check" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                <span><span className="font-semibold">Compared to your profile photo.</span> A Run Local staff member reviews that the live photo matches the profile photo on your account.</span>
+                <span><span className="font-semibold">Compared to your profile photo.</span> A Kimbio staff member reviews that the live photo matches the profile photo on your account.</span>
               </li>
               <li className="flex gap-2">
                 <Icon name="check" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
@@ -213,7 +213,7 @@ export function VerifyPage() {
               </li>
               <li className="flex gap-2">
                 <Icon name="check" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                <span><span className="font-semibold">Access is limited.</span> Only Run Local administrators can view verification records — for safety and moderation. Law enforcement may request records where the law requires it.</span>
+                <span><span className="font-semibold">Access is limited.</span> Only Kimbio administrators can view verification records — for safety and moderation. Law enforcement may request records where the law requires it.</span>
               </li>
             </ul>
             <label className="mt-2 flex items-start gap-2.5 rounded-xl bg-slate-50 p-3.5">
@@ -227,7 +227,7 @@ export function VerifyPage() {
                 className="mt-0.5 h-5 w-5 accent-[#14171C]"
               />
               <span className="text-[13px] font-semibold leading-snug text-slate-800">
-                I agree to the live selfie verification described above, including storage for up to {retentionYears} year{retentionYears === 1 ? "" : "s"} and access by Run Local administrators.
+                I agree to the live selfie verification described above, including storage for up to {retentionYears} year{retentionYears === 1 ? "" : "s"} and access by Kimbio administrators.
               </span>
             </label>
             {error ? <Notice tone="red">{error}</Notice> : null}
@@ -270,7 +270,7 @@ export function VerifyPage() {
           </span>
           <h1 className="mt-3 text-xl font-extrabold text-slate-900">Verification submitted</h1>
           <p className="mt-2 text-sm leading-relaxed text-slate-600">
-            Your selfie is in. A Run Local administrator will review it — this is a manual review, not an automated
+            Your selfie is in. A Kimbio administrator will review it — this is a manual review, not an automated
             match. You're still in <span className="font-semibold">Pending Verification</span> and can browse, but
             can't RSVP or post yet.
           </p>

@@ -157,9 +157,9 @@ const COLUMBIA_FORUM: ForumPost[] = [
   {
     id: "p1",
     section: "announcements",
-    title: "Welcome to Run Local — Columbia is live!",
+    title: "Welcome to Kimbio — Columbia is live!",
     body: "Columbia, MO is our launch city. Browse this week's group runs, check out the races tab, and join the conversation. Heads-up: some listings are sample seed content. Verification is live — verified members can RSVP, join groups, and submit listings for review.",
-    author: "Run Local Team",
+    author: "Kimbio Team",
     authorNote: "Official",
     createdAt: "Aug 1",
     pinned: true,

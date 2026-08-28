@@ -3,18 +3,18 @@
  *
  * Signup flow (honest, no fake auth):
  *  1. supabase.signUp(email, password) creates the Supabase auth user. The
- *     password is NEVER sent to Run Local and never stored client-side.
+ *     password is NEVER sent to Kimbio and never stored client-side.
  *  2. The local Pending profile is then created through POST /api/accounts
  *     with ONLY profile metadata (name, username, email, birthdate, optional
  *     phone, optional profile photo) — this is the fix for the bug where
- *     Supabase created auth.users but Run Local never created the matching
+ *     Supabase created auth.users but Kimbio never created the matching
  *     account. Username uniqueness is enforced server-side (see
  *     src/lib/username.ts).
  *  3a. If Supabase returns an immediate session (email confirmation off):
- *      the local account is created with a Run Local session, the Supabase
+ *      the local account is created with a Kimbio session, the Supabase
  *      identity is linked via /api/login/check, and the user is signed in.
  *  3b. If email confirmation is required (no Supabase session): the local
- *      pending account is created with `noSession: true` — NO Run Local
+ *      pending account is created with `noSession: true` — NO Kimbio
  *      session is claimed without a valid Supabase session. The user confirms
  *      by email link, then logs in; /api/login/check then links the verified
  *      Supabase identity to the pending account and signs them in.
@@ -210,7 +210,7 @@ export function LoginPage() {
   };
 
   /**
-   * Best-effort profile photo upload. Only called AFTER a valid Run Local
+   * Best-effort profile photo upload. Only called AFTER a valid Kimbio
    * session exists (never before). On failure the data URL is kept so the
    * next successful login retries it — nothing is silently dropped or faked.
    */
@@ -292,7 +292,7 @@ export function LoginPage() {
       }
       if (r.emailConfirmationRequired) {
         // Supabase requires an email confirmation link (no session). Create
-        // the local Pending profile WITHOUT a Run Local session — signed-in
+        // the local Pending profile WITHOUT a Kimbio session — signed-in
         // status is never claimed without a valid Supabase session. The
         // account links to the confirmed identity on first login.
         const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined, noSession: true, ...getStoredUtm() });
@@ -315,7 +315,7 @@ export function LoginPage() {
         } else {
           setPendingConfirmationEmail(e);
           setNotice(
-            "Your Supabase account was created, but Run Local couldn't save your profile right now. Confirm your email and log in — your account will finish setting up then." +
+            "Your Supabase account was created, but Kimbio couldn't save your profile right now. Confirm your email and log in — your account will finish setting up then." +
               emailDeliveryCaveat(emailDeliveryState),
           );
           setSearchParams({}, { replace: true });
@@ -330,7 +330,7 @@ export function LoginPage() {
         return;
       }
       // Immediate session: create the local Pending account (this establishes
-      // the Run Local session cookie) — never the password, only metadata.
+      // the Kimbio session cookie) — never the password, only metadata.
       const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined, ...getStoredUtm() });
       if (!created.ok) {
         setBusy(false);
@@ -338,11 +338,11 @@ export function LoginPage() {
         else if (created.error.code === "username_taken") setError("That username is already taken — try another.");
         else if (created.error.code === "invalid_username") setError(created.error.message ?? "Pick a valid username.");
         else if (created.error.code === "invalid_city" || created.error.code === "city_required") setCityError(created.error.message ?? "Pick a supported city.");
-        else setError(created.error.message ?? "Could not create your Run Local profile. Try again.");
+        else setError(created.error.message ?? "Could not create your Kimbio profile. Try again.");
         return;
       }
       // Link the verified Supabase identity to the local account and confirm
-      // the Run Local session (the server trusts the token, not client email).
+      // the Kimbio session (the server trusts the token, not client email).
       const checked = await api.loginCheck(r.accessToken);
       setBusy(false);
       if (!checked.ok) {
@@ -371,7 +371,7 @@ export function LoginPage() {
     }
     // /api/login/check links the verified Supabase identity and — if the
     // matching local account is missing (the signup-account bug) — creates it
-    // from the verified identity before issuing the Run Local session.
+    // from the verified identity before issuing the Kimbio session.
     const checked = await api.loginCheck(r.accessToken);
     setBusy(false);
     if (!checked.ok) {
@@ -391,7 +391,7 @@ export function LoginPage() {
     setBusy(true);
     const r = await supabase.resetPasswordForEmail(email.trim());
     setBusy(false);
-    if (r.ok) setNotice(`If that email has a Run Local account, Supabase will send password reset instructions. ${emailDeliveryState === "not-configured" ? "Email delivery provider status is not configured in this deployment; delivery is not guaranteed." : "Delivery is handled by the configured provider."}`);
+    if (r.ok) setNotice(`If that email has a Kimbio account, Supabase will send password reset instructions. ${emailDeliveryState === "not-configured" ? "Email delivery provider status is not configured in this deployment; delivery is not guaranteed." : "Delivery is handled by the configured provider."}`);
     else setError(r.message);
   };
 
@@ -416,13 +416,13 @@ export function LoginPage() {
         <Icon name="chevronRight" className="h-4 w-4 rotate-180" /> Back
       </button>
       {!backendAvailable && (
-        <p className="mb-4 rounded-xl bg-amber-50 p-3.5 text-[13px] text-amber-900">The Run Local server is unreachable — sign-in is unavailable.</p>
+        <p className="mb-4 rounded-xl bg-amber-50 p-3.5 text-[13px] text-amber-900">The Kimbio server is unreachable — sign-in is unavailable.</p>
       )}
       <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
         <h1 className="text-xl font-extrabold">{mode === "login" ? "Log in" : "Create your account"}</h1>
         <p className="mt-1 text-[13px] text-slate-600">
           {mode === "login"
-            ? "Use your email and password. Your Run Local session is secured by server-side token validation."
+            ? "Use your email and password. Your Kimbio session is secured by server-side token validation."
             : "Sign up with email and password. We'll email you a confirmation link, then you'll finish identity verification from your profile."}
         </p>
         <div className="mt-4 space-y-4">
@@ -571,7 +571,7 @@ export function LoginPage() {
                   </p>
                 ) : null}
                 <span className="mt-1 block text-[11px] leading-relaxed text-slate-400">
-                  Run Local is city-scoped — this is the community your home, events, races, and forum default to. You can
+                  Kimbio is city-scoped — this is the community your home, events, races, and forum default to. You can
                   change it later in Settings.
                 </span>
               </div>

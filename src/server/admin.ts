@@ -203,7 +203,7 @@ export interface Authz {
   scope: { kind: ScopeKind; cityId: string | null };
   /** Admin identity for the audit log. */
   admin: string;
-  /** Run Local account id (null for key-admin sessions). */
+  /** Kimbio account id (null for key-admin sessions). */
   accountId: string | null;
 }
 

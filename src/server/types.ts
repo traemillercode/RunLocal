@@ -117,7 +117,7 @@ export interface AccountRecord {
   /**
    * Supabase Auth user UUID (sub) linked after email OTP verification.
    * Server-side only — never shipped to the client. This is the secure bridge
-   * between the Supabase-authenticated email identity and the Run Local
+   * between the Supabase-authenticated email identity and the Kimbio
    * account; null until the first successful OTP verification.
    */
   supabaseAuthId: string | null;
@@ -360,7 +360,7 @@ export interface AuditEntry {
    */
   change: string | null;
   /**
-   * Run Local account id of the actor (signed-in user actions outside the
+   * Kimbio account id of the actor (signed-in user actions outside the
    * admin-session model, e.g. group-lead moderation). Null for key-admin
    * sessions and legacy entries written before this field existed.
    */

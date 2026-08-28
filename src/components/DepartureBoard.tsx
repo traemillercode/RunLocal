@@ -604,13 +604,13 @@ export default function DepartureBoard({ events, onHostRun }: { events: RunEvent
     try {
       if (event.priceCents > 0) await startCheckout(event.id);
       else await createRsvp(event.id);
-    } catch {
+    } catch (e) {
       setRsvps((prev) => {
         const next = new Set(prev);
         next.delete(event.id);
         return next;
       });
-      setToast("Couldn't save your RSVP. Check your connection and try again.");
+      setToast(e instanceof Error && e.message ? e.message : "Couldn't save your RSVP. Check your connection and try again.");
     } finally {
       setPendingId(null);
     }

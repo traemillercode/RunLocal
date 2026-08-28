@@ -63,7 +63,7 @@ export function ConfirmationPage() {
         <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
           <h1 className="text-xl font-extrabold">Email confirmed</h1>
           <p className="mt-2 text-sm text-slate-600">
-            {signedIn ? "You’re signed in and your Run Local account is linked." : "Your email is confirmed. Log in to continue."}
+            {signedIn ? "You’re signed in and your Kimbio account is linked." : "Your email is confirmed. Log in to continue."}
           </p>
           <PillButton variant="primary" className="mt-5 w-full" onClick={() => navigate(signedIn ? "/profile" : "/login")}>
             {signedIn ? "Go to my profile" : "Log in"}

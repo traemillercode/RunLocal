@@ -465,7 +465,7 @@ export function RunnerProfileMissing() {
         to="/"
         className="mt-5 inline-flex min-h-11 items-center rounded-full bg-[#14171C] px-5 text-sm font-semibold text-white"
       >
-        Back to Run Local
+        Back to Kimbio
       </Link>
     </section>
   );

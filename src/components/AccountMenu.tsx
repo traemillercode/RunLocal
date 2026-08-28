@@ -56,7 +56,7 @@ export function AccountMenuContent({
     <>
       {!backendAvailable ? (
         <p className="mb-3 rounded-xl bg-amber-50 p-3 text-[12px] leading-relaxed text-amber-900">
-          The Run Local server is unreachable right now — signing in and verification are unavailable until it's back.
+          The Kimbio server is unreachable right now — signing in and verification are unavailable until it's back.
         </p>
       ) : null}
 
@@ -182,7 +182,7 @@ export function AccountMenuButton() {
       <Popover
         open={open}
         onClose={() => setOpen(false)}
-        title={account ? "Account" : "Run Local account"}
+        title={account ? "Account" : "Kimbio account"}
         align="right"
       >
         <AccountMenuContent

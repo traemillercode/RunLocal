@@ -2,7 +2,7 @@
  * Private iCalendar (RFC 5545) export for the runner's own upcoming My Runs.
  *
  * TIMESTAMP / TIMEZONE ASSUMPTION (documented, test-locked):
- * Run Local stores run start times as the same local wall-clock labels the app
+ * Kimbio stores run start times as the same local wall-clock labels the app
  * displays (e.g. "6:00 PM" for Columbia, MO), encoded in UTC-formatted fields
  * (`startsAt` = `YYYY-MM-DDTHH:MM:SS.000Z`). This module emits those wall-clock
  * values as FLOATING local times — `DTSTART:20260810T180000` with no `Z` and no
@@ -114,9 +114,9 @@ export function buildMyRunsIcs(runs: IcsRun[], now = new Date()): string {
   const lines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Run Local//My Runs//EN",
+    "PRODID:-//Kimbio//My Runs//EN",
     "CALSCALE:GREGORIAN",
-    "X-WR-CALNAME:Run Local — My Runs",
+    "X-WR-CALNAME:Kimbio — My Runs",
   ];
   for (const run of runs) {
     if (!run.startsAt) continue;
@@ -132,7 +132,7 @@ export function buildMyRunsIcs(runs: IcsRun[], now = new Date()): string {
       `DTEND:${end}`,
       `SUMMARY:${escapeIcalText(run.title)}`,
       ...(run.location ? [`LOCATION:${escapeIcalText(run.location)}`] : []),
-      `DESCRIPTION:${run.kind === "solo" ? "Added from Run Local. Private solo run." : "Added from Run Local. Private RSVP for this occurrence."}`,
+      `DESCRIPTION:${run.kind === "solo" ? "Added from Kimbio. Private solo run." : "Added from Kimbio. Private RSVP for this occurrence."}`,
       "CLASS:PRIVATE",
       "END:VEVENT",
     );

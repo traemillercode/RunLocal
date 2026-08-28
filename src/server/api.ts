@@ -1,5 +1,5 @@
 /**
- * HTTP API layer for the Run Local identity & safety features.
+ * HTTP API layer for the Kimbio identity & safety features.
  *
  * Served by serve.ts on the same origin as the SPA (port 3000). All /api
  * responses are `Cache-Control: no-store`; state-changing endpoints require
@@ -1173,7 +1173,7 @@ async function handleApi(
   // ---- account creation (signup completion) ------------------------------
   // Used by the password signup flow AFTER Supabase created the auth user:
   // the local Pending profile carries only profile metadata (name, email,
-  // birthdate, optional phone) — the password NEVER reaches Run Local.
+  // birthdate, optional phone) — the password NEVER reaches Kimbio.
   // `noSession: true` is for the email-confirmation-required path, where
   // Supabase returns no session: the pending account is created but NO Run
   // Local session cookie is issued, so nothing claims signed-in status
@@ -1200,7 +1200,7 @@ async function handleApi(
     const rawCityId = typeof body.cityId === "string" ? body.cityId : "";
     const cityId = rawCityId.trim();
     if (!cityId) {
-      return err(res, { status: 400, error: "city_required", message: "Choose your home city — Run Local is city-scoped and your community content defaults to it." }), true;
+      return err(res, { status: 400, error: "city_required", message: "Choose your home city — Kimbio is city-scoped and your community content defaults to it." }), true;
     }
     if (rawCityId !== cityId || cityStatus(db, cityId) === null) {
       return err(res, { status: 400, error: "invalid_city", message: "That city isn't supported yet — pick one from the list." }), true;
@@ -1282,7 +1282,7 @@ async function handleApi(
   // ---- request email verification (Supabase delivers it) ----------------------------
   // Supabase sends the 6-digit code to the user's inbox. This endpoint only
   // gates the request: session, funnel phase, provider configuration, and the
-  // Run Local rate limit. The actual send happens client-side via the
+  // Kimbio rate limit. The actual send happens client-side via the
   // supabase-js `email verification` call, so the server never holds the code.
   if (method === "POST" && url.pathname === "/api/verify/start") {
     const sess = requireSession(db, cookies);
@@ -1308,7 +1308,7 @@ async function handleApi(
   // The client verifies the 6-digit code with Supabase (verification code) and sends
   // the resulting access token here. The server NEVER trusts the client's
   // claim: it introspects the token against Supabase and only then links the
-  // Supabase user (sub) to the Run Local account and advances the funnel.
+  // Supabase user (sub) to the Kimbio account and advances the funnel.
   // Email verification alone moves the funnel to the selfie step — it does NOT
   // grant the Verified badge (only owner approval does).
   if (method === "POST" && url.pathname === "/api/verify/check") {
@@ -1439,7 +1439,7 @@ async function handleApi(
     if (!rec || rec.deletedAt) return err(res, { status: 401, error: "sign_in_required" }), true;
     const cityId = typeof body.cityId === "string" ? body.cityId.trim() : "";
     if (!cityId) {
-      return err(res, { status: 400, error: "city_required", message: "Choose your home city — Run Local is city-scoped and your community content defaults to it." }), true;
+      return err(res, { status: 400, error: "city_required", message: "Choose your home city — Kimbio is city-scoped and your community content defaults to it." }), true;
     }
     const status = cityStatus(db, cityId);
     if (status === null) {
@@ -1481,7 +1481,7 @@ async function handleApi(
   // Guests with an existing account sign in through the SAME Supabase OTP path
   // as signup: the server validates the account exists and gates the request;
   // Supabase delivers the code; the client verifies it; the server validates
-  // the resulting Supabase identity and issues the Run Local session cookie.
+  // the resulting Supabase identity and issues the Kimbio session cookie.
   // Every failure is explicit: unknown email, rejected account, unconfigured
   // provider, rejected/unverifiable Supabase token.
   if (method === "POST" && url.pathname === "/api/login/start") {
@@ -1492,7 +1492,7 @@ async function handleApi(
     }
     const rec = db.getAccountByEmail(email);
     if (!rec || rec.deletedAt) {
-      return err(res, { status: 404, error: "no_account", message: "No Run Local account found for that email — you can sign up instead." }), true;
+      return err(res, { status: 404, error: "no_account", message: "No Kimbio account found for that email — you can sign up instead." }), true;
     }
     if (rec.status === "rejected") {
       return err(res, { status: 403, error: "account_rejected", message: "This account was rejected and can't sign in. Contact the owner if you believe this is a mistake." }), true;
@@ -1531,7 +1531,7 @@ async function handleApi(
     // derived from the email local-part as a placeholder (never fabricated
     // claims — no birthdate/phone are invented); the normal signup-metadata
     // path collects the real profile on a fresh signup. This is what fixes
-    // "auth.users exists but Run Local has no account → no_account".
+    // "auth.users exists but Kimbio has no account → no_account".
     let rec = db.getAccountByEmail(verified.email);
     if (!rec || rec.deletedAt) {
       rec = db.createAccount({ name: displayNameFromEmail(verified.email), email: verified.email });

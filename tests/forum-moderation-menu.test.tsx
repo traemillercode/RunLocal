@@ -192,7 +192,7 @@ describe("ForumPage — seed posts carry admin-only menu items", () => {
       </MemoryRouter>,
     );
     // Seed announcements render in the default tab; admins get Hide/Restore/Delete.
-    expect(html).toContain('aria-label="Actions for Welcome to Run Local — Columbia is live!"');
+    expect(html).toContain('aria-label="Actions for Welcome to Kimbio — Columbia is live!"');
     expect(html).toContain('aria-haspopup="menu"');
   });
 
@@ -204,7 +204,7 @@ describe("ForumPage — seed posts carry admin-only menu items", () => {
         <ForumPage city={city} />
       </MemoryRouter>,
     );
-    expect(html).toContain('aria-label="Actions for Welcome to Run Local — Columbia is live!"');
+    expect(html).toContain('aria-label="Actions for Welcome to Kimbio — Columbia is live!"');
   });
 
   it("guest sees NO action menu on seed posts", () => {

@@ -10,7 +10,7 @@ import { PERSONAL_RUN_CONSENT_VERSION } from "../src/server/types";
 import { buildMyRunsIcs, escapeIcalText, foldIcalText, myRunsIcsFilename, toIcalDateTime } from "../src/server/ical";
 
 /**
- * TIMEZONE ASSUMPTION (test-locked): Run Local stores run start times as the
+ * TIMEZONE ASSUMPTION (test-locked): Kimbio stores run start times as the
  * local wall-clock labels the app displays (e.g. "6:00 PM"), encoded in UTC
  * fields. The ICS export emits those wall-clock values as FLOATING local times
  * (no `Z`, no `TZID`) so Google/Outlook/Apple render the same wall-clock time
@@ -68,9 +68,9 @@ describe("iCalendar generation (RFC 5545)", () => {
     const ics = buildMyRunsIcs([run], now);
     expect(ics).toContain("BEGIN:VCALENDAR\r\n");
     expect(ics).toContain("VERSION:2.0\r\n");
-    expect(ics).toContain("PRODID:-//Run Local//My Runs//EN\r\n");
+    expect(ics).toContain("PRODID:-//Kimbio//My Runs//EN\r\n");
     expect(ics).toContain("CALSCALE:GREGORIAN\r\n");
-    expect(ics).toContain("X-WR-CALNAME:Run Local — My Runs\r\n");
+    expect(ics).toContain("X-WR-CALNAME:Kimbio — My Runs\r\n");
     expect(ics).toContain("BEGIN:VEVENT\r\n");
     expect(ics).toContain("UID:myrun-row-1@runlocal\r\n");
     expect(ics).toContain("DTSTAMP:20260809T120000Z\r\n"); // DTSTAMP is always UTC
@@ -78,7 +78,7 @@ describe("iCalendar generation (RFC 5545)", () => {
     expect(ics).toContain("DTEND:20260810T190000\r\n"); // +60 min default duration
     expect(ics).toContain("SUMMARY:Monday social run\r\n");
     expect(ics).toContain("LOCATION:Downtown Columbia\\, MO\r\n"); // comma escaped per RFC 5545
-    expect(ics).toContain("DESCRIPTION:Added from Run Local. Private RSVP for this occurrence.\r\n");
+    expect(ics).toContain("DESCRIPTION:Added from Kimbio. Private RSVP for this occurrence.\r\n");
     expect(ics).toContain("CLASS:PRIVATE\r\n");
     expect(ics).toContain("END:VEVENT\r\nEND:VCALENDAR\r\n");
   });
@@ -118,7 +118,7 @@ describe("iCalendar generation (RFC 5545)", () => {
 
   it("marks solo runs with their own private description and floating time", () => {
     const ics = buildMyRunsIcs([{ id: "solo-1", kind: "solo", title: "Easy jog", startsAt: "2026-08-11T06:05:00.000Z", location: "Stephens Lake" }], now);
-    expect(ics).toContain("DESCRIPTION:Added from Run Local. Private solo run.\r\n");
+    expect(ics).toContain("DESCRIPTION:Added from Kimbio. Private solo run.\r\n");
     expect(ics).toContain("DTSTART:20260811T060500\r\n");
     expect(ics).toContain("DTEND:20260811T070500\r\n");
   });
@@ -208,6 +208,6 @@ describe("private My Runs ICS API", () => {
     expect(out.status).toBe(200);
     expect(out.body).toContain(`DTSTART:${icsDate(upcomingMonday)}T060500`);
     expect(out.body).toContain(`DTEND:${icsDate(upcomingMonday)}T070500`);
-    expect(out.body).toContain("DESCRIPTION:Added from Run Local. Private solo run.\r\n");
+    expect(out.body).toContain("DESCRIPTION:Added from Kimbio. Private solo run.\r\n");
   });
 });

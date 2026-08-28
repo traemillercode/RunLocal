@@ -16,8 +16,8 @@ export function ProviderCallbackPage() {
         <h1 className="mt-2 text-xl font-extrabold">{denied ? "Connection cancelled" : "Connection not completed"}</h1>
         <p className="mt-2 text-sm text-slate-600">
           {denied
-            ? "Strava did not authorize Run Local. No activity access was granted."
-            : "This callback reached Run Local, but this deployment cannot complete the Strava connection from this URL. No token was saved."}
+            ? "Strava did not authorize Kimbio. No activity access was granted."
+            : "This callback reached Kimbio, but this deployment cannot complete the Strava connection from this URL. No token was saved."}
         </p>
         <PillButton variant="primary" className="mt-5 w-full" onClick={() => navigate("/settings", { replace: true })}>Return to settings</PillButton>
         <button type="button" onClick={() => cancelCallback(navigate, "/")} className="mt-3 block w-full text-center text-sm font-semibold text-slate-600 underline">Cancel</button>

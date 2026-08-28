@@ -1,5 +1,5 @@
 /**
- * Single navigation model for Run Local — the ONE source of truth for the
+ * Single navigation model for Kimbio — the ONE source of truth for the
  * mobile bottom tab bar, the desktop sidebar, and the account menu.
  *
  * Before this module existed, three independent nav definitions (BottomNav

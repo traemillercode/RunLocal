@@ -42,8 +42,8 @@ describe("RunnerProfileHeader — identity card (guest-accessible)", () => {
     expect(html).toContain("Taylor Runner");
     expect(html).toContain("@taylor_runs");
     expect(html).toContain("Home: Columbia");
-    expect(html).toContain('title="Identity verified by Run Local"'); // VerifiedBadge artifact
-    expect(html).toContain("Trusted member — verified by Run Local leadership"); // TrustedBadge artifact
+    expect(html).toContain('title="Identity verified by Kimbio"'); // VerifiedBadge artifact
+    expect(html).toContain("Trusted member — verified by Kimbio leadership"); // TrustedBadge artifact
     expect(html).toContain("Group Leader");
   });
   it("renders initials fallback when there is no photo and hides badges when unset", () => {
@@ -116,7 +116,7 @@ describe("RunnerProfileMissing — honest 404 state", () => {
       </MemoryRouter>,
     );
     expect(html).toContain("Runner not found");
-    expect(html).toContain("Back to Run Local");
+    expect(html).toContain("Back to Kimbio");
     expect(html).toContain('href="/"');
   });
 });

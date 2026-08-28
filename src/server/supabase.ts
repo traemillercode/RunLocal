@@ -3,7 +3,7 @@
  *
  * Supabase owns email delivery + OTP verification (email verification run in the browser with the PUBLIC anon key). This module is the
  * server's half of the bridge: it validates that a presented access token is
- * a REAL Supabase session for a given identity, so the Run Local server never
+ * a REAL Supabase session for a given identity, so the Kimbio server never
  * trusts a client-supplied "email verified" claim, email address, or role.
  *
  * Verification strategy (honest, no fake auth):
@@ -111,7 +111,7 @@ export async function verifySupabaseToken(token: string, opts: TokenVerifyOption
 }
 
 /**
- * Apply the Supabase identity to a Run Local account — the secure bridge
+ * Apply the Supabase identity to a Kimbio account — the secure bridge
  * rules. Returns the store patch to apply on success; on failure the caller
  * must NOT link anything.
  *
