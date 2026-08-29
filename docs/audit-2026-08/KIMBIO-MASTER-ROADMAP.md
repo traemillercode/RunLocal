@@ -27,7 +27,7 @@ not from build output.
 | 0.8 Sponsor price snapshot | ✅ |
 | 0.9 Marketing imagery | **Trae's** — real Columbia photos |
 | 0.10 Code splitting | ✅ 1,332 KB → 612 KB entry; FCP 3,364 → 2,132 ms. LCP criterion re-assigned to Phase 1 (null LCP is a content problem, not a bundle problem) |
-| 0.11 Accessibility | Open — last engineering item. Legs 1–2 verified (`text-[8px]`, sub-44px). Leg 3 re-derive from missing `aria-label`s, which also fixes blank feedback breadcrumbs |
+| 0.11 Accessibility | **Done (f2da771), with a correction (f736976).** Leg 3 was 7 unlabelled icon-only controls, not 139. Leg 1: 40 sub-11px sites retired. **Leg 2's originally-recorded "16 controls lifted" was WRONG — the guard's `<button\b([^>]*)>` capture stopped at the `>` inside an inline `=>` handler, so most buttons were never scanned. Real total is 40 across 14 files, down to `h-7`.** Guard rewritten brace-aware |
 | Canonical host | ✅ Bonus — 3 hostnames → 301 to `getkimbio.com`, per-route canonical, POST not redirected |
 | Build ID | ✅ Bonus — resolved at Vite config time with git fallback |
 

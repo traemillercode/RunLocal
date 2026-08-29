@@ -4,6 +4,8 @@ import { MarketingLiveBoard } from "../components/MarketingLiveBoard";
 import { CITIES } from "../data/cities";
 import { Icon } from "../components/ui";
 import type { IconName } from "../components/ui";
+import { FEATURES, type Feature } from "../lib/features";
+import { isPublicReadPath } from "../lib/geofenceBypass";
 
 const city = CITIES.find((item) => item.id === "columbia-mo");
 
@@ -48,12 +50,31 @@ const FEATURED_ROUTES = [
   { name: "Grindstone Loop", surface: "Trail", distance: "8.1 mi", elevation: "480 ft", photo: MARKETING_IMAGES.track },
 ];
 
-const EXPLORE_LINKS: { to: string; label: string; icon: IconName; blurb: string }[] = [
-  { to: "/", label: "Events", icon: "calendar", blurb: "This week's group runs" },
-  { to: "/races", label: "Races", icon: "trophy", blurb: "Every local race, one place" },
-  { to: "/forum", label: "Forum", icon: "chat", blurb: "Ask, share, find a pace group" },
-  { to: "/routes", label: "Routes", icon: "mapPin", blurb: "Real GPX-backed trails" },
-];
+/**
+ * Explore destinations, derived rather than listed.
+ *
+ * Two defects this replaces:
+ *   1. "Events" pointed at "/", which for a signed-out visitor IS this page —
+ *      clicking it reloaded the page you were already on.
+ *   2. "Forum" was offered but /forum is deliberately NOT a public read route
+ *      (reading community discussion is a member benefit, not a shop window),
+ *      so a guest clicking it hit the geofence and bounced back here. Groups,
+ *      which IS public, was missing entirely.
+ *
+ * Filtering on isPublicReadPath makes the second class impossible: this menu
+ * can no longer advertise a destination the geofence will refuse. If a route's
+ * public status changes, the menu follows automatically instead of drifting.
+ */
+const EXPLORE_BLURBS: Record<string, string> = {
+  "/events": "This week's group runs",
+  "/groups": "Run clubs and crews near you",
+  "/races": "Every local race, one place",
+  "/routes": "Real routes runners actually use",
+};
+
+const EXPLORE_LINKS: { to: string; label: string; icon: IconName; blurb: string }[] = (FEATURES as readonly Feature[])
+  .filter((f) => f.reach.kind === "nav" && f.nav && f.roles.includes("guest") && isPublicReadPath(f.route))
+  .map((f) => ({ to: f.route, label: f.nav!.label, icon: f.nav!.icon, blurb: EXPLORE_BLURBS[f.route] ?? f.summary }));
 
 function MarketingNav() {
   const [exploreOpen, setExploreOpen] = useState(false);
