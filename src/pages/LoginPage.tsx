@@ -284,6 +284,23 @@ export function LoginPage() {
     setResendNotice(null);
 
     if (mode === "signup") {
+      /*
+       * ASK BEFORE CREATING ANYTHING. supabase.signUp() below creates an auth
+       * user and sends a confirmation email; the cap is enforced afterwards, in
+       * POST /api/accounts. Without this check a refused signup leaves a
+       * Supabase identity with no Kimbio account and a confirmation email for
+       * an account that will never exist — cleanup by hand in the Supabase
+       * console.
+       *
+       * The server still enforces the cap independently. This is not the gate;
+       * it is what stops the gate leaving debris.
+       */
+      const status = await api.getSignupStatus(cityId!);
+      if (status.ok && !status.data.open) {
+        setBusy(false);
+        setError(status.data.message ?? "Signups are closed right now.");
+        return;
+      }
       const r = await supabase.signUp(e, password, { data: { username: normalizeUsername(username)!, display_name: name.trim() } });
       if (!r.ok) {
         setBusy(false);

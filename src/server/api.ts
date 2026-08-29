@@ -109,7 +109,7 @@ import { listAdminContent, editContentTitle, hideContent, restoreContent, archiv
 import { publicSponsors, publicSponsorPayment, listAdminSponsors, createSponsor, updateSponsor, deleteSponsor, submitSponsorInquiry, checkSponsorAvailability } from "./sponsors";
 import { createSponsorCheckout, createPublicSponsorCheckout, handleStripeWebhook, activateSponsorFromEvent, stripeConfigured, sponsorTotalPriceUsd } from "./payments";
 import { sendWeeklyPlanEmail } from "./weeklyPlanEmail";
-import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation, betaCapReached } from "./invitations";
+import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation, betaCapReached, BETA_FULL_MESSAGE } from "./invitations";
 import { repairApprovedSubmissions } from "./submissionBackfill";
 import {
   credentialType,
@@ -1180,6 +1180,38 @@ async function handleApi(
   // Local session cookie is issued, so nothing claims signed-in status
   // without a valid Supabase session. The account links to the verified
   // Supabase identity on the user's first confirmed login (/api/login/check).
+  /*
+   * GET /api/signup-status?city=… — can this city accept a signup right now?
+   *
+   * Exists because of an ORPHAN. LoginPage calls supabase.signUp() FIRST, which
+   * creates a Supabase auth user and sends a confirmation email, and only then
+   * calls POST /api/accounts where the cap refuses. So a refused twelfth person
+   * would be left with a Supabase identity, a confirmation email for an account
+   * that does not exist, and a rejection message — requiring manual cleanup in
+   * the Supabase console.
+   *
+   * The server-side ordering was already correct (the cap refuses long before
+   * any db write); the orphan is one layer up, in the client's two-step signup.
+   * This lets the client ask before it creates anything.
+   *
+   * Unauthenticated and deliberately thin: a boolean and a message. It reveals
+   * that a beta is full, which is public-facing copy anyway, and nothing about
+   * who is in it or how many slots remain.
+   */
+  if (method === "GET" && url.pathname === "/api/signup-status") {
+    const cityId = (url.searchParams.get("city") ?? "").trim();
+    const status = cityId ? cityStatus(db, cityId) : null;
+    if (!status) return ok(res, { open: true }), true; // unknown city: let the real endpoint decide
+    if (status === "coming_soon" || status === "inactive") {
+      const e = cityNotOpenError(status);
+      return ok(res, { open: false, reason: e.error, message: e.message }), true;
+    }
+    if (status === "invite_only" && betaCapReached(db)) {
+      return ok(res, { open: false, reason: "beta_full", message: BETA_FULL_MESSAGE }), true;
+    }
+    return ok(res, { open: true }), true;
+  }
+
   if (method === "POST" && url.pathname === "/api/accounts") {
     const body = (await readJson(req)) as { name?: unknown; username?: unknown; email?: unknown; phone?: unknown; birthdate?: unknown; cityId?: unknown; requestedRole?: unknown; noSession?: unknown; invitationToken?: unknown };
     const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -1237,7 +1269,7 @@ async function handleApi(
         return err(res, {
           status: 403,
           error: "beta_full",
-          message: "Kimbio is in a closed beta right now and this week's spots are taken. We're opening up soon.",
+          message: BETA_FULL_MESSAGE,
         }), true;
       }
     }

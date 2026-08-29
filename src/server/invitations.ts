@@ -278,3 +278,20 @@ export function betaCapReached(db: Db, env: NodeJS.ProcessEnv = process.env): bo
   const cap = betaRedemptionCap(env);
   return cap > 0 && redemptionCount(db) >= cap;
 }
+
+/**
+ * Shown when the cohort is full.
+ *
+ * Deliberately NOT "this week's spots are taken" — that implies slots reopen on
+ * Monday, and someone who comes back would be refused again. And a bare
+ * "opening up soon" is a promise with nothing to act on.
+ *
+ * The mailto is the email capture: hello@getkimbio.com receives now, so this
+ * collects the next cohort without a table, an endpoint or a form. When the
+ * queue justifies real capture, the replies will already say whether anyone
+ * writes in.
+ *
+ * Exported so the pre-check and the refusal cannot drift apart.
+ */
+export const BETA_FULL_MESSAGE =
+  "Kimbio is in a closed beta while we get things right for Columbia. We're opening up soon — email hello@getkimbio.com and we'll save you a spot.";

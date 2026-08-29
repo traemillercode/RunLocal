@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 import { betaRedemptionCap, redemptionCount, betaCapReached } from "../src/server/invitations";
 import { createMemoryStore, type Db } from "../src/server/store";
+import { readCode, codeIndexOf, codeCount } from "./helpers/source";
 
 function invitation(db: Db, id: string, used: boolean) {
   db.appendInvitation({
@@ -93,14 +94,21 @@ describe("the gate applies to SIGN-UP only, never SIGN-IN", () => {
   });
 
   it("the server enforces the cap on account creation, not on session creation", async () => {
-    const { readFileSync } = await import("node:fs");
-    const api = readFileSync(new URL("../src/server/api.ts", import.meta.url).pathname, "utf8");
-    // betaCapReached must appear exactly once, inside the POST /api/accounts
-    // handler — not on any session or login route.
-    expect((api.match(/betaCapReached\(/g) ?? []).length).toBe(1);
-    const capAt = api.indexOf("betaCapReached(");
-    const accountsAt = api.indexOf('url.pathname === "/api/accounts"');
-    expect(capAt).toBeGreaterThan(accountsAt);
+    // Appears twice by design: the /api/signup-status pre-check and the
+    // /api/accounts refusal. Both are signup paths. What matters is that
+    // neither is a session route.
+    const code = readCode(new URL("../src/server/api.ts", import.meta.url));
+    expect(codeCount(code, "betaCapReached(")).toBe(2);
+    const statusAt = codeIndexOf(code, 'url.pathname === "/api/signup-status"');
+    const accountsAt = codeIndexOf(code, 'url.pathname === "/api/accounts"');
+    expect(statusAt).toBeGreaterThan(-1);
+    expect(accountsAt).toBeGreaterThan(-1);
+    // No cap check anywhere near a session/login handler.
+    for (const sessionRoute of ['"/api/sessions"', '"/api/login"']) {
+      const at = codeIndexOf(code, sessionRoute);
+      if (at === -1) continue;
+      expect(code.slice(at, at + 900)).not.toContain("betaCapReached");
+    }
   });
 });
 
@@ -108,22 +116,86 @@ describe("the owner is never locked out", () => {
   it("the cap check exempts the owner email", async () => {
     // Filling the cohort must not stop the owner testing the signed-out signup
     // flow — the class of problem discovered at the worst possible moment.
-    const { readFileSync } = await import("node:fs");
-    const api = readFileSync(new URL("../src/server/api.ts", import.meta.url).pathname, "utf8");
-    expect(api).toContain("!isOwnerEmail(email) && betaCapReached(db)");
+    const code = readCode(new URL("../src/server/api.ts", import.meta.url));
+    expect(code).toContain("!isOwnerEmail(email) && betaCapReached(db)");
   });
 });
 
 describe("the eleventh person gets copy, not an error code", () => {
   it("the refusal message is human and says what happens next", async () => {
-    const { readFileSync } = await import("node:fs");
-    const api = readFileSync(new URL("../src/server/api.ts", import.meta.url).pathname, "utf8");
-    const msg = /error: "beta_full",\s*\n\s*message: "([^"]+)"/.exec(api)?.[1] ?? "";
+    const { BETA_FULL_MESSAGE: msg } = await import("../src/server/invitations");
     expect(msg.length).toBeGreaterThan(40);
     expect(msg.toLowerCase()).toContain("closed beta");
     // Must not read as the user's fault — they did nothing wrong.
     for (const blame of ["invalid", "not allowed", "denied", "forbidden"]) {
       expect(msg.toLowerCase()).not.toContain(blame);
     }
+  });
+});
+
+describe("a minted invite consumes no slot until it is redeemed", () => {
+  it("twelve minted, none redeemed — signup still open", () => {
+    // The failure this rules out: if the cap counted CREATED invitations,
+    // minting twelve links would refuse the twelfth person before anyone had
+    // signed up at all.
+    const db = createMemoryStore();
+    for (let i = 0; i < 12; i++) invitation(db, `minted-${i}`, false);
+    expect(redemptionCount(db)).toBe(0);
+    expect(betaCapReached(db, { BETA_REDEMPTION_CAP: "12" } as never)).toBe(false);
+  });
+
+  it("the count moves only when usedAt is set", () => {
+    const db = createMemoryStore();
+    invitation(db, "pending", false);
+    expect(redemptionCount(db)).toBe(0);
+    // Redemption is what sets usedAt — see redeemInvitation().
+    db.updateInvitation("pending", { usedAt: new Date().toISOString(), usedByAccountId: "acc-1" });
+    expect(redemptionCount(db)).toBe(1);
+  });
+
+  it("a revoked-but-used invitation still counts, since the account exists", () => {
+    // Revoking after redemption does not un-create the account, so the slot
+    // stays consumed. Otherwise revoking would silently reopen a slot while
+    // the person remains in the beta.
+    const db = createMemoryStore();
+    invitation(db, "used-then-revoked", true);
+    db.updateInvitation("used-then-revoked", { revokedAt: new Date().toISOString() });
+    expect(redemptionCount(db)).toBe(1);
+  });
+});
+
+describe("a refused signup leaves nothing behind", () => {
+  it("the cap check precedes every account write in the handler", async () => {
+    const code = readCode(new URL("../src/server/api.ts", import.meta.url));
+    const route = codeIndexOf(code, 'url.pathname === "/api/accounts"');
+    const cap = codeIndexOf(code, "betaCapReached(db)", route);
+    const write = codeIndexOf(code, "db.createAccount(", route);
+    expect(cap).toBeGreaterThan(-1);
+    expect(write).toBeGreaterThan(-1);
+    expect(cap).toBeLessThan(write);
+  });
+
+  it("the client asks before creating a Supabase user", async () => {
+    /*
+     * The orphan the server ordering cannot prevent: LoginPage calls
+     * supabase.signUp() first, which creates an auth user and sends a
+     * confirmation email, and only then hits the capped endpoint. A refused
+     * twelfth person would be left with a Supabase identity, a confirmation
+     * email for an account that never exists, and a rejection — cleanup by hand.
+     */
+    // Comments stripped: the first "supabase.signUp(" in this file is in its
+    // docblock, and matching that reported the call at character 118 — before
+    // the imports. Third time a guard has read prose about code as code.
+    const src = readCode(new URL("../src/pages/LoginPage.tsx", import.meta.url));
+    const check = codeIndexOf(src, "api.getSignupStatus(");
+    const create = codeIndexOf(src, "supabase.signUp(");
+    expect(check).toBeGreaterThan(-1);
+    expect(check).toBeLessThan(create);
+  });
+
+  it("the pre-check and the refusal share one message, so they cannot drift", async () => {
+    const code = readCode(new URL("../src/server/api.ts", import.meta.url));
+    expect(codeCount(code, "BETA_FULL_MESSAGE")).toBeGreaterThanOrEqual(2);
+    expect(code).not.toContain("this week's spots are taken");
   });
 });

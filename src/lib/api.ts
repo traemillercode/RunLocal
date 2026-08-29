@@ -1792,3 +1792,14 @@ export function submitFeedback(category: FeedbackCategory, message: string, cont
 export function getPublicGoingCounts(occurrenceIds: string[]): Promise<ApiResult<{ summaries: { eventId: string; goingCount: number }[] }>> {
   return request(`/api/events/public-summary?ids=${encodeURIComponent(occurrenceIds.join(","))}`);
 }
+
+/**
+ * Can this city accept a signup right now?
+ *
+ * Called BEFORE supabase.signUp(), which creates an auth user and sends a
+ * confirmation email. Without this pre-check a refused signup leaves a Supabase
+ * identity with no Kimbio account behind it — an orphan needing manual cleanup.
+ */
+export function getSignupStatus(cityId: string): Promise<ApiResult<{ open: boolean; reason?: string; message?: string }>> {
+  return request(`/api/signup-status?city=${encodeURIComponent(cityId)}`);
+}
