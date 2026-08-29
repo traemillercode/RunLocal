@@ -214,3 +214,24 @@ describe("registry assertion 7 — nav constraints", () => {
     }
   });
 });
+
+describe("registry assertion 8 — the Training tab is never a dead end", () => {
+  it("has training features to offer when there is no plan", () => {
+    // The Training tab used to land on "No training plan yet — set up a plan in
+    // Settings": a surface explaining why it is empty instead of doing
+    // something, on the first screen every new account sees. The no-plan state
+    // now renders these as cards, so the tab is only as empty as this list.
+    const cards = features.filter(
+      (f) => f.area === "training" && f.status === "live" && f.id !== "training" && f.reach.kind === "child" && !f.route.includes(":"),
+    );
+    expect(cards.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("every entry has a label distinct from its summary", () => {
+    // nav.label only exists for nav entries, but a CHILD still needs a name
+    // wherever it is listed. Falling back to summary rendered the same sentence
+    // as both heading and subtitle.
+    const same = features.filter((f) => f.label.trim().toLowerCase() === f.summary.trim().replace(/\.$/, "").toLowerCase());
+    expect(same.map((f) => f.id)).toEqual([]);
+  });
+});

@@ -4,6 +4,7 @@ import * as api from "../lib/api";
 import { useToast } from "../lib/toast";
 import { Icon } from "../components/ui";
 import { useDeadEnd } from "../lib/friction";
+import { FEATURES, type Feature } from "../lib/features";
 import { resolveSlot, slotLabel, bySessionTime, totalUnitFor, toTotal, totalUnitLabel } from "../lib/slots";
 import { RecurrenceSchedulerSheet } from "../components/RecurrenceSchedulerSheet";
 
@@ -62,6 +63,69 @@ function addDays(d: Date, n: number): Date {
  * to go to Settings to do anything. A separate component so the hook is not
  * called conditionally in the parent's early-return branch.
  */
+/**
+ * The Training tab's no-plan state.
+ *
+ * WAS: "No training plan yet — set up a plan in Settings" with a button to
+ * Settings. That is the pattern removed twice already this build — a surface
+ * that explains why it is empty instead of doing something — and it was the
+ * first screen every new account would hit on a tab that had just been
+ * promoted to the bottom bar. It also pointed at Settings, which is not where
+ * anyone looks for training.
+ *
+ * NOW: the six training features that previously hung off this page and
+ * nowhere else are rendered as cards, DERIVED from the registry rather than
+ * listed here — so a new training feature appears automatically and cannot
+ * become the next orphan.
+ *
+ * This is deliberately NOT the 1.12 hub. It makes the tab non-empty using what
+ * already exists, and gives those six a front door for the first time, which
+ * was the point of giving Training a tab at all.
+ */
+function TrainingNoPlan() {
+  // area === "training", minus the hub itself and detail routes that need a
+  // parent record to make sense.
+  const cards = (FEATURES as readonly Feature[]).filter(
+    (f) => f.area === "training" && f.status === "live" && f.id !== "training" && f.reach.kind === "child" && !f.route.includes(":"),
+  );
+  return (
+    <div className="mx-auto max-w-md px-4 py-8 desktop-reading-narrow">
+      <NoPlanDeadEnd />
+      <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">Training</p>
+      <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Build your weeks</h1>
+      <p className="mt-1 text-sm text-slate-500">
+        A plan lays out your runs day by day. You don&apos;t need one to use everything else here.
+      </p>
+
+      {/* Primary action stays "Start a plan"; the cards are what you can do meanwhile. */}
+      <Link
+        to="/settings"
+        className="mt-4 flex h-11 items-center justify-center rounded-xl bg-[#14171C] text-[14px] font-bold text-white"
+      >
+        Start a plan
+      </Link>
+
+      <ul className="mt-6 space-y-2">
+        {cards.map((f) => (
+          <li key={f.id}>
+            <Link
+              to={f.route}
+              className="flex min-h-11 items-center gap-3 rounded-xl bg-white px-4 py-3 ring-1 ring-slate-200/70"
+            >
+              <Icon name={f.nav?.icon ?? "calendar"} className="h-4 w-4 shrink-0 text-slate-400" />
+              <span className="flex-1">
+                <span className="block text-[14px] font-bold text-slate-900">{f.label}</span>
+                <span className="block text-[12px] text-slate-500">{f.summary}</span>
+              </span>
+              <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-slate-300" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function NoPlanDeadEnd() {
   useDeadEnd("training-plan-no-plan", true, "reached training plan without a plan");
   return null;
@@ -110,19 +174,7 @@ export function TrainingPlanDetailPage() {
     return <div className="mx-auto max-w-2xl px-4 py-10 text-center text-sm text-slate-500">Loading…</div>;
   }
 
-  if (plan === null) {
-    return (
-      <div className="mx-auto max-w-md px-4 py-10 text-center">
-        <NoPlanDeadEnd />
-        <Icon name="calendar" className="mx-auto h-8 w-8 text-slate-300" />
-        <h1 className="mt-3 text-lg font-extrabold text-slate-900">No training plan yet</h1>
-        <p className="mt-1 text-sm text-slate-500">Set up a plan in Settings to start planning your days.</p>
-        <Link to="/settings" className="mt-4 inline-block rounded-full bg-[#14171C] px-4 py-2.5 text-sm font-bold text-white">
-          Go to Settings
-        </Link>
-      </div>
-    );
-  }
+  if (plan === null) return <TrainingNoPlan />;
 
   const planStart = plan.startDate;
   const planEnd = toDateStr(addDays(new Date(`${plan.startDate}T00:00:00Z`), plan.totalWeeks * 7 - 1));
