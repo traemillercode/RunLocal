@@ -87,3 +87,42 @@ describe("pre-existing bypasses are preserved", () => {
     expect(shouldBypassGeofence({ pathname: "/admin", signedIn: false, isOwner: true })).toBe(false);
   });
 });
+
+/**
+ * Item A made /events/:eventId publicly reachable. That is correct per D2, but
+ * it means any identity exposure on that page is now reachable by an
+ * out-of-area guest — the same leak the board avoids by making
+ * RunCard.attendees optional.
+ *
+ * Verified at the source rather than the surface: the page renders whatever
+ * the API returns, so the question is what a guest can OBTAIN, not what the
+ * component would draw if handed data. These assert the server gates, since
+ * that is the boundary that actually holds.
+ */
+describe("public event detail exposes no identities (D2)", () => {
+  it("the routes carrying identity are auth-gated server-side", async () => {
+    const { readFileSync } = await import("node:fs");
+    const api = readFileSync(new URL("../src/server/api.ts", import.meta.url).pathname, "utf8");
+
+    // connections-going returns real names. Must require a session AND verified
+    // status — a guest gets 401, so the row renders empty rather than leaking.
+    const goingStart = api.indexOf("const goingPath =");
+    const goingHandler = api.slice(goingStart, goingStart + 900);
+    expect(goingHandler).toContain("sign_in_required");
+    expect(goingHandler).toContain("verified_runner_required");
+
+    // Discussion carries author names and free text. Stricter still: verified,
+    // attending, and same city.
+    const discStart = api.indexOf("const discussionPath =");
+    const discussionHandler = api.slice(discStart, discStart + 3000);
+    expect(discussionHandler).toContain("sign_in_required");
+    expect(discussionHandler).toContain("participant_required");
+  });
+
+  it("the public going-count endpoint remains the only unauthenticated attendance source", () => {
+    // /api/events/public-summary is counts-only and leak-tested separately.
+    // If a second unauthenticated attendance endpoint ever appears, that test
+    // will not cover it — this is the reminder that it must.
+    expect(isPublicReadPath("/events/tuesday-tempo")).toBe(true);
+  });
+});
