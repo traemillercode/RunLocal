@@ -41,8 +41,6 @@ import { CoachingPage } from "./pages/CoachingPage";
 import { CoachAthletePlanPage } from "./pages/CoachAthletePlanPage";
 import { RecurrenceManagementPage } from "./pages/RecurrenceManagementPage";
 import { CoachDirectoryPage } from "./pages/CoachDirectoryPage";
-// TEMPORARY — Sentry smoke test. Remove with its route once confirmed.
-import { SentryTestPage } from "./pages/SentryTestPage";
 import { PaceCalculatorPage } from "./pages/PaceCalculatorPage";
 import { RecoveryPage } from "./pages/RecoveryPage";
 import { ConfirmationPage } from "./pages/ConfirmationPage";
@@ -67,10 +65,7 @@ import { TourHost } from "./components/TourHost";
 import { NO_NAV_PATHS } from "./lib/nav";
 
 /** Reachable from anywhere, no location check — the marketing/legal pages and account-setup flows need to work for someone outside the geofence considering a move or already mid-signup. Everything else (events, groups, messaging, etc.) requires being within GEOFENCE_RADIUS_MILES. */
-const GEOFENCE_BYPASS_PATHS = new Set(["/landing", "/legal", "/login", "/recovery", "/confirmation", "/callback",
-  // TEMPORARY — Sentry smoke test. Bypasses the geofence so it can be reached
-  // from a phone on any network. Remove with the route.
-  "/dev/sentry-test"]);
+const GEOFENCE_BYPASS_PATHS = new Set(["/landing", "/legal", "/login", "/recovery", "/confirmation", "/callback"]);
 
 function GroupRoute() { const location = useLocation(); const id = location.pathname.split("/").pop() ?? ""; return <GroupDetailPage id={id} />; }
 function RunnerRoute() { const location = useLocation(); const id = location.pathname.split("/").pop() ?? ""; return <RunnerProfilePage id={id} />; }
@@ -160,8 +155,6 @@ function Shell() {
             <Route path="/coach-roster/:athleteId" element={<CoachAthletePlanPage />} />
             <Route path="/recurring-schedules" element={<RecurrenceManagementPage />} />
             <Route path="/coaches" element={<CoachDirectoryPage />} />
-            {/* TEMPORARY — Sentry smoke test. Remove once confirmed in Sentry Issues. */}
-            <Route path="/dev/sentry-test" element={<SentryTestPage />} />
             <Route path="/pace-calculator" element={<PaceCalculatorPage />} />
             <Route path="/legal" element={<LegalPage />} />
             <Route path="/login" element={<LoginPage />} />
