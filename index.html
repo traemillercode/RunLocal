@@ -9,6 +9,18 @@
       content="Kimbio helps you find group runs, races, and running community in your city. Launching with Columbia, MO."
     />
     <meta name="theme-color" content="#14171C" />
+    <!--
+      Canonical host. Three hostnames served identical content (Railway service
+      domain, apex, www); the server now 301s the other two here, and this tag
+      is the belt-and-braces signal for anything that reaches a non-canonical
+      origin before the redirect (a cached page, a scraper that ignores 301s).
+
+      Deliberately site-root and static: a SPA has no per-route head management
+      yet, and a canonical tag pointing every route at "/" would be actively
+      worse than none. Per-route canonicals land with the prerendering work in
+      roadmap 2.12, which is where per-route <title> and OG tags belong too.
+    -->
+    <link rel="canonical" href="https://getkimbio.com/" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/icon-180.png" />

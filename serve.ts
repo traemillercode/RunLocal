@@ -101,8 +101,55 @@ await runWeeklyPlanEmailCheck();
 const weeklyPlanEmailInterval = setInterval(() => void runWeeklyPlanEmailCheck(), 60 * 60 * 1000);
 weeklyPlanEmailInterval.unref();
 
+/**
+ * Canonical host redirect.
+ *
+ * Three hostnames currently serve identical content (the Railway service
+ * domain, the apex, and www) with no redirects. That's not just duplicate
+ * content: PostHog's persistence is localStorage+cookie, and BOTH are
+ * origin-scoped — so the same runner on www and apex is two people with two
+ * consent states, gets the cookie banner twice, and splits every funnel.
+ * It also scatters SEO authority across three domains, which would make the
+ * prerendering work in 2.12 largely pointless.
+ *
+ * Set CANONICAL_HOST (e.g. "getkimbio.com") to turn this on. Left unset in
+ * local dev and preview environments, where redirecting to production would
+ * be actively wrong.
+ */
+const CANONICAL_HOST = process.env.CANONICAL_HOST?.trim().toLowerCase() || null;
+
+function canonicalRedirectTarget(req: import("node:http").IncomingMessage): string | null {
+  if (!CANONICAL_HOST) return null;
+  // Only document requests. A 301 on POST/PUT is widely re-issued as GET by
+  // clients, silently dropping the body — never redirect an API call. The SPA
+  // uses same-origin relative URLs, so once the document is on the canonical
+  // host every subsequent API call already is too.
+  if (req.method !== "GET" && req.method !== "HEAD") return null;
+  const rawPath = req.url ?? "/";
+  if (rawPath.startsWith("/api/")) return null;
+
+  const forwarded = req.headers["x-forwarded-host"];
+  const hostHeader = (Array.isArray(forwarded) ? forwarded[0] : forwarded) ?? req.headers.host ?? "";
+  const host = hostHeader.split(",")[0].trim().toLowerCase().replace(/:\d+$/, "");
+  if (!host || host === CANONICAL_HOST) return null;
+  // Never redirect a local or private-network request, even if the env var is
+  // set — that would make a misconfigured deploy impossible to debug locally.
+  if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".local")) return null;
+
+  return `https://${CANONICAL_HOST}${rawPath}`;
+}
+
 const server = createServer(async (req, res) => {
   try {
+    // 0) Canonicalize the hostname before anything else, so every downstream
+    //    surface (analytics identity, consent, cookies, SEO) sees one origin.
+    const redirectTo = canonicalRedirectTarget(req);
+    if (redirectTo) {
+      res.writeHead(301, { location: redirectTo, "cache-control": "public, max-age=3600" });
+      res.end();
+      return;
+    }
+
     // 1) API + admin endpoints (same origin as the SPA).
     if (await apiHandler(req, res, db)) return;
 
