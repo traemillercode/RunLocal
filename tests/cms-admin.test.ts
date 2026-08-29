@@ -579,7 +579,27 @@ describe("Global Admin CMS — payload safety & image refs", () => {
   });
 });
 
-describe("Global Admin CMS — provider enabled/disabled enforcement", () => {
+/**
+ * SKIPPED — tests a REMOVED endpoint, not a stale assertion.
+ *
+ * These call /api/connections/strava and /api/connections/strava/disconnect,
+ * neither of which exists anywhere in src/ any more; the provider-connection
+ * route was removed (see KIMBIO-STRUCTURAL-AUDIT.md §8).
+ *
+ * Skipped rather than deleted because roadmap 6.1 brings provider integration
+ * back as READ-ONLY IMPORT — Apple Health first, then Strava/Garmin — and this
+ * block is the surviving written spec for how CMS enable/disable gates a
+ * connection attempt. Deleting it would produce the same green suite and throw
+ * away a design we will want.
+ *
+ * Only this block is skipped. The other six describe blocks in this file cover
+ * live CMS behaviour and still run.
+ *
+ * UNSKIP WHEN: 6.1 lands a connection endpoint. The CMS gating contract
+ * (403 provider_disabled, and reaching the normal configuration check when
+ * enabled) should hold for import exactly as it did for direct connection.
+ */
+describe.skip("Global Admin CMS — provider enabled/disabled enforcement (removed route; see roadmap 6.1)", () => {
   beforeEach(() => {
     process.env[ADMIN_KEY_VAR] = KEY;
     process.env[ADMIN_EMAIL_VAR] = ADMIN_EMAIL;
