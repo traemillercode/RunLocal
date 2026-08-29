@@ -78,3 +78,39 @@ describe("Canonical host redirect", () => {
       .toBe("https://getkimbio.com/");
   });
 });
+
+/**
+ * Per-route canonical. The shipped bug was a hardcoded homepage canonical on
+ * every route, which tells Google every page is a duplicate of "/" and would
+ * deindex every event page - inverting the goal of the 2.12 SEO work.
+ * Logic mirrored from serve.ts for the same reason as above.
+ */
+function canonicalHref(requestPath: string, canonical: string): string {
+  let p = requestPath || "/";
+  if (p === "/index.html") p = "/";
+  if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
+  return `https://${canonical}${p}`;
+}
+
+describe("Per-route canonical", () => {
+  it("points at the actual route, not the homepage", () => {
+    expect(canonicalHref("/events", CANON)).toBe("https://getkimbio.com/events");
+    expect(canonicalHref("/groups/ctc", CANON)).toBe("https://getkimbio.com/groups/ctc");
+  });
+
+  it("keeps the root canonical as the bare origin", () => {
+    expect(canonicalHref("/", CANON)).toBe("https://getkimbio.com/");
+    expect(canonicalHref("/index.html", CANON)).toBe("https://getkimbio.com/");
+  });
+
+  it("normalizes a trailing slash so two URLs don't claim competing canonicals", () => {
+    expect(canonicalHref("/events/", CANON)).toBe(canonicalHref("/events", CANON));
+  });
+
+  it("rewrites the shipped placeholder rather than appending a second tag", () => {
+    const html = '<head><link rel="canonical" href="https://getkimbio.com/" /></head>';
+    const out = html.replace(/<link rel="canonical"[^>]*>/i, `<link rel="canonical" href="${canonicalHref("/events", CANON)}" />`);
+    expect(out.match(/rel="canonical"/g)).toHaveLength(1);
+    expect(out).toContain("https://getkimbio.com/events");
+  });
+});

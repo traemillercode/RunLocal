@@ -139,6 +139,40 @@ function canonicalRedirectTarget(req: import("node:http").IncomingMessage): stri
   return `https://${CANONICAL_HOST}${rawPath}`;
 }
 
+/**
+ * Rewrites the canonical link to the ACTUAL route being served.
+ *
+ * The bug this fixes: index.html shipped a hardcoded
+ * `<link rel="canonical" href="https://getkimbio.com/">`, so every route
+ * declared itself a duplicate of the homepage. That doesn't just fail to
+ * help - it actively instructs Google to drop every event, group, and race
+ * page from the index, which is the exact inverse of what the prerendering
+ * work in 2.12 is for.
+ *
+ * Done server-side rather than in the SPA so a crawler sees the right value
+ * in the initial HTML without executing JS. Only touches HTML responses.
+ */
+function rewriteCanonical(data: Buffer, servedPath: string, requestPath: string): Buffer {
+  if (!CANONICAL_HOST || !servedPath.endsWith(".html")) return data;
+
+  // Normalize so trivially-different URLs don't self-report as competing
+  // canonicals: strip a trailing slash (except root), and collapse an
+  // index.html request back to "/".
+  let p = requestPath || "/";
+  if (p === "/index.html") p = "/";
+  if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
+  // The canonical is the clean path only - query strings are tracking and
+  // filter state, never a distinct document.
+  const href = `https://${CANONICAL_HOST}${p}`;
+
+  const html = data.toString("utf8");
+  const replaced = html.replace(
+    /<link rel="canonical"[^>]*>/i,
+    `<link rel="canonical" href="${href}" />`,
+  );
+  return replaced === html ? data : Buffer.from(replaced, "utf8");
+}
+
 const server = createServer(async (req, res) => {
   try {
     // 0) Canonicalize the hostname before anything else, so every downstream
@@ -199,7 +233,7 @@ const server = createServer(async (req, res) => {
       data = await readFile(servedPath);
     }
     res.writeHead(200, staticHeaders(servedPath));
-    res.end(data);
+    res.end(rewriteCanonical(data, servedPath, url.pathname));
   } catch {
     if (!res.headersSent) res.writeHead(500).end("server error");
     else res.end();
