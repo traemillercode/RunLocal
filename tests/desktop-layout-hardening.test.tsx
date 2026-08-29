@@ -194,7 +194,10 @@ describe("DesktopSidebar authenticated account affordances (UI)", () => {
 
   it("wires the Sign out button to the account store's signOut", () => {
     const source = readFileSync(resolve(process.cwd(), "src/components/DesktopSidebar.tsx"), "utf8");
-    expect(source).toContain("const { me, signOut } = useAccount();");
+    // Asserts that signOut comes from the store, not the exact destructuring
+    // line — the sidebar now also pulls `role` for role-filtered nav, and the
+    // test should not break because a sibling field was added beside it.
+    expect(source).toMatch(/const \{[^}]*signOut[^}]*\} = useAccount\(\);/);
     expect(source).toContain("onClick={() => void signOut()}");
   });
 

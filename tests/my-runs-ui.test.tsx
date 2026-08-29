@@ -43,7 +43,23 @@ describe("My Runs SSR UI", () => {
     expect(idle).toContain(">Remove</button>");
     expect(idle).not.toContain("disabled");
   });
-  it("shows My Runs in primary navigation with the dedicated route", () => { const html = renderToStaticMarkup(<MemoryRouter><BottomNav /></MemoryRouter>); expect(html).toContain('href="/my-runs"'); expect(html).toContain("My Runs"); });
+  /**
+   * My Runs LEFT the bottom bar with the five-tab structure (D1:
+   * Home / Events / Groups / Training / You). Five is a constraint, not an
+   * observation — a sixth tab means something comes out, and My Runs was it.
+   *
+   * It is NOT unreachable: sidebar on desktop, account menu on mobile. But it
+   * did go from one tap to two on a phone, which is a real product change and
+   * is flagged as such rather than absorbed silently by editing this test.
+   */
+  it("keeps My Runs reachable on mobile via the account menu, not the bottom bar", async () => {
+    const bottom = renderToStaticMarkup(<MemoryRouter><BottomNav /></MemoryRouter>);
+    expect(bottom).not.toContain('href="/my-runs"');
+
+    const { profileMenuEntries } = await import("../src/lib/accountMenu");
+    const { entries } = profileMenuEntries({ status: "signed_in", account: { status: "verified" } } as never);
+    expect(entries.some((e) => e.to === "/my-runs")).toBe(true);
+  });
   it("renders only one desktop My Runs navigation entry", async () => {
     const { DesktopSidebar } = await import("../src/components/DesktopSidebar");
     const html = renderToStaticMarkup(<MemoryRouter><DesktopSidebar city={{ id: "columbia-mo", name: "Columbia", state: "MO", live: true, tagline: "", groups: [], events: [], races: [], forum: [] }} onOpenCitySheet={() => {}} /></MemoryRouter>);

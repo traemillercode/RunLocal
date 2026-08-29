@@ -3,7 +3,7 @@ import type { City } from "../types";
 import { Icon } from "./ui";
 import { useAccount } from "../state/account";
 import { useNotifications } from "../state/notifications";
-import { activeForPath, entriesForSurface, NO_NAV_PATHS } from "../lib/nav";
+import { activeForPath, entriesForRole, NO_NAV_PATHS } from "../lib/nav";
 /**
  * Desktop sidebar — entries derived from the single nav model (src/lib/nav.ts)
  * with the SAME activeForPath matcher as the bottom tab bar. Settings lives in
@@ -13,14 +13,18 @@ import { activeForPath, entriesForSurface, NO_NAV_PATHS } from "../lib/nav";
  */
 export function DesktopSidebar({ city, onOpenCitySheet }: { city: City; onOpenCitySheet: () => void }) {
   const location = useLocation();
-  const { me, signOut } = useAccount();
+  const { me, role, signOut } = useAccount();
   const { unreadCount } = useNotifications();
   const signedIn = me?.status === "signed_in";
   const unread = unreadCount ?? 0;
 const showingMarketing = location.pathname === "/" && me?.status !== "signed_in";
 if (NO_NAV_PATHS.has(location.pathname) || showingMarketing) return null;
-  const navEntries = entriesForSurface("sidebar").filter((e) => e.id !== "settings");
-  const settingsEntry = entriesForSurface("sidebar").find((e) => e.id === "settings");
+  // isAdmin is required for capability-gated entries: `roles` is only a floor
+  // for /admin, since every verified runner is not an admin.
+  const isAdmin = me?.status === "signed_in" && (me.account.isOwner === true || Boolean(me.account.adminCityId));
+  const sidebarEntries = entriesForRole("sidebar", role, { isAdmin });
+  const navEntries = sidebarEntries.filter((e) => e.id !== "settings");
+  const settingsEntry = sidebarEntries.find((e) => e.id === "settings");
   return (
     <aside className="desktop-sidebar" aria-label="Primary navigation">
       <Link to="/" className="desktop-brand" aria-label="Kimbio home">

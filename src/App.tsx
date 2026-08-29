@@ -27,6 +27,7 @@ const EventDetailPage = lazy(() => import("./pages/EventDetailPage").then((m) =>
 const ForumPage = lazy(() => import("./pages/ForumPage").then((m) => ({ default: m.ForumPage })));
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const ProfilePage = lazy(() => import("./pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
+const MySubmissions = lazy(() => import("./pages/ProfilePage").then((m) => ({ default: m.MySubmissions })));
 const RunnerProfilePage = lazy(() => import("./pages/RunnerProfilePage").then((m) => ({ default: m.RunnerProfilePage })));
 const RacesPage = lazy(() => import("./pages/RacesPage").then((m) => ({ default: m.RacesPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
@@ -168,6 +169,14 @@ function Shell() {
             <Route path="/connections" element={<ConnectionsPage />} />
             <Route path="/messages" element={<MessagesPage />} />
             <Route path="/messages/:conversationId" element={<MessagesPage />} />
+            {/*
+              A real route, replacing the nav entry that pointed at
+              /profile?section=submissions. The registry deliberately does not
+              model query strings, and MySubmissions was already a standalone
+              exported component — so this is a route for something that already
+              stood alone, not a new page.
+            */}
+            <Route path="/submissions" element={me?.status === "signed_in" ? <MySubmissions signedIn /> : <MarketingPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/training-plan" element={<TrainingPlanDetailPage />} />
             <Route path="/shoes" element={<ShoeLibraryPage />} />

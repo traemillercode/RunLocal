@@ -148,17 +148,39 @@ export const FEATURES = [
   { id: "profile", route: "/profile", summary: "Your profile as others see it.", area: "account", roles: SIGNED_IN, status: "live",
     reach: { kind: "nav" }, nav: { label: "You", icon: "user", surfaces: ["bottom", "sidebar", "menu"] } },
   { id: "my-runs", route: "/my-runs", summary: "Runs you've logged and RSVP'd to.", area: "account", roles: SIGNED_IN, status: "live",
-    reach: { kind: "child", parent: "profile" } },
+    // Nav-reachable, not child-of-profile: ProfilePage links to NONE of its
+  // declared children, so modelling these as children would have made three
+  // live features unreachable the moment nav started rendering from the
+  // registry. The five-tab limit is a BOTTOM BAR constraint; the sidebar can
+  // hold more.
+  reach: { kind: "nav" }, nav: { label: "My Runs", icon: "rsvp", surfaces: ["sidebar"] } },
   { id: "connections", route: "/connections", summary: "Runners you know.", area: "account", roles: SIGNED_IN, status: "live",
-    reach: { kind: "child", parent: "profile" } },
+    // Nav-reachable, not child-of-profile: ProfilePage links to NONE of its
+  // declared children, so modelling these as children would have made three
+  // live features unreachable the moment nav started rendering from the
+  // registry. The five-tab limit is a BOTTOM BAR constraint; the sidebar can
+  // hold more.
+  reach: { kind: "nav" }, nav: { label: "Connections", icon: "users", surfaces: ["sidebar"] } },
   { id: "messages", route: "/messages", summary: "Direct messages.", area: "account", roles: VERIFIED, status: "live",
-    reach: { kind: "child", parent: "profile" } },
+    // Nav-reachable, not child-of-profile: ProfilePage links to NONE of its
+  // declared children, so modelling these as children would have made three
+  // live features unreachable the moment nav started rendering from the
+  // registry. The five-tab limit is a BOTTOM BAR constraint; the sidebar can
+  // hold more.
+  reach: { kind: "nav" }, nav: { label: "Messages", icon: "messages", surfaces: ["sidebar"] } },
   { id: "conversation", route: "/messages/:conversationId", summary: "One conversation.", area: "account", roles: VERIFIED, status: "live",
     reach: { kind: "child", parent: "messages" } },
   { id: "notifications", route: "/notifications", summary: "What's happened since you were last here.", area: "account", roles: SIGNED_IN, status: "live",
     reach: { kind: "child", parent: "profile" } },
+  // A real route rather than /profile?section=submissions. The registry does not
+  // model query strings — assertion 5 requires every entry to exist in App.tsx,
+  // and a registry that knows about ?section= ends up modelling every query
+  // string. Dropping a genuine destination to satisfy a schema was the wrong
+  // direction, so it got a route instead.
+  { id: "submissions", route: "/submissions", summary: "Runs and races you've submitted for review.", area: "account", roles: SIGNED_IN, status: "live",
+    reach: { kind: "child", parent: "profile" } },
   { id: "settings", route: "/settings", summary: "Account, privacy, and notification preferences.", area: "account", roles: SIGNED_IN, status: "live",
-    reach: { kind: "nav" }, nav: { label: "Settings", icon: "settings", surfaces: ["menu"] } },
+    reach: { kind: "nav" }, nav: { label: "Settings", icon: "settings", surfaces: ["sidebar", "menu"] } },
   { id: "runner-profile", route: "/runners/:id", summary: "Another runner's public profile.", area: "account", roles: SIGNED_IN, status: "live",
     reach: { kind: "child", parent: "connections" } },
 
@@ -190,7 +212,10 @@ export const FEATURES = [
   // ── Auth flows ────────────────────────────────────────────────────────
   // Never linked from anywhere: entered by redirect or emailed link. "flow"
   // says that honestly instead of leaving them looking forgotten.
-  { id: "login", route: "/login", summary: "Sign in or create an account.", area: "public", roles: ALL, status: "live",
+  // GUEST only. Offering "Sign in" to someone already signed in is a menu item
+  // that cannot do anything for them — the same class of dead affordance as the
+  // pending-account RSVP button.
+  { id: "login", route: "/login", summary: "Sign in or create an account.", area: "public", roles: ["guest"], status: "live",
     reach: { kind: "nav" }, nav: { label: "Sign in", icon: "user", surfaces: ["menu"] } },
   { id: "callback", route: "/callback", summary: "Completes sign-in after an emailed link.", area: "public", roles: ALL, status: "live",
     reach: { kind: "flow" } },
@@ -218,7 +243,7 @@ export type FeatureId =
   | "home" | "events" | "event-detail" | "events-manage" | "past-events" | "races" | "routes" | "route-detail" | "checkin"
   | "groups" | "group-detail" | "group-manage" | "group-roster" | "my-groups" | "forum"
   | "training" | "training-summary" | "shoes" | "pace-calculator" | "recurring-schedules" | "coaches" | "coaching" | "coach-roster" | "coach-athlete"
-  | "profile" | "my-runs" | "connections" | "messages" | "conversation" | "notifications" | "settings" | "runner-profile"
+  | "profile" | "my-runs" | "connections" | "messages" | "conversation" | "notifications" | "submissions" | "settings" | "runner-profile"
   | "admin"
   | "landing" | "legal" | "sponsor" | "sponsor-detail"
   | "login" | "callback" | "confirmation" | "recovery" | "verify"

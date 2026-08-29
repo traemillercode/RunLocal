@@ -70,7 +70,14 @@ export function profileMenuEntries(me: Me | null): { entries: MenuEntry[]; signe
     { key: "profile", label: "My profile", icon: navEntry("profile").icon, to: navEntry("profile").route },
     { key: "groups", label: navEntry("groups").label, icon: navEntry("groups").icon, to: navEntry("groups").route },
     { key: "routes", label: navEntry("routes").label, icon: navEntry("routes").icon, to: navEntry("routes").route },
-    { key: "submissions", label: navEntry("submissions").label, icon: navEntry("submissions").icon, to: navEntry("submissions").route },
+    // Submissions is no longer a NAV entry — it has a real route (/submissions)
+    // reached from here, since the registry does not model query strings.
+    { key: "submissions", label: "My submissions", icon: "document", to: "/submissions" },
+    // My Runs is in this menu AND the sidebar. It left the bottom bar when the
+    // five-tab structure landed, and the account menu is the only place a
+    // phone user can reach it — without this it is unreachable on mobile,
+    // which is the primary surface.
+    { key: "my-runs", label: navEntry("my-runs").label, icon: navEntry("my-runs").icon, to: navEntry("my-runs").route },
     { key: "settings", label: navEntry("settings").label, icon: navEntry("settings").icon, to: navEntry("settings").route },
     { key: "connections", label: navEntry("connections").label, icon: navEntry("connections").icon, to: navEntry("connections").route },
   ];

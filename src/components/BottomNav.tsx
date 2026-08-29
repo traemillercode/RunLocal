@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Icon } from "./ui";
-import { activeForPath, entriesForSurface } from "../lib/nav";
+import { activeForPath, entriesForRole } from "../lib/nav";
+import { useAccount } from "../state/account";
 import { useUnreadMessagesCount } from "../state/unreadMessages";
 import { CreateMenuSheet } from "./CreateMenuSheet";
 
@@ -20,7 +21,10 @@ import { CreateMenuSheet } from "./CreateMenuSheet";
  */
 export function BottomNav() {
   const { pathname } = useLocation();
-  const tabs = entriesForSurface("bottom");
+  const { role } = useAccount();
+  // Role-filtered, and entries a role cannot use are HIDDEN rather than
+  // disabled — a permanently greyed tab teaches people to ignore the bar.
+  const tabs = entriesForRole("bottom", role);
   const unreadMessages = useUnreadMessagesCount();
   const [createOpen, setCreateOpen] = useState(false);
   return (

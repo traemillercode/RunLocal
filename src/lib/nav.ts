@@ -12,6 +12,8 @@
  * Pure module (no React) so it is unit-testable in vitest's node environment.
  */
 import type { IconName } from "../components/ui";
+import type { AccountRole } from "./accounts";
+import { FEATURES, type Feature } from "./features";
 export type NavSurface = "bottom" | "sidebar" | "menu";
 
 export interface NavEntry {
@@ -31,19 +33,57 @@ export interface NavEntry {
   match: "exact" | "prefix";
 }
 
-export const NAV_ENTRIES: readonly NavEntry[] = [
-  { id: "events", route: "/", label: "Events", icon: "calendar", surfaces: ["bottom", "sidebar"], match: "prefix" },
-  { id: "races", route: "/races", label: "Races", icon: "trophy", surfaces: ["bottom", "sidebar"], match: "prefix" },
-  { id: "routes", route: "/routes", label: "Routes", icon: "mapPin", surfaces: ["sidebar"], match: "prefix" },
-  { id: "forum", route: "/forum", label: "Forum", icon: "chat", surfaces: ["bottom", "sidebar"], match: "prefix" },
-  { id: "groups", route: "/groups", label: "Groups & Clubs", icon: "users", surfaces: ["sidebar"], match: "prefix" },
-  { id: "connections", route: "/connections", label: "Connections", icon: "users", surfaces: ["bottom", "sidebar"], match: "prefix" },
-  { id: "messages", route: "/messages", label: "Messages", icon: "messages", surfaces: ["bottom", "sidebar"], match: "prefix" },
-  { id: "my-runs", route: "/my-runs", label: "My Runs", icon: "rsvp", surfaces: ["bottom", "sidebar"], match: "prefix" },
-  { id: "profile", route: "/profile", label: "Profile", icon: "user", surfaces: ["sidebar", "menu"], match: "prefix" },
-  { id: "settings", route: "/settings", label: "Settings", icon: "settings", surfaces: ["sidebar", "menu"], match: "prefix" },
-  { id: "submissions", route: "/profile?section=submissions", label: "My submissions", icon: "document", surfaces: ["menu"], match: "prefix" },
-] as const;
+/**
+ * DERIVED from the feature registry (src/lib/features.ts), not declared here.
+ *
+ * This file used to be a second source of truth: three surfaces each decided
+ * independently what existed, which is how 24 routes ended up with no nav path
+ * and how "Events" pointed at "/" long after "/" stopped being the events page.
+ * The registry now decides; this maps its entries onto the NavEntry shape the
+ * existing consumers already read, so BottomNav and DesktopSidebar are
+ * unchanged.
+ *
+ * Ordering follows the registry's declaration order, which is the five-tab
+ * structure Home · Events · Groups · Training · You.
+ */
+export const NAV_ENTRIES: readonly NavEntry[] = (FEATURES as readonly Feature[])
+  .filter((f): f is Feature & { nav: NonNullable<Feature["nav"]> } => f.reach.kind === "nav" && Boolean(f.nav))
+  .map((f) => ({
+    id: f.id,
+    route: f.route,
+    label: f.nav.label,
+    icon: f.nav.icon,
+    surfaces: f.nav.surfaces,
+    // "/" must be exact: prefix-matching the root marks every route active.
+    match: f.route === "/" ? "exact" : "prefix",
+  }));
+
+/**
+ * Which nav entries a given role may see.
+ *
+ * HIDDEN, never disabled. A permanently greyed menu item teaches people to
+ * ignore the menu — and three commits of this build were spent removing
+ * controls that looked usable and were not.
+ *
+ * Capability-gated entries (currently /admin) are excluded unless the caller
+ * passes the capability explicitly, because `roles` is only a floor for those:
+ * every verified runner is not an admin.
+ */
+export function entriesForRole(
+  surface: NavSurface,
+  role: AccountRole,
+  opts: { isAdmin?: boolean } = {},
+): readonly NavEntry[] {
+  const byId = new Map((FEATURES as readonly Feature[]).map((f) => [f.id, f]));
+  return NAV_ENTRIES.filter((e) => {
+    if (!e.surfaces.includes(surface)) return false;
+    const feature = byId.get(e.id as never);
+    if (!feature) return false;
+    if (!feature.roles.includes(role)) return false;
+    if (feature.capability) return opts.isAdmin === true;
+    return true;
+  });
+}
 
 /** Entries rendered by a given surface, in canonical order. */
 export function entriesForSurface(surface: NavSurface): readonly NavEntry[] {

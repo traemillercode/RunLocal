@@ -174,3 +174,43 @@ describe("registry assertion 6 — capability-gated features name a real capabil
     expect(ungated).toEqual([]);
   });
 });
+
+describe("registry assertion 7 — nav constraints", () => {
+  it("the bottom bar holds exactly five tabs", () => {
+    // D1. Five is a CONSTRAINT, not an observation: a sixth means something
+    // comes out. Thumb reach on a phone is the reason, and it does not change
+    // because a new feature wants prominence.
+    const bottom = features.filter((f) => f.reach.kind === "nav" && f.nav?.surfaces.includes("bottom"));
+    expect(bottom.map((f) => f.id)).toEqual(["home", "events", "groups", "training", "profile"]);
+  });
+
+  it("every nav entry a role can see leads somewhere that role can use", () => {
+    // Hidden, never disabled. A greyed menu item teaches people to ignore the
+    // menu — and this build removed three controls that looked usable and were
+    // not (guest RSVP, pending RSVP, guest Host-a-run).
+    const bad: string[] = [];
+    for (const f of features) {
+      if (f.reach.kind !== "nav" || !f.nav) continue;
+      // A capability-gated entry must not claim to be reachable by role alone.
+      if (f.capability && f.roles.includes("verified")) {
+        // acceptable only because entriesForRole() additionally requires isAdmin
+        const nav = readFileSync(new URL("../src/lib/nav.ts", import.meta.url).pathname, "utf8");
+        if (!/if \(feature\.capability\) return opts\.isAdmin === true;/.test(nav)) {
+          bad.push(`${f.id} is capability-gated but nav does not check isAdmin`);
+        }
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("no nav entry is a child of a page that does not link to it", () => {
+    // The orphaning this caught: my-runs, connections and messages were
+    // modelled as children of profile, but ProfilePage links to NONE of its
+    // declared children — so deriving nav from the registry would have made
+    // three live features unreachable. They are nav entries for that reason.
+    for (const id of ["my-runs", "connections", "messages"]) {
+      const f = features.find((x) => x.id === id)!;
+      expect(f.reach.kind).toBe("nav");
+    }
+  });
+});

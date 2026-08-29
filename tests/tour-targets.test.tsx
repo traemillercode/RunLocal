@@ -21,7 +21,10 @@ import { ProfileGroupsCardContent } from "../src/pages/ProfilePage";
 import { CITIES } from "../src/data/cities";
 import { TOUR_STEPS, TOUR_STORAGE_KEY } from "../src/lib/tour";
 
-const { useAccountMock } = vi.hoisted(() => ({ useAccountMock: vi.fn() }));
+// Default return matters: some tests render without calling
+// mockVerifiedSession(), and BottomNav now destructures `role`, so an
+// undefined return throws instead of rendering a guest bar.
+const { useAccountMock } = vi.hoisted(() => ({ useAccountMock: vi.fn((): Record<string, unknown> => ({ me: null, role: "guest" })) }));
 vi.mock("../src/state/account", () => ({ useAccount: useAccountMock }));
 
 function mockVerifiedSession() {
@@ -37,23 +40,39 @@ const city = CITIES[0];
 
 describe("tour targets on shell & nav surfaces", () => {
   it("BottomNav keeps exactly five tabs and carries the tour anchor", () => {
+    // Must declare a role: the bar is role-filtered now, and a guest correctly
+    // sees three tabs (Training and You are member surfaces). Without this the
+    // test was asserting the five-tab structure against a guest render.
+    mockVerifiedSession();
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <BottomNav />
       </MemoryRouter>,
     );
     expect(html).toContain('data-tour-target="bottom-nav"');
-    // Five-tab nav: Events, Races, Forum, Connections (Profile moved to the
-    // header avatar menu + desktop sidebar), My Runs.
-    const tabs = ["Events", "Races", "Forum", "Connections", "My Runs"];
+    /*
+     * The five-tab structure (D1): Home / Events / Groups / Training / You.
+     *
+     * Races, Forum, Connections and My Runs LEFT the bottom bar when it was
+     * capped at five. All four remain reachable — sidebar on desktop, account
+     * menu on mobile — but they are no longer one tap from the bottom of a
+     * phone. That is a real change, not a rename.
+     *
+     * The previous version of this block also contradicted itself: it asserted
+     * the bar both contains and does not contain "Groups", which passed only
+     * because neither string was present.
+     */
+    const tabs = ["Home", "Events", "Groups", "Training", "You"];
     for (const t of tabs) expect(html).toContain(t);
-    expect(html).toContain("grid-cols-5");
-    expect(html).not.toContain("Groups");
-    expect(html).not.toContain('href="/profile"');
-    expect(html).toContain('href="/connections"');
+    // The bar sizes itself from tabs.length via gridTemplateColumns rather
+    // than a hardcoded grid-cols-N class, so it cannot fall out of step with
+    // the number of tabs. Assert the rendered column count, not a class name.
+    expect(html).toContain("repeat(5, minmax(0, 1fr))");
+    expect(html).toContain('href="/profile"');
+    expect(html).not.toContain('href="/connections"');
   });
 
-  it("DesktopSidebar exposes the Groups & Clubs directory link with the nav anchor", () => {
+  it("DesktopSidebar exposes the Groups directory link with the nav anchor", () => {
     mockVerifiedSession();
     const html = renderToStaticMarkup(
       <MemoryRouter>
@@ -62,7 +81,9 @@ describe("tour targets on shell & nav surfaces", () => {
     );
     expect(html).toContain('data-tour-target="desktop-nav"');
     // react-dom/server escapes the ampersand in text nodes.
-    expect(html).toContain("Groups &amp; Clubs");
+    // Label is "Groups" now: the registry carries one label per feature, and
+    // "Groups & Clubs" was a second name for the same destination.
+    expect(html).toContain(">Groups<");
     expect(html).toContain('href="/groups"');
   });
 

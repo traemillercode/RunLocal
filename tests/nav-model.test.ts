@@ -3,8 +3,12 @@ import { NAV_ENTRIES, entriesForSurface, activeForPath, NO_NAV_PATHS } from "../
 
 describe("single nav model (src/lib/nav.ts)", () => {
   it("defines all entries in canonical order", () => {
+    // Derived from the feature registry now, so this asserts the registry's
+    // declaration order — the five-tab structure Home / Events / Groups /
+    // Training / You, plus the sidebar-and-menu-only entries.
     expect(NAV_ENTRIES.map((e) => e.id)).toEqual([
-      "events", "races", "routes", "forum", "groups", "connections", "messages", "my-runs", "profile", "settings", "submissions",
+      "home", "events", "races", "routes", "groups", "forum", "training",
+      "profile", "my-runs", "connections", "messages", "settings", "admin", "login",
     ]);
     for (const e of NAV_ENTRIES) {
       expect(typeof e.route).toBe("string");
@@ -13,24 +17,26 @@ describe("single nav model (src/lib/nav.ts)", () => {
       expect(e.surfaces.length).toBeGreaterThan(0);
     }
   });
-  it("keeps the bottom bar at exactly six tabs (Messages added since this constraint was first written), in the current order", () => {
+  it("keeps the bottom bar at EXACTLY FIVE tabs, in the D1 order", () => {
+    // Five is the constraint, not an observation. A sixth tab means something
+    // comes out — the original version of this test was right about the number
+    // even while being stale about the contents.
     expect(entriesForSurface("bottom").map((e) => e.id)).toEqual([
-      "events", "races", "forum", "connections", "messages", "my-runs",
+      "home", "events", "groups", "training", "profile",
     ]);
+    expect(entriesForSurface("bottom")).toHaveLength(5);
   });
   it("keeps Settings out of the bottom bar, in sidebar + account menu only", () => {
     expect(entriesForSurface("bottom").find((e) => e.id === "settings")).toBeUndefined();
     const settings = NAV_ENTRIES.find((e) => e.id === "settings")!;
     expect(settings.surfaces).toEqual(["sidebar", "menu"]);
   });
-  it("keeps the My submissions entry in the account-menu surface only (no bottom/sidebar)", () => {
-    expect(entriesForSurface("bottom").find((e) => e.id === "submissions")).toBeUndefined();
-    expect(entriesForSurface("sidebar").find((e) => e.id === "submissions")).toBeUndefined();
-    const submissions = NAV_ENTRIES.find((e) => e.id === "submissions")!;
-    expect(submissions.label).toBe("My submissions");
-    expect(submissions.route).toBe("/profile?section=submissions");
-    expect(submissions.icon).toBe("document");
-    expect(submissions.surfaces).toEqual(["menu"]);
+  it("no longer carries a submissions NAV entry — it is a child route of profile", () => {
+    // Was /profile?section=submissions in the menu. It now has a real route
+    // (/submissions) reached from the profile page, because the registry does
+    // not model query strings and dropping the destination to satisfy that
+    // would have been the wrong direction.
+    expect(NAV_ENTRIES.find((e) => e.id === "submissions")).toBeUndefined();
   });
   it("matches Events on / exactly and on /events* detail routes", () => {
     const events = NAV_ENTRIES.find((e) => e.id === "events")!;
