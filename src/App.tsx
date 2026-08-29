@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import { initTelemetry } from "./lib/telemetry";
 import { installRageClickDetector, useRouteTelemetry } from "./lib/friction";
 import { FeedbackLauncher } from "./components/FeedbackSheet";
+import { shouldBypassGeofence } from "./lib/geofenceBypass";
 import { BottomNav } from "./components/BottomNav";
 import { CitySheet, Header } from "./components/Header";
 import { DesktopSidebar } from "./components/DesktopSidebar";
@@ -64,7 +65,6 @@ import { TourHost } from "./components/TourHost";
 import { NO_NAV_PATHS } from "./lib/nav";
 
 /** Reachable from anywhere, no location check — the marketing/legal pages and account-setup flows need to work for someone outside the geofence considering a move or already mid-signup. Everything else (events, groups, messaging, etc.) requires being within GEOFENCE_RADIUS_MILES. */
-const GEOFENCE_BYPASS_PATHS = new Set(["/landing", "/legal", "/login", "/recovery", "/confirmation", "/callback"]);
 
 function GroupRoute() { const location = useLocation(); const id = location.pathname.split("/").pop() ?? ""; return <GroupDetailPage id={id} />; }
 function RunnerRoute() { const location = useLocation(); const id = location.pathname.split("/").pop() ?? ""; return <RunnerProfilePage id={id} />; }
@@ -113,12 +113,12 @@ function Shell() {
           <PublicContentProvider cityId={city.id}>
             <GeofenceGate
               city={city}
-              bypass={
-                GEOFENCE_BYPASS_PATHS.has(location.pathname) ||
-                (location.pathname === "/sponsor" || location.pathname.startsWith("/sponsor/")) ||
-                (location.pathname === "/" && me?.status !== "signed_in") ||
-                (me?.status === "signed_in" && (me.account.isOwner === true || me.account.isGeofenceExempt === true))
-              }
+              bypass={shouldBypassGeofence({
+                pathname: location.pathname,
+                signedIn: me?.status === "signed_in",
+                isOwner: me?.status === "signed_in" ? me.account.isOwner : undefined,
+                isGeofenceExempt: me?.status === "signed_in" ? me.account.isGeofenceExempt : undefined,
+              })}
             >
             {/*
               Route-level code splitting (roadmap 0.10). Every page except the
