@@ -382,7 +382,16 @@ function RsvpButton({ event, going, pending, onJoin, onLeave, inverted }: RsvpBu
    88px time gutter + fluid body + optional 96px route sliver.
    ───────────────────────────────────────────────────────────────────────────── */
 
-interface EventCardProps {
+/**
+ * The DISCOVERY card — the dark-rail card on the /events board.
+ *
+ * Named BoardRunCard, not EventCard: src/components/EventCard.tsx is a
+ * different component doing a different job (the weekly list row EventsPage
+ * renders, with moderation actions and capability gating). Three files once
+ * exported something called EventCard, and a fix landed in the copy nothing
+ * rendered because of it.
+ */
+interface BoardRunCardProps {
   /** D2: when false, attendee identities are never rendered regardless of what is passed. */
   showAttendees?: boolean;
   event: RunEvent;
@@ -394,7 +403,7 @@ interface EventCardProps {
   onLeave: () => void;
 }
 
-function EventCard({ event, now, hero, going, pending, onJoin, onLeave, showAttendees = true }: EventCardProps) {
+function BoardRunCard({ event, now, hero, going, pending, onJoin, onLeave, showAttendees = true }: BoardRunCardProps) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
 
@@ -799,7 +808,7 @@ export default function DepartureBoard({ events, onHostRun, signedIn = true }: {
                       style={{ animation: `kbRise 380ms ${SPRING} ${i * 40}ms both` }}
                       className="kb-anim"
                     >
-                      <EventCard
+                      <BoardRunCard
                         showAttendees={signedIn}
                         event={e}
                         now={now}
