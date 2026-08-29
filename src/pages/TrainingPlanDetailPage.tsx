@@ -4,7 +4,7 @@ import * as api from "../lib/api";
 import { useToast } from "../lib/toast";
 import { Icon } from "../components/ui";
 import { useDeadEnd } from "../lib/friction";
-import { slotLabel, bySessionTime, totalUnitFor, toTotal, totalUnitLabel } from "../lib/slots";
+import { resolveSlot, slotLabel, bySessionTime, totalUnitFor, toTotal, totalUnitLabel } from "../lib/slots";
 import { RecurrenceSchedulerSheet } from "../components/RecurrenceSchedulerSheet";
 
 const TRAINING_PLAN_LABELS: Record<api.TrainingPlanType, string> = {
@@ -293,7 +293,10 @@ export function TrainingPlanDetailPage() {
           {selectedDays.length < 2 ? (
             <SecondWorkoutPrompt
               onAdd={(time) => {
-                const slot: api.TrainingDaySlot = Number(time.slice(0, 2)) < 12 ? "am" : "pm";
+                // Uses the shared resolver. This is where the slot is actually
+                // ASSIGNED, so an inline copy of `hour < 12` here would be the
+                // one that silently disagrees with everything reading it back.
+                const slot = resolveSlot(time, "primary");
                 setDaysByDate((prev) => ({ ...prev, [selectedDate]: [...(prev[selectedDate] ?? []), { slot, scheduledTime: time } as api.TrainingPlanDayView] }));
               }}
             />
@@ -340,12 +343,24 @@ function SecondWorkoutPrompt({ onAdd }: { onAdd: (time: string) => void }) {
   }
   return (
     <div className="rounded-xl border border-dashed border-slate-300 p-3">
-      <p className="mb-2 text-[13px] font-bold text-slate-700">What time?</p>
+      <p className="mb-2 text-[13px] font-bold text-slate-700">What time does it start?</p>
       <div className="flex gap-2">
-        <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
-        <button type="button" onClick={() => onAdd(time)} className="rounded-lg bg-[#14171C] px-4 text-[13px] font-bold text-white">Add</button>
+        <input
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          aria-label="Start time of the second workout"
+          className="h-11 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
+        />
+        <button type="button" onClick={() => onAdd(time)} className="h-11 rounded-lg bg-[#14171C] px-4 text-[13px] font-bold text-white">Add</button>
       </div>
-      <p className="mt-1.5 text-[11px] text-slate-400">{Number(time.slice(0, 2)) < 12 ? "Morning" : "Afternoon/evening"} workout</p>
+      {/* Routed through the shared resolver rather than repeating `hour < 12`
+          inline. This screen and the day panel must never disagree about which
+          slot a time lands in — that was a second copy of the rule waiting to
+          drift from the first. */}
+      <p className="mt-1.5 text-[11px] text-slate-500">
+        {slotLabel(time, "primary") === "AM" ? "Morning (AM)" : "Afternoon/evening (PM)"} workout
+      </p>
     </div>
   );
 }
@@ -559,9 +574,34 @@ function DayPanel({
             </select>
           ) : null}
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={workoutType === "swim" ? "e.g. Interval swim" : "e.g. Tempo run"} className={`w-full ${fieldCls}`} maxLength={60} />
+          {/*
+            "Starts at", never "Time". The interval toggles below use "Duration"
+            for a length of time, so a bare "Time" here left two different
+            meanings of the word on one screen with nothing saying which.
+
+            The live "→ AM/PM" readout exists because type="time" renders in
+            24-hour form under many OS locales, and slot derivation keys off
+            hour < 12. Without it, an athlete who reads 18:00 as 6 lands in the
+            wrong slot with no signal. Showing the consequence as they type
+            makes the derivation legible rather than magic — and it is less UI
+            than forcing a bespoke 12-hour control with its own AM/PM toggle.
+          */}
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold text-slate-500">Time (optional)</span>
-            <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2.5 text-[13px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
+            <span className="text-[13px] font-semibold text-slate-500">Starts at</span>
+            <input
+              type="time"
+              value={scheduledTime}
+              onChange={(e) => setScheduledTime(e.target.value)}
+              aria-label="Start time of day"
+              className="h-11 rounded-lg border border-slate-200 px-2.5 text-[13px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
+            />
+            {scheduledTime ? (
+              <span className="text-[13px] font-bold text-[#14171C]">
+                → {slotLabel(scheduledTime, slot) ?? "—"}
+              </span>
+            ) : (
+              <span className="text-[13px] text-slate-400">optional</span>
+            )}
           </div>
 
           <div className="flex gap-1.5">
@@ -598,7 +638,7 @@ function DayPanel({
                 <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">Work interval</p>
                 <div className="flex gap-1.5">
                   <button type="button" onClick={() => setWorkMeasure("distance")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${workMeasure === "distance" ? "bg-[#14171C] text-white" : "bg-white text-slate-600"}`}>Distance</button>
-                  <button type="button" onClick={() => setWorkMeasure("duration")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${workMeasure === "duration" ? "bg-[#14171C] text-white" : "bg-white text-slate-600"}`}>Time</button>
+                  <button type="button" onClick={() => setWorkMeasure("duration")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${workMeasure === "duration" ? "bg-[#14171C] text-white" : "bg-white text-slate-600"}`}>Duration</button>
                 </div>
                 <div className="mt-1.5 flex gap-2">
                   <input type="number" min="0" value={workValue} onChange={(e) => setWorkValue(e.target.value)} placeholder={workMeasure === "duration" ? "Duration" : "Distance"} className={`min-w-0 flex-1 ${fieldCls}`} />
@@ -637,7 +677,7 @@ function DayPanel({
                   </div>
                   <div className="mt-1.5 flex gap-1.5">
                     <button type="button" onClick={() => setRestMeasure("distance")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${restMeasure === "distance" ? "bg-slate-700 text-white" : "bg-white text-slate-600"}`}>Distance</button>
-                    <button type="button" onClick={() => setRestMeasure("duration")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${restMeasure === "duration" ? "bg-slate-700 text-white" : "bg-white text-slate-600"}`}>Time</button>
+                    <button type="button" onClick={() => setRestMeasure("duration")} className={`flex-1 rounded-lg py-1.5 text-[12px] font-bold ${restMeasure === "duration" ? "bg-slate-700 text-white" : "bg-white text-slate-600"}`}>Duration</button>
                   </div>
                   <div className="mt-1.5 flex gap-2">
                     <input type="number" min="0" value={restValue} onChange={(e) => setRestValue(e.target.value)} placeholder={restMeasure === "duration" ? "Duration" : "Distance"} className={`min-w-0 flex-1 ${fieldCls}`} />

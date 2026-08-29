@@ -115,3 +115,24 @@ describe("total display units (bug 3)", () => {
     expect(totalUnitLabel("km")).toBe("km");
   });
 });
+
+describe("the AM/PM rule lives in exactly one place", () => {
+  it("no component re-derives the slot with an inline hour comparison", async () => {
+    // TrainingPlanDetailPage carried its own `Number(time.slice(0,2)) < 12`
+    // in the second-workout prompt, a second copy of the rule that would
+    // silently disagree with slots.ts the moment either changed. The panel and
+    // that prompt must never land the same time in different slots.
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const roots = ["../src/pages", "../src/components"].map((r) => new URL(r, import.meta.url).pathname);
+    const offenders: string[] = [];
+    for (const root of roots) {
+      for (const f of readdirSync(root).filter((x) => x.endsWith(".tsx"))) {
+        const src = readFileSync(join(root, f), "utf8");
+        // The specific shape: slicing an HH:MM string and comparing to 12.
+        if (/slice\(0,\s*2\)\s*\)?\s*[<>]=?\s*12/.test(src)) offenders.push(f);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
