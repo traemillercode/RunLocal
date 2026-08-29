@@ -1773,3 +1773,17 @@ export const getCheckinSession = (token: string) => request<CheckinSessionView>(
 export const joinCheckinSession = (token: string) => request<{ rsvped: boolean }>(`/api/checkin/session/${encodeURIComponent(token)}/join`, { method: "POST" });
 export const signCheckinWaiver = (token: string) => request<{ signature: { signedAt: string; expiresAt: string; versionId: string } }>(`/api/checkin/session/${encodeURIComponent(token)}/sign`, { method: "POST" });
 export const checkinViaSession = (token: string) => request<{ checkin: { id: string; checkedInAt: string; duplicate: boolean } }>(`/api/checkin/session/${encodeURIComponent(token)}/checkin`, { method: "POST" });
+
+// ---- Product feedback (roadmap 0.7) ---------------------------------------
+export type FeedbackCategory = "broken" | "confusing" | "idea" | "praise";
+export interface FeedbackContext {
+  path: string;
+  role?: string | null;
+  viewport?: string | null;
+  appVersion?: string | null;
+  recentActions?: string[];
+  onScreenError?: string | null;
+}
+export function submitFeedback(category: FeedbackCategory, message: string, context: FeedbackContext): Promise<ApiResult<{ id: string }>> {
+  return request("/api/feedback", { method: "POST", body: JSON.stringify({ category, message, ...context }) });
+}

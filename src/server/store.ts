@@ -304,6 +304,7 @@ export class Db {
   private appeals = new Map<string, import("./types").AppealRecord>();
   private recognitions = new Map<string, import("./types").RecognitionRecord>();
   private attendance = new Map<string, import("./types").AttendanceRecord>();
+  private feedback = new Map<string, import("./types").FeedbackRecord>();
   private personalRuns = new Map<string, import("./types").PersonalRunRecord>();
   private matchingPreferences = new Map<string, import("./types").MatchingPreferencesRecord>();
   private joinRequests = new Map<string, import("./types").JoinRequestRecord>();
@@ -443,6 +444,7 @@ export class Db {
       for (const a of parsed.appeals ?? []) this.appeals.set(a.id, a);
       for (const r of parsed.recognitions ?? []) this.recognitions.set(`${r.accountId}:${r.role}`, r);
       for (const a of parsed.attendance ?? []) this.attendance.set(a.id, { ...a, deletedAt: a.deletedAt ?? null, visibilityOverride: a.visibilityOverride ?? "inherit" });
+      for (const f of parsed.feedback ?? []) this.feedback.set(f.id, f);
       for (const r of parsed.personalRuns ?? []) this.personalRuns.set(r.id, r);
       for (const p of parsed.matchingPreferences ?? []) this.matchingPreferences.set(p.accountId, p);
       for (const j of parsed.joinRequests ?? []) this.joinRequests.set(j.id, { ...j, requesterAccepted: j.requesterAccepted ?? false, recipientAccepted: j.recipientAccepted ?? false });
@@ -522,6 +524,7 @@ export class Db {
       appeals: [...this.appeals.values()],
       recognitions: [...this.recognitions.values()],
       attendance: [...this.attendance.values()],
+      feedback: [...this.feedback.values()],
       personalRuns: [...this.personalRuns.values()],
       matchingPreferences: [...this.matchingPreferences.values()],
       joinRequests: [...this.joinRequests.values()],
@@ -1102,6 +1105,22 @@ export class Db {
   listAllAttendanceByEvent(eventId: string) { return [...this.attendance.values()].filter(a => a.eventId === eventId); }
   hasAttendance(accountId: string, eventId: string) { return [...this.attendance.values()].some(a => !a.deletedAt && a.accountId === accountId && a.eventId === eventId); }
   addAttendance(a: import("./types").AttendanceRecord) { this.attendance.set(a.id, a); return a; }
+
+  // ---- Product feedback (roadmap 0.7) ----------------------------------
+  addFeedback(f: import("./types").FeedbackRecord) { this.feedback.set(f.id, f); return f; }
+  /** Newest first - an admin reading a beta queue wants the latest report at the top. */
+  listFeedback(opts?: { category?: import("./types").FeedbackCategory; unresolvedOnly?: boolean }) {
+    return [...this.feedback.values()]
+      .filter((f) => (!opts?.category || f.category === opts.category) && (!opts?.unresolvedOnly || f.resolvedAt === null))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  getFeedback(id: string) { return this.feedback.get(id); }
+  resolveFeedback(id: string, at: string) {
+    const f = this.feedback.get(id);
+    if (!f) return undefined;
+    f.resolvedAt = at;
+    return f;
+  }
   updateAttendance(id: string, patch: Partial<import("./types").AttendanceRecord>) { const a = this.attendance.get(id); if (!a) return undefined; const next = { ...a, ...patch }; this.attendance.set(id, next); return next; }
   /**
    * Fires a "your run starts soon" notification for every active RSVP whose

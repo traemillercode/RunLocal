@@ -45,7 +45,8 @@ import {
   sessionAccount,
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
-import { isOwnerEmail } from "./owner";
+import { isOwnerEmail, ownerEmail } from "./owner";
+import { sendEmail } from "./email";
 import { resolveOccurrence, defaultOccurrenceDate, sameEventId, occurrenceAttendeeCount } from "./occurrences";
 import { publicGroups, publicGroup } from "./groups";
 import { currentWaiver, waiverStatus, createWaiverVersion, signWaiver, processWaiverExpiry } from "./waivers";
@@ -3632,6 +3633,85 @@ async function handleApi(
   // POST /api/events/attendance-summary — bulk per-occurrence host/attendee/goingCount,
   // capped to 4 attendees server-side, for a whole week's board in one call instead of
   // one request per card. Body: { occurrenceIds: string[] } (capped to 100 per call).
+  // ---- Product feedback (roadmap 0.7) -------------------------------------
+  // POST /api/feedback — anyone (signed in or not) can report. Everything is
+  // stored; only "broken" emails immediately, because a notification that
+  // fires for praise and ideas trains the owner to ignore it within a week.
+  if (url.pathname === "/api/feedback" && method === "POST") {
+    const sess = requireSession(db, cookies);
+    const b = (await readJson(req)) as Record<string, unknown>;
+    const CATEGORIES = ["broken", "confusing", "idea", "praise"] as const;
+    const category = typeof b.category === "string" && (CATEGORIES as readonly string[]).includes(b.category)
+      ? (b.category as typeof CATEGORIES[number]) : null;
+    const message = typeof b.message === "string" ? b.message.trim().slice(0, 2000) : "";
+    if (!category) return err(res, { status: 400, error: "invalid_category" }), true;
+    if (!message) return err(res, { status: 400, error: "message_required", message: "Tell us a little about what happened." }), true;
+
+    const account = sess ? db.getAccount(sess.accountId) : undefined;
+    const str = (v: unknown, n: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, n) : null);
+    const record: import("./types").FeedbackRecord = {
+      id: `fb_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      accountId: account?.id ?? null,
+      category,
+      message,
+      path: str(b.path, 200) ?? "/",
+      role: str(b.role, 40),
+      userAgent: str(req.headers["user-agent"], 300) ?? "",
+      viewport: str(b.viewport, 20),
+      appVersion: str(b.appVersion, 60),
+      recentActions: Array.isArray(b.recentActions)
+        ? b.recentActions.filter((a): a is string => typeof a === "string").slice(-3).map((a) => a.slice(0, 120))
+        : [],
+      onScreenError: str(b.onScreenError, 300),
+      createdAt: new Date().toISOString(),
+      resolvedAt: null,
+    };
+    db.addFeedback(record);
+    await db.persist();
+
+    if (category === "broken") {
+      const reporter = account?.name ?? "Anonymous";
+      const rows: [string, string][] = [
+        ["Route", record.path],
+        ["Reporter", account ? `${account.name} (${account.email})` : "Signed out"],
+        ["Role", record.role ?? "—"],
+        ["Device", record.userAgent],
+        ["Viewport", record.viewport ?? "—"],
+        ["App version", record.appVersion ?? "—"],
+        ["Last actions", record.recentActions.length ? record.recentActions.join(" → ") : "—"],
+        ["Error on screen", record.onScreenError ?? "—"],
+      ];
+      const esc = (v: string) => v.replace(/[<>&]/g, (c) => (c === "<" ? "&lt;" : c === ">" ? "&gt;" : "&amp;"));
+      void sendEmail({
+        to: ownerEmail(),
+        from: "Kimbio Feedback <feedback@getkimbio.com>",
+        // Reply-To is the whole loop for a small beta: answer the tester from a
+        // mail client without opening the app. Receiving is disabled on the
+        // domain, so the From address can never be a destination.
+        ...(account?.email ? { replyTo: account.email } : {}),
+        // Route and category in the subject so the inbox list alone is triageable.
+        subject: `[Kimbio] Broken — ${record.path} — ${reporter}`,
+        html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#14171C;max-width:600px;">
+<p style="font-size:16px;line-height:1.6;white-space:pre-wrap;border-left:3px solid #FF5741;padding-left:12px;margin:0 0 20px;">${esc(record.message)}</p>
+<table cellpadding="6" cellspacing="0" style="font-size:13px;border-collapse:collapse;">
+${rows.map(([k, v]) => `<tr><td style="color:#5b5f66;vertical-align:top;">${k}</td><td style="font-family:monospace;">${esc(v)}</td></tr>`).join("")}
+</table></div>`,
+      });
+    }
+    return ok(res, { id: record.id }), true;
+  }
+
+  // GET /api/feedback — owner/admin only. The table is the record; this is what
+  // the unified queue (1.6) will read.
+  if (url.pathname === "/api/feedback" && method === "GET") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const account = db.getAccount(sess.accountId);
+    if (!account || !isOwnerEmail(account.email)) return err(res, { status: 403, error: "forbidden" }), true;
+    const unresolvedOnly = url.searchParams.get("unresolved") === "1";
+    return ok(res, { feedback: db.listFeedback({ unresolvedOnly }) }), true;
+  }
+
   if (url.pathname === "/api/events/attendance-summary" && method === "POST") {
     const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
     const b = (await readJson(req)) as { occurrenceIds?: unknown };

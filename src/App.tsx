@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { initTelemetry } from "./lib/telemetry";
 import { installRageClickDetector, useRouteTelemetry } from "./lib/friction";
+import { FeedbackLauncher } from "./components/FeedbackSheet";
 import { BottomNav } from "./components/BottomNav";
 import { CitySheet, Header } from "./components/Header";
 import { DesktopSidebar } from "./components/DesktopSidebar";
@@ -210,6 +211,7 @@ export default function App() {
           <BrowserRouter>
             <TelemetryBootstrap />
             <Shell />
+            <FeedbackLauncher />
             <CookieBanner />
           </BrowserRouter>
         </NotificationsProvider>

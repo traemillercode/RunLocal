@@ -39,6 +39,35 @@ function describeTarget(el: Element | null): string {
 }
 
 /**
+ * Rolling breadcrumb trail of the last few user actions, used to give a
+ * feedback report real context ("after tapping Add run") instead of an empty
+ * array. Kept in memory only - never persisted, never transmitted except as
+ * part of a report the user chose to send.
+ *
+ * Records the same non-content descriptor as rage_click: element role and
+ * label, never innerText, so a click on a message bubble doesn't capture the
+ * message.
+ */
+const BREADCRUMB_LIMIT = 6;
+const breadcrumbs: string[] = [];
+
+export function recordBreadcrumb(action: string): void {
+  breadcrumbs.push(action.slice(0, 120));
+  if (breadcrumbs.length > BREADCRUMB_LIMIT) breadcrumbs.shift();
+}
+
+/** The last 3 actions, oldest first - what the feedback report attaches. */
+export function getRecentActions(): string[] {
+  return breadcrumbs.slice(-3);
+}
+
+/** Tracks the most recent user-visible error so a report can attach it automatically. */
+let lastErrorShown: string | null = null;
+export function getLastErrorShown(): string | null {
+  return lastErrorShown;
+}
+
+/**
  * Installs the global rage-click listener. Returns a cleanup function.
  * Deliberately passive and capture-phase so it observes without interfering
  * with any real handler.
@@ -49,6 +78,7 @@ export function installRageClickDetector(): () => void {
 
   const onClick = (e: MouseEvent) => {
     const now = Date.now();
+    recordBreadcrumb(`clicked ${describeTarget(e.target as Element | null)} on ${window.location.pathname}`);
     hits = hits.filter((h) => now - h.t < RAGE_WINDOW_MS);
     hits.push({ x: e.clientX, y: e.clientY, t: now });
 
@@ -78,6 +108,7 @@ export function installRageClickDetector(): () => void {
  * not friction.
  */
 export function reportErrorShown(message: string, context?: { path?: string; code?: string }): void {
+  lastErrorShown = message.slice(0, 300);
   track("error_shown", {
     // Truncated and never combined with user input by the callers below.
     message: message.slice(0, 140),
@@ -98,6 +129,7 @@ export function reportDeadEnd(surface: string, reason?: string): void {
 export function useRouteTelemetry(): void {
   const location = useLocation();
   useEffect(() => {
+    recordBreadcrumb(`viewed ${location.pathname}`);
     trackPageView(location.pathname);
   }, [location.pathname]);
 }

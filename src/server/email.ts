@@ -7,14 +7,23 @@
  * approval. Silently no-ops if RESEND_API_KEY isn't set, so a misconfigured
  * deployment degrades to "no email sent" rather than a crash.
  */
-export async function sendEmail(input: { to: string; subject: string; html: string }): Promise<{ ok: boolean }> {
+export async function sendEmail(input: { to: string; subject: string; html: string; from?: string; replyTo?: string }): Promise<{ ok: boolean }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { ok: false };
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ from: "Kimbio <hello@getkimbio.com>", to: [input.to], subject: input.subject, html: input.html }),
+      body: JSON.stringify({
+        from: input.from ?? "Kimbio <hello@getkimbio.com>",
+        to: [input.to],
+        subject: input.subject,
+        html: input.html,
+        // Lets a feedback notification be answered directly from a mail client.
+        // Receiving is disabled on getkimbio.com, so the From address can never
+        // be a destination - Reply-To is what closes the loop with a beta tester.
+        ...(input.replyTo ? { reply_to: [input.replyTo] } : {}),
+      }),
     });
     return { ok: r.ok };
   } catch {

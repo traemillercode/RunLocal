@@ -458,6 +458,8 @@ export interface PersistedDb {
    * event submission (the submitter is the host of that event).
    */
   attendance?: AttendanceRecord[];
+  /** Optional like every other collection, so a store written before feedback existed hydrates unchanged. */
+  feedback?: FeedbackRecord[];
   personalRuns?: PersonalRunRecord[];
   matchingPreferences?: MatchingPreferencesRecord[];
   joinRequests?: JoinRequestRecord[];
@@ -1400,4 +1402,44 @@ export interface SubmissionRecord {
    *  - group: group record id ("user-<sid>"). Null until approved.
    */
   publicRefId: string | null;
+}
+
+/**
+ * Product feedback from a beta user — "this is broken", "this is confusing",
+ * an idea, or praise.
+ *
+ * Deliberately distinct from `RunnerFeedbackSheet`, which is PEER trust-rating
+ * (tags, concerns, community standing) between two runners. That answers "is
+ * this person good to run with"; this answers "is the app working". They share
+ * a word and nothing else.
+ *
+ * The table is the record; email is only a notification layer. Everything is
+ * stored regardless of category, so when the unified admin queue (roadmap 1.6)
+ * lands it reads this table and the email becomes optional.
+ */
+export type FeedbackCategory = "broken" | "confusing" | "idea" | "praise";
+
+export interface FeedbackRecord {
+  id: string;
+  /** Null for a signed-out reporter - feedback is worth capturing either way. */
+  accountId: string | null;
+  category: FeedbackCategory;
+  message: string;
+  /**
+   * Auto-captured context. This is what makes a report actionable: "the button
+   * doesn't work" is useless, "the button doesn't work, /training-plan, coach
+   * role, iPhone 14, after tapping Add run" is a bug report.
+   */
+  path: string;
+  role: string | null;
+  userAgent: string;
+  viewport: string | null;
+  appVersion: string | null;
+  /** Last few user actions before submitting, oldest first. */
+  recentActions: string[];
+  /** Any error visible on screen at submit time. */
+  onScreenError: string | null;
+  createdAt: string;
+  /** Set once an admin has dealt with it. Read by the 1.6 queue later. */
+  resolvedAt: string | null;
 }
