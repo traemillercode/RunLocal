@@ -334,7 +334,7 @@ export function LoginPage() {
       const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined, ...getStoredUtm() });
       if (!created.ok) {
         setBusy(false);
-        if (created.error.code === "email_taken") setError("That email already has an account. Log in instead.");
+        if (created.error.code === "email_taken") setError(supabase.ACCOUNT_EXISTS_MESSAGE);
         else if (created.error.code === "username_taken") setError("That username is already taken — try another.");
         else if (created.error.code === "invalid_username") setError(created.error.message ?? "Pick a valid username.");
         else if (created.error.code === "invalid_city" || created.error.code === "city_required") setCityError(created.error.message ?? "Pick a supported city.");

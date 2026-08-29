@@ -290,6 +290,60 @@ describe("signUp (browser adapter)", () => {
     expect(auth.signUp).toHaveBeenCalledWith({ email: "runner@example.com", password: "s3cret-pass", options: { emailRedirectTo: "https://runlocal.ctonew.app" } });
   });
 
+  /**
+   * REPEATED SIGNUP — the bug this suite did not cover, and the single most
+   * common signup path after someone forgets they already joined.
+   *
+   * With email confirmation on, Supabase does NOT error for an existing
+   * address. It returns 200 with an obfuscated user, no session, and an EMPTY
+   * identities array — deliberately, so an attacker cannot enumerate
+   * registered addresses. That is indistinguishable from a genuine new signup
+   * if you only look at `session`, which is precisely how the UI came to tell
+   * people to check an inbox no message had been sent to.
+   */
+  it("detects a repeated signup from an empty identities array, not from the session", async () => {
+    const auth = authStub();
+    // Exactly what Supabase returns for an already-registered address:
+    // no error, no session, obfuscated user, identities: [].
+    auth.signUp.mockResolvedValue({
+      data: { user: { id: "00000000-0000-0000-0000-000000000000", email: "taken@example.com", identities: [] }, session: null },
+      error: null,
+    });
+    createClientMock.mockReturnValue({ auth });
+    const result = await signUp("taken@example.com", "s3cret-pass", { env: CLIENT_ENV, auth });
+    expect(result).toMatchObject({ ok: false, code: "email_taken" });
+  });
+
+  it("does NOT treat a genuine new signup awaiting confirmation as taken", async () => {
+    // Same shape as above except identities is populated — a real new user who
+    // simply has not clicked the confirmation link yet. Getting this wrong in
+    // the other direction would block every legitimate signup.
+    const auth = authStub();
+    auth.signUp.mockResolvedValue({
+      data: { user: { id: "11111111-1111-1111-1111-111111111111", email: "new@example.com", identities: [{ id: "ident-1", provider: "email" }] }, session: null },
+      error: null,
+    });
+    createClientMock.mockReturnValue({ auth });
+    const result = await signUp("new@example.com", "s3cret-pass", { env: CLIENT_ENV, auth });
+    expect(result).toEqual({ ok: true, accessToken: null, emailConfirmationRequired: true });
+  });
+
+  it("never confirms that an address is registered", async () => {
+    // Enumeration guard. The message must help the real owner without telling
+    // a stranger whether an address has an account.
+    const auth = authStub();
+    auth.signUp.mockResolvedValue({ data: { user: { id: "x", email: "taken@example.com", identities: [] }, session: null }, error: null });
+    createClientMock.mockReturnValue({ auth });
+    const result = await signUp("taken@example.com", "s3cret-pass", { env: CLIENT_ENV, auth });
+    const message = result.ok ? "" : result.message;
+    for (const leak of ["already registered", "already has an account", "already exists", "taken"]) {
+      expect(message.toLowerCase()).not.toContain(leak);
+    }
+    // Still actionable for the person who does own it.
+    expect(message.toLowerCase()).toContain("sign in");
+    expect(message.toLowerCase()).toContain("reset your password");
+  });
+
   it("passes only safe profile metadata through options.data", async () => {
     const auth = authStub();
     createClientMock.mockReturnValue({ auth });

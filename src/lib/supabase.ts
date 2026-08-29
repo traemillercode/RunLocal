@@ -30,6 +30,18 @@ export interface SupabaseAuthLike {
 const missingMessage = "Password sign-in is not configured on this deployment (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are missing).";
 function authFor(cfg: SupabaseClientConfig): SupabaseAuthLike { return createClient(cfg.url!, cfg.anonKey!).auth; }
 function cfg(opts?: Record<string, string | undefined>) { return supabaseClientConfig(opts ?? (import.meta.env as Record<string, string | undefined>)); }
+/**
+ * Shown when signup hits an address that already has an account.
+ *
+ * Deliberately does NOT say "that email is already registered". Confirming an
+ * address has an account tells an enumerator something true about a stranger,
+ * and this is the one message a script would probe for. It also isn't needed:
+ * the person who genuinely owns the address is helped just as well by being
+ * pointed at sign-in and password reset, and the person who doesn't learns
+ * nothing either way.
+ */
+export const ACCOUNT_EXISTS_MESSAGE = "Already have an account? Sign in, or reset your password if you've forgotten it.";
+
 export type AuthResult = { ok: true; accessToken: string | null; emailConfirmationRequired: boolean } | { ok: false; code: "unconfigured" | "invalid_credentials" | "email_not_confirmed" | "email_taken" | "rate_limited" | "timeout" | "failed"; message: string };
 
 /** Upper bound for a single Supabase Auth call so a hung provider can't leave a busy spinner running forever. */
@@ -51,7 +63,7 @@ function mapError(rawError: unknown): AuthResult {
   const message = normalizeErrorMessage(rawError, "Supabase could not complete that request.");
   if (/invalid login credentials/i.test(message)) return { ok:false, code:"invalid_credentials", message:"Email or password is incorrect." };
   if (/email not confirmed/i.test(message)) return { ok:false, code:"email_not_confirmed", message:"Confirm your email from the message Supabase sent, then try again." };
-  if (/already registered|already exists/i.test(message)) return { ok:false, code:"email_taken", message:"That email already has an account. Log in instead." };
+  if (/already registered|already exists/i.test(message)) return { ok:false, code:"email_taken", message:ACCOUNT_EXISTS_MESSAGE };
   if (/rate|too many|security purposes/i.test(message)) return { ok:false, code:"rate_limited", message:"Too many attempts. Wait a moment and try again." };
   return { ok:false, code:"failed", message };
 }
@@ -63,6 +75,20 @@ export async function signUp(email: string, password: string, opts: { env?: Reco
     if (outcome === "timeout") return { ok:false, code:"timeout", message:SIGNUP_TIMEOUT_MESSAGE };
     const { data, error } = outcome;
     if (error) return mapError(error);
+    // REPEATED SIGNUP. When email confirmation is on, Supabase does NOT error
+    // for an address that already has an account — it returns 200 with an
+    // obfuscated user and no session, deliberately, so an attacker can't
+    // enumerate registered addresses. That is indistinguishable from a genuine
+    // new signup by `data.session` alone, which is exactly why this shipped:
+    // `emailConfirmationRequired: !data.session` was true in both cases and the
+    // UI told the user to check an inbox no message was ever sent to.
+    //
+    // An empty `identities` array is Supabase's documented signal for it. The
+    // pre-existing `email_taken` branch in mapError() only fires when email
+    // confirmation is DISABLED, so it was unreachable in this configuration.
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      return { ok: false, code: "email_taken", message: ACCOUNT_EXISTS_MESSAGE };
+    }
     return { ok:true, accessToken:data.session?.access_token ?? null, emailConfirmationRequired:!data.session };
   } catch { return {ok:false,code:"failed",message:"Could not reach the Supabase Auth service. Check your connection and try again."}; }
 }
