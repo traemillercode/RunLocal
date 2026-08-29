@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import type { ReactNode } from "react";
 import { Icon } from "./ui";
+import { useDeadEnd } from "../lib/friction";
 import { rsvpEvent } from "../lib/api";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -597,6 +598,15 @@ export default function DepartureBoard({ events, onHostRun }: { events: RunEvent
   }, [visible, now]);
 
   const heroId = visible[0]?.id;
+
+  // Audit hypothesis: a filter returning nothing. Distinguishes "no runs at all
+  // this week" from "the filter excluded everything" — different problems with
+  // different fixes, and the reason field is what tells them apart.
+  useDeadEnd(
+    "events-board-empty",
+    visible.length === 0,
+    events.length === 0 ? "no events this week" : `filter '${filter}' matched none of ${events.length}`,
+  );
 
   const join = useCallback(async (event: RunEvent) => {
     setPendingId(event.id);

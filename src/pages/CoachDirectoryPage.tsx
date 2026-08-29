@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import * as api from "../lib/api";
 import { Icon } from "../components/ui";
+import { useDeadEnd } from "../lib/friction";
 import { CoachRequestBlock } from "../components/CoachRequestBlock";
 
 /**
@@ -18,6 +19,10 @@ export function CoachDirectoryPage() {
   useEffect(() => {
     void api.getCoachDirectory().then((r) => { if (r.ok) setCoaches(r.data.coaches); });
   }, []);
+
+  // Audit hypothesis: a discovery surface with nothing to discover. If this
+  // never fires, coaches are listing themselves and the gap is elsewhere.
+  useDeadEnd("coach-directory-empty", coaches !== null && coaches.length === 0);
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 pb-24 desktop-reading-narrow">

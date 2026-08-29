@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import * as api from "../lib/api";
 import { useToast } from "../lib/toast";
 import { Icon } from "../components/ui";
+import { useDeadEnd } from "../lib/friction";
 import { RecurrenceSchedulerSheet } from "../components/RecurrenceSchedulerSheet";
 
 const TRAINING_PLAN_LABELS: Record<api.TrainingPlanType, string> = {
@@ -54,6 +55,17 @@ function addDays(d: Date, n: number): Date {
  * AM and PM workouts. Tapping a day opens a detail panel below the grid to
  * view/edit that day's real content without navigating away.
  */
+
+/**
+ * Audit hypothesis: someone reaches /training-plan with no plan set up and has
+ * to go to Settings to do anything. A separate component so the hook is not
+ * called conditionally in the parent's early-return branch.
+ */
+function NoPlanDeadEnd() {
+  useDeadEnd("training-plan-no-plan", true, "reached training plan without a plan");
+  return null;
+}
+
 export function TrainingPlanDetailPage() {
   const toast = useToast();
   const [plan, setPlan] = useState<api.TrainingPlanView | null | undefined>(undefined);
@@ -100,6 +112,7 @@ export function TrainingPlanDetailPage() {
   if (plan === null) {
     return (
       <div className="mx-auto max-w-md px-4 py-10 text-center">
+        <NoPlanDeadEnd />
         <Icon name="calendar" className="mx-auto h-8 w-8 text-slate-300" />
         <h1 className="mt-3 text-lg font-extrabold text-slate-900">No training plan yet</h1>
         <p className="mt-1 text-sm text-slate-500">Set up a plan in Settings to start planning your days.</p>
@@ -195,14 +208,26 @@ export function TrainingPlanDetailPage() {
               // "3+4=7mi": at the 11px accessibility floor the equation cannot
               // fit a ~50px cell, and per the Calendar Spec the arithmetic was
               // noise anyway — it hides which session was the quality one, and
-              // the total properly belongs in the week header. The "2" badge
-              // already signals a two-a-day. Full stacked-row redesign is 1.5.
-              const twoRunTotal = dayList.length === 2 && dayList[0].distanceValue != null && dayList[1].distanceValue != null
+              // the total belongs in the week header. Renders "3 · 4", NOT the
+              // sum: "7" is visually identical to a single 7-mile run, so
+              // collapsing to a total loses the one thing the cell must convey
+              // — that there were two sessions, and that an AM shakeout and a
+              // PM tempo are not seven miles of the same thing. Four chars
+              // shorter than "3+4=7mi", so it fits the cell at the 11px floor,
+              // and the "2" badge reinforces it.
+              //
+              // Phase 1.5 drops aspect-square (the real constraint, and a CSS
+              // choice rather than a requirement) for ~1:1.3, which fits two
+              // stacked rows with AM/PM labels — the convention TrainingPeaks,
+              // Final Surge, and Garmin all share. Weekly total moves to the
+              // week row header there.
+              const twoRunSplit = dayList.length === 2 && dayList[0].distanceValue != null && dayList[1].distanceValue != null
                 ? (() => {
                     const [a, b] = dayList;
-                    const bInAUnit = fromMilesLocal(toMilesLocal(b.distanceValue!, b.distanceUnit), a.distanceUnit);
-                    const sum = Math.round((a.distanceValue! + bInAUnit) * 10) / 10;
-                    return `${sum}${unitAbbrev(a.distanceUnit)}`;
+                    // Converted into the first session's unit so "3 · 4" is a
+                    // like-for-like comparison rather than two different scales.
+                    const bInAUnit = Math.round(fromMilesLocal(toMilesLocal(b.distanceValue!, b.distanceUnit), a.distanceUnit) * 10) / 10;
+                    return `${a.distanceValue} · ${bInAUnit}`;
                   })()
                 : null;
               return (
@@ -216,8 +241,8 @@ export function TrainingPlanDetailPage() {
                   } ${selectedDate === dateStr ? "ring-2 ring-[#14171C]" : ""} ${meta ? meta.color : inPlan ? "bg-slate-50" : ""} ${dateStr === today ? "font-extrabold" : ""}`}
                 >
                   <span className="text-[12px]">{d.getUTCDate()}</span>
-                  {twoRunTotal ? (
-                    <span className="text-[11px] font-bold leading-none">{twoRunTotal}</span>
+                  {twoRunSplit ? (
+                    <span className="text-[11px] font-bold leading-none">{twoRunSplit}</span>
                   ) : primary ? (
                     <span className="text-[11px] font-bold leading-none">
                       {primary.workoutType === "rest" ? "Rest" : primary.distanceValue != null ? `${primary.distanceValue}${unitAbbrev(primary.distanceUnit)}` : meta?.label}

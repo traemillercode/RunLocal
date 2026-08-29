@@ -133,3 +133,17 @@ export function useRouteTelemetry(): void {
     trackPageView(location.pathname);
   }, [location.pathname]);
 }
+
+/**
+ * Reports a dead end once per distinct occurrence, from inside a component.
+ *
+ * A bare reportDeadEnd() in a render body fires on every re-render, which would
+ * drown the signal in duplicates. Keyed on surface+reason so a genuinely
+ * different dead end still reports.
+ */
+export function useDeadEnd(surface: string, active: boolean, reason?: string): void {
+  useEffect(() => {
+    if (active) reportDeadEnd(surface, reason);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surface, active, reason]);
+}
