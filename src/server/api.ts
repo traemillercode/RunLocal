@@ -109,7 +109,7 @@ import { listAdminContent, editContentTitle, hideContent, restoreContent, archiv
 import { publicSponsors, publicSponsorPayment, listAdminSponsors, createSponsor, updateSponsor, deleteSponsor, submitSponsorInquiry, checkSponsorAvailability } from "./sponsors";
 import { createSponsorCheckout, createPublicSponsorCheckout, handleStripeWebhook, activateSponsorFromEvent, stripeConfigured, sponsorTotalPriceUsd } from "./payments";
 import { sendWeeklyPlanEmail } from "./weeklyPlanEmail";
-import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation } from "./invitations";
+import { createInvitation, revokeInvitation, listInvitations, validateInvitation, redeemInvitation, betaCapReached } from "./invitations";
 import { repairApprovedSubmissions } from "./submissionBackfill";
 import {
   credentialType,
@@ -1219,6 +1219,27 @@ async function handleApi(
     if (signupCityStatus === "invite_only") {
       const v = validateInvitation(db, cityId, email, invitationToken, now);
       if (!v.ok) return err(res, { status: v.status, error: v.error, message: v.message }), true;
+
+      /*
+       * COHORT CAP, checked after the invitation is known valid so the two
+       * failures stay distinguishable: "your code is wrong" and "your code is
+       * fine, we are full" are different situations and deserve different copy.
+       *
+       * The OWNER bypasses it. Without this, filling the cohort would lock the
+       * owner out of testing the signed-out signup flow — the class of problem
+       * discovered at the worst possible moment.
+       *
+       * Copy, not a raw error code: a hard stop that says "beta_full" is a dead
+       * end, and dead ends are what the last two days removed. The client
+       * renders this message.
+       */
+      if (!isOwnerEmail(email) && betaCapReached(db)) {
+        return err(res, {
+          status: 403,
+          error: "beta_full",
+          message: "Kimbio is in a closed beta right now and this week's spots are taken. We're opening up soon.",
+        }), true;
+      }
     }
     // Username is REQUIRED for new signups and validated/normalized here —
     // the server is authoritative, never the client. Legacy accounts without

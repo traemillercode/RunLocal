@@ -235,3 +235,46 @@ export function redeemInvitation(
   db.updateInvitation(rec.id, { usedAt: now.toISOString(), usedByAccountId: accountId });
   return { ok: true };
 }
+
+/* ── Beta redemption cap ──────────────────────────────────────────────────── */
+
+/**
+ * How many invitations may be redeemed before signup closes.
+ *
+ * NOT hardcoded, deliberately. SPONSOR_DAY_RATE_USD being a constant in
+ * payments.ts is recorded as a defect for exactly this reason: changing a
+ * number that the business decides should not require shipping software. If
+ * the eleventh person is someone we actually want, raising the cap is an
+ * environment change.
+ *
+ * 0 or unset means NO CAP — the gate itself is the control, and a cap that
+ * defaults to something restrictive would silently close signup the first time
+ * the variable failed to load.
+ */
+export function betaRedemptionCap(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = Number(env.BETA_REDEMPTION_CAP);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+}
+
+/**
+ * Redemptions consumed so far.
+ *
+ * Counts REDEEMED INVITATIONS, not accounts. There are already nine accounts
+ * in auth.users created before any gate existed; counting accounts would mean
+ * the cap is blown before the first invitee arrives. Pre-existing accounts sit
+ * outside the invitation system and consume no slots.
+ */
+export function redemptionCount(db: Db): number {
+  return db.listInvitations().filter((i) => i.usedAt !== null).length;
+}
+
+/**
+ * Whether the beta is full. Separate from validateInvitation() because a
+ * VALID invitation can still be refused when the cohort is full, and the two
+ * produce different messages: one is "your code is wrong", the other is
+ * "you did nothing wrong, we are full".
+ */
+export function betaCapReached(db: Db, env: NodeJS.ProcessEnv = process.env): boolean {
+  const cap = betaRedemptionCap(env);
+  return cap > 0 && redemptionCount(db) >= cap;
+}
