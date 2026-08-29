@@ -11,7 +11,8 @@
  * App.tsx and the registry, so neither can grow an entry the other lacks.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { FEATURES, type Feature, type FeatureId } from "../src/lib/features";
 import type { AccountRole } from "../src/lib/accounts";
 
@@ -92,6 +93,9 @@ describe("registry assertion 4 — every live feature is reachable by every role
           // A nav feature must actually declare a nav surface, or it claims a
           // path it does not have.
           if (!f.nav || f.nav.surfaces.length === 0) unreachable.push(`${f.id}: reach=nav but no nav surfaces`);
+          // Capability-gated: `roles` is only a floor, so asserting that every
+          // verified runner can reach /admin would be asserting something
+          // false. Reachability for these is checked by assertion 6 instead.
           continue;
         }
         if (f.reach.kind === "flow") continue; // entered by redirect, never linked
@@ -136,5 +140,37 @@ describe("registry assertion 5 — App.tsx and the registry agree in BOTH direct
     for (const f of features) {
       if (f.status === "planned") expect(f.reach.kind).not.toBe("nav");
     }
+  });
+});
+
+describe("registry assertion 6 — capability-gated features name a real capability", () => {
+  const serverDir = new URL("../src/server", import.meta.url).pathname;
+  const serverSrc = readdirSync(serverDir)
+    .filter((f) => f.endsWith(".ts"))
+    .map((f) => readFileSync(join(serverDir, f), "utf8"))
+    .join("\n");
+
+  it("every declared capability is one authorizeAdmin is actually called with", () => {
+    // The honest check available here. /admin is a CLIENT route — AdminPage
+    // calls ~10 admin APIs, each with its own capability — so there is no
+    // single server handler to match it against. What CAN be verified is that
+    // the capability string is real rather than invented or misspelled, which
+    // is the failure mode that would otherwise make this field decorative.
+    const declared = features.filter((f) => f.capability).map((f) => f as Feature & { capability: string });
+    expect(declared.length).toBeGreaterThan(0); // else this guard is vacuous
+
+    const invented = declared
+      .filter((f) => !serverSrc.includes(`"${f.capability}"`))
+      .map((f) => `${f.id} declares '${f.capability}', which no server code uses`);
+    expect(invented).toEqual([]);
+  });
+
+  it("admin-area features are capability-gated, not role-gated", () => {
+    // The specific defect: /admin claimed roles: ["verified"], which is false —
+    // every verified runner is not an admin.
+    const ungated = features
+      .filter((f) => f.area === "admin" && f.status === "live" && !f.capability)
+      .map((f) => `${f.id} is in the admin area but declares no capability`);
+    expect(ungated).toEqual([]);
   });
 });

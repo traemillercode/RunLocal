@@ -49,6 +49,22 @@ export interface Feature {
   area: FeatureArea;
   /** Who can reach it. Drives role-gated nav and demo persona filtering. */
   roles: readonly AccountRole[];
+  /**
+   * Set when access is governed by the ADMIN CAPABILITY system rather than by
+   * AccountRole. Must match a string `authorizeAdmin` is actually called with.
+   *
+   * Why this exists: /admin previously declared `roles: ["verified"]`, which is
+   * false — every verified runner is not an admin. Assertion 4 was therefore
+   * confirming a reachability claim it had no way to evaluate, on the one route
+   * where being wrong costs the most. A guard reporting a pass on a claim it
+   * cannot check is worse than no guard.
+   *
+   * Deliberately coarse: this records THAT a capability governs the route, not
+   * the full permission model, which stays in eventCapabilities/authorizeAdmin.
+   * Duplicating that model here would create a second source of truth for
+   * permissions — the exact failure the registry exists to prevent.
+   */
+  capability?: string;
   /** Shipping state. Nothing marked "planned" may be described as available anywhere. */
   status: "live" | "beta" | "planned";
   reach: Reach;
@@ -149,7 +165,13 @@ export const FEATURES = [
   // ── Admin ─────────────────────────────────────────────────────────────
   // Role-conditional: rendered only for owner/key/city admins, hidden rather
   // than disabled — a permanently greyed menu teaches people to ignore menus.
+  // roles is the FLOOR (you must at least be verified); `capability` is what
+  // actually gates it. AdminPage is a client route calling ~10 admin APIs, each
+  // with its own capability, so no single server handler corresponds to it —
+  // admin.cms_settings is named here as the representative capability the page
+  // cannot function without.
   { id: "admin", route: "/admin", summary: "Moderation queue, verification, and city settings.", area: "admin", roles: VERIFIED, status: "live",
+    capability: "admin.cms_settings",
     reach: { kind: "nav" }, nav: { label: "Admin", icon: "shield", surfaces: ["sidebar"] } },
 
   // ── Public / marketing ────────────────────────────────────────────────
@@ -184,6 +206,14 @@ export const FEATURES = [
     reach: { kind: "orphan", reason: "React Router catch-all; matched only when no other route does, so it is unreachable by design." } },
 ] as const satisfies readonly Feature[];
 
+/**
+ * NOTE: hand-maintained, deliberately. It cannot be derived from FEATURES
+ * because Reach.parent references FeatureId, which would make the type
+ * circular. Every alternative is worse — a two-pass definition, a satisfies
+ * dance, or losing the compile-time check on `parent`. Two independent guards
+ * cover the duplication: a typo in an id fails tsc, and assertion 5 enforces
+ * uniqueness.
+ */
 export type FeatureId =
   | "home" | "events" | "event-detail" | "events-manage" | "past-events" | "races" | "routes" | "route-detail" | "checkin"
   | "groups" | "group-detail" | "group-manage" | "group-roster" | "my-groups" | "forum"
