@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { initTelemetry } from "./lib/telemetry";
 import { installRageClickDetector, useRouteTelemetry } from "./lib/friction";
@@ -18,47 +18,47 @@ import { PublicContentProvider } from "./state/content";
 import { useSelectedCity } from "./state/city";
 import { useAccount } from "./state/account";
 import * as api from "./lib/api";
-import { AdminPage } from "./pages/AdminPage";
-import { EventsPage } from "./pages/EventsPage";
+const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
+const EventsPage = lazy(() => import("./pages/EventsPage").then((m) => ({ default: m.EventsPage })));
 import { DiscoverEventsPage } from "./pages/DiscoverEventsPage";
-import { EventDetailPage } from "./pages/EventDetailPage";
-import { ForumPage } from "./pages/ForumPage";
-import { LoginPage } from "./pages/LoginPage";
-import { ProfilePage } from "./pages/ProfilePage";
-import { RunnerProfilePage } from "./pages/RunnerProfilePage";
-import { RacesPage } from "./pages/RacesPage";
-import { SettingsPage } from "./pages/SettingsPage";
-import { LegalPage } from "./pages/LegalPage";
-import { VerifyPage } from "./pages/VerifyPage";
+const EventDetailPage = lazy(() => import("./pages/EventDetailPage").then((m) => ({ default: m.EventDetailPage })));
+const ForumPage = lazy(() => import("./pages/ForumPage").then((m) => ({ default: m.ForumPage })));
+const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const ProfilePage = lazy(() => import("./pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
+const RunnerProfilePage = lazy(() => import("./pages/RunnerProfilePage").then((m) => ({ default: m.RunnerProfilePage })));
+const RacesPage = lazy(() => import("./pages/RacesPage").then((m) => ({ default: m.RacesPage })));
+const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const LegalPage = lazy(() => import("./pages/LegalPage").then((m) => ({ default: m.LegalPage })));
+const VerifyPage = lazy(() => import("./pages/VerifyPage").then((m) => ({ default: m.VerifyPage })));
 import { GeofenceGate } from "./components/GeofenceGate";
-import { SponsorPaymentPage } from "./pages/SponsorPaymentPage";
-import { SponsorInquiryPage } from "./pages/SponsorInquiryPage";
-import { TrainingPlanDetailPage } from "./pages/TrainingPlanDetailPage";
-import { ShoeLibraryPage } from "./pages/ShoeLibraryPage";
-import { TrainingSummaryPage } from "./pages/TrainingSummaryPage";
-import { CoachRosterPage } from "./pages/CoachRosterPage";
-import { CoachingPage } from "./pages/CoachingPage";
-import { CoachAthletePlanPage } from "./pages/CoachAthletePlanPage";
-import { RecurrenceManagementPage } from "./pages/RecurrenceManagementPage";
-import { CoachDirectoryPage } from "./pages/CoachDirectoryPage";
-import { PaceCalculatorPage } from "./pages/PaceCalculatorPage";
-import { RecoveryPage } from "./pages/RecoveryPage";
-import { ConfirmationPage } from "./pages/ConfirmationPage";
-import { ProviderCallbackPage } from "./pages/ProviderCallbackPage";
-import { MyRunsPage } from "./pages/MyRunsPage";
-import { PersonalRunsPage } from "./pages/PersonalRunsPage";
-import { PastEventsPage } from "./pages/PastEventsPage";
-import { GroupsHubPage } from "./pages/GroupsPage";
+const SponsorPaymentPage = lazy(() => import("./pages/SponsorPaymentPage").then((m) => ({ default: m.SponsorPaymentPage })));
+const SponsorInquiryPage = lazy(() => import("./pages/SponsorInquiryPage").then((m) => ({ default: m.SponsorInquiryPage })));
+const TrainingPlanDetailPage = lazy(() => import("./pages/TrainingPlanDetailPage").then((m) => ({ default: m.TrainingPlanDetailPage })));
+const ShoeLibraryPage = lazy(() => import("./pages/ShoeLibraryPage").then((m) => ({ default: m.ShoeLibraryPage })));
+const TrainingSummaryPage = lazy(() => import("./pages/TrainingSummaryPage").then((m) => ({ default: m.TrainingSummaryPage })));
+const CoachRosterPage = lazy(() => import("./pages/CoachRosterPage").then((m) => ({ default: m.CoachRosterPage })));
+const CoachingPage = lazy(() => import("./pages/CoachingPage").then((m) => ({ default: m.CoachingPage })));
+const CoachAthletePlanPage = lazy(() => import("./pages/CoachAthletePlanPage").then((m) => ({ default: m.CoachAthletePlanPage })));
+const RecurrenceManagementPage = lazy(() => import("./pages/RecurrenceManagementPage").then((m) => ({ default: m.RecurrenceManagementPage })));
+const CoachDirectoryPage = lazy(() => import("./pages/CoachDirectoryPage").then((m) => ({ default: m.CoachDirectoryPage })));
+const PaceCalculatorPage = lazy(() => import("./pages/PaceCalculatorPage").then((m) => ({ default: m.PaceCalculatorPage })));
+const RecoveryPage = lazy(() => import("./pages/RecoveryPage").then((m) => ({ default: m.RecoveryPage })));
+const ConfirmationPage = lazy(() => import("./pages/ConfirmationPage").then((m) => ({ default: m.ConfirmationPage })));
+const ProviderCallbackPage = lazy(() => import("./pages/ProviderCallbackPage").then((m) => ({ default: m.ProviderCallbackPage })));
+const MyRunsPage = lazy(() => import("./pages/MyRunsPage").then((m) => ({ default: m.MyRunsPage })));
+const PersonalRunsPage = lazy(() => import("./pages/PersonalRunsPage").then((m) => ({ default: m.PersonalRunsPage })));
+const PastEventsPage = lazy(() => import("./pages/PastEventsPage").then((m) => ({ default: m.PastEventsPage })));
+const GroupsHubPage = lazy(() => import("./pages/GroupsPage").then((m) => ({ default: m.GroupsHubPage })));
 import { MarketingPage } from "./pages/MarketingPage";
-import { RoutesPage } from "./pages/RoutesPage";
-import { RouteDetailPage } from "./pages/RouteDetailPage";
-import { GroupDetailPage } from "./pages/GroupDetailPage";
-import { GroupManagePage } from "./pages/GroupManagePage";
-import { NotificationsPage } from "./pages/NotificationsPage";
-import { ConnectionsPage } from "./pages/ConnectionsPage";
-import { MessagesPage } from "./pages/MessagesPage";
-import { RosterPage } from "./pages/RosterPage";
-import { CheckinPage } from "./pages/CheckinPage";
+const RoutesPage = lazy(() => import("./pages/RoutesPage").then((m) => ({ default: m.RoutesPage })));
+const RouteDetailPage = lazy(() => import("./pages/RouteDetailPage").then((m) => ({ default: m.RouteDetailPage })));
+const GroupDetailPage = lazy(() => import("./pages/GroupDetailPage").then((m) => ({ default: m.GroupDetailPage })));
+const GroupManagePage = lazy(() => import("./pages/GroupManagePage").then((m) => ({ default: m.GroupManagePage })));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
+const ConnectionsPage = lazy(() => import("./pages/ConnectionsPage").then((m) => ({ default: m.ConnectionsPage })));
+const MessagesPage = lazy(() => import("./pages/MessagesPage").then((m) => ({ default: m.MessagesPage })));
+const RosterPage = lazy(() => import("./pages/RosterPage").then((m) => ({ default: m.RosterPage })));
+const CheckinPage = lazy(() => import("./pages/CheckinPage").then((m) => ({ default: m.CheckinPage })));
 import { parseAuthCallback } from "./lib/recovery";
 import * as supabase from "./lib/supabase";
 import { TourHost } from "./components/TourHost";
@@ -121,6 +121,18 @@ function Shell() {
                 (me?.status === "signed_in" && (me.account.isOwner === true || me.account.isGeofenceExempt === true))
               }
             >
+            {/*
+              Route-level code splitting (roadmap 0.10). Every page except the
+              two "/" renderers loads on demand, so a runner on mobile data at a
+              trailhead no longer downloads Admin, Forum, Settings, and Messages
+              before seeing a single run.
+
+              The fallback is a min-height spacer rather than a spinner: a
+              chunk fetch is usually fast enough that a spinner would flash and
+              read as jank, and reserving height avoids the layout shift that a
+              zero-height fallback would cause.
+            */}
+            <Suspense fallback={<div className="min-h-[60vh]" aria-busy="true" />}>
             <Routes>
             <Route path="/" element={me?.status === "signed_in" ? <DiscoverEventsPage city={city} /> : <MarketingPage />} />
             <Route path="/events/manage" element={me?.status === "signed_in" ? <EventsPage city={city} store={store} /> : <MarketingPage />} />
@@ -167,6 +179,7 @@ function Shell() {
             <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </Suspense>
             </GeofenceGate>
           </PublicContentProvider>
         </ModeratedProvider>
