@@ -71,7 +71,7 @@ function RecurrenceEditor({ recurrence, onSaved, onCancel }: { recurrence: api.R
   const [title, setTitle] = useState(recurrence.title);
   const [distanceValue, setDistanceValue] = useState(recurrence.distanceValue?.toString() ?? "");
   const [saving, setSaving] = useState(false);
-  const fieldCls = "h-10 w-full rounded-lg border border-slate-200 px-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
+  const fieldCls = "h-10 rounded-lg border border-slate-200 px-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
   const save = async () => {
     setSaving(true);
@@ -83,8 +83,8 @@ function RecurrenceEditor({ recurrence, onSaved, onCancel }: { recurrence: api.R
   return (
     <div className="rounded-2xl bg-white p-4 ring-2 ring-[#14171C]">
       <p className="mb-2 text-[13px] font-bold text-slate-700">Editing all instances of this rule</p>
-      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" className={fieldCls} maxLength={60} />
-      <input type="number" min="0" value={distanceValue} onChange={(e) => setDistanceValue(e.target.value)} placeholder="Distance" className={`mt-2.5 ${fieldCls}`} />
+      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" className={`w-full ${fieldCls}`} maxLength={60} />
+      <input type="number" min="0" value={distanceValue} onChange={(e) => setDistanceValue(e.target.value)} placeholder="Distance" className={`mt-2.5 w-full ${fieldCls}`} />
       <div className="mt-3 flex gap-2">
         <button type="button" onClick={onCancel} className="h-10 flex-1 rounded-full bg-slate-100 text-[13px] font-bold text-slate-700">Cancel</button>
         <button type="button" disabled={saving} onClick={() => void save()} className="h-10 flex-1 rounded-full bg-[#14171C] text-[13px] font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save all"}</button>

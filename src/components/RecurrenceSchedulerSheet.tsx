@@ -41,7 +41,7 @@ export function RecurrenceSchedulerSheet({ planStart, planEnd, onCreated, onClos
     else setError(r.error.message ?? "Couldn't schedule that.");
   };
 
-  const fieldCls = "h-10 w-full rounded-lg border border-slate-200 px-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
+  const fieldCls = "h-10 rounded-lg border border-slate-200 px-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
@@ -64,8 +64,8 @@ export function RecurrenceSchedulerSheet({ planStart, planEnd, onCreated, onClos
         </div>
 
         <div className="mt-4 flex gap-2">
-          <label className="flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Start date</span><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={fieldCls} /></label>
-          <label className="flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">End date</span><input type="date" min={startDate} value={endDate} onChange={(e) => setEndDate(e.target.value)} className={fieldCls} /></label>
+          <label className="flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Start date</span><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={`w-full ${fieldCls}`} /></label>
+          <label className="flex-1"><span className="mb-1 block text-[11px] font-semibold text-slate-500">End date</span><input type="date" min={startDate} value={endDate} onChange={(e) => setEndDate(e.target.value)} className={`w-full ${fieldCls}`} /></label>
         </div>
 
         <p className="mb-1.5 mt-4 text-[12px] font-bold uppercase tracking-wide text-slate-500">Workout</p>
@@ -80,7 +80,7 @@ export function RecurrenceSchedulerSheet({ planStart, planEnd, onCreated, onClos
         {workoutType !== "rest" ? (
           <div className="mt-3 space-y-2.5">
             {workoutType === "run" || workoutType === "race" ? (
-              <select value={runLabel} onChange={(e) => setRunLabel(e.target.value as api.TrainingRunLabel | "")} className={fieldCls}>
+              <select value={runLabel} onChange={(e) => setRunLabel(e.target.value as api.TrainingRunLabel | "")} className={`w-full ${fieldCls}`}>
                 <option value="">Run type…</option>
                 <option value="easy">Easy</option>
                 <option value="tempo">Tempo</option>
@@ -91,7 +91,7 @@ export function RecurrenceSchedulerSheet({ planStart, planEnd, onCreated, onClos
                 <option value="race_pace">Race pace</option>
               </select>
             ) : null}
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" className={fieldCls} maxLength={60} />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" className={`w-full ${fieldCls}`} maxLength={60} />
             <div className="flex gap-2">
               <input type="number" min="0" value={distanceValue} onChange={(e) => setDistanceValue(e.target.value)} placeholder="Distance" className={`min-w-0 flex-1 ${fieldCls}`} />
               <select value={distanceUnit} onChange={(e) => setDistanceUnit(e.target.value as api.TrainingDistanceUnit)} className={`w-28 ${fieldCls}`}>

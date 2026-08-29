@@ -458,7 +458,7 @@ function DayPanel({
     if (r.ok) { onSaved(r.data.day); setCompletionStatus(r.data.day.completionStatus); }
   };
 
-  const fieldCls = "h-10 w-full rounded-lg border border-slate-200 px-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
+  const fieldCls = "h-10 rounded-lg border border-slate-200 px-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
   const dateLabel = new Date(`${date}T00:00:00Z`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
 
   return (
@@ -490,7 +490,7 @@ function DayPanel({
       {workoutType !== "rest" ? (
         <div className="mt-3 space-y-2.5">
           {workoutType === "run" || workoutType === "race" ? (
-            <select value={runLabel} onChange={(e) => setRunLabel(e.target.value as api.TrainingRunLabel | "")} className={fieldCls}>
+            <select value={runLabel} onChange={(e) => setRunLabel(e.target.value as api.TrainingRunLabel | "")} className={`w-full ${fieldCls}`}>
               <option value="">Run type…</option>
               <option value="easy">Easy</option>
               <option value="tempo">Tempo</option>
@@ -501,7 +501,7 @@ function DayPanel({
               <option value="race_pace">Race pace</option>
             </select>
           ) : null}
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={workoutType === "swim" ? "e.g. Interval swim" : "e.g. Tempo run"} className={fieldCls} maxLength={60} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={workoutType === "swim" ? "e.g. Interval swim" : "e.g. Tempo run"} className={`w-full ${fieldCls}`} maxLength={60} />
           <div className="flex items-center gap-2">
             <span className="text-[13px] font-semibold text-slate-500">Time (optional)</span>
             <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} className="h-9 rounded-lg border border-slate-200 px-2.5 text-[13px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
@@ -556,7 +556,7 @@ function DayPanel({
                     </select>
                   )}
                 </div>
-                <select value={workPaceTarget} onChange={(e) => setWorkPaceTarget(e.target.value as api.PaceZoneTarget | "")} className={`mt-1.5 ${fieldCls}`}>
+                <select value={workPaceTarget} onChange={(e) => setWorkPaceTarget(e.target.value as api.PaceZoneTarget | "")} className={`mt-1.5 w-full ${fieldCls}`}>
                   <option value="">No pace target</option>
                   <option value="easy">Easy pace</option>
                   <option value="marathon">Marathon pace</option>
@@ -622,7 +622,7 @@ function DayPanel({
 
           {workoutType === "run" || workoutType === "race" ? (
             <>
-              <select value={addingShoe ? "__new__" : shoeId} onChange={(e) => { if (e.target.value === "__new__") setAddingShoe(true); else { setAddingShoe(false); setShoeId(e.target.value); } }} className={fieldCls}>
+              <select value={addingShoe ? "__new__" : shoeId} onChange={(e) => { if (e.target.value === "__new__") setAddingShoe(true); else { setAddingShoe(false); setShoeId(e.target.value); } }} className={`w-full ${fieldCls}`}>
                 <option value="">No shoe picked</option>
                 {localShoes.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.totalMiles.toFixed(1)} mi{s.isDefault ? " (default)" : ""}</option>)}
                 <option value="__new__">+ Add a new shoe</option>
@@ -707,7 +707,7 @@ function DayPanel({
           </div>
 
           {completionStatus === "missed" ? (
-            <select value={missedReason} onChange={(e) => setMissedReason(e.target.value as api.TrainingDayMissedReason)} className={`mt-2.5 ${fieldCls}`}>
+            <select value={missedReason} onChange={(e) => setMissedReason(e.target.value as api.TrainingDayMissedReason)} className={`mt-2.5 w-full ${fieldCls}`}>
               <option value="sick">Sick</option>
               <option value="injured">Injured</option>
               <option value="too_busy">Too busy / schedule conflict</option>

@@ -108,7 +108,7 @@ function CoachDayEditor({ athleteId, date, day, onSaved, onClose }: { athleteId:
   const [distanceValue, setDistanceValue] = useState(day?.distanceValue?.toString() ?? "");
   const [frozen, setFrozen] = useState(day?.frozen ?? false);
   const [saving, setSaving] = useState(false);
-  const fieldCls = "h-10 w-full rounded-lg border border-slate-200 px-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
+  const fieldCls = "h-10 rounded-lg border border-slate-200 px-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
   const save = async () => {
     setSaving(true);
@@ -132,8 +132,8 @@ function CoachDayEditor({ athleteId, date, day, onSaved, onClose }: { athleteId:
       </div>
       {workoutType !== "rest" ? (
         <div className="mt-3 space-y-2.5">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Tempo run" className={fieldCls} maxLength={60} />
-          <input type="number" min="0" value={distanceValue} onChange={(e) => setDistanceValue(e.target.value)} placeholder="Distance (miles)" className={fieldCls} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Tempo run" className={`w-full ${fieldCls}`} maxLength={60} />
+          <input type="number" min="0" value={distanceValue} onChange={(e) => setDistanceValue(e.target.value)} placeholder="Distance (miles)" className={`w-full ${fieldCls}`} />
         </div>
       ) : null}
       <label className="mt-3 flex items-center gap-2 text-[13px] font-semibold text-slate-600">

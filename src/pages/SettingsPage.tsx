@@ -382,7 +382,7 @@ export function ProfileDetailsSection({
     tiktokUrl: account.tiktokUrl ?? "",
   });
   const [showSocialLinks, setShowSocialLinks] = useState(account.showSocialLinks === true);
-  const fieldCls = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
+  const fieldCls = "h-11 rounded-xl border border-slate-200 bg-white px-3.5 text-[15px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
   const rows: { key: keyof typeof draft; label: string; placeholder: string; textarea?: boolean }[] = [
     { key: "name", label: "Display name", placeholder: "Your name" },
     { key: "customTitle", label: "Custom title (optional)", placeholder: "e.g. Founder, Pacer, Coach" },
@@ -411,7 +411,7 @@ export function ProfileDetailsSection({
                 maxLength={280}
                 placeholder={row.placeholder}
                 onChange={(e) => setDraft((d) => ({ ...d, [row.key]: e.target.value }))}
-                className={`${fieldCls} h-20 resize-none py-2.5`}
+                className={`${fieldCls} h-20 w-full resize-none py-2.5`}
               />
             ) : (
               <input
@@ -420,7 +420,7 @@ export function ProfileDetailsSection({
                 maxLength={row.key === "name" ? 60 : 140}
                 placeholder={row.placeholder}
                 onChange={(e) => setDraft((d) => ({ ...d, [row.key]: e.target.value }))}
-                className={fieldCls}
+                className={`w-full ${fieldCls}`}
               />
             )}
           </label>
@@ -447,7 +447,7 @@ export function ProfileDetailsSection({
                 maxLength={200}
                 placeholder={row.placeholder}
                 onChange={(e) => setDraft((d) => ({ ...d, [row.key]: e.target.value }))}
-                className={fieldCls}
+                className={`w-full ${fieldCls}`}
               />
             </label>
           ))}
@@ -570,7 +570,7 @@ export function TrainingPlanSection({ cityId }: { cityId: string }) {
     });
   };
 
-  const fieldCls = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-[15px] text-slate-900 outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
+  const fieldCls = "h-11 rounded-xl border border-slate-200 bg-white px-3.5 text-[15px] text-slate-900 outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60";
 
   if (plan === undefined) return null;
 
@@ -603,23 +603,23 @@ export function TrainingPlanSection({ cityId }: { cityId: string }) {
         <div className="space-y-3">
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-slate-700">Plan type</span>
-            <select value={planType} onChange={(e) => setPlanType(e.target.value as api.TrainingPlanType)} className={fieldCls}>
+            <select value={planType} onChange={(e) => setPlanType(e.target.value as api.TrainingPlanType)} className={`w-full ${fieldCls}`}>
               {(Object.keys(TRAINING_PLAN_LABELS) as api.TrainingPlanType[]).map((t) => <option key={t} value={t}>{TRAINING_PLAN_LABELS[t]}</option>)}
             </select>
           </label>
           {planType === "other" ? (
             <label className="block">
               <span className="mb-1.5 block text-sm font-semibold text-slate-700">Plan name</span>
-              <input type="text" value={customLabel} maxLength={40} onChange={(e) => setCustomLabel(e.target.value)} placeholder="e.g. Trail 50K" className={fieldCls} />
+              <input type="text" value={customLabel} maxLength={40} onChange={(e) => setCustomLabel(e.target.value)} placeholder="e.g. Trail 50K" className={`w-full ${fieldCls}`} />
             </label>
           ) : null}
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-slate-700">Length (weeks)</span>
-            <input type="number" min={1} max={52} value={totalWeeks} onChange={(e) => setTotalWeeks(e.target.value)} className={fieldCls} />
+            <input type="number" min={1} max={52} value={totalWeeks} onChange={(e) => setTotalWeeks(e.target.value)} className={`w-full ${fieldCls}`} />
           </label>
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-slate-700">Start date (week 1 begins this day)</span>
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={fieldCls} />
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={`w-full ${fieldCls}`} />
           </label>
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-slate-700">Training for a specific race? (optional)</span>
@@ -629,7 +629,7 @@ export function TrainingPlanSection({ cityId }: { cityId: string }) {
                 if (e.target.value === "__new__") { setAddingNewRace(true); setLinkedRaceId(""); }
                 else { setAddingNewRace(false); setLinkedRaceId(e.target.value); }
               }}
-              className={fieldCls}
+              className={`w-full ${fieldCls}`}
             >
               <option value="">No specific race</option>
               {races.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -639,9 +639,9 @@ export function TrainingPlanSection({ cityId }: { cityId: string }) {
           {addingNewRace ? (
             <div className="space-y-2.5 rounded-xl bg-slate-50 p-3.5">
               <p className="text-[12px] text-slate-500">This gets submitted for admin review so it shows up as a real race on Kimbio — your plan links to it by name right away.</p>
-              <input value={newRaceName} onChange={(e) => setNewRaceName(e.target.value)} placeholder="Race name" className={fieldCls} maxLength={80} />
-              <input type="date" value={newRaceDate} onChange={(e) => setNewRaceDate(e.target.value)} className={fieldCls} />
-              <input value={newRaceLocation} onChange={(e) => setNewRaceLocation(e.target.value)} placeholder="Location (optional)" className={fieldCls} maxLength={80} />
+              <input value={newRaceName} onChange={(e) => setNewRaceName(e.target.value)} placeholder="Race name" className={`w-full ${fieldCls}`} maxLength={80} />
+              <input type="date" value={newRaceDate} onChange={(e) => setNewRaceDate(e.target.value)} className={`w-full ${fieldCls}`} />
+              <input value={newRaceLocation} onChange={(e) => setNewRaceLocation(e.target.value)} placeholder="Location (optional)" className={`w-full ${fieldCls}`} maxLength={80} />
             </div>
           ) : null}
           <div className="flex gap-2 pt-1">

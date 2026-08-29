@@ -193,6 +193,28 @@ More important: there is **no button component**. Every button is a hand-rolled
 `className` string, which is why primary actions look different on every page
 and why the disabled, loading, and pressed states are inconsistent or missing.
 
+> **ADDENDUM (found while fixing 0.3, 2026-08-29).** The same failure mode
+> applies to shared *class-string constants*, not just to hand-rolled ones.
+> `fieldCls` is defined **six times** across five files (four `h-10` copies,
+> two divergent `h-11` copies in SettingsPage), with **48 consumers** — and
+> every copy ended in `w-full`.
+>
+> A shared class string ending in a width utility **silently collapses any
+> fixed-width sibling it is paired with.** In a flex row, a `w-28` select
+> inheriting `w-full` won the cascade and took 320px of a 380px panel, leaving
+> the `flex-1 min-w-0` input beside it **26px wide with 0px of content width** —
+> the value was correctly in state and had nowhere to render. Confirmed at
+> **18 collision sites**, on two separate surfaces (TrainingPlanDetailPage and
+> the orphaned RecurrenceSchedulerSheet, the latter unreported only because the
+> route has no nav entry).
+>
+> Fixed by removing the width from all six constants and making `w-full`
+> explicit at the 25 call sites that actually wanted it. **This is the same
+> class of bug as the 251 hand-rolled button strings and it is what the
+> Phase 2 `Button` / `PageShell` / token work structurally prevents:** a shared
+> constant should carry appearance, never layout, because layout is the one
+> property whose correct value depends on the context it is dropped into.
+
 ### Fix — a real `Button` with variants
 
 `primary` (ink fill) · `secondary` (ink outline) · `ghost` (text only) ·
