@@ -20,7 +20,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { GroupSubmissionSheet, IndependentEventSheet, RaceSubmissionSheet, SubmissionSuccessStep } from "../src/components/SubmissionSheets";
 import { CITIES } from "../src/data/cities";
 import type { Me, PublicAccount } from "../src/lib/accounts";
@@ -243,7 +243,29 @@ describe("My submissions status view (UI)", () => {
   });
 });
 
+/**
+ * PINNED CLOCK.
+ *
+ * These assertions depend on which seeded weekly runs are still upcoming, and
+ * EventsPage correctly hides occurrences that have already started. Unpinned,
+ * "Saturday Long Run: MKT Trail" is present for most of the week and absent
+ * from 7:00 AM Saturday onward — so the suite passed for days and then failed
+ * on a Saturday morning with no commit in between.
+ *
+ * The original comment below called it "a deterministic upcoming seed event",
+ * which was the actual mistake: Saturday looked safe because it reads as the
+ * end of the week, but the run starts partway through that day.
+ *
+ * Pinned to WEDNESDAY 2026-09-02 09:00 UTC — midweek, so every later-week seed
+ * run (Thu/Fri/Sat/Sun) is genuinely still upcoming, with no reliance on the
+ * boundary behaviour of any single day.
+ */
+const PINNED_NOW = new Date("2026-09-02T09:00:00.000Z");
+
 describe("public pages render only approved community content (UI)", () => {
+  beforeAll(() => { vi.useFakeTimers({ shouldAdvanceTime: true }); vi.setSystemTime(PINNED_NOW); });
+  afterAll(() => { vi.useRealTimers(); });
+
   it("races page lists approved community races alongside seed races", () => {
     guestAuth();
     usePublicContentMock.mockReturnValue({ races: [APPROVED_RACE], groups: [], events: [], loaded: true });
