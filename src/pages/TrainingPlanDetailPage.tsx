@@ -215,11 +215,12 @@ export function TrainingPlanDetailPage() {
               // shorter than "3+4=7mi", so it fits the cell at the 11px floor,
               // and the "2" badge reinforces it.
               //
-              // Phase 1.5 drops aspect-square (the real constraint, and a CSS
-              // choice rather than a requirement) for ~1:1.3, which fits two
-              // stacked rows with AM/PM labels — the convention TrainingPeaks,
-              // Final Surge, and Garmin all share. Weekly total moves to the
-              // week row header there.
+              // aspect-square has already been DROPPED (the cell is
+              // min-h-[58px]) — a 50px square could not hold "AM 3 · PM 4" at
+              // the 11px floor. What remains for Phase 1.5 is the full stacked
+              // -row layout: one row per session, three-plus sessions without
+              // truncation, and the weekly total moved to the week row header
+              // — the convention TrainingPeaks, Final Surge, and Garmin share.
               const twoRunSplit = dayList.length === 2 && dayList[0].distanceValue != null && dayList[1].distanceValue != null
                 ? (() => {
                     const [a, b] = dayList;
