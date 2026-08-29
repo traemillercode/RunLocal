@@ -179,7 +179,18 @@ independently verified in the Visual System Audit and both still valid.
 ~~139 icon-only controls with no accessible name (empty SVGs)~~ — **this third
 leg is void** (see 0.1). The a11y concern may still be real but must be
 re-derived from actual missing `aria-label`s on icon-only controls, not from
-empty SVGs. Running clubs skew older than
+empty SVGs.
+>
+> **DEPENDENCY ADDED (0.7, commit 53cc487).** Feedback reports attach the user's
+> last 3 actions, and those breadcrumbs describe a control by its `aria-label`
+> (falling back to `data-tour-target`, then `name`, then the tag name) —
+> deliberately never `innerText`, so a click on a message bubble can't capture
+> the message. **An icon-only button with no accessible name therefore produces
+> a near-blank crumb** like `button[]`. So 0.11 is no longer only a
+> compliance/usability item: adding accessible names directly improves the
+> quality of every bug report a beta tester sends. Fixing a11y makes the
+> feedback channel measurably more useful, which raises 0.11's value above its
+> original framing. Running clubs skew older than
 tech products; your own seed data has a "walkers welcome" run. Add `axe` to CI.
 
 ---

@@ -487,7 +487,17 @@ export class Db {
       for (const r of parsed.accountReports ?? []) this.accountReports.set(r.id, r);
       for (const rt of parsed.routes ?? []) this.routes.set(rt.id, { ...rt, hasElevationData: rt.hasElevationData ?? rt.elevationGainFt > 0 });
       for (const wp of parsed.routeWaypoints ?? []) this.routeWaypoints.set(wp.id, { ...wp, volunteerAccountIds: wp.volunteerAccountIds ?? [] });
-      for (const s of parsed.sponsors ?? []) this.sponsors.set(s.id, s);
+      // Bookings written before the price snapshot existed have no quote.
+      // Normalize to null so the field is genuinely absent rather than
+      // undefined - quotedTotalCents() then correctly falls back to the
+      // current rate for them, and only for them.
+      for (const s of parsed.sponsors ?? []) this.sponsors.set(s.id, {
+        ...s,
+        quotedDayRateUsd: s.quotedDayRateUsd ?? null,
+        quotedTotalUsd: s.quotedTotalUsd ?? null,
+        quotedAt: s.quotedAt ?? null,
+        rateVersion: s.rateVersion ?? null,
+      });
       for (const e of parsed.geofenceAllowlist ?? []) this.geofenceAllowlist.add(e.toLowerCase());
       // Privacy: records persisted before a field existed are merged over the
       // verbatim owner-spec defaults so they keep working.

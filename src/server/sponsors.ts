@@ -1,6 +1,7 @@
 import { newId, type Db } from "./store";
 import type { SponsorRecord } from "./types";
 import { authorizeAdmin, type AdminResult, type AdminCtx } from "./admin";
+import { SPONSOR_DAY_RATE_USD, SPONSOR_RATE_VERSION, sponsorTotalPriceUsd } from "./payments";
 
 /** Real slot caps, mirrored client-side for display but enforced here — the actual source of truth. One featured + three standard per city, four total. */
 export const SPONSOR_TIER_CAPS = { featured: 1, standard: 3 } as const;
@@ -130,7 +131,7 @@ export function createSponsor(db: Db, ctx: AdminCtx, input: SponsorInput, now = 
   const logoRef = typeof input.logoRef === "string" && input.logoRef ? input.logoRef : null;
   const active = input.active !== false;
   const at = now.toISOString();
-  const rec = db.createSponsor({ id: newId(), cityId, tier, businessName, tagline, linkUrl, logoRef, active, startDate: dates.startDate, endDate: dates.endDate, createdAt: at, updatedAt: at });
+  const rec = db.createSponsor({ id: newId(), cityId, tier, businessName, tagline, linkUrl, logoRef, active, startDate: dates.startDate, endDate: dates.endDate, createdAt: at, updatedAt: at, quotedDayRateUsd: SPONSOR_DAY_RATE_USD[tier], quotedTotalUsd: sponsorTotalPriceUsd(tier, dates.startDate, dates.endDate), quotedAt: at, rateVersion: SPONSOR_RATE_VERSION, });
   if (!rec) return { ok: false, status: 409, error: "slot_full", message: `The ${tier} tier is already booked for part of that date range. Try different dates.` };
   return { ok: true, data: { sponsor: toAdminView(rec) } };
 }
@@ -188,7 +189,7 @@ export function submitSponsorInquiry(db: Db, input: SponsorInput, now = new Date
   }
   const logoRef = typeof input.logoRef === "string" && input.logoRef ? input.logoRef : null;
   const at = now.toISOString();
-  const rec = db.createSponsor({ id: newId(), cityId, tier, businessName, tagline, linkUrl, logoRef, active: false, startDate: dates.startDate, endDate: dates.endDate, createdAt: at, updatedAt: at });
+  const rec = db.createSponsor({ id: newId(), cityId, tier, businessName, tagline, linkUrl, logoRef, active: false, startDate: dates.startDate, endDate: dates.endDate, createdAt: at, updatedAt: at, quotedDayRateUsd: SPONSOR_DAY_RATE_USD[tier], quotedTotalUsd: sponsorTotalPriceUsd(tier, dates.startDate, dates.endDate), quotedAt: at, rateVersion: SPONSOR_RATE_VERSION, });
   if (!rec) return { ok: false, status: 409, error: "slot_full", message: "Those dates just got booked for this tier — try a different range." };
   return { ok: true, data: { sponsor: toAdminView(rec) } };
 }

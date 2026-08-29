@@ -694,6 +694,21 @@ export interface SponsorRecord {
   endDate: string;
   createdAt: string;
   updatedAt: string;
+  /**
+   * PRICE SNAPSHOT - what this booking was actually quoted, captured at
+   * creation. Nullable only because bookings created before this field
+   * existed have no recorded price; every new booking sets all four.
+   *
+   * Without this the price is recomputed from the CURRENT rate on every read,
+   * so changing SPONSOR_DAY_RATE_USD silently reprices historical bookings -
+   * an accounting problem, not a UX one. A sponsor quoted a founding rate must
+   * stay at that rate forever, and a dispute needs a number that doesn't move.
+   */
+  quotedDayRateUsd: number | null;
+  quotedTotalUsd: number | null;
+  quotedAt: string | null;
+  /** Which rate card produced the quote, so a future CMS-managed rate table (roadmap 3.6) can be reconciled against past bookings. */
+  rateVersion: string | null;
 }
 
 /**

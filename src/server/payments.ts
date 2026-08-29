@@ -34,6 +34,13 @@ function stripeClient(env: Record<string, string | undefined> = process.env): St
 /** Reasonable starter day rates — easy to change here without touching the checkout flow itself. */
 export const SPONSOR_DAY_RATE_USD = { featured: 25, standard: 10 } as const;
 
+/**
+ * Identifies the rate card in force. Bump this whenever SPONSOR_DAY_RATE_USD
+ * changes, so a booking's stored rateVersion says which card priced it. Cheap
+ * now; the only way to reconcile history once rates move to the CMS (3.6).
+ */
+export const SPONSOR_RATE_VERSION = "2026-08-launch";
+
 /** Inclusive day count for a booking window. */
 function bookingDays(startDate: string, endDate: string): number {
   return Math.round((new Date(endDate + "T00:00:00Z").getTime() - new Date(startDate + "T00:00:00Z").getTime()) / 86_400_000) + 1;
@@ -42,6 +49,20 @@ function bookingDays(startDate: string, endDate: string): number {
 /** Total price in whole USD for a sponsor's actual booked date range. */
 export function sponsorTotalPriceUsd(tier: "featured" | "standard", startDate: string, endDate: string): number {
   return SPONSOR_DAY_RATE_USD[tier] * bookingDays(startDate, endDate);
+}
+
+/**
+ * The amount to actually charge, in cents.
+ *
+ * Prefers the price snapshotted on the booking so a rate change between
+ * booking and payment cannot silently reprice what the sponsor was quoted.
+ * Falls back to recomputing only for legacy bookings created before the
+ * snapshot existed - those have no recorded quote, and refusing to charge
+ * them would be worse than charging the current rate.
+ */
+function quotedTotalCents(sponsor: import("./types").SponsorRecord): number {
+  const total = sponsor.quotedTotalUsd ?? sponsorTotalPriceUsd(sponsor.tier, sponsor.startDate, sponsor.endDate);
+  return total * 100;
 }
 
 interface CheckoutInput {
@@ -80,7 +101,7 @@ export async function createSponsorCheckout(db: Db, ctx: AdminCtx, input: Checko
             quantity: 1,
             price_data: {
               currency: "usd",
-              unit_amount: sponsorTotalPriceUsd(sponsor.tier, sponsor.startDate, sponsor.endDate) * 100,
+              unit_amount: quotedTotalCents(sponsor),
               product_data: { name: `Kimbio ${sponsor.tier === "featured" ? "Featured" : "Standard"} sponsor placement — ${sponsor.businessName} (${sponsor.startDate} to ${sponsor.endDate})` },
             },
           },
@@ -142,7 +163,7 @@ export async function createPublicSponsorCheckout(db: Db, sponsorId: string, suc
             quantity: 1,
             price_data: {
               currency: "usd",
-              unit_amount: sponsorTotalPriceUsd(sponsor.tier, sponsor.startDate, sponsor.endDate) * 100,
+              unit_amount: quotedTotalCents(sponsor),
               product_data: { name: `Kimbio ${sponsor.tier === "featured" ? "Featured" : "Standard"} sponsor placement — ${sponsor.businessName} (${sponsor.startDate} to ${sponsor.endDate})` },
             },
           },
