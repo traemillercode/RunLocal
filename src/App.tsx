@@ -136,7 +136,18 @@ function Shell() {
             <Route path="/" element={me?.status === "signed_in" ? <DiscoverEventsPage city={city} /> : <MarketingPage />} />
             <Route path="/events/manage" element={me?.status === "signed_in" ? <EventsPage city={city} store={store} /> : <MarketingPage />} />
             <Route path="/landing" element={<MarketingPage />} />
-            <Route path="/events" element={<EventsPage city={city} store={store} />} />
+            {/*
+              The BOARD is /events now, not EventsPage.
+              Forced by 1.2: Home takes "/", so DiscoverEventsPage needed a home
+              or the discovery board would have been routed out of existence.
+              /events is also where the marketing Explore menu points and what
+              D2 made public, so the public surface is the privacy-safe one —
+              RunCard.attendees is optional and absent renders the going count
+              alone. EventsPage stays at /events/manage (already auth-gated),
+              which keeps its ~29 write and moderation references off any
+              public path instead of needing a guest branch each.
+            */}
+            <Route path="/events" element={<DiscoverEventsPage city={city} />} />
             <Route path="/events/:eventId" element={<EventDetailPage city={city} store={store} />} />
             <Route path="/past-events" element={<PastEventsPage city={city} />} />
             <Route path="/groups" element={<GroupsHubPage city={city} />} />

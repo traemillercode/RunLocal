@@ -203,7 +203,7 @@ function Metric({ label, value, inverted }: MetricProps) {
 }
 
 interface AvatarStackProps {
-  attendees: Person[];
+  attendees?: Person[];
   count: number;
   inverted: boolean;
   justJoined: boolean;
@@ -211,7 +211,7 @@ interface AvatarStackProps {
 
 function AvatarStack({ attendees, count, inverted, justJoined }: AvatarStackProps) {
   const ringColor = inverted ? INK_SOFT : "#FFFFFF";
-  const shown = attendees.slice(0, 4);
+  const shown = (attendees ?? []).slice(0, 4);
   return (
     <div className="flex items-center">
       <div className="flex items-center">
@@ -383,6 +383,8 @@ function RsvpButton({ event, going, pending, onJoin, onLeave, inverted }: RsvpBu
    ───────────────────────────────────────────────────────────────────────────── */
 
 interface EventCardProps {
+  /** D2: when false, attendee identities are never rendered regardless of what is passed. */
+  showAttendees?: boolean;
   event: RunEvent;
   now: Date;
   hero: boolean;
@@ -392,7 +394,7 @@ interface EventCardProps {
   onLeave: () => void;
 }
 
-function EventCard({ event, now, hero, going, pending, onJoin, onLeave }: EventCardProps) {
+function EventCard({ event, now, hero, going, pending, onJoin, onLeave, showAttendees = true }: EventCardProps) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
 
@@ -516,7 +518,7 @@ function EventCard({ event, now, hero, going, pending, onJoin, onLeave }: EventC
 
           <div className="flex items-center gap-4">
             <AvatarStack
-              attendees={event.attendees}
+              attendees={showAttendees ? event.attendees : undefined}
               count={event.goingCount + (going ? 1 : 0)}
               inverted={inverted}
               justJoined={going}
@@ -560,7 +562,12 @@ function EventCard({ event, now, hero, going, pending, onJoin, onLeave }: EventC
    PAGE
    ───────────────────────────────────────────────────────────────────────────── */
 
-export default function DepartureBoard({ events, onHostRun }: { events: RunEvent[]; onHostRun: () => void }) {
+/**
+ * `signedIn: false` is the D2 public mode. Two changes, both minimal because
+ * the card was built for this: attendee identities are simply not passed by the
+ * caller, and write actions become a signup prompt rather than a dead control.
+ */
+export default function DepartureBoard({ events, onHostRun, signedIn = true }: { events: RunEvent[]; onHostRun: () => void; signedIn?: boolean }) {
   const [now, setNow] = useState(() => new Date());
   const [filter, setFilter] = useState<EventType | "all">("all");
   const [rsvps, setRsvps] = useState<Set<string>>(() => new Set());
@@ -609,6 +616,10 @@ export default function DepartureBoard({ events, onHostRun }: { events: RunEvent
   );
 
   const join = useCallback(async (event: RunEvent) => {
+    // A guest tapping RSVP gets the signup path, not a silent failure. The
+    // server would reject it anyway; this makes the reason visible and gives
+    // the action somewhere to go.
+    if (!signedIn) { window.location.assign("/login?mode=signup"); return; }
     setPendingId(event.id);
     setRsvps((prev) => new Set(prev).add(event.id)); // optimistic
     try {
@@ -624,9 +635,10 @@ export default function DepartureBoard({ events, onHostRun }: { events: RunEvent
     } finally {
       setPendingId(null);
     }
-  }, []);
+  }, [signedIn]);
 
   const leave = useCallback(async (event: RunEvent) => {
+    if (!signedIn) { window.location.assign("/login?mode=signup"); return; }
     setPendingId(event.id);
     setRsvps((prev) => {
       const next = new Set(prev);
@@ -689,6 +701,7 @@ export default function DepartureBoard({ events, onHostRun }: { events: RunEvent
             Columbia, MO
           </span>
         </div>
+        {signedIn ? (
         <button
           type="button"
           onClick={onHostRun}
@@ -698,6 +711,19 @@ export default function DepartureBoard({ events, onHostRun }: { events: RunEvent
           <Icon name="plus" className="h-3.5 w-3.5" />
           Host a run
         </button>
+        ) : (
+          // A guest gets the conversion action instead of a control they
+          // cannot use. Offering "Host a run" and bouncing them to signup is
+          // still an affordance leak — every write action on a public page is
+          // a dead end dressed as a feature.
+          <a
+            href="/login?mode=signup"
+            className="kb-focus flex h-11 items-center gap-1.5 rounded-full bg-[#FF5741] px-4 font-bold text-[#14171C]"
+            style={{ fontSize: "13px", letterSpacing: "-0.01em" }}
+          >
+            Join Kimbio
+          </a>
+        )}
       </header>
 
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-8 lg:flex-row lg:gap-10">
@@ -774,6 +800,7 @@ export default function DepartureBoard({ events, onHostRun }: { events: RunEvent
                       className="kb-anim"
                     >
                       <EventCard
+                        showAttendees={signedIn}
                         event={e}
                         now={now}
                         hero={e.id === heroId}

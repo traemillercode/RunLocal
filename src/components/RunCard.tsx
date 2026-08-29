@@ -311,6 +311,8 @@ function RsvpButton({ event, going, pending, onJoin, onLeave, inverted }: RsvpBu
    ───────────────────────────────────────────────────────────────────────────── */
 
 interface EventCardProps {
+  /** When false, attendee identities are never rendered regardless of what is passed (D2). */
+  showAttendees?: boolean;
   event: RunEvent;
   now: Date;
   hero: boolean;
@@ -320,7 +322,7 @@ interface EventCardProps {
   onLeave: () => void;
 }
 
-export function EventCard({ event, now, hero, going, pending, onJoin, onLeave }: EventCardProps) {
+export function EventCard({ event, now, hero, going, pending, onJoin, onLeave, showAttendees = true }: EventCardProps) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
 
@@ -444,7 +446,7 @@ export function EventCard({ event, now, hero, going, pending, onJoin, onLeave }:
 
           <div className="flex items-center gap-4">
             <AvatarStack
-              attendees={event.attendees}
+              attendees={showAttendees ? event.attendees : undefined}
               count={event.goingCount + (going ? 1 : 0)}
               inverted={inverted}
               justJoined={going}
