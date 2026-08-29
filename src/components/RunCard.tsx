@@ -282,7 +282,7 @@ function RsvpButton({ event, going, pending, onJoin, onLeave, inverted }: RsvpBu
       disabled={pending}
       aria-pressed={going}
       aria-label={going ? `You are going to ${event.name}. Press twice to drop out.` : `RSVP to ${event.name}`}
-      className="kb-anim kb-focus relative flex h-10 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full font-bold"
+      className="kb-anim kb-focus relative flex h-11 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full font-bold"
       style={{
         width,
         background: bg,

@@ -293,7 +293,7 @@ function MessageBubble({
             className="w-full rounded-2xl border border-slate-200 p-3 text-[14px] outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60"
           />
           <div className="mt-1.5 flex justify-end gap-2">
-            <button type="button" onClick={() => { setEditing(false); setEditDraft(msg.body ?? ""); }} className="h-8 rounded-full bg-slate-100 px-3 text-[12px] font-bold text-slate-700">Cancel</button>
+            <button type="button" onClick={() => { setEditing(false); setEditDraft(msg.body ?? ""); }} className="h-11 rounded-full bg-slate-100 px-3 text-[12px] font-bold text-slate-700">Cancel</button>
             <button type="button" onClick={saveEdit} disabled={!editDraft.trim()} className="h-11 rounded-full bg-[#14171C] px-3 text-[12px] font-bold text-white disabled:opacity-50">Save</button>
           </div>
         </div>
@@ -337,7 +337,7 @@ function MessageBubble({
               type="button"
               onClick={() => pick(e)}
               aria-pressed={myReaction === e}
-              className={`grid h-8 w-8 place-items-center rounded-full text-[18px] ${myReaction === e ? "bg-[#FF5741]/15 ring-2 ring-[#FF5741]" : "hover:bg-slate-100"}`}
+              className={`grid h-11 w-8 place-items-center rounded-full text-[18px] ${myReaction === e ? "bg-[#FF5741]/15 ring-2 ring-[#FF5741]" : "hover:bg-slate-100"}`}
             >
               {e}
             </button>

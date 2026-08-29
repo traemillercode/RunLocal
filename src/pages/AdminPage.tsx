@@ -1085,7 +1085,7 @@ export function AdminPage() {
         <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
           <div className="flex items-start justify-between gap-2">
             <h2 className="text-[15px] font-bold text-slate-900">Record — {record.name}</h2>
-            <button type="button" onClick={() => setRecord(null)} className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-500 active:bg-slate-200" aria-label="Close record">
+            <button type="button" onClick={() => setRecord(null)} className="grid h-11 w-8 place-items-center rounded-full bg-slate-100 text-slate-500 active:bg-slate-200" aria-label="Close record">
               <Icon name="close" className="h-4 w-4" />
             </button>
           </div>

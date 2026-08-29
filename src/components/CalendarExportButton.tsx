@@ -12,7 +12,7 @@ export function CalendarExportButton({ event, className = "" }: { event: Calenda
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
         aria-expanded={open}
         aria-label="Add to calendar"
-        className="flex h-9 items-center gap-1.5 rounded-full bg-slate-100 px-3 text-[12px] font-bold text-slate-700 active:bg-slate-200"
+        className="flex h-11 items-center gap-1.5 rounded-full bg-slate-100 px-3 text-[12px] font-bold text-slate-700 active:bg-slate-200"
       >
         <Icon name="calendar" className="h-4 w-4" /> Add to calendar
       </button>

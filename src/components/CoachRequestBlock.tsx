@@ -42,7 +42,7 @@ export function CoachRequestBlock({ targetAccountId, targetName }: { targetAccou
         type="button"
         disabled={busy !== null}
         onClick={() => void send(true)}
-        className="h-10 flex-1 rounded-full bg-slate-100 text-[13px] font-bold text-slate-700 disabled:opacity-50"
+        className="h-11 flex-1 rounded-full bg-slate-100 text-[13px] font-bold text-slate-700 disabled:opacity-50"
       >
         {busy === "coach" ? "Sending…" : `Offer to coach ${targetName.split(" ")[0]}`}
       </button>
@@ -50,7 +50,7 @@ export function CoachRequestBlock({ targetAccountId, targetName }: { targetAccou
         type="button"
         disabled={busy !== null}
         onClick={() => void send(false)}
-        className="h-10 flex-1 rounded-full bg-slate-100 text-[13px] font-bold text-slate-700 disabled:opacity-50"
+        className="h-11 flex-1 rounded-full bg-slate-100 text-[13px] font-bold text-slate-700 disabled:opacity-50"
       >
         {busy === "athlete" ? "Sending…" : `Ask them to coach you`}
       </button>

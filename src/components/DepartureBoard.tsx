@@ -354,7 +354,7 @@ function RsvpButton({ event, going, pending, onJoin, onLeave, inverted }: RsvpBu
       disabled={pending}
       aria-pressed={going}
       aria-label={going ? `You are going to ${event.name}. Press twice to drop out.` : `RSVP to ${event.name}`}
-      className="kb-anim kb-focus relative flex h-10 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full font-bold"
+      className="kb-anim kb-focus relative flex h-11 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full font-bold"
       style={{
         width,
         background: bg,
@@ -721,7 +721,7 @@ export default function DepartureBoard({ events, onHostRun }: { events: RunEvent
                   key={f.id}
                   type="button"
                   onClick={() => setFilter(f.id)}
-                  className="kb-anim kb-focus h-9 rounded-full px-4 font-bold"
+                  className="kb-anim kb-focus h-11 rounded-full px-4 font-bold"
                   style={{
                     fontSize: "13px",
                     letterSpacing: "-0.01em",

@@ -257,7 +257,7 @@ export function NotificationPreferencesSection({
                     aria-checked={value}
                     aria-label={`${meta.label} ${value ? "on" : "off"}`}
                     onClick={() => onToggle(meta.key)}
-                    className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${value ? "bg-[#14171C]" : "bg-slate-300"}`}
+                    className={`relative h-11 w-12 shrink-0 rounded-full transition-colors ${value ? "bg-[#14171C]" : "bg-slate-300"}`}
                   >
                     <span aria-hidden="true" className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${value ? "left-6" : "left-1"}`} />
                   </button>
@@ -725,7 +725,7 @@ export function PrivacySettingsSection({
               aria-checked={settings.searchable_by_name}
               aria-label={`Let people find me by name ${settings.searchable_by_name ? "on" : "off"}`}
               onClick={() => onSave({ searchable_by_name: !settings.searchable_by_name })}
-              className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${settings.searchable_by_name ? "bg-[#14171C]" : "bg-slate-300"}`}
+              className={`relative h-11 w-12 shrink-0 rounded-full transition-colors ${settings.searchable_by_name ? "bg-[#14171C]" : "bg-slate-300"}`}
             >
               <span aria-hidden="true" className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${settings.searchable_by_name ? "left-6" : "left-1"}`} />
             </button>

@@ -108,9 +108,9 @@ export function TrainingSummaryPage() {
       </div>
 
       <div className="mt-3 flex items-center justify-between">
-        <button type="button" onClick={() => setAnchor((a) => shiftAnchor(mode, a, -1))} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100"><Icon name="chevronRight" className="h-4 w-4 rotate-180 text-slate-600" /></button>
+        <button type="button" onClick={() => setAnchor((a) => shiftAnchor(mode, a, -1))} className="grid h-11 w-9 place-items-center rounded-full bg-slate-100"><Icon name="chevronRight" className="h-4 w-4 rotate-180 text-slate-600" /></button>
         <p className="text-[15px] font-bold text-slate-900">{label}</p>
-        <button type="button" onClick={() => setAnchor((a) => shiftAnchor(mode, a, 1))} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100"><Icon name="chevronRight" className="h-4 w-4 text-slate-600" /></button>
+        <button type="button" onClick={() => setAnchor((a) => shiftAnchor(mode, a, 1))} className="grid h-11 w-9 place-items-center rounded-full bg-slate-100"><Icon name="chevronRight" className="h-4 w-4 text-slate-600" /></button>
       </div>
 
       {score ? (

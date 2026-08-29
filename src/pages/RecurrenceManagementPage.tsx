@@ -55,8 +55,8 @@ export function RecurrenceManagementPage() {
                   {r.daysOfWeek.map((d) => DAY_LABELS[d]).join("/")} · {new Date(`${r.startDate}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })} – {new Date(`${r.endDate}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}
                 </p>
                 <div className="mt-3 flex gap-2">
-                  <button type="button" onClick={() => setEditingId(r.id)} className="h-9 flex-1 rounded-full bg-slate-100 text-[12px] font-bold text-slate-700">Edit all instances</button>
-                  <button type="button" disabled={busyId === r.id} onClick={() => void remove(r.id)} className="h-9 flex-1 rounded-full bg-rose-50 text-[12px] font-bold text-rose-600 disabled:opacity-50">Remove rule</button>
+                  <button type="button" onClick={() => setEditingId(r.id)} className="h-11 flex-1 rounded-full bg-slate-100 text-[12px] font-bold text-slate-700">Edit all instances</button>
+                  <button type="button" disabled={busyId === r.id} onClick={() => void remove(r.id)} className="h-11 flex-1 rounded-full bg-rose-50 text-[12px] font-bold text-rose-600 disabled:opacity-50">Remove rule</button>
                 </div>
               </div>
             )

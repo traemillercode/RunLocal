@@ -178,11 +178,11 @@ export function TrainingPlanDetailPage() {
       <div className="lg:grid lg:grid-cols-[1fr_380px] lg:items-start lg:gap-6">
         <div>
           <div className="mt-5 flex items-center justify-between">
-            <button type="button" onClick={() => setViewMonth((m) => addMonths(m, -1))} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 active:bg-slate-200" aria-label="Previous month">
+            <button type="button" onClick={() => setViewMonth((m) => addMonths(m, -1))} className="grid h-11 w-9 place-items-center rounded-full bg-slate-100 active:bg-slate-200" aria-label="Previous month">
               <Icon name="chevronRight" className="h-4 w-4 rotate-180 text-slate-600" />
             </button>
             <p className="text-[15px] font-bold text-slate-900">{viewMonth.toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" })}</p>
-            <button type="button" onClick={() => setViewMonth((m) => addMonths(m, 1))} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 active:bg-slate-200" aria-label="Next month">
+            <button type="button" onClick={() => setViewMonth((m) => addMonths(m, 1))} className="grid h-11 w-9 place-items-center rounded-full bg-slate-100 active:bg-slate-200" aria-label="Next month">
               <Icon name="chevronRight" className="h-4 w-4 text-slate-600" />
             </button>
           </div>
@@ -829,7 +829,7 @@ function DayPanel({
               type="button"
               disabled={loggingSaving}
               onClick={() => void saveLog(completionStatus as "done" | "missed" | "modified")}
-              className="mt-2.5 h-9 w-full rounded-full bg-slate-800 text-[12px] font-bold text-white disabled:opacity-50"
+              className="mt-2.5 h-11 w-full rounded-full bg-slate-800 text-[12px] font-bold text-white disabled:opacity-50"
             >
               {loggingSaving ? "Logging…" : "Log it"}
             </button>

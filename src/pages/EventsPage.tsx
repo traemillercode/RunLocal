@@ -522,7 +522,7 @@ export function EventsPage({ city }: { city: City; store: AppStore }) {
             type="button"
             aria-pressed={feedSegment === value}
             onClick={() => setFeedSegment(value)}
-            className={`h-9 flex-1 rounded-lg text-[13px] font-semibold transition-colors ${
+            className={`h-11 flex-1 rounded-lg text-[13px] font-semibold transition-colors ${
               feedSegment === value ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
             }`}
           >

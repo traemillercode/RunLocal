@@ -61,10 +61,26 @@ describe("0.11 leg 2 — touch targets meet the 44px minimum", () => {
     const offenders: string[] = [];
     for (const f of files) {
       const src = readFileSync(f, "utf8");
-      const re = /<button\b([^>]*)>/gs;
+      // Cannot use /<button\b([^>]*)>/ : an inline arrow handler contains
+      // `=>`, and the negated class stops at that `>`, so the capture ends at
+      // `onClick={() =` and never reaches className. Every button with an
+      // inline arrow was therefore INVISIBLE to this guard — which is how a
+      // 40px feedback launcher shipped under a rule that forbids it.
+      // Brace-aware scan instead: walk to the closing `>` at depth zero.
+      const re = /<button\b/g;
       let m: RegExpExecArray | null;
       while ((m = re.exec(src)) !== null) {
-        const cls = /className=(?:"([^"]*)"|\{`([^`]*)`\})/.exec(m[1]);
+        // Scan forward to the tag-closing `>`, ignoring any inside {...}.
+        let depth = 0;
+        let end = m.index;
+        for (let i = m.index; i < src.length; i++) {
+          const ch = src[i];
+          if (ch === "{") depth++;
+          else if (ch === "}") depth--;
+          else if (ch === ">" && depth === 0) { end = i; break; }
+        }
+        const attrs = src.slice(m.index, end);
+        const cls = /className=(?:"([^"]*)"|\{`([^`]*)`\})/.exec(attrs);
         if (!cls) continue;
         // `min-h-11` already satisfies the rule - exclude it, or its embedded
         // "h-11" is misread as a bare height (and a `min-h-8` would be missed).

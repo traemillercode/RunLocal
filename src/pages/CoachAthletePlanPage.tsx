@@ -66,9 +66,9 @@ export function CoachAthletePlanPage() {
       ) : null}
 
       <div className="mt-4 flex items-center justify-between">
-        <button type="button" onClick={() => setWeekStart((w) => toDateStr(addDays(new Date(`${w}T00:00:00Z`), -7)))} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100"><Icon name="chevronRight" className="h-4 w-4 rotate-180 text-slate-600" /></button>
+        <button type="button" onClick={() => setWeekStart((w) => toDateStr(addDays(new Date(`${w}T00:00:00Z`), -7)))} className="grid h-11 w-9 place-items-center rounded-full bg-slate-100"><Icon name="chevronRight" className="h-4 w-4 rotate-180 text-slate-600" /></button>
         <p className="text-[14px] font-bold text-slate-900">{new Date(`${weekStart}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })} – {new Date(`${weekEnd}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}</p>
-        <button type="button" onClick={() => setWeekStart((w) => toDateStr(addDays(new Date(`${w}T00:00:00Z`), 7)))} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100"><Icon name="chevronRight" className="h-4 w-4 text-slate-600" /></button>
+        <button type="button" onClick={() => setWeekStart((w) => toDateStr(addDays(new Date(`${w}T00:00:00Z`), 7)))} className="grid h-11 w-9 place-items-center rounded-full bg-slate-100"><Icon name="chevronRight" className="h-4 w-4 text-slate-600" /></button>
       </div>
 
       <div className="mt-4 space-y-1.5">

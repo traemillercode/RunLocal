@@ -56,7 +56,7 @@ export function RecurrenceSchedulerSheet({ planStart, planEnd, onCreated, onClos
               key={i}
               type="button"
               onClick={() => toggleDay(i)}
-              className={`h-9 flex-1 rounded-lg text-[12px] font-bold ${daysOfWeek.includes(i) ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-500"}`}
+              className={`h-11 flex-1 rounded-lg text-[12px] font-bold ${daysOfWeek.includes(i) ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-500"}`}
             >
               {label}
             </button>

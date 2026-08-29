@@ -23,7 +23,7 @@ function GuestLoginCta() {
       type="button"
       onClick={() => navigate("/login")}
       aria-label="Log in"
-      className="flex h-9 shrink-0 items-center rounded-[10px] bg-[#FF5741] px-2 text-[12px] font-extrabold text-[#14171C] shadow-sm active:bg-[#e94735] min-[400px]:px-3 min-[400px]:text-[13px]"
+      className="flex h-11 shrink-0 items-center rounded-[10px] bg-[#FF5741] px-2 text-[12px] font-extrabold text-[#14171C] shadow-sm active:bg-[#e94735] min-[400px]:px-3 min-[400px]:text-[13px]"
     >
       Log in
     </button>

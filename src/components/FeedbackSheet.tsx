@@ -119,14 +119,25 @@ export function FeedbackLauncher() {
   const [open, setOpen] = useState(false);
   return (
     <>
+      {/*
+        A labelled pill, not a glyph. This was a 16px megaphone in a 40px grey
+        circle — at that size a megaphone reads as a volume icon, so nobody
+        would guess it meant "tell us something's broken", which made 0.7
+        decorative. It was also the quietest control on the page, and 40px tall
+        under a 44px rule.
+
+        Coral with ink text: the brand rule reserves coral for the single
+        primary action on a screen, and during a beta the feedback channel
+        genuinely is that — it is the only way a user can reach us at all.
+      */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Send feedback about Kimbio"
-        title="Send feedback"
-        className="fixed bottom-28 right-3 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-slate-500 shadow-md ring-1 ring-slate-200 backdrop-blur active:scale-95 sm:bottom-6"
+        className="fixed bottom-28 right-3 z-40 flex h-11 items-center gap-1.5 rounded-full bg-[#FF5741] px-4 text-[13px] font-bold text-[#14171C] shadow-lg ring-1 ring-black/5 active:scale-95 sm:bottom-6"
       >
         <Icon name="megaphone" className="h-4 w-4" />
+        Feedback
       </button>
       <FeedbackSheet open={open} onClose={() => setOpen(false)} />
     </>
