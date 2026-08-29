@@ -141,7 +141,15 @@ describe("Global Admin CMS — authorization", () => {
     expect(r.body.settings.title).toBe(DEFAULT_SETTINGS.title);
     expect(r.body.cities.some((c: { id: string }) => c.id === "columbia-mo")).toBe(true);
     expect(r.body.integrations.map((i: { provider: string }) => i.provider)).toEqual(["strava", "garmin", "coros", "suunto"]);
-    expect(r.body.integrations.every((i: { offered: boolean }) => i.offered === true)).toBe(true);
+    // Only Strava is offered. Garmin/Coros/Suunto are deliberately "coming
+    // soon" — the roadmap position is import, don't rebuild, and direct
+    // connections to those three were never shipped. This previously asserted
+    // every provider was offered, which was true of an older default set.
+    const offered = Object.fromEntries(r.body.integrations.map((i: { provider: string; offered: boolean }) => [i.provider, i.offered]));
+    expect(offered.strava).toBe(true);
+    expect(offered.garmin).toBe(false);
+    expect(offered.coros).toBe(false);
+    expect(offered.suunto).toBe(false);
   });
 
   it("allows the signed-in owner without the admin key configured", async () => {
@@ -166,10 +174,13 @@ describe("Global Admin CMS — settings persistence & defaults", () => {
     const db = createMemoryStore();
     const r = await call(db, "GET", "/api/config");
     expect(r.status).toBe(200);
-    expect(r.body.settings.title).toBe("Run Local");
+    expect(r.body.settings.title).toBe("Kimbio"); // rebrand: was "Run Local"
     expect(r.body.settings.primary).toBe("#0b2b22");
     expect(r.body.settings.bottomNav).toEqual(["home", "races", "clubs", "forum"]);
-    expect(r.body.settings.providers).toEqual({ strava: true, garmin: true, coros: true, suunto: true });
+    // Asserts DEFAULT_SETTINGS.providers as actually shipped: only Strava is
+    // enabled. The other three were flipped to false when direct connections
+    // were dropped in favour of import-don't-rebuild.
+    expect(r.body.settings.providers).toEqual({ strava: true, garmin: false, coros: false, suunto: false });
   });
 
   it("persists a settings update and returns it on the next read", async () => {
