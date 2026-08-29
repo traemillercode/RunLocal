@@ -12,12 +12,19 @@ import { NOTIFICATION_CATEGORY_META, categoryMeta, notificationTime, unreadCount
 describe("notification category metadata", () => {
   it("covers every persisted preference key exactly once", () => {
     const keys = NOTIFICATION_CATEGORY_META.map((m) => m.key).sort();
-    expect(keys).toEqual(["account_alerts", "community_updates", "run_reminders"]);
+    expect(keys).toEqual(["account_alerts", "community_updates", "messages", "run_reminders"]);
   });
 
-  it("marks only Community updates as available today", () => {
+  it("marks every category available, because each now has a real producer", () => {
+    // Was "only Community updates". Three producers have shipped since:
+    //   run_reminders    store.ts     "Your run is coming up"
+    //   messages         api.ts       new-message notification
+    //   account_alerts   admin.ts     appeal decisions
+    // Verified each by finding its addNotification call site rather than
+    // trusting the metadata flag — the flag is the claim, the producer is the
+    // evidence.
     const available = NOTIFICATION_CATEGORY_META.filter((m) => m.available);
-    expect(available.map((m) => m.key)).toEqual(["community_updates"]);
+    expect(available.map((m) => m.key).sort()).toEqual(["account_alerts", "community_updates", "messages", "run_reminders"]);
   });
 
   it("labels unavailable categories honestly (no implied delivery)", () => {
@@ -25,9 +32,22 @@ describe("notification category metadata", () => {
       expect(meta.label.length).toBeGreaterThan(0);
       expect(meta.description.length).toBeGreaterThan(0);
     }
-    // The two categories with no producer right now are explicitly not available.
-    expect(categoryMeta("run_reminders").available).toBe(false);
-    expect(categoryMeta("account_alerts").available).toBe(false);
+    // The ORIGINAL INTENT of this test is worth keeping even though the
+    // specific expectations inverted: a category must never advertise
+    // delivery it cannot perform. Rather than pinning which categories are
+    // unavailable — a list that goes stale every time one ships, which is
+    // exactly what happened here — assert the invariant itself: anything
+    // marked available must have a producer somewhere in src/server.
+    const { readFileSync, readdirSync } = require("node:fs") as typeof import("node:fs");
+    const { join } = require("node:path") as typeof import("node:path");
+    const serverDir = new URL("../src/server", import.meta.url).pathname;
+    const serverSrc = readdirSync(serverDir)
+      .filter((f) => f.endsWith(".ts"))
+      .map((f) => readFileSync(join(serverDir, f), "utf8"))
+      .join("\n");
+    for (const meta of NOTIFICATION_CATEGORY_META.filter((m) => m.available)) {
+      expect(serverSrc).toContain(`category: "${meta.key}"`);
+    }
   });
 
   it("falls back to the first category for an unknown key", () => {
