@@ -82,3 +82,28 @@ describe("Friction reporting", () => {
     expect(() => reportErrorShown("x".repeat(5000))).not.toThrow();
   });
 });
+
+describe("UTM reaches PostHog as first-touch person properties", () => {
+  it("captures from the URL before reading storage", async () => {
+    // The race this closes: TelemetryBootstrap's effect fires before Shell's,
+    // and Shell is where captureUtmFromUrl() runs — so reading storage without
+    // capturing first returns empty on a FIRST visit, which is the only visit
+    // that carries the tag.
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../src/lib/telemetry.ts", import.meta.url).pathname, "utf8");
+    const captureAt = src.indexOf("captureUtmFromUrl();");
+    const readAt = src.indexOf("const utm = getStoredUtm();");
+    expect(captureAt).toBeGreaterThan(-1);
+    expect(captureAt).toBeLessThan(readAt);
+  });
+
+  it("uses $set_once, so a return visit cannot overwrite the original source", async () => {
+    // First-touch attribution. Someone who arrives from Instagram, leaves, and
+    // returns via a direct link came from Instagram — $set would credit the
+    // second visit, which is the one least likely to carry a tag.
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../src/lib/telemetry.ts", import.meta.url).pathname, "utf8");
+    expect(src).toContain("$set_once");
+    expect(src).not.toMatch(/register\(\{\s*\$set:/);
+  });
+});

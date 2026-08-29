@@ -45,7 +45,7 @@ import {
   sessionAccount,
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
-import { isOwnerEmail, ownerEmail } from "./owner";
+import { isOwnerEmail } from "./owner";
 import { sendEmail } from "./email";
 import { resolveOccurrence, defaultOccurrenceDate, sameEventId, occurrenceAttendeeCount } from "./occurrences";
 import { publicGroups, publicGroup } from "./groups";
@@ -3683,7 +3683,12 @@ async function handleApi(
       ];
       const esc = (v: string) => v.replace(/[<>&]/g, (c) => (c === "<" ? "&lt;" : c === ">" ? "&gt;" : "&amp;"));
       void sendEmail({
-        to: ownerEmail(),
+        // feedback@getkimbio.com, not the owner's personal address. Google
+        // Workspace now delivers it, and a role address means the destination
+        // survives the owner changing address or someone else triaging.
+        // FEEDBACK_INBOX overrides it for a non-production environment, where
+        // sending to the real inbox would pollute a live queue with test data.
+        to: process.env.FEEDBACK_INBOX?.trim() || "feedback@getkimbio.com",
         from: "Kimbio Feedback <feedback@getkimbio.com>",
         // Reply-To is the whole loop for a small beta: answer the tester from a
         // mail client without opening the app. Receiving is disabled on the

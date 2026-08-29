@@ -82,9 +82,12 @@ describe("Feedback — notification rules", () => {
     const u = account(db, "reporter@example.com");
     await call(db, "POST", "/api/feedback", u.cookie, { category: "broken", message: "broken thing", ...CONTEXT });
     expect(sent[0].from).toContain("feedback@getkimbio.com");
+    // Delivered to the role address now that Google Workspace receives it —
+    // not the owner's personal inbox.
+    expect(sent[0].to).toBe("feedback@getkimbio.com");
     // Receiving is disabled on the domain, so replying to From would go nowhere.
     expect(sent[0].replyTo).toBe("reporter@example.com");
-    expect(sent[0].to).not.toContain("feedback@getkimbio.com");
+
   });
 
   it("a signed-out report still sends, with no reply-to rather than a broken one", async () => {

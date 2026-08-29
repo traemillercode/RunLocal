@@ -27,7 +27,7 @@
  *    and splitting the gate would mean the banner tells a half-truth.
  */
 
-import { getConsent } from "./analytics";
+import { captureUtmFromUrl, getConsent, getStoredUtm } from "./analytics";
 
 /**
  * The events actually wired today. A closed union rather than a `string` so a
@@ -98,6 +98,30 @@ export async function initTelemetry(): Promise<void> {
           autocapture: false, // explicit taxonomy only - see module docblock
         });
         posthogClient = posthog;
+
+        /*
+         * UTM as PERSON PROPERTIES. captureUtmFromUrl() has been storing these
+         * since launch and getStoredUtm() feeds them to createAccount — but
+         * they never reached PostHog, so acquisition source was recorded on the
+         * account and invisible to every funnel. Half-wired: the data existed
+         * and could not be segmented on.
+         *
+         * $set_once, not $set: first-touch attribution. A runner who arrives
+         * from Instagram, leaves, and returns via a direct link came from
+         * Instagram — overwriting on the second visit would credit the wrong
+         * source, and the second visit is the one least likely to carry a tag.
+         */
+        // Capture BEFORE reading. TelemetryBootstrap renders above Shell, so
+        // its effect fires first — and Shell is where captureUtmFromUrl() runs.
+        // Reading storage here without this returns empty on a first visit,
+        // which is the only visit that carries the UTM tag. Calling it here is
+        // safe: it reads the URL and writes sessionStorage, so a second call is
+        // a no-op rather than a duplicate.
+        captureUtmFromUrl();
+        const utm = getStoredUtm();
+        if (Object.keys(utm).length > 0) {
+          posthog.register({ $set_once: utm });
+        }
       } catch {
         // A blocked or failed SDK load must never break the app. Telemetry is
         // strictly observational; it has no business affecting what a runner
