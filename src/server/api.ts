@@ -3712,6 +3712,39 @@ ${rows.map(([k, v]) => `<tr><td style="color:#5b5f66;vertical-align:top;">${k}</
     return ok(res, { feedback: db.listFeedback({ unresolvedOnly }) }), true;
   }
 
+  // GET /api/events/public-summary?ids=a,b,c — going COUNTS only, no auth.
+  //
+  // Exists because the marketing preview must prove the community is real, and
+  // a stranger seeing three runs with "0 going" would disprove it — worse than
+  // showing no runs at all. The authenticated attendance-summary endpoint can't
+  // serve this: it returns names and initials, which must never reach an
+  // anonymous visitor (D2, and "private by default" is claimed on this very
+  // page).
+  //
+  // Deliberately returns nothing but the count. Not names, not initials, not
+  // avatars, not even the number of hosts — a count cannot identify anyone.
+  // Cached because every marketing view and every crawler hit lands here.
+  if (url.pathname === "/api/events/public-summary" && method === "GET") {
+    const ids = (url.searchParams.get("ids") ?? "")
+      .split(",").map((s) => s.trim()).filter(Boolean).slice(0, 20);
+    const counts: Record<string, number> = {};
+    if (ids.length > 0) {
+      const wanted = new Set(ids);
+      for (const a of db.listAttendance()) {
+        if (!a.occurrenceId || !wanted.has(a.occurrenceId) || a.role === "host") continue;
+        counts[a.occurrenceId] = (counts[a.occurrenceId] ?? 0) + 1;
+      }
+    }
+    res.writeHead(200, {
+      "content-type": "application/json",
+      // Short TTL: fresh enough that a new RSVP shows up quickly, long enough
+      // that a crawl or a burst of marketing views doesn't recount every time.
+      "cache-control": "public, max-age=60, stale-while-revalidate=300",
+    });
+    res.end(JSON.stringify({ summaries: ids.map((eventId) => ({ eventId, goingCount: counts[eventId] ?? 0 })) }));
+    return true;
+  }
+
   if (url.pathname === "/api/events/attendance-summary" && method === "POST") {
     const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
     const b = (await readJson(req)) as { occurrenceIds?: unknown };
