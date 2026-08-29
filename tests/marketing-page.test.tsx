@@ -5,34 +5,43 @@ import { CITIES } from "../src/data/cities";
 import { MarketingPage } from "../src/pages/MarketingPage";
 
 describe("public marketing landing page", () => {
-  it("has truthful hero, section copy, and public CTAs", () => {
+  it("keeps the public entry points, whatever the copy says", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <MarketingPage />
       </MemoryRouter>,
     );
-    expect(html).toContain("Columbia, MO");
-    expect(html).toContain("Your run.");
-    expect(html).toContain("Browse public events");
-    expect(html).toContain("/events");
-    expect(html).toContain("/login?mode=signup");
-    expect(html).toContain("Verified-member posting is the next step");
-    expect(html).toContain("Matching and discovery are planned");
+    // CONTRACT, not copy. This previously pinned exact strings ("Your run.",
+    // "Verified-member posting is the next step") that 1.4 replaced wholesale
+    // when the live board became the hero — so it failed for describing a page
+    // that no longer existed rather than for anything being wrong. Marketing
+    // copy is expected to change; these four are what the page is FOR.
+    expect(html).toContain("Columbia, MO");        // the city is named
+    expect(html).toContain("/events");             // a guest can browse without signing up
+    expect(html).toContain("/login?mode=signup");  // a guest can convert
+    expect(html).toContain("marketing-live-board"); // the board is present (1.4)
   });
 
-  it("labels provider availability honestly", () => {
+  it("never advertises a provider integration that does not exist", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <MarketingPage />
       </MemoryRouter>,
     );
-    expect(html).toContain("Strava");
-    expect(html).toContain("Supported");
-    expect(html).toContain("Strava connection is supported");
-    expect(html.match(/Coming soon/g)?.length).toBe(3);
-    expect(html).toContain("Garmin");
-    expect(html).toContain("COROS");
-    expect(html).toContain("Suunto");
+    // The old version asserted the page NAMES Strava, Garmin, COROS and Suunto
+    // with a "Coming soon" count of exactly 3. The page no longer mentions
+    // providers at all — which is MORE honest, not less: /api/connections/strava
+    // was removed from src/ entirely, so a page promising Strava connection
+    // would now be advertising something a signup cannot deliver.
+    //
+    // Inverted to the invariant the original was protecting: if a provider is
+    // named, it must not be presented as working. Survives providers returning
+    // in roadmap 6.1 as read-only import.
+    for (const provider of ["Strava", "Garmin", "COROS", "Suunto"]) {
+      if (!html.includes(provider)) continue;
+      const claim = new RegExp(`${provider}[^<]{0,60}(connected|supported|sync)`, "i");
+      expect(html).not.toMatch(claim);
+    }
   });
 
   it("renders a live, date-aware event board rather than a fixed list", () => {
