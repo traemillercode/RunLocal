@@ -4,6 +4,7 @@ import * as api from "../lib/api";
 import { useToast } from "../lib/toast";
 import { Icon } from "../components/ui";
 import { useDeadEnd } from "../lib/friction";
+import { slotLabel, bySessionTime, totalUnitFor, toTotal, totalUnitLabel } from "../lib/slots";
 import { RecurrenceSchedulerSheet } from "../components/RecurrenceSchedulerSheet";
 
 const TRAINING_PLAN_LABELS: Record<api.TrainingPlanType, string> = {
@@ -92,7 +93,7 @@ export function TrainingPlanDetailPage() {
   const onSaved = (day: api.TrainingPlanDayView) => {
     setDaysByDate((prev) => {
       const existing = (prev[day.date] ?? []).filter((d) => d.slot !== day.slot);
-      return { ...prev, [day.date]: [...existing, day].sort((a, b) => (a.slot === "pm" ? 1 : 0) - (b.slot === "pm" ? 1 : 0)) };
+      return { ...prev, [day.date]: [...existing, day].sort(bySessionTime) };
     });
     toast("Day saved.", "success");
     // Fixes the earlier flagged bug: the edit panel collapses back to the calendar after a save, rather than staying open indefinitely.
@@ -201,8 +202,6 @@ export function TrainingPlanDetailPage() {
               // A "quality" workout - anything more structured than an easy run or plain rest - gets its own marker so it stands out from an easy day at a glance.
               const hasQualityWorkout = dayList.some((d2) => d2.intervalStructure || (d2.runLabel && d2.runLabel !== "easy" && d2.runLabel !== "recovery_run"));
               const unitAbbrev = (u: api.TrainingDistanceUnit) => (u === "miles" ? "mi" : u === "km" ? "km" : u === "meters" ? "m" : "yd");
-              const toMilesLocal = (v: number, u: api.TrainingDistanceUnit) => (u === "miles" ? v : u === "km" ? v * 0.621371 : u === "meters" ? v * 0.000621371 : v * 0.000568182);
-              const fromMilesLocal = (miles: number, u: api.TrainingDistanceUnit) => (u === "miles" ? miles : u === "km" ? miles / 0.621371 : u === "meters" ? miles / 0.000621371 : miles / 0.000568182);
               // Two runs, both with a real distance - show "3 + 4 = 7mi" rather than just the total, so both are visible at a glance. Converts the second into the first's unit if they differ.
               // Two sessions with real distances. Shows the TOTAL only, not
               // "3+4=7mi": at the 11px accessibility floor the equation cannot
@@ -226,8 +225,22 @@ export function TrainingPlanDetailPage() {
                     const [a, b] = dayList;
                     // Converted into the first session's unit so "3 · 4" is a
                     // like-for-like comparison rather than two different scales.
-                    const bInAUnit = Math.round(fromMilesLocal(toMilesLocal(b.distanceValue!, b.distanceUnit), a.distanceUnit) * 10) / 10;
-                    return `${a.distanceValue} · ${bInAUnit}`;
+                    // BUG 3: this used to convert into the FIRST session's unit,
+                    // so an AM track session in meters rendered the day as
+                    // "11229.53". Meters and yards are input units — that is how
+                    // tracks are measured — never totals units. Both sessions now
+                    // display in a real total unit, rounded to one decimal.
+                    const unit = totalUnitFor([a.distanceUnit, b.distanceUnit]);
+                    const av = toTotal(a.distanceValue!, a.distanceUnit, unit);
+                    const bInAUnit = toTotal(b.distanceValue!, b.distanceUnit, unit);
+                    // WHICH session is the morning one is the entire point of
+                    // scanning this at wake-up. Labels only appear when times
+                    // are actually set — an unlabelled pair is still honest.
+                    const la = slotLabel(a.scheduledTime, a.slot);
+                    const lb = slotLabel(b.scheduledTime, b.slot);
+                    return la && lb
+                      ? `${la} ${av} · ${lb} ${bInAUnit}${totalUnitLabel(unit)}`
+                      : `${av} · ${bInAUnit}${totalUnitLabel(unit)}`;
                   })()
                 : null;
               return (
@@ -236,7 +249,7 @@ export function TrainingPlanDetailPage() {
                   type="button"
                   disabled={!inPlan}
                   onClick={() => setSelectedDate(dateStr)}
-                  className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] ${
+                  className={`relative flex min-h-[58px] flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 py-1 text-[11px] ${
                     !inMonth ? "text-slate-300" : !inPlan ? "text-slate-300" : "text-slate-800"
                   } ${selectedDate === dateStr ? "ring-2 ring-[#14171C]" : ""} ${meta ? meta.color : inPlan ? "bg-slate-50" : ""} ${dateStr === today ? "font-extrabold" : ""}`}
                 >
@@ -496,7 +509,19 @@ function DayPanel({
     <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-[15px] font-bold text-slate-900">
-          {dateLabel} {slot !== "primary" ? <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold uppercase text-slate-500">{day?.scheduledTime ? new Date(`2000-01-01T${day.scheduledTime}`).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : slot}</span> : null}
+          {dateLabel}{" "}
+          {/*
+            Was gated on slot !== "primary", so the FIRST session never showed
+            its time — the model bug surfacing in the UI. Now driven by whether
+            a time actually exists, which is the real question.
+          */}
+          {day?.scheduledTime ? (
+            <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold uppercase text-slate-500">
+              {slotLabel(day.scheduledTime, slot)} · {new Date(`2000-01-01T${day.scheduledTime}`).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+            </span>
+          ) : slot !== "primary" ? (
+            <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold uppercase text-slate-500">{slot}</span>
+          ) : null}
           {frozen ? <Icon name="shield" className="ml-1.5 inline h-3.5 w-3.5 text-slate-400" /> : null}
         </p>
         <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100" aria-label="Close"><Icon name="close" className="h-4 w-4" /></button>
