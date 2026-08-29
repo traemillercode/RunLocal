@@ -140,6 +140,15 @@
 .marketing-live-board {
   text-align: left;
   background: #fff;
+  /*
+    .marketing-page sets color:#f7f7f5 for the dark page, and this card is the
+    one white surface on it — so anything not explicitly coloured inherits
+    near-white ON white. The run titles were rendering invisible while the
+    location and distance below them looked fine, purely because those two had
+    explicit colours and the h3 did not. Set the base colour on the card so
+    every descendant inherits an on-white value by default.
+  */
+  color: #14171C;
   border: 1px solid #E4E4DF;
   border-radius: 16px;
   overflow: hidden;
@@ -168,6 +177,7 @@
 /* Ink time rail — the DepartureBoard's signature device, reused so the
    marketing page and the product read as one system. */
 .marketing-live-when {
+  color: #14171C;
   flex-shrink: 0;
   min-width: 96px;
   font-size: 13px;
@@ -175,7 +185,7 @@
   color: #14171C;
   font-variant-numeric: tabular-nums;
 }
-.marketing-live-body h3 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.marketing-live-body h3 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; color: #14171C; }
 .marketing-live-body p { margin: 2px 0 0; font-size: 13px; color: #7A7A72; }
 .marketing-live-meta { font-weight: 600; }
 .marketing-live-board .marketing-text-link { display: inline-block; margin: 14px 18px 16px; }
