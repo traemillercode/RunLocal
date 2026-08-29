@@ -168,6 +168,37 @@ layer" positioning on the first screen a stranger sees.
 
 **0.10 — Route-level code splitting** *(new — see Competitive Gaps)*
 
+> **DONE (44228de). Measured against live getkimbio.com** at 390x844, ~1.6Mbps,
+> 4x CPU throttle — not a local build:
+>
+> | | Before | After |
+> |---|---|---|
+> | Entry chunk | 1,332,577 B | **611,943 B** |
+> | JS transferred | 347 KB | **175 KB** |
+> | FCP | 3,364 ms | **2,132 ms** |
+> | LCP | null | **still null** |
+>
+> **The "LCP starts reporting" criterion was NOT met, and has been re-assigned
+> to Phase 1.** The bookkeeping matters: 0.10 controls how fast code *arrives*;
+> LCP measures whether *content paints*. Those are different things. Halving the
+> bundle made the shell arrive sooner but produced no LCP candidate, because the
+> signed-out landing page still isn't rendering qualifying above-the-fold
+> content. That is **1.2** (real signed-in Home) and **1.4** (live events on
+> marketing) — re-test LCP after those land, not by splitting further.
+>
+> Verified that telemetry is genuinely lazy, not merely configured to be: with a
+> fresh context and no consent, first paint issues **one** JS request and zero
+> requests to PostHog or Sentry. Note for future audits — grepping the entry
+> chunk for `posthog`/`sentry` returns hits even when correct, because the
+> dynamic import's *callback* (the `init()` call and `api_host` default) must
+> live in the entry. Check library internals instead: `rrweb`,
+> `__PosthogExtensions__`, `@sentry/core`. All zero in the entry.
+>
+> Deliberately NOT split further. The remaining 611 KB is React, Router, and
+> Supabase — needed at startup, and splitting it trades real complexity for
+> diminishing returns without addressing the null LCP, whose cause is missing
+> content rather than bundle weight.
+
 **1.32 MB in one chunk** (350 KB gzipped), no lazy loading; the build warns
 about it. Admin, Forum, Settings, and Messages are 36% of the app and don't
 belong in first paint. Runners open this on mobile data at a trailhead.

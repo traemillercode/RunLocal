@@ -46,7 +46,6 @@ const RecoveryPage = lazy(() => import("./pages/RecoveryPage").then((m) => ({ de
 const ConfirmationPage = lazy(() => import("./pages/ConfirmationPage").then((m) => ({ default: m.ConfirmationPage })));
 const ProviderCallbackPage = lazy(() => import("./pages/ProviderCallbackPage").then((m) => ({ default: m.ProviderCallbackPage })));
 const MyRunsPage = lazy(() => import("./pages/MyRunsPage").then((m) => ({ default: m.MyRunsPage })));
-const PersonalRunsPage = lazy(() => import("./pages/PersonalRunsPage").then((m) => ({ default: m.PersonalRunsPage })));
 const PastEventsPage = lazy(() => import("./pages/PastEventsPage").then((m) => ({ default: m.PastEventsPage })));
 const GroupsHubPage = lazy(() => import("./pages/GroupsPage").then((m) => ({ default: m.GroupsHubPage })));
 import { MarketingPage } from "./pages/MarketingPage";
@@ -151,7 +150,6 @@ function Shell() {
             <Route path="/routes/:routeId" element={<RouteDetailPage />} />
             <Route path="/forum" element={<ForumPage city={city} />} />
             <Route path="/my-runs" element={<MyRunsPage />} />
-            <Route path="/personal-runs" element={<PersonalRunsPage />} />
             <Route path="/profile" element={<ProfilePage city={city} store={store} />} />
             <Route path="/runners/:id" element={<RunnerRoute />} />
             <Route path="/notifications" element={<NotificationsPage />} />

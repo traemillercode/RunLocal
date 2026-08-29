@@ -339,7 +339,7 @@ export function buildSoloRunInput(cityId: string, f: SoloRunFormFields): Paramet
 
 /**
  * "Schedule my own run" bottom sheet — used from the EventsPage host section
- * and the MyRunsHeader. Mirrors the PersonalRunsPage form fields (title, start
+ * and the MyRunsHeader. Same form fields as the personal-run API accepts (title, start
  * time, optional location/distance) plus the mandatory privacy consent
  * checkbox. On success it toasts, closes, and lets the parent decide what
  * happens next (navigate to My Runs, or refresh the list in place).
