@@ -115,3 +115,78 @@
 .marketing-mobile-menu-item { display: flex; align-items: center; gap: 14px; padding: 14px 4px; min-height: 44px; color: #f7f7f5; text-decoration: none; font-size: 15px; font-weight: 700; border-bottom: 1px solid #262930; }
 .marketing-mobile-menu-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
 .marketing-mobile-menu-actions .marketing-button { width: 100%; }
+
+/* ── Live board hero (roadmap 1.4) ─────────────────────────────────────────
+   Replaces the full-bleed photo hero. Order is headline → subhead → board →
+   CTA, and nothing is inserted between the headline and the board, so on a
+   phone the proof of activity is the first thing under the title rather than
+   sitting below an image. */
+.marketing-hero-live {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 56px 20px 40px;
+  text-align: center;
+}
+.marketing-hero-live h1 {
+  font-size: clamp(32px, 6vw, 52px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  margin: 0 0 12px;
+}
+.marketing-hero-live .marketing-lede-warm { margin: 0 auto 28px; max-width: 44ch; }
+.marketing-hero-live .marketing-actions { margin-top: 28px; justify-content: center; }
+
+.marketing-live-board {
+  text-align: left;
+  background: #fff;
+  border: 1px solid #E4E4DF;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 28px -18px rgba(20, 23, 28, 0.35);
+}
+.marketing-live-header {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid #E4E4DF;
+}
+.marketing-live-count {
+  margin: 4px 0 0;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: #14171C;
+}
+.marketing-live-count strong { font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.marketing-live-list { list-style: none; margin: 0; padding: 0; }
+.marketing-live-item {
+  display: flex;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #F1F1EE;
+}
+.marketing-live-item:last-child { border-bottom: 0; }
+/* Ink time rail — the DepartureBoard's signature device, reused so the
+   marketing page and the product read as one system. */
+.marketing-live-when {
+  flex-shrink: 0;
+  min-width: 96px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #14171C;
+  font-variant-numeric: tabular-nums;
+}
+.marketing-live-body h3 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.marketing-live-body p { margin: 2px 0 0; font-size: 13px; color: #7A7A72; }
+.marketing-live-meta { font-weight: 600; }
+.marketing-live-board .marketing-text-link { display: inline-block; margin: 14px 18px 16px; }
+
+.marketing-live-board-empty { padding: 20px 18px; }
+.marketing-live-empty-line { margin: 6px 0 12px; font-size: 15px; color: #14171C; }
+
+@media (max-width: 560px) {
+  .marketing-hero-live { padding: 32px 16px 28px; }
+  /* Stack the time above the run on narrow screens rather than squeezing a
+     96px rail against the title. */
+  .marketing-live-item { flex-direction: column; gap: 4px; }
+  .marketing-live-when { min-width: 0; }
+}

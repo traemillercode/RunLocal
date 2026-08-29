@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { MarketingLiveBoard } from "../components/MarketingLiveBoard";
 import { CITIES } from "../data/cities";
 import { Icon } from "../components/ui";
 
 const city = CITIES.find((item) => item.id === "columbia-mo");
-const previewEvents = city?.events.slice(0, 3) ?? [];
 
 /** Real photography, stored locally and optimized (see public/marketing/). Sourced as general running lifestyle imagery — not verified to depict the specific named Missouri trails, so captions never make that claim. */
 export const MARKETING_IMAGES = {
@@ -21,13 +21,17 @@ export const MARKETING_IMAGES = {
 };
 
 /** The "moments" gallery — captions read like what a runner would actually caption their own photo, not marketing copy. */
+/**
+ * Two supporting photos, below the fold. Cut from six: the board carries the
+ * page now, and the stock set is the weakest thing on it. Dropped the fisheye
+ * trail jump and the marathon crowd specifically — an action-sports image and
+ * a big-race image are the visual language of every running app, which
+ * contradicts a product whose whole claim is a local Tuesday evening.
+ * Kept the two that read closest to a real group run.
+ */
 const GALLERY_MOMENTS = [
   { photo: MARKETING_IMAGES.groupSunrise, caption: "Dusty roads, early crew" },
   { photo: MARKETING_IMAGES.trailTwoRunners, caption: "Two miles in, still talking" },
-  { photo: MARKETING_IMAGES.groupSunset, caption: "Last light on the river path" },
-  { photo: MARKETING_IMAGES.trailJump, caption: "Trail day, no regrets" },
-  { photo: MARKETING_IMAGES.trackRelay, caption: "Handoff practice, Tuesday nights" },
-  { photo: MARKETING_IMAGES.silhouetteDusk, caption: "One more mile before dark" },
 ];
 
 const sections = [
@@ -126,20 +130,26 @@ export function MarketingPage() {
     <div className="marketing-page">
       <MarketingNav />
       <main id="top">
-        <section className="marketing-hero-v2" aria-labelledby="hero-title">
-          <div className="marketing-hero-v2-photo marketing-hero-v2-photo-left">
-            <img src={MARKETING_IMAGES.trailTwoRunners} alt="" loading="eager" />
+        {/*
+          The board IS the hero (roadmap 1.4). The full-bleed photos are gone:
+          a photo says "running exists", the board says "14 runs in Columbia
+          this week and 34 people are going" — only one of those is an argument.
+          It also can't go stale, and our stock imagery was the weakest part of
+          the page, so reducing its prominence is the point rather than a
+          compromise.
+
+          Order is headline, one subhead line, board, CTA — so on mobile the
+          board lands immediately after the headline with no photo in between.
+        */}
+        <section className="marketing-hero-live" aria-labelledby="hero-title">
+          <h1 id="hero-title">People who actually show up.</h1>
+          <p className="marketing-lede-warm">Real group runs in Columbia — who's going, where, and when.</p>
+          {city ? <MarketingLiveBoard city={city} /> : null}
+          <div className="marketing-actions">
+            <Link to="/login?mode=signup" className="marketing-button marketing-button-primary">Create your account</Link>
+            <Link to="/events" className="marketing-button marketing-button-light">Browse public events <span aria-hidden="true">↗</span></Link>
           </div>
-          <div className="marketing-hero-v2-photo marketing-hero-v2-photo-right">
-            <img src={MARKETING_IMAGES.groupSunset} alt="" loading="eager" />
-          </div>
-          <div className="marketing-hero-v2-card">
-            <p className="marketing-kicker-warm">Columbia, MO · Live now</p>
-            <h1 id="hero-title">People who actually show up.</h1>
-            <p className="marketing-lede-warm">Real group runs, real faces, real Columbia. No fake crowds, no empty listings.</p>
-            <div className="marketing-actions"><Link to="/events" className="marketing-button marketing-button-primary">Browse public events <span aria-hidden="true">↗</span></Link><Link to="/login?mode=signup" className="marketing-button marketing-button-light">Create your account</Link></div>
-            <p className="marketing-note-warm">No login needed to look around.</p>
-          </div>
+          <p className="marketing-note-warm">No login needed to look around.</p>
         </section>
 
         <section className="marketing-gallery" aria-labelledby="gallery-title">
@@ -153,13 +163,6 @@ export function MarketingPage() {
               </figure>
             ))}
           </div>
-        </section>
-
-        <section id="preview" className="marketing-section marketing-preview" aria-labelledby="preview-title">
-          <p className="marketing-kicker">This week</p><h2 id="preview-title">What’s happening in Columbia</h2>
-          <p className="marketing-muted">Public event listings from the launch city.</p>
-          <div className="marketing-event-grid">{previewEvents.map((event) => <article className="marketing-event" key={event.id}><div className="marketing-event-mark" aria-hidden="true">↗</div><h3>{event.title}</h3><p>{event.time}</p><p>{event.location}</p><span>{event.distanceLabel}</span></article>)}</div>
-          <Link to="/events" className="marketing-text-link">See all public events <span aria-hidden="true">→</span></Link>
         </section>
 
         <section className="marketing-route-section" aria-labelledby="routes-title">

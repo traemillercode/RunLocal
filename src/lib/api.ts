@@ -1787,3 +1787,8 @@ export interface FeedbackContext {
 export function submitFeedback(category: FeedbackCategory, message: string, context: FeedbackContext): Promise<ApiResult<{ id: string }>> {
   return request("/api/feedback", { method: "POST", body: JSON.stringify({ category, message, ...context }) });
 }
+
+/** Public going-counts — no auth, counts only, never identities. Powers the marketing preview (roadmap 1.4). */
+export function getPublicGoingCounts(occurrenceIds: string[]): Promise<ApiResult<{ summaries: { eventId: string; goingCount: number }[] }>> {
+  return request(`/api/events/public-summary?ids=${encodeURIComponent(occurrenceIds.join(","))}`);
+}
