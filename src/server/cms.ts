@@ -193,6 +193,11 @@ export function decodeCmsImage(data: unknown): { ok: true; bytes: Buffer; ext: "
   const ext = (m[1] === "jpeg" ? "jpg" : m[1]) as "jpg" | "png" | "webp";
   const bytes = Buffer.from(m[2].replace(/\s/g, ""), "base64");
   if (bytes.length === 0) return { ok: false, error: "invalid_image" };
+  // MAX_CMS_IMAGE_BYTES was declared and never referenced, so this docblock's
+  // "≤4MB decoded" was aspirational: any image under the 6MB JSON body cap was
+  // accepted. Same shape as the other declared-but-unused defects found this
+  // week — the constant reads as enforcement without being any.
+  if (bytes.length > MAX_CMS_IMAGE_BYTES) return { ok: false, error: "image_too_large" };
   // CMS remains separately scoped: it validates data-URL syntax and size only;
   // profile/selfie/group uploads use the stricter shared dimensional validator.
   return { ok: true, bytes, ext };
