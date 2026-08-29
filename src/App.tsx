@@ -22,6 +22,7 @@ import * as api from "./lib/api";
 const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
 const EventsPage = lazy(() => import("./pages/EventsPage").then((m) => ({ default: m.EventsPage })));
 import { DiscoverEventsPage } from "./pages/DiscoverEventsPage";
+import { HomePage } from "./pages/HomePage";
 const EventDetailPage = lazy(() => import("./pages/EventDetailPage").then((m) => ({ default: m.EventDetailPage })));
 const ForumPage = lazy(() => import("./pages/ForumPage").then((m) => ({ default: m.ForumPage })));
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
@@ -133,7 +134,7 @@ function Shell() {
             */}
             <Suspense fallback={<div className="min-h-[60vh]" aria-busy="true" />}>
             <Routes>
-            <Route path="/" element={me?.status === "signed_in" ? <DiscoverEventsPage city={city} /> : <MarketingPage />} />
+            <Route path="/" element={me?.status === "signed_in" ? <HomePage city={city} /> : <MarketingPage />} />
             <Route path="/events/manage" element={me?.status === "signed_in" ? <EventsPage city={city} store={store} /> : <MarketingPage />} />
             <Route path="/landing" element={<MarketingPage />} />
             {/*

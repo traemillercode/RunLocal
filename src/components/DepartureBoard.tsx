@@ -297,6 +297,7 @@ function RouteSliver({ path, inverted }: RouteSliverProps) {
    ───────────────────────────────────────────────────────────────────────────── */
 
 interface RsvpButtonProps {
+  canRsvp: boolean;
   event: RunEvent;
   going: boolean;
   pending: boolean;
@@ -305,7 +306,7 @@ interface RsvpButtonProps {
   inverted: boolean;
 }
 
-function RsvpButton({ event, going, pending, onJoin, onLeave, inverted }: RsvpButtonProps) {
+function RsvpButton({ event, going, pending, onJoin, onLeave, inverted, canRsvp }: RsvpButtonProps) {
   const [confirming, setConfirming] = useState(false);
   const [pressed, setPressed] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -330,13 +331,18 @@ function RsvpButton({ event, going, pending, onJoin, onLeave, inverted }: RsvpBu
     onLeave();
   };
 
-  const width = going ? (confirming ? 116 : 104) : event.priceCents > 0 ? 118 : 96;
+  const width = !canRsvp ? 92 : going ? (confirming ? 116 : 104) : event.priceCents > 0 ? 118 : 96;
 
   const bg = going ? (confirming ? "transparent" : CORAL) : inverted ? "#FFFFFF" : INK;
   const fg = going ? (confirming ? CORAL : INK) : inverted ? INK : "#FFFFFF";
   const border = confirming ? `1.5px solid ${CORAL}` : "1.5px solid transparent";
 
-  const label = !going
+  // The label must name the action the server will actually accept. A pending
+  // account pressing "RSVP" gets a 403, so it says "Verify" and goes to
+  // verification — the step that genuinely unblocks them.
+  const label = !canRsvp
+    ? "Verify"
+    : !going
     ? event.priceCents > 0
       ? `Join · $${(event.priceCents / 100).toFixed(0)}`
       : "RSVP"
@@ -353,7 +359,13 @@ function RsvpButton({ event, going, pending, onJoin, onLeave, inverted }: RsvpBu
       onPointerLeave={() => setPressed(false)}
       disabled={pending}
       aria-pressed={going}
-      aria-label={going ? `You are going to ${event.name}. Press twice to drop out.` : `RSVP to ${event.name}`}
+      aria-label={
+        !canRsvp
+          ? `Verify your account to RSVP to ${event.name}`
+          : going
+          ? `You are going to ${event.name}. Press twice to drop out.`
+          : `RSVP to ${event.name}`
+      }
       className="kb-anim kb-focus relative flex h-11 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full font-bold"
       style={{
         width,
@@ -392,6 +404,7 @@ function RsvpButton({ event, going, pending, onJoin, onLeave, inverted }: RsvpBu
  * rendered because of it.
  */
 interface BoardRunCardProps {
+  canRsvp: boolean;
   /** D2: when false, attendee identities are never rendered regardless of what is passed. */
   showAttendees?: boolean;
   event: RunEvent;
@@ -403,7 +416,7 @@ interface BoardRunCardProps {
   onLeave: () => void;
 }
 
-function BoardRunCard({ event, now, hero, going, pending, onJoin, onLeave, showAttendees = true }: BoardRunCardProps) {
+function BoardRunCard({ event, now, hero, going, pending, onJoin, onLeave, showAttendees = true, canRsvp }: BoardRunCardProps) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
 
@@ -533,6 +546,8 @@ function BoardRunCard({ event, now, hero, going, pending, onJoin, onLeave, showA
               justJoined={going}
             />
             <RsvpButton
+
+              canRsvp={canRsvp}
               event={event}
               going={going}
               pending={pending}
@@ -576,7 +591,14 @@ function BoardRunCard({ event, now, hero, going, pending, onJoin, onLeave, showA
  * the card was built for this: attendee identities are simply not passed by the
  * caller, and write actions become a signup prompt rather than a dead control.
  */
-export default function DepartureBoard({ events, onHostRun, signedIn = true }: { events: RunEvent[]; onHostRun: () => void; signedIn?: boolean }) {
+/**
+ * `canRsvp` is NOT `signedIn`. The server requires status === "verified"
+ * (403 verified_runner_required), so a PENDING account is signed in and still
+ * cannot RSVP. Gating the button on signedIn gave pending users a live control
+ * that always failed — the same affordance leak just removed for guests,
+ * one status further in.
+ */
+export default function DepartureBoard({ events, onHostRun, signedIn = true, canRsvp = true }: { events: RunEvent[]; onHostRun: () => void; signedIn?: boolean; canRsvp?: boolean }) {
   const [now, setNow] = useState(() => new Date());
   const [filter, setFilter] = useState<EventType | "all">("all");
   const [rsvps, setRsvps] = useState<Set<string>>(() => new Set());
@@ -629,6 +651,9 @@ export default function DepartureBoard({ events, onHostRun, signedIn = true }: {
     // server would reject it anyway; this makes the reason visible and gives
     // the action somewhere to go.
     if (!signedIn) { window.location.assign("/login?mode=signup"); return; }
+    // Pending accounts go to verification, which is the action that actually
+    // unblocks them, rather than a request the server will refuse.
+    if (!canRsvp) { window.location.assign("/verify"); return; }
     setPendingId(event.id);
     setRsvps((prev) => new Set(prev).add(event.id)); // optimistic
     try {
@@ -644,7 +669,7 @@ export default function DepartureBoard({ events, onHostRun, signedIn = true }: {
     } finally {
       setPendingId(null);
     }
-  }, [signedIn]);
+  }, [signedIn, canRsvp]);
 
   const leave = useCallback(async (event: RunEvent) => {
     if (!signedIn) { window.location.assign("/login?mode=signup"); return; }
@@ -809,6 +834,8 @@ export default function DepartureBoard({ events, onHostRun, signedIn = true }: {
                       className="kb-anim"
                     >
                       <BoardRunCard
+
+                        canRsvp={canRsvp}
                         showAttendees={signedIn}
                         event={e}
                         now={now}

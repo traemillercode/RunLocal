@@ -27,6 +27,10 @@ export function DiscoverEventsPage({ city }: { city: City }) {
   const { hidden } = useModerated();
   const { role, me } = useAccount();
   const signedIn = me?.status === "signed_in";
+  // NOT the same as signedIn: the server refuses RSVP unless status is
+  // "verified" (403 verified_runner_required), so a pending account must be
+  // sent to verification rather than handed a button that fails.
+  const canRsvp = role === "verified";
   const [canonicalEvents, setCanonicalEvents] = useState<api.CanonicalEvent[] | null>(null);
   const [summaries, setSummaries] = useState<Record<string, api.AttendanceSummaryEntry>>({});
   const [publicCounts, setPublicCounts] = useState<Record<string, number>>({});
@@ -99,7 +103,7 @@ export function DiscoverEventsPage({ city }: { city: City }) {
 
   return (
     <div>
-      <DepartureBoard events={mapped} onHostRun={openHostRun} signedIn={signedIn} />
+      <DepartureBoard events={mapped} onHostRun={openHostRun} signedIn={signedIn} canRsvp={canRsvp} />
       {signedIn ? (
       <div className="mx-auto max-w-md px-4 py-3 text-center">
         <Link to="/events/manage" className="text-[13px] font-semibold text-slate-500 underline underline-offset-2">
