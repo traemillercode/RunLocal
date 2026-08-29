@@ -125,7 +125,17 @@ export function Popover({ open, onClose, title, align = "right", children }: Pop
   );
 }
 
-const PATHS: Record<string, ReactNode> = {
+/**
+ * Icon glyphs. This object is the SINGLE SOURCE OF TRUTH for icon names —
+ * `IconName` is derived from its keys below, so adding a glyph here makes the
+ * name valid everywhere with no second list to keep in sync.
+ *
+ * Deliberately NOT typed as Record<string, ReactNode>: that would accept any
+ * string and let `<Icon name="chevrn" />` render nothing at all, silently. The
+ * `satisfies` form below keeps the literal key types while still checking the
+ * values.
+ */
+const PATHS = {
   close: <path d="M6 6l12 12M18 6L6 18" />,
   logout: <><path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4" /><path d="M14 8l4 4-4 4M18 12H9" /></>,
   chevronDown: <path d="M6 9l6 6 6-6" />,
@@ -335,9 +345,21 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M12 17h.01" />
     </>
   ),
-};
+} satisfies Record<string, ReactNode>;
 
-export function Icon({ name, className = "h-5 w-5" }: { name: string; className?: string }) {
+/**
+ * Every valid icon name, derived from PATHS rather than hand-maintained.
+ *
+ * Before this, `name` was `string`, so a typo produced an empty <svg> — an
+ * invisible control with no error and no warning. That silent-failure mode is
+ * what let the original audit believe 139 call sites were rendering nothing;
+ * the claim was wrong, but the failure mode it described is real and this
+ * closes it. `tsc --noEmit` already gates the build, so a bad name is now a
+ * build failure rather than a missing affordance.
+ */
+export type IconName = keyof typeof PATHS;
+
+export function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -349,7 +371,11 @@ export function Icon({ name, className = "h-5 w-5" }: { name: string; className?
       className={className}
       aria-hidden="true"
     >
-      {PATHS[name] ?? null}
+      {PATHS[name] ?? (import.meta.env.DEV ? (
+        // Dev-only. Silence is what made a missing icon invisible; in
+        // development an unknown name draws a visible box instead.
+        <path d="M4 4h16v16H4z M4 4l16 16 M20 4L4 20" />
+      ) : null)}
     </svg>
   );
 }

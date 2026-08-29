@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import * as api from "../lib/api";
 import { Chip, Icon, PillButton } from "../components/ui";
+import type { IconName } from "../components/ui";
 import { ConnectionActivityCardView } from "../components/ActivityCards";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { useAccount } from "../state/account";
@@ -639,7 +640,7 @@ function initials(name: string): string {
     .toUpperCase();
 }
 
-function EmptyState({ icon, title, body, action }: { icon: string; title: string; body: string; action?: { label: string; onClick: () => void } }) {
+function EmptyState({ icon, title, body, action }: { icon: IconName; title: string; body: string; action?: { label: string; onClick: () => void } }) {
   return (
     <div className="flex flex-col items-center rounded-2xl bg-white p-8 text-center ring-1 ring-slate-200/70">
       <Icon name={icon} className="h-10 w-10 text-slate-300" />

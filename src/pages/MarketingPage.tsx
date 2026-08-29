@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { MarketingLiveBoard } from "../components/MarketingLiveBoard";
 import { CITIES } from "../data/cities";
 import { Icon } from "../components/ui";
+import type { IconName } from "../components/ui";
 
 const city = CITIES.find((item) => item.id === "columbia-mo");
 
@@ -47,7 +48,7 @@ const FEATURED_ROUTES = [
   { name: "Grindstone Loop", surface: "Trail", distance: "8.1 mi", elevation: "480 ft", photo: MARKETING_IMAGES.track },
 ];
 
-const EXPLORE_LINKS = [
+const EXPLORE_LINKS: { to: string; label: string; icon: IconName; blurb: string }[] = [
   { to: "/", label: "Events", icon: "calendar", blurb: "This week's group runs" },
   { to: "/races", label: "Races", icon: "trophy", blurb: "Every local race, one place" },
   { to: "/forum", label: "Forum", icon: "chat", blurb: "Ask, share, find a pace group" },

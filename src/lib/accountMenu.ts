@@ -8,6 +8,7 @@
  * Admin / Super Admin entry. The `isOwner` flag is server-computed — this
  * module never inspects emails or self-assigns roles.
  */
+import type { IconName } from "../components/ui";
 import type { Me } from "./accounts";
 import { phaseLabel, roleLabel } from "./accounts";
 import { CITIES } from "../data/cities";
@@ -23,7 +24,7 @@ function navEntry(id: string) {
 export interface MenuEntry {
   key: string;
   label: string;
-  icon: string;
+  icon: IconName;
   hint?: string;
   /** Internal route to navigate to. */
   to?: string;

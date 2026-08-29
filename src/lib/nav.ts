@@ -11,6 +11,7 @@
  *
  * Pure module (no React) so it is unit-testable in vitest's node environment.
  */
+import type { IconName } from "../components/ui";
 export type NavSurface = "bottom" | "sidebar" | "menu";
 
 export interface NavEntry {
@@ -20,7 +21,7 @@ export interface NavEntry {
   route: string;
   label: string;
   /** Icon name from the shared icon set (components/ui.tsx). */
-  icon: string;
+  icon: IconName;
   /** Which surfaces render this entry. */
   surfaces: readonly NavSurface[];
   /**

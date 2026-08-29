@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Chip, Icon, Sheet } from "../components/ui";
+import type { IconName } from "../components/ui";
 import { BackLink } from "../components/BackLink";
 import { RailCard, RailStack } from "../components/RailCard";
 import { ActionMenu } from "../components/ActionMenu";
@@ -30,7 +31,7 @@ import { useAccount } from "../state/account";
 import { useModerated } from "../state/moderated";
 import { usePublicContent } from "../state/content";
 
-function DetailRow({ icon, children }: { icon: string; children: ReactNode }) {
+function DetailRow({ icon, children }: { icon: IconName; children: ReactNode }) {
   return (
     <p className="flex items-start gap-2.5 text-[14px] text-slate-700">
       <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-500">

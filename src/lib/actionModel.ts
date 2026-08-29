@@ -14,6 +14,7 @@
  * broken row when the server ships a new action. An empty list renders
  * nothing (callers must render no trigger at all).
  */
+import type { IconName } from "../components/ui";
 export type ActionKey =
   | "edit"
   | "edit_own"
@@ -40,7 +41,7 @@ export interface ActionMeta {
   /** Canonical menu label. */
   label: string;
   /** Icon name — must exist in ui.tsx PATHS. */
-  icon: string;
+  icon: IconName;
   /** Destructive actions render red. */
   danger: boolean;
 }

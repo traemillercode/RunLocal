@@ -6,6 +6,7 @@ import { VerifiedGateSheet } from "../components/VerifiedGateSheet";
 import { ActionMenu } from "../components/ActionMenu";
 import { ModerationConfirmSheet } from "../components/ModerationConfirmSheet";
 import { Chip, Icon, PillButton, Sheet } from "../components/ui";
+import type { IconName } from "../components/ui";
 import { useToast } from "../lib/toast";
 import { useAccount } from "../state/account";
 import { getActivityFeed, type PublicActivityCard } from "../lib/api";
@@ -36,7 +37,7 @@ export function replyIntent(role: AccountRole, title: string): { toast: string |
   return { toast: `Replies need a verified profile — "${title}"`, opensGate: true };
 }
 
-const SECTION_META: Record<ForumSection, { icon: string; active: string; badge: string; dot: string }> = {
+const SECTION_META: Record<ForumSection, { icon: IconName; active: string; badge: string; dot: string }> = {
   announcements: { icon: "megaphone", active: "bg-[#14171C] text-white", badge: "bg-slate-100 text-slate-600", dot: "bg-[#FF5741]" },
   community: { icon: "chat", active: "bg-[#14171C] text-white", badge: "bg-slate-100 text-slate-600", dot: "bg-[#FF5741]" },
   qa: { icon: "help", active: "bg-[#14171C] text-white", badge: "bg-slate-100 text-slate-600", dot: "bg-[#FF5741]" },
@@ -115,7 +116,7 @@ export function ForumCreateSheetBody({
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [linkedEventId, setLinkedEventId] = useState<string | undefined>(undefined);
-  const cta: { label: string; icon: string; onClick: () => void } = verified
+  const cta: { label: string; icon: IconName; onClick: () => void } = verified
     ? { label: "Post to forum", icon: "check", onClick: () => onSubmit?.({ section, category, title, body, linkedEventId }) }
     : role === "rejected"
       ? { label: "View my verification status", icon: "shield", onClick: onOpenGate }
