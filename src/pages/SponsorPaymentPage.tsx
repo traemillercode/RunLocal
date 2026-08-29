@@ -87,7 +87,7 @@ export function SponsorPaymentPage() {
           </div>
         ) : (
           <>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#FF5741]">{sponsor.tier} placement</span>
+            <span className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">{sponsor.tier} placement</span>
             <h1 className="mt-1 text-xl font-extrabold tracking-tight text-slate-900">{sponsor.businessName}</h1>
             <p className="mt-1 text-[13px] font-semibold text-slate-500">{formatDateRange(sponsor.startDate, sponsor.endDate)}</p>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">

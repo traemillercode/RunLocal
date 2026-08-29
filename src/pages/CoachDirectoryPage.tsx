@@ -36,7 +36,7 @@ export function CoachDirectoryPage() {
               <div className="flex items-center gap-1.5">
                 <Link to={`/runners/${c.username ?? c.accountId}`} className="text-[15px] font-bold text-slate-900 hover:underline">{c.name}</Link>
                 {c.isVerifiedCoach ? (
-                  <span className="flex items-center gap-0.5 rounded-full bg-[#FF5741]/10 px-2 py-0.5 text-[10px] font-extrabold uppercase text-[#FF5741]">
+                  <span className="flex items-center gap-0.5 rounded-full bg-[#FF5741]/10 px-2 py-0.5 text-[11px] font-extrabold uppercase text-[#FF5741]">
                     <Icon name="check" className="h-2.5 w-2.5" /> Verified coach
                   </span>
                 ) : null}

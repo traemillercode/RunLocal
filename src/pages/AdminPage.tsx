@@ -673,7 +673,7 @@ export function AdminPage() {
                       <p className="truncate text-sm font-semibold text-slate-800">{row.name}</p>
                       <p className="truncate text-xs text-slate-500">{row.email}</p>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${row.phase === "pending_review" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${row.phase === "pending_review" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
                       {row.phase}
                     </span>
                   </div>
@@ -741,7 +741,7 @@ export function AdminPage() {
                       {row.kind === "race" ? "Race" : row.kind === "group" ? "Group" : "Independent run"} · {row.submitterName} · {row.summary}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">Pending</span>
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-800">Pending</span>
                 </div>
                 <div className="mt-2 flex gap-2">
                   <PillButton variant="secondary" className="flex-1 px-3" disabled={subAction === row.id} onClick={() => setSheet({ kind: "submission", id: row.id, action: "approve", entity: row.title })}>
@@ -818,7 +818,7 @@ export function AdminPage() {
                               {f.kind} · {f.reporterName}
                             </p>
                           </div>
-                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${open ? "bg-red-100 text-red-700" : "bg-slate-200 text-slate-500"}`}>{f.status}</span>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${open ? "bg-red-100 text-red-700" : "bg-slate-200 text-slate-500"}`}>{f.status}</span>
                         </div>
                         <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{f.reason}</p>
                         {open ? (
@@ -952,7 +952,7 @@ export function AdminPage() {
                             className="h-4 w-4 accent-[#14171C]"
                           />
                           {g.name}
-                          {g.rrcaBadge ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-800">RRCA badge on</span> : null}
+                          {g.rrcaBadge ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold uppercase text-emerald-800">RRCA badge on</span> : null}
                         </label>
                         <textarea
                           rows={2}
@@ -1066,10 +1066,10 @@ export function AdminPage() {
                     <span className="block truncate text-xs text-slate-500">{r.email}</span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${r.status === "verified" ? "bg-emerald-100 text-emerald-800" : r.status === "rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${r.status === "verified" ? "bg-emerald-100 text-emerald-800" : r.status === "rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
                       {r.status}{r.status === "pending" && r.phase ? ` · ${r.phase}` : ""}
                     </span>
-                    {r.trustedMember ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700">Trusted</span> : null}
+                    {r.trustedMember ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-sky-700">Trusted</span> : null}
                     <Icon name="chevronRight" className="h-4 w-4 text-slate-300" />
                   </span>
                 </button>
@@ -1214,7 +1214,7 @@ export function AdminPage() {
           <div className="max-h-[85vh] max-w-md overflow-hidden rounded-2xl bg-white" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-100 p-4">
               <p className="text-sm font-bold text-slate-900">Verification selfie — audited view</p>
-              <button type="button" onClick={closeSelfieModal} className="rounded-full p-1.5 hover:bg-slate-100">
+              <button type="button" aria-label="Close photo" onClick={closeSelfieModal} className="rounded-full p-1.5 hover:bg-slate-100">
                 <Icon name="close" className="h-5 w-5" />
               </button>
             </div>
@@ -1328,7 +1328,7 @@ function RoleEditor({
         <h3 className="text-[13px] font-bold text-slate-900">Roles</h3>
         <div className="flex flex-wrap items-center gap-1.5">
           {record.roles.map((r) => (
-            <span key={r} className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${r === "site_admin" ? "bg-slate-800 text-white" : r === "city_admin" ? "bg-indigo-100 text-indigo-700" : r === "group_leader" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+            <span key={r} className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${r === "site_admin" ? "bg-slate-800 text-white" : r === "city_admin" ? "bg-indigo-100 text-indigo-700" : r === "group_leader" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
               {roleLabel(r)}
             </span>
           ))}

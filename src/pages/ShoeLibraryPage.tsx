@@ -69,7 +69,7 @@ export function ShoeLibraryPage() {
               <div className="min-w-0">
                 <p className="flex items-center gap-1.5 text-[15px] font-bold text-slate-900">
                   {s.name}
-                  {s.isDefault ? <span className="rounded-full bg-[#FF5741] px-2 py-0.5 text-[10px] font-extrabold text-[#14171C]">DEFAULT</span> : null}
+                  {s.isDefault ? <span className="rounded-full bg-[#FF5741] px-2 py-0.5 text-[11px] font-extrabold text-[#14171C]">DEFAULT</span> : null}
                 </p>
                 <p className="text-[13px] text-slate-500">{s.totalMiles.toFixed(1)} miles logged</p>
               </div>

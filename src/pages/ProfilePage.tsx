@@ -184,7 +184,7 @@ export function MySubmissionsContent({
                 {items.length > 0 && (onAction || onWithdraw) ? (
                   <ActionMenu entityTitle={`${r.title} submission`} items={items} onSelect={(key) => (onAction ? onAction(r, key) : onWithdraw?.(r.id, r.title))} />
                 ) : null}
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${st.cls}`}>{st.label}</span>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${st.cls}`}>{st.label}</span>
               </span>
             </div>
             {r.status === "rejected" && r.rejectionReason ? (

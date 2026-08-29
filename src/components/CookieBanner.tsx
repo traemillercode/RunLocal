@@ -33,10 +33,10 @@ export function CookieBanner() {
           During the beta we record how the app is used — which pages you visit, errors you hit, and an anonymized replay of your session — so we can fix what's broken. Typing is never recorded. Decline and nothing is collected at all.
         </p>
         <div className="flex shrink-0 gap-2">
-          <button type="button" onClick={() => choose("declined")} className="h-10 rounded-full bg-slate-100 px-4 text-[13px] font-bold text-slate-700 active:bg-slate-200">
+          <button type="button" onClick={() => choose("declined")} className="h-11 rounded-full bg-slate-100 px-4 text-[13px] font-bold text-slate-700 active:bg-slate-200">
             Decline
           </button>
-          <button type="button" onClick={() => choose("granted")} className="h-10 rounded-full bg-[#14171C] px-4 text-[13px] font-bold text-white active:opacity-90">
+          <button type="button" onClick={() => choose("granted")} className="h-11 rounded-full bg-[#14171C] px-4 text-[13px] font-bold text-white active:opacity-90">
             Accept
           </button>
         </div>

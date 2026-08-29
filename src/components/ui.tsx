@@ -62,7 +62,7 @@ export function Sheet({ open, onClose, title, subtitle, children }: SheetProps) 
             type="button"
             onClick={onClose}
             aria-label="Close sheet"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600 active:bg-slate-200"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600 active:bg-slate-200"
           >
             <Icon name="close" className="h-5 w-5" />
           </button>

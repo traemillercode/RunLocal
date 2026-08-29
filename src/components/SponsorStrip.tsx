@@ -39,7 +39,7 @@ export function SponsorStrip({ cityId }: { cityId: string }) {
             </span>
           )}
           <span className="min-w-0 flex-1">
-            <span className="block text-[10px] font-bold uppercase tracking-widest text-[#FF5741]">Sponsored</span>
+            <span className="block text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">Sponsored</span>
             <span className="block truncate text-[14px] font-bold text-slate-900">{featured.businessName}</span>
             {featured.tagline ? <span className="block truncate text-[12px] text-slate-500">{featured.tagline}</span> : null}
           </span>
@@ -58,7 +58,7 @@ export function SponsorStrip({ cityId }: { cityId: string }) {
               {s.logoUrl ? (
                 <img src={s.logoUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
               ) : (
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-500">
                   {s.businessName.slice(0, 1).toUpperCase()}
                 </span>
               )}

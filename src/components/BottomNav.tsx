@@ -60,7 +60,7 @@ export function BottomNav() {
               >
                 <Icon name={t.icon} className="h-5 w-5" />
                 {badge > 0 ? (
-                  <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 grid min-w-[16px] place-items-center rounded-full bg-[#FF5741] px-1 text-[9px] font-extrabold leading-[16px] text-white ring-2 ring-white">
+                  <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#FF5741] px-1 text-[11px] font-extrabold leading-[18px] text-white ring-2 ring-white">
                     {badge > 9 ? "9+" : badge}
                   </span>
                 ) : null}

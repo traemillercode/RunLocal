@@ -77,7 +77,7 @@ export function TrustedMembersSection({ isCityAdmin }: { isCityAdmin: boolean })
             Every action is audited with your reason.
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700">
+        <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-sky-700">
           {isCityAdmin ? "City scope" : "All cities"}
         </span>
       </div>

@@ -123,7 +123,7 @@ function CoachDayEditor({ athleteId, date, day, onSaved, onClose }: { athleteId:
     <div className="rounded-2xl bg-white p-4 ring-2 ring-[#14171C]">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-[14px] font-bold text-slate-900">{new Date(`${date}T00:00:00Z`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })}</p>
-        <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-4 w-4" /></button>
+        <button type="button" aria-label="Close day editor" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-4 w-4" /></button>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {(Object.keys(WORKOUT_META) as api.TrainingDayWorkoutType[]).map((t) => (
@@ -140,7 +140,7 @@ function CoachDayEditor({ athleteId, date, day, onSaved, onClose }: { athleteId:
         <input type="checkbox" checked={frozen} onChange={(e) => setFrozen(e.target.checked)} className="h-4 w-4" />
         Lock this day (athlete can't change it, but can still log progress and link a group run)
       </label>
-      <button type="button" disabled={saving} onClick={() => void save()} className="mt-3 h-10 w-full rounded-full bg-[#14171C] text-[13px] font-bold text-white disabled:opacity-50">
+      <button type="button" disabled={saving} onClick={() => void save()} className="mt-3 h-11 w-full rounded-full bg-[#14171C] text-[13px] font-bold text-white disabled:opacity-50">
         {saving ? "Saving…" : "Save"}
       </button>
     </div>

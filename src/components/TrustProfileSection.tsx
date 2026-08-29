@@ -83,7 +83,7 @@ export function CredentialList({ credentials }: { credentials: CredentialView[] 
                 <p className="truncate text-xs text-slate-500">{c.certifyingBody}</p>
                 {c.expiresOn ? <p className="text-[11px] text-slate-400">Expires {c.expiresOn}</p> : null}
               </div>
-              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${st.cls}`}>{st.label}</span>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${st.cls}`}>{st.label}</span>
             </div>
             {c.status === "rejected" && c.decisionReason ? (
               <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-[12px] leading-relaxed text-red-700">
@@ -285,7 +285,7 @@ export function AppealHistory({ appeals }: { appeals: AppealView[] }) {
           <li key={a.id} className="rounded-xl border border-slate-200 p-3">
             <div className="flex items-start justify-between gap-2">
               <p className="text-[13px] leading-relaxed text-slate-700">{a.reason}</p>
-              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${s.cls}`}>{s.label}</span>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${s.cls}`}>{s.label}</span>
             </div>
             {a.status !== "open" && a.decisionReason ? (
               <p className="mt-1.5 text-[12px] text-slate-500">

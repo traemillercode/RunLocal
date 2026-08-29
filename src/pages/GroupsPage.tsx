@@ -56,8 +56,8 @@ export function GroupsHubPage({ city }: { city: City }) {
       <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">{city.name}</p>
       <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900" data-tour-target="groups-directory">Groups & clubs</h1>
       <div className="mt-4 flex gap-2">
-        <button type="button" onClick={() => setTab("discover")} className={`h-10 rounded-full px-4 text-sm font-bold ${tab === "discover" ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-700"}`}>Discover</button>
-        <button type="button" onClick={() => setTab("mine")} className={`h-10 rounded-full px-4 text-sm font-bold ${tab === "mine" ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-700"}`}>My Clubs</button>
+        <button type="button" onClick={() => setTab("discover")} className={`h-11 rounded-full px-4 text-sm font-bold ${tab === "discover" ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-700"}`}>Discover</button>
+        <button type="button" onClick={() => setTab("mine")} className={`h-11 rounded-full px-4 text-sm font-bold ${tab === "mine" ? "bg-[#14171C] text-white" : "bg-slate-100 text-slate-700"}`}>My Clubs</button>
       </div>
       <div className="mt-5">
         {tab === "discover" ? <DiscoverGroupsContent city={city} /> : <MyGroupsContent />}

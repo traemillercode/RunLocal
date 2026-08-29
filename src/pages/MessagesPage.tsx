@@ -72,7 +72,7 @@ function NewGroupSheet({ onClose, onCreated }: { onClose: () => void; onCreated:
       <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-extrabold text-slate-900">New group</h2>
-          <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-5 w-5" /></button>
+          <button type="button" aria-label="Close new message" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-5 w-5" /></button>
         </div>
         <input
           type="text"
@@ -134,7 +134,7 @@ function NewMessageSheet({ onClose, onStarted }: { onClose: () => void; onStarte
       <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-t-2xl bg-white sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 pb-3">
           <h2 className="text-lg font-extrabold text-slate-900">New message</h2>
-          <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-5 w-5" /></button>
+          <button type="button" aria-label="Close add people" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-5 w-5" /></button>
         </div>
         <div className="px-5 pb-3">
           <input
@@ -294,7 +294,7 @@ function MessageBubble({
           />
           <div className="mt-1.5 flex justify-end gap-2">
             <button type="button" onClick={() => { setEditing(false); setEditDraft(msg.body ?? ""); }} className="h-8 rounded-full bg-slate-100 px-3 text-[12px] font-bold text-slate-700">Cancel</button>
-            <button type="button" onClick={saveEdit} disabled={!editDraft.trim()} className="h-8 rounded-full bg-[#14171C] px-3 text-[12px] font-bold text-white disabled:opacity-50">Save</button>
+            <button type="button" onClick={saveEdit} disabled={!editDraft.trim()} className="h-11 rounded-full bg-[#14171C] px-3 text-[12px] font-bold text-white disabled:opacity-50">Save</button>
           </div>
         </div>
       </div>
@@ -455,7 +455,7 @@ function GroupSettingsSheet({
       <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-extrabold text-slate-900">Group settings</h2>
-          <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-5 w-5" /></button>
+          <button type="button" aria-label="Close conversation details" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-5 w-5" /></button>
         </div>
 
         <div className="mt-5 flex justify-center">
@@ -580,7 +580,7 @@ function ReportSheet({
           <>
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-extrabold text-slate-900">Report {accountName}</h2>
-              <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-5 w-5" /></button>
+              <button type="button" aria-label="Close report form" onClick={onClose} className="rounded-full p-1.5 hover:bg-slate-100"><Icon name="close" className="h-5 w-5" /></button>
             </div>
             <p className="mt-1 text-[13px] text-slate-500">This goes to an admin for review, privately — {accountName} is never told you reported them.</p>
             {error ? <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-800">{error}</p> : null}
@@ -866,7 +866,7 @@ function Thread({ conversationId }: { conversationId: string }) {
                 {convo.otherProfile.profilePhotoUrl ? (
                   <img src={convo.otherProfile.profilePhotoUrl} alt="" className="h-4 w-4 rounded-full object-cover" />
                 ) : (
-                  <span className="grid h-4 w-4 place-items-center rounded-full bg-slate-300 text-[8px] font-bold text-white">{initials(convo.name)}</span>
+                  <span className="grid h-5 w-5 place-items-center rounded-full bg-slate-300 text-[11px] font-bold text-white">{initials(convo.name)}</span>
                 )}
               </div>
             );
@@ -929,6 +929,7 @@ function Thread({ conversationId }: { conversationId: string }) {
           />
           <button
             type="button"
+            aria-label="Send message"
             disabled={(!draft.trim() && !photoDataUrl) || sending}
             onClick={send}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#14171C] text-white disabled:opacity-40"

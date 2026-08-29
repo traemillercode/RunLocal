@@ -178,7 +178,7 @@ export function TagRunnerSheetBody({
                   onClick={() => onSelect(p)}
                   className={`flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${selected ? "bg-sky-50" : "bg-white active:bg-slate-50"}`}
                 >
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-600">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-600">
                     {initials(p.name)}
                   </span>
                   <span className="min-w-0">

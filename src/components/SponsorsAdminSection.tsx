@@ -86,7 +86,7 @@ export function SponsorsAdminSection({ cityId, reason }: { cityId: string; reaso
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className="truncate text-[13px] font-bold text-slate-900">{s.businessName}</span>
-                  <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase ${s.tier === "featured" ? "bg-[#FF5741]/15 text-[#14171C]" : "bg-slate-100 text-slate-500"}`}>
+                  <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold uppercase ${s.tier === "featured" ? "bg-[#FF5741]/15 text-[#14171C]" : "bg-slate-100 text-slate-500"}`}>
                     {s.tier}
                   </span>
                 </div>

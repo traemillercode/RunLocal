@@ -122,7 +122,7 @@ export function SponsorInquiryPage() {
             {logoPreviewUrl ? (
               <img src={logoPreviewUrl} alt="" className="h-11 w-11 rounded-xl object-cover" />
             ) : (
-              <span className="grid h-11 w-11 place-items-center rounded-xl bg-slate-200 text-[10px] font-bold text-slate-500">Logo</span>
+              <span className="grid h-11 w-11 place-items-center rounded-xl bg-slate-200 text-[11px] font-bold text-slate-500">Logo</span>
             )}
             <div className="min-w-0 flex-1">
               <label className="inline-block cursor-pointer text-[13px] font-bold text-[#14171C] underline underline-offset-2">

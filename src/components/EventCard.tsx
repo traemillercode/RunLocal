@@ -57,9 +57,9 @@ export function EventCard({ event, city, rsvped, canRsvp, onRsvp, featured = fal
                 event.isToday ? "bg-[#14171C] text-[#FF5741]" : "bg-slate-100 text-slate-700"
               }`}
             >
-              <span className="text-[10px] font-bold uppercase tracking-wider">{event.dayAbbrev}</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider">{event.dayAbbrev}</span>
               <span className="text-xl font-extrabold leading-tight">{event.date.getDate()}</span>
-              <span className="text-[10px] font-semibold uppercase text-slate-400">
+              <span className="text-[11px] font-semibold uppercase text-slate-400">
                 {monthDayLabel(event.date).split(" ")[0]}
               </span>
             </div>

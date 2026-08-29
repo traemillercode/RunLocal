@@ -86,8 +86,8 @@ function RecurrenceEditor({ recurrence, onSaved, onCancel }: { recurrence: api.R
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" className={`w-full ${fieldCls}`} maxLength={60} />
       <input type="number" min="0" value={distanceValue} onChange={(e) => setDistanceValue(e.target.value)} placeholder="Distance" className={`mt-2.5 w-full ${fieldCls}`} />
       <div className="mt-3 flex gap-2">
-        <button type="button" onClick={onCancel} className="h-10 flex-1 rounded-full bg-slate-100 text-[13px] font-bold text-slate-700">Cancel</button>
-        <button type="button" disabled={saving} onClick={() => void save()} className="h-10 flex-1 rounded-full bg-[#14171C] text-[13px] font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save all"}</button>
+        <button type="button" onClick={onCancel} className="h-11 flex-1 rounded-full bg-slate-100 text-[13px] font-bold text-slate-700">Cancel</button>
+        <button type="button" disabled={saving} onClick={() => void save()} className="h-11 flex-1 rounded-full bg-[#14171C] text-[13px] font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save all"}</button>
       </div>
     </div>
   );

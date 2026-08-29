@@ -173,7 +173,7 @@ export function TrainingPlanDetailPage() {
             </button>
           </div>
 
-          <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase text-slate-400">
+          <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] font-bold uppercase text-slate-400">
             {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <div key={i}>{d}</div>)}
           </div>
           <div className="mt-1 grid grid-cols-7 gap-1">
@@ -191,12 +191,18 @@ export function TrainingPlanDetailPage() {
               const toMilesLocal = (v: number, u: api.TrainingDistanceUnit) => (u === "miles" ? v : u === "km" ? v * 0.621371 : u === "meters" ? v * 0.000621371 : v * 0.000568182);
               const fromMilesLocal = (miles: number, u: api.TrainingDistanceUnit) => (u === "miles" ? miles : u === "km" ? miles / 0.621371 : u === "meters" ? miles / 0.000621371 : miles / 0.000568182);
               // Two runs, both with a real distance - show "3 + 4 = 7mi" rather than just the total, so both are visible at a glance. Converts the second into the first's unit if they differ.
-              const twoRunLabel = dayList.length === 2 && dayList[0].distanceValue != null && dayList[1].distanceValue != null
+              // Two sessions with real distances. Shows the TOTAL only, not
+              // "3+4=7mi": at the 11px accessibility floor the equation cannot
+              // fit a ~50px cell, and per the Calendar Spec the arithmetic was
+              // noise anyway — it hides which session was the quality one, and
+              // the total properly belongs in the week header. The "2" badge
+              // already signals a two-a-day. Full stacked-row redesign is 1.5.
+              const twoRunTotal = dayList.length === 2 && dayList[0].distanceValue != null && dayList[1].distanceValue != null
                 ? (() => {
                     const [a, b] = dayList;
-                    const bInAUnit = Math.round(fromMilesLocal(toMilesLocal(b.distanceValue!, b.distanceUnit), a.distanceUnit) * 10) / 10;
+                    const bInAUnit = fromMilesLocal(toMilesLocal(b.distanceValue!, b.distanceUnit), a.distanceUnit);
                     const sum = Math.round((a.distanceValue! + bInAUnit) * 10) / 10;
-                    return `${a.distanceValue}+${bInAUnit}=${sum}${unitAbbrev(a.distanceUnit)}`;
+                    return `${sum}${unitAbbrev(a.distanceUnit)}`;
                   })()
                 : null;
               return (
@@ -210,17 +216,17 @@ export function TrainingPlanDetailPage() {
                   } ${selectedDate === dateStr ? "ring-2 ring-[#14171C]" : ""} ${meta ? meta.color : inPlan ? "bg-slate-50" : ""} ${dateStr === today ? "font-extrabold" : ""}`}
                 >
                   <span className="text-[12px]">{d.getUTCDate()}</span>
-                  {twoRunLabel ? (
-                    <span className="text-[8px] font-bold leading-none">{twoRunLabel}</span>
+                  {twoRunTotal ? (
+                    <span className="text-[11px] font-bold leading-none">{twoRunTotal}</span>
                   ) : primary ? (
-                    <span className="text-[9px] font-bold leading-none">
+                    <span className="text-[11px] font-bold leading-none">
                       {primary.workoutType === "rest" ? "Rest" : primary.distanceValue != null ? `${primary.distanceValue}${unitAbbrev(primary.distanceUnit)}` : meta?.label}
                     </span>
                   ) : null}
-                  {hasQualityWorkout ? <Icon name="spark" className="absolute left-1 top-1 h-3 w-3 text-[#FF5741]" /> : dayList.length > 1 ? <span className="absolute left-1 top-1 grid h-3.5 w-3.5 place-items-center rounded-full bg-[#14171C] text-[8px] font-black text-white">2</span> : null}
+                  {hasQualityWorkout ? <Icon name="spark" className="absolute left-1 top-1 h-3 w-3 text-[#FF5741]" /> : dayList.length > 1 ? <span className="absolute left-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-[#14171C] text-[11px] font-black text-white">2</span> : null}
                   {anyFrozen ? <Icon name="shield" className="absolute right-1 top-1 h-3 w-3 text-slate-400" /> : null}
                   {primary?.completionStatus === "done" ? <Icon name="check" className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 text-emerald-600" /> : null}
-                  {primary?.completionStatus === "missed" ? <span className="absolute bottom-0.5 right-0.5 text-[8px] font-black text-rose-500">✕</span> : null}
+                  {primary?.completionStatus === "missed" ? <span className="absolute bottom-0.5 right-0.5 text-[11px] font-black text-rose-500">✕</span> : null}
                 </button>
               );
             })}
@@ -646,7 +652,7 @@ function DayPanel({
         <p className="mt-3 text-[13px] text-slate-500">Rest day — nothing planned.</p>
       )}
 
-      <button type="button" disabled={saving} onClick={() => void save()} className="mt-3 h-10 w-full rounded-full bg-[#14171C] text-[13px] font-bold text-white disabled:opacity-50">
+      <button type="button" disabled={saving} onClick={() => void save()} className="mt-3 h-11 w-full rounded-full bg-[#14171C] text-[13px] font-bold text-white disabled:opacity-50">
         {saving ? "Saving…" : "Save day"}
       </button>
 

@@ -429,7 +429,7 @@ export function ForumThread({
         <ul className="space-y-3">
           {replies.map((r) => (
             <li key={r.id} className="flex gap-2.5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white text-[11px] font-bold text-slate-500 ring-1 ring-slate-200">
                 {r.author
                   .split(/\s+/)
                   .map((w) => w[0])

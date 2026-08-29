@@ -136,7 +136,7 @@ export function TrainingSummaryPage() {
             className="mt-3 w-full rounded-lg border border-rose-300 bg-white px-3 py-2 text-[14px] outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-300"
           />
           {reviewError ? <p role="alert" className="mt-2 text-[12px] font-semibold text-rose-700">{reviewError}</p> : null}
-          <button type="button" disabled={reviewSubmitting || !reviewNotes.trim()} onClick={() => void submitReview()} className="mt-3 h-10 w-full rounded-full bg-rose-600 text-[13px] font-bold text-white disabled:opacity-50">
+          <button type="button" disabled={reviewSubmitting || !reviewNotes.trim()} onClick={() => void submitReview()} className="mt-3 h-11 w-full rounded-full bg-rose-600 text-[13px] font-bold text-white disabled:opacity-50">
             {reviewSubmitting ? "Submitting…" : "Confirm reviewed"}
           </button>
         </div>

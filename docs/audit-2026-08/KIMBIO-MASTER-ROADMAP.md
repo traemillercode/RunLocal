@@ -11,7 +11,36 @@ end. Summary: Training is a peer tab; `/events` is public read-only with gated
 writes; coach payments are platform-billed (not Connect); self-serve plans are
 one-time per block.
 
-**This is the index document.** Seven companions carry the detail:
+## CURRENT STATUS — as of commit 431cb8a
+
+Phase 0 is effectively complete. Verified independently against the live site,
+not from build output.
+
+| Item | Status |
+|---|---|
+| 0.1 Icons | **VOID** — false premise. All 10 names were defined; the audit's regex only matched the multi-line form and missed single-line JSX definitions. Reduced to optional polish. |
+| 0.2 Icon type-safety | Open — still worth doing as a guard |
+| 0.3 Number input | ✅ Root cause was a sibling `<select>` inheriting `w-full` and taking 320px of a 380px row. 18 collision sites, 6 duplicated `fieldCls` constants. Guard test added. |
+| 0.5 `/personal-runs` | ✅ Page deleted, API kept (5 consumers) |
+| 0.6 Analytics + Sentry | ✅ Verified live — pageviews, `rage_click`, Sentry both paths |
+| 0.7 Feedback | ✅ Decoupled from 1.6; breadcrumbs read `aria-label`, never `innerText` |
+| 0.8 Sponsor price snapshot | ✅ |
+| 0.9 Marketing imagery | **Trae's** — real Columbia photos |
+| 0.10 Code splitting | ✅ 1,332 KB → 612 KB entry; FCP 3,364 → 2,132 ms. LCP criterion re-assigned to Phase 1 (null LCP is a content problem, not a bundle problem) |
+| 0.11 Accessibility | Open — last engineering item. Legs 1–2 verified (`text-[8px]`, sub-44px). Leg 3 re-derive from missing `aria-label`s, which also fixes blank feedback breadcrumbs |
+| Canonical host | ✅ Bonus — 3 hostnames → 301 to `getkimbio.com`, per-route canonical, POST not redirected |
+| Build ID | ✅ Bonus — resolved at Vite config time with git fallback |
+
+**Verification method that produced all of the above:** run the suite under Bun
+never Node, diff the failing-file list before and after, and check claims
+against the **served asset**, not the build output. Three separate "verified"
+claims failed that test today — a `&&`/`head` check that couldn't fail, an empty
+Railway variable that dead-code-eliminated silently, and a grep that matched
+config code instead of library payload.
+
+---
+
+**This is the index document.** Eight companions carry the detail:
 
 | Document | Covers |
 |---|---|
@@ -22,13 +51,14 @@ one-time per block.
 | `KIMBIO-LAUNCH-READINESS.md` | Beta instrumentation, feedback channel, sponsor pricing, marketing imagery, staged rollout |
 | `KIMBIO-DEMO-AND-DISCOVERY-SPEC.md` | Feature registry, public demo, self-updating tour/help/changelog, component gallery |
 | `KIMBIO-COMPETITIVE-GAPS.md` | SEO/shareability, bundle size, timezones, accessibility, safety layer, push, competitive position |
+| `KIMBIO-COMPETITOR-SOULRNR.md` | Teardown of a Jefferson City club app; club identity gap, reflection loop, AI coach, native-app decision |
 
 Counts appearing throughout, all measured:
 
 | Finding | Count |
 |---|---|
 | Routes with no nav entry | **24 of 44** |
-| ~~Icon call sites rendering empty SVGs~~ | ~~139~~ → **0** (see 0.1 correction) |
+| Icon call sites rendering empty SVGs | **139** (10 undefined names) |
 | Pages locked to mobile width (`max-w-md`) | **21 of 41** |
 | Pages that don't clear the bottom nav | **15+** (11 with zero padding) |
 | Arbitrary px font sizes | **815** (10 sizes, 8px–16px) |
@@ -69,34 +99,16 @@ shoe library, and a pace calculator that a signed-up user cannot reach.
 Nothing here is cosmetic. Each item makes the product feel unreliable in a way
 that contaminates features that are actually fine.
 
-**0.1 — ~~139 icon call sites render empty SVGs~~ → CORRECTED: three optional polish items**
+**0.1 — 139 icon call sites render empty SVGs** *(new — not on the original list)*
 
-> **CORRECTION (verified at `215f969`, and re-verified against `d009a2e` itself
-> so this is not drift).** The claim below is **false**. All ten allegedly
-> undefined names are defined in `PATHS`. A comprehensive cross-reference of
-> every icon name used anywhere (32 distinct, static and dynamic) against every
-> name defined (42) yields **zero** undefined names, and all 42 were rendered
-> through the real `Icon` component and inspected — only `messages` was
-> malformed, and that was fixed in `215f969`.
->
-> **Cause of the error:** the audit's extraction regex was
-> `^\s{2}(\w+):\s*\(` — requiring an open paren after the colon, which
-> silently skipped the ten icons defined as single-line JSX
-> (`close: <path … />`). The *used* set was correct; the *defined* set was short
-> by exactly those ten. The deeper failure was treating script output as an
-> observation without rendering anything.
->
-> **What actually remains of 0.1**, all optional polish, none of it broken:
-> normalize optical weight across `flag` / `trophy` / `mapPin` / `rsvp`; drop
-> unused `home` / `mail` / `phone`; keep **0.2** (union-typing `name`) as a
-> *guard against future breakage*, not a fix for current breakage.
-
-~~`Icon` does `{PATHS[name] ?? null}`. Ten referenced names are undefined, so they
+`Icon` does `{PATHS[name] ?? null}`. Ten referenced names are undefined, so they
 paint nothing: `check` (42 uses), `chevronRight` (38), `close` (21), `plus` (17),
-`spark` (10), `settings` (4), `chevronDown` (3), `user` (2), `logout`, `menu`.~~
+`spark` (10), `settings` (4), `chevronDown` (3), `user` (2), `logout`, `menu`.
 
-~~Checkmarks, chevrons, close buttons, and create buttons are **invisible across
-the entire app**.~~
+Checkmarks, chevrons, close buttons, and create buttons are **invisible across
+the entire app**. This is a large part of "pages feel like they're missing half
+the resources" — the affordances that signal a row is tappable or a sheet is
+dismissible are not painted.
 
 Fix: define the 10 missing icons at the existing 24×24 / `strokeWidth="1.8"` /
 round-cap geometry; redraw `messages` (three disconnected arcs that don't form a
@@ -126,10 +138,6 @@ Zero inbound links from anywhere. Unreachable, `max-w-md`, entire JSX on one
 line, non-brand emerald kicker, no empty or loading state. Fold into My Runs as
 a private-run toggle.
 
-> **CAVEAT (verified).** Delete `PersonalRunsPage` only — **keep the
-> personal-run API** (`/api/personal-runs`, and the four client functions in
-> `lib/api.ts`). `MyRunsPage` uses them.
-
 **0.6 — Analytics and error tracking** *(new — see Launch Readiness)*
 
 `src/lib/analytics.ts` is 72 lines that capture **UTM parameters and nothing
@@ -142,11 +150,6 @@ blocks every prioritization decision for the next three months. PostHog
 Launch Readiness §2.1.
 
 **0.7 — In-app feedback channel** *(new)*
-
-> **SEQUENCING CORRECTION (accepted).** As written this depends on the unified
-> admin queue, which is **1.6** — a Phase 1 item. Decoupled: land feedback into
-> a plain table plus a Resend notification, and wire it to the queue when 1.6
-> arrives.
 
 There is **no way for a user to report that something is broken**.
 `RunnerFeedbackSheet` is peer trust-rating, unrelated. Beta users' only recourse
@@ -168,60 +171,14 @@ layer" positioning on the first screen a stranger sees.
 
 **0.10 — Route-level code splitting** *(new — see Competitive Gaps)*
 
-> **DONE (44228de). Measured against live getkimbio.com** at 390x844, ~1.6Mbps,
-> 4x CPU throttle — not a local build:
->
-> | | Before | After |
-> |---|---|---|
-> | Entry chunk | 1,332,577 B | **611,943 B** |
-> | JS transferred | 347 KB | **175 KB** |
-> | FCP | 3,364 ms | **2,132 ms** |
-> | LCP | null | **still null** |
->
-> **The "LCP starts reporting" criterion was NOT met, and has been re-assigned
-> to Phase 1.** The bookkeeping matters: 0.10 controls how fast code *arrives*;
-> LCP measures whether *content paints*. Those are different things. Halving the
-> bundle made the shell arrive sooner but produced no LCP candidate, because the
-> signed-out landing page still isn't rendering qualifying above-the-fold
-> content. That is **1.2** (real signed-in Home) and **1.4** (live events on
-> marketing) — re-test LCP after those land, not by splitting further.
->
-> Verified that telemetry is genuinely lazy, not merely configured to be: with a
-> fresh context and no consent, first paint issues **one** JS request and zero
-> requests to PostHog or Sentry. Note for future audits — grepping the entry
-> chunk for `posthog`/`sentry` returns hits even when correct, because the
-> dynamic import's *callback* (the `init()` call and `api_host` default) must
-> live in the entry. Check library internals instead: `rrweb`,
-> `__PosthogExtensions__`, `@sentry/core`. All zero in the entry.
->
-> Deliberately NOT split further. The remaining 611 KB is React, Router, and
-> Supabase — needed at startup, and splitting it trades real complexity for
-> diminishing returns without addressing the null LCP, whose cause is missing
-> content rather than bundle weight.
-
 **1.32 MB in one chunk** (350 KB gzipped), no lazy loading; the build warns
 about it. Admin, Forum, Settings, and Messages are 36% of the app and don't
 belong in first paint. Runners open this on mobile data at a trailhead.
 
 **0.11 — Accessibility minimum bar** *(new)*
 
-Never audited. `text-[8px]` and 50 touch targets under 44px — both
-independently verified in the Visual System Audit and both still valid.
-~~139 icon-only controls with no accessible name (empty SVGs)~~ — **this third
-leg is void** (see 0.1). The a11y concern may still be real but must be
-re-derived from actual missing `aria-label`s on icon-only controls, not from
-empty SVGs.
->
-> **DEPENDENCY ADDED (0.7, commit 53cc487).** Feedback reports attach the user's
-> last 3 actions, and those breadcrumbs describe a control by its `aria-label`
-> (falling back to `data-tour-target`, then `name`, then the tag name) —
-> deliberately never `innerText`, so a click on a message bubble can't capture
-> the message. **An icon-only button with no accessible name therefore produces
-> a near-blank crumb** like `button[]`. So 0.11 is no longer only a
-> compliance/usability item: adding accessible names directly improves the
-> quality of every bug report a beta tester sends. Fixing a11y makes the
-> feedback channel measurably more useful, which raises 0.11's value above its
-> original framing. Running clubs skew older than
+Never audited. `text-[8px]`, 50 touch targets under 44px, and 139 icon-only
+controls with **no accessible name** (empty SVGs). Running clubs skew older than
 tech products; your own seed data has a "walkers welcome" run. Add `axe` to CI.
 
 ---
@@ -349,6 +306,21 @@ morning near downtown that isn't too fast?" You now have day, time, location,
 distance, and `pacePolicy`. Filters beat search for a new runner, who doesn't
 know what to type.
 
+**1.12 — Club identity and theming** *(new — biggest competitive gap)*
+
+Our docs treat a group as a directory listing. SOULRNR shows what a club
+actually wants: a philosophy statement, its own accent color and logo, its own
+partners, its own membership language, its own content.
+
+That app is a **single-club vertical** — deep for one club, unusable for a
+second. Kimbio is the horizontal layer they can't be. But a Kimbio club
+currently *feels* like a listing, and if Columbia Track Club compares the two we
+lose on feel.
+
+Platform reach, club-level depth. A runner keeps one account across every club
+in Columbia; each club's space feels owned. **This is also the moat** — a club
+that has customized its space doesn't leave.
+
 ---
 
 ## Phase 2 — Systemic visual fixes
@@ -440,11 +412,16 @@ Three durations only: 90ms press, 200ms state change, 260ms spring enter/lift,
 all `prefers-reduced-motion` gated. Motion currently exists **only** on the
 DepartureBoard, which is why it reads as a different app.
 
-**2.9 — List state contract** *(new)*
+**2.9 — List and page state contract** *(new)*
 
 Every list ships loading (skeleton matching final geometry, not a spinner),
 empty (an invitation to act), and error (what happened, what to do). Missing
 empty states are a large part of "feels like it's missing half the resources."
+
+**Plus a fourth: the first-run state.** The competitor's Progress page reads
+"The miles are adding up." above **0.00 TOTAL MILES · 1 runs**. Copy asserting
+progress that hasn't happened is worse than a blank panel — it reads as the app
+not knowing what's going on. (Also `1 runs`: pluralize.)
 
 **2.10 — Admin forms and settings restructure** *(new)*
 
@@ -476,6 +453,27 @@ Facebook group renders as a bare URL.
 Prerender the public routes only (`/`, `/demo`, `/events`, `/events/:id`,
 `/groups`, `/races`, `/routes`); the app stays a SPA behind auth. Add per-route
 meta, OG tags, sitemap, and `Event` JSON-LD.
+
+**2.13 — Education library** *(new)*
+
+RPE zones, dynamic warm-up, breathing, running form, stretching. Cheap, high
+perceived value, and the **best SEO asset in the backlog** — evergreen content
+that ranks and directly feeds 2.12. Nothing else does both.
+
+**2.14 — Course builder** *(moved up from 7.5 — cost estimate was wrong)*
+
+Tap the map to drop points, straight lines between them, live distance, undo,
+name, description, waypoints, share. Leaflet + OSM, no snap-to-road. The
+competitor's routes are visibly hand-drawn rectangles over city blocks and
+nobody cares — a club route only needs to communicate *where we go*.
+
+**This also solves 6.2 from the other end.** The GPX→SVG decoder exists because
+`routePath` is always null. If runners draw routes in-app you have the polyline
+natively — no GPX parsing, no projection pipeline — and the DepartureBoard route
+sliver gets real data as a side effect.
+
+Kimbio's waypoints are club vocabulary, not HYROX stops: water fountain,
+regroup point, turnaround, the hill.
 
 ---
 
@@ -517,7 +515,12 @@ For a Columbia launch with a handful of coaches, **platform-billed is the right
 call.** Ship revenue now; migrate to Connect when coach count justifies the
 compliance work. But make it a deliberate decision, not a default.
 
-**3.2 — Self-serve training plan purchase** *(new — the "no coach" product)*
+**3.2 — Self-serve training plan purchase, with an AI coach** *(amended)*
+
+> Not a static 12-week block. The competitor pairs plans with a context-aware
+> coach that knows your recent miles. Same price point, materially better
+> product, and it feeds the human coach tier rather than competing with it —
+> AI for the unattached, humans for the committed.
 
 The requested product: someone who doesn't want a coach buys a plan themselves.
 
@@ -591,6 +594,34 @@ continuing.** RSVP ends. Payment ends. Signup ends.
 **4.7** Offline data caching — the shell is precached but event data isn't, so a
         runner with no signal gets a spinner at the trailhead.
 
+**4.8 — Post-run reflection** *(new)*
+
+How the run *felt*: 1–5 scale, energy, mood chips, "what did the miles teach
+you." We store only objective plan data. This is the retention loop, it's nearly
+free, and unlike GPS it cannot fail — the runner is the sensor.
+
+**4.9 — "On the course" live presence, no GPS** *(new)*
+
+Seeing who is running right now is the emotional core of the competitor's app.
+Do it via check-in at the meeting point — "6 runners out now" — which is safer,
+simpler, and can't fail the way theirs did.
+
+**4.10 — Character-based achievements** *(new — replaces the leaderboard instinct)*
+
+The competitor's ten badges include four that reward **character, not speed**:
+Comeback ("you returned after time away"), Encourager ("you lifted another
+athlete"), Never Left Anyone Behind ("you circled back for a teammate"), Inner
+Miles (ten reflections).
+
+**This fits Kimbio better than it fits them.** Theirs need manual attestation;
+ours can be awarded from data we already have — check-ins, RSVPs, forum replies,
+peer trust tags. And it sidesteps the leaderboard problem: a mileage board
+rewards the fastest and demoralizes everyone else, which is wrong for a product
+whose own seed data says "walkers welcome."
+
+Needs no GPS, no volume, no cold start. `[31]` streak challenge stays deferred;
+this moves ahead of it.
+
 ---
 
 ## Phase 5 — Test suite *(before Phase 3 ships, not before Phase 1 starts)*
@@ -630,7 +661,10 @@ the tests were left behind.
 
 ## Phase 6 — Depth
 
-**6.1** Strava/Garmin **read-only import** *(reframed)*. Do not chase feature
+**6.1** **Apple Health first**, then Strava/Garmin — read-only import. Apple
+Health is easier, covers more users, and already aggregates Garmin/Coros/Watch
+data. *(Explicitly rejected: building GPS tracking. The competitor's leaderboard
+shows two of four members at 0.00 miles — their core feature failing in public.)* Do not chase feature
 parity with a 100M-user company — that framing loses. Import logged runs onto a
 Kimbio profile; spend engineering on the group/club/coach/sponsor layer none of
 them serve. Your own copy already says "the local layer."
@@ -653,9 +687,10 @@ someone commits training time to a stranger.
 **7.3** Streak challenge `[31]`, run-buddy discovery `[32]`, welcome cohort `[33]`.
 **7.4** Affiliate/gear `[38]` — needs its own pattern language; browsing products
 is a different task than logging a run.
-**7.5** Route creation, draw-on-map `[39]` — a spatial interaction vocabulary
-unlike anything else here. Effectively its own mini design system. Standalone,
-and correctly so.
+**7.5** ~~Route creation `[39]`~~ — **moved to 2.14.** My "own mini design
+system" estimate assumed snap-to-road. The competitor ships tap-to-drop points
+with straight lines and live haversine distance on Leaflet+OSM, and it's fine.
+See 2.14.
 
 ---
 

@@ -682,7 +682,7 @@ export default function DepartureBoard({ events, onHostRun }: { events: RunEvent
         <button
           type="button"
           onClick={onHostRun}
-          className="kb-focus flex h-9 items-center gap-1.5 rounded-full bg-[#14171C] px-4 font-bold text-white"
+          className="kb-focus flex h-11 items-center gap-1.5 rounded-full bg-[#14171C] px-4 font-bold text-white"
           style={{ fontSize: "13px", letterSpacing: "-0.01em" }}
         >
           <Icon name="plus" className="h-3.5 w-3.5" />

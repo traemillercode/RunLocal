@@ -415,7 +415,7 @@ export function ConnectionsView({
             >
               {t.label}
               {count > 0 ? (
-                <span aria-hidden="true" className="grid min-w-[20px] place-items-center rounded-full bg-[#FF5741] px-1 text-[10px] font-extrabold leading-[18px] text-[#14171C]">
+                <span aria-hidden="true" className="grid min-w-[20px] place-items-center rounded-full bg-[#FF5741] px-1 text-[11px] font-extrabold leading-[18px] text-[#14171C]">
                   {count > 9 ? "9+" : count}
                 </span>
               ) : null}

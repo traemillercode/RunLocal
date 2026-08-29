@@ -63,7 +63,7 @@ if (NO_NAV_PATHS.has(location.pathname) || showingMarketing) return null;
                 {unread > 0 ? (
                   <span
                     aria-hidden="true"
-                    className="absolute -right-4 -top-2.5 grid min-w-[18px] place-items-center rounded-full bg-[#FF5741] px-1 text-[10px] font-extrabold leading-[18px] text-[#14171C]"
+                    className="absolute -right-4 -top-2.5 grid min-w-[18px] place-items-center rounded-full bg-[#FF5741] px-1 text-[11px] font-extrabold leading-[18px] text-[#14171C]"
                   >
                     {unread > 9 ? "9+" : unread}
                   </span>

@@ -590,14 +590,14 @@ export function TrainingPlanSection({ cityId }: { cityId: string }) {
           ) : null}
           <div className="mt-3 flex gap-2">
             <Link to="/training-plan" className="flex h-10 items-center rounded-full bg-[#FF5741] px-4 text-[13px] font-bold text-[#14171C]">View weeks</Link>
-            <button type="button" onClick={startEditing} className="h-10 rounded-full bg-slate-100 px-4 text-[13px] font-bold text-slate-700">Edit</button>
-            <button type="button" onClick={clear} disabled={saving} className="h-10 rounded-full px-4 text-[13px] font-bold text-red-600">Remove plan</button>
+            <button type="button" onClick={startEditing} className="h-11 rounded-full bg-slate-100 px-4 text-[13px] font-bold text-slate-700">Edit</button>
+            <button type="button" onClick={clear} disabled={saving} className="h-11 rounded-full px-4 text-[13px] font-bold text-red-600">Remove plan</button>
           </div>
         </div>
       ) : !editing ? (
         <div>
           <p className="text-[13px] text-slate-500">No training plan set. Add one to track your week automatically.</p>
-          <button type="button" onClick={startEditing} className="mt-3 h-10 rounded-full bg-[#14171C] px-4 text-[13px] font-bold text-white">Set up a plan</button>
+          <button type="button" onClick={startEditing} className="mt-3 h-11 rounded-full bg-[#14171C] px-4 text-[13px] font-bold text-white">Set up a plan</button>
         </div>
       ) : (
         <div className="space-y-3">

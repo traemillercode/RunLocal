@@ -71,13 +71,13 @@ export function ConnectionsGoingRow({ connections }: { connections: api.Connecti
           c.profilePhotoUrl ? (
             <img key={c.accountId} src={c.profilePhotoUrl} alt="" className="h-6 w-6 rounded-full object-cover ring-2 ring-white md:h-7 md:w-7" />
           ) : (
-            <span key={c.accountId} className="grid h-6 w-6 place-items-center rounded-full bg-slate-100 text-[9px] font-bold text-slate-600 ring-2 ring-white md:h-7 md:w-7">
+            <span key={c.accountId} className="grid h-6 w-6 place-items-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-600 ring-2 ring-white md:h-7 md:w-7">
               {goingInitials(c.name)}
             </span>
           ),
         )}
         {extra > 0 ? (
-          <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-200 text-[9px] font-bold text-slate-700 ring-2 ring-white md:h-7 md:w-7">
+          <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-700 ring-2 ring-white md:h-7 md:w-7">
             +{extra}
           </span>
         ) : null}

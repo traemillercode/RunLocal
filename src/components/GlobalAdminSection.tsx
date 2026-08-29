@@ -580,7 +580,7 @@ function CityRow({
         <p className="text-sm font-semibold text-slate-800">
           {city.name}, {city.state}
         </p>
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${active ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-500"}`}>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${active ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-500"}`}>
           {active ? "Active" : "Inactive"}
         </span>
       </div>
