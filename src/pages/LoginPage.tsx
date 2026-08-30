@@ -31,6 +31,7 @@ import * as api from "../lib/api";
 import { getStoredUtm } from "../lib/analytics";
 import { validateBirthdate } from "../lib/birthdate";
 import * as supabase from "../lib/supabase";
+import { captureInviteFromUrl, getStoredInvite, clearStoredInvite } from "../lib/analytics";
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
 import { normalizeErrorMessage } from "../lib/errors";
 import { CITIES } from "../data/cities";
@@ -134,6 +135,22 @@ export function LoginPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { me, backendAvailable, refresh } = useAccount();
   const [email, setEmail] = useState("");
+  /*
+   * INVITE. Captured on mount so it survives the hero's "Browse public events"
+   * detour and any other navigation before signup. Prefilled AND locked,
+   * because invitations are email-bound: signing up with a different address
+   * fails validation, and prefilling removes that failure rather than
+   * explaining it after the fact.
+   */
+  const [invite, setInvite] = useState<ReturnType<typeof getStoredInvite>>(null);
+  useEffect(() => {
+    captureInviteFromUrl();
+    const stored = getStoredInvite();
+    if (stored) {
+      setInvite(stored);
+      setEmail(stored.email);
+    }
+  }, []);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   // signup-only profile metadata
@@ -156,6 +173,16 @@ export function LoginPage() {
   // in" CTA) re-derives login mode without a reload, and the in-form toggle
   // writes the param back so the URL always reflects the visible form.
   const mode = loginModeFromSearch(searchParams);
+  // An invite link is unambiguously a signup, so land on that tab. Done via the
+  // URL because `mode` is derived from search params — local state would be
+  // overwritten on the next render and diverge from what the address bar says.
+  useEffect(() => {
+    if (invite && mode !== "signup") {
+      const next = new URLSearchParams(searchParams);
+      next.set("mode", "signup");
+      setSearchParams(next, { replace: true });
+    }
+  }, [invite, mode, searchParams, setSearchParams]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -312,8 +339,9 @@ export function LoginPage() {
         // the local Pending profile WITHOUT a Kimbio session — signed-in
         // status is never claimed without a valid Supabase session. The
         // account links to the confirmed identity on first login.
-        const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined, noSession: true, ...getStoredUtm() });
+        const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined, noSession: true, invitationToken: invite?.token, ...getStoredUtm() });
         setBusy(false);
+        if (created.ok) clearStoredInvite();
         if (created.ok || created.error.code === "email_taken") {
           setPendingConfirmationEmail(e);
           setNotice(signupConfirmationNotice(emailDeliveryState, Boolean(photoDataUrl)));
@@ -348,7 +376,7 @@ export function LoginPage() {
       }
       // Immediate session: create the local Pending account (this establishes
       // the Kimbio session cookie) — never the password, only metadata.
-      const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined, ...getStoredUtm() });
+      const created = await api.createAccount({ name: name.trim(), username: username.trim(), email: e, birthdate, cityId: cityId!, phone: phone.trim() || undefined, invitationToken: invite?.token, ...getStoredUtm() });
       if (!created.ok) {
         setBusy(false);
         if (created.error.code === "email_taken") setError(supabase.ACCOUNT_EXISTS_MESSAGE);
@@ -596,7 +624,27 @@ export function LoginPage() {
           )}
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold">Email</span>
-            <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+            {/*
+              Locked when an invite is present. Invitations are email-bound, so
+              changing this produces a rejection the person cannot diagnose —
+              they were sent a link and it "didn't work". readOnly rather than
+              disabled so the value still submits and screen readers still
+              announce it.
+            */}
+            <input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              readOnly={Boolean(invite)}
+              aria-describedby={invite ? "invite-email-note" : undefined}
+              className={`${inputCls}${invite ? " bg-slate-50 text-slate-600" : ""}`}
+            />
+            {invite ? (
+              <p id="invite-email-note" className="mt-1 text-[12px] text-slate-500">
+                Your invitation is for this address.
+              </p>
+            ) : null}
           </label>
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold">Password</span>

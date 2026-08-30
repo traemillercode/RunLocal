@@ -70,3 +70,53 @@ export function getStoredUtm(): UtmParams {
     return {};
   }
 }
+
+/* ── Invitation capture ───────────────────────────────────────────────────── */
+
+const INVITE_KEY = "kimbio_invite";
+
+export interface StoredInvite { token: string; email: string }
+
+/**
+ * Capture ?invite=TOKEN&email=… from the URL, the same way UTM is captured.
+ *
+ * It must SURVIVE navigation: the hero puts "Create your account" and "Browse
+ * public events" side by side, so opening an invite link, tapping browse, and
+ * coming back is a realistic path — and losing the token there would produce a
+ * rejection the person cannot explain or fix.
+ *
+ * sessionStorage, not localStorage: an invite is single-use and belongs to this
+ * visit. Persisting it across sessions would leave a stale token on a shared
+ * device long after it was redeemed.
+ *
+ * NOT consent-gated, unlike UTM. This is not analytics — it is the credential
+ * required to complete the action the user came to perform, and losing it
+ * because someone declined cookies would be a dead end with no visible cause.
+ */
+export function captureInviteFromUrl(): void {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("invite")?.trim();
+    const email = params.get("email")?.trim().toLowerCase();
+    if (!token || !email) return;
+    sessionStorage.setItem(INVITE_KEY, JSON.stringify({ token, email }));
+  } catch {
+    /* private mode or storage disabled — the field still accepts manual entry */
+  }
+}
+
+export function getStoredInvite(): StoredInvite | null {
+  try {
+    const raw = sessionStorage.getItem(INVITE_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Partial<StoredInvite>;
+    return v.token && v.email ? { token: v.token, email: v.email } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Cleared after a successful signup so a second tab cannot reuse a spent token. */
+export function clearStoredInvite(): void {
+  try { sessionStorage.removeItem(INVITE_KEY); } catch { /* ignore */ }
+}

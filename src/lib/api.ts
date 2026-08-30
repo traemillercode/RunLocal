@@ -134,7 +134,13 @@ export function normalizeAccountResponse(body: unknown): ApiResult<{ account: im
   }
   return { ok: false, error: new ApiError(502, "invalid_response", "The server returned an invalid account response. Please try again.") };
 }
-export async function createAccount(input: { name: string; username: string; email: string; phone?: string; birthdate: string; cityId: string; requestedRole?: "runner" | "group_leader"; noSession?: boolean; utm_source?: string; utm_medium?: string; utm_campaign?: string }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
+export async function createAccount(input: { name: string; username: string; email: string; phone?: string; birthdate: string; cityId: string; requestedRole?: "runner" | "group_leader"; noSession?: boolean; utm_source?: string; utm_medium?: string; utm_campaign?: string;
+  /**
+   * Required when the city is invite_only. The server has validated this since
+   * the gate was written; the client never sent it, so flipping a city to
+   * invite_only would have closed signup to EVERYONE, invited or not.
+   */
+  invitationToken?: string }): Promise<ApiResult<{ account: import("./accounts").PublicAccount }>> {
   const result = await request<unknown>("/api/accounts", { method: "POST", body: JSON.stringify(input) });
   return result.ok ? normalizeAccountResponse(result.data) : result;
 }
@@ -1802,4 +1808,45 @@ export function getPublicGoingCounts(occurrenceIds: string[]): Promise<ApiResult
  */
 export function getSignupStatus(cityId: string): Promise<ApiResult<{ open: boolean; reason?: string; message?: string }>> {
   return request(`/api/signup-status?city=${encodeURIComponent(cityId)}`);
+}
+
+/* ── Invitations (admin) ──────────────────────────────────────────────────── */
+
+export interface InvitationView {
+  id: string;
+  cityId: string;
+  email: string;
+  createdAt: string;
+  createdBy: string;
+  expiresAt: string;
+  usedAt: string | null;
+  revokedAt: string | null;
+  valid: boolean;
+}
+
+export function listInvitations(cityId?: string): Promise<ApiResult<{ invitations: InvitationView[] }>> {
+  return request(`/api/admin/invitations${cityId ? `?city=${encodeURIComponent(cityId)}` : ""}`);
+}
+
+/**
+ * Mint an invitation. The raw token is returned ONCE and never again — only its
+ * hash is stored — so the caller must surface it immediately or it is lost.
+ */
+export function createInvitation(input: { cityId: string; email: string; expiresInDays?: number }): Promise<ApiResult<{ invitation: InvitationView; token: string }>> {
+  return request("/api/admin/invitations", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function revokeInvitation(id: string): Promise<ApiResult<{ invitation: InvitationView }>> {
+  return request(`/api/admin/invitations/${encodeURIComponent(id)}/revoke`, { method: "POST" });
+}
+
+/**
+ * The link to send. Carries BOTH token and email because invitations are
+ * email-bound and validateInvitation() looks the record up by (city, email) —
+ * the token alone cannot find it. Including the email also lets signup prefill
+ * and lock the field, removing the mismatch failure rather than explaining it.
+ */
+export function invitationUrl(email: string, token: string): string {
+  const base = typeof window !== "undefined" ? window.location.origin : "https://getkimbio.com";
+  return `${base}/login?mode=signup&invite=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
 }
