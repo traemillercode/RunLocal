@@ -93,22 +93,30 @@ export function entriesForSurface(surface: NavSurface): readonly NavEntry[] {
 /**
  * Uniform active-state matcher shared by BottomNav, DesktopSidebar, and the
  * account menu:
- *  - Events: active on "/" exactly AND on every /events* detail route.
- *  - Profile: active on /profile AND on /runners/:id (public profile views
- *    are profile views — the Profile item stays highlighted).
- *  - Everyone else: active on the entry's route and nested routes under it.
+ *  - Everyone: active on the entry's route and nested routes under it, plus
+ *    any ALSO_ACTIVE_ON prefixes declared for that entry.
  */
+
+/**
+ * Extra prefixes that should highlight an entry, declared rather than branched.
+ *
+ * Events previously had a hardcoded `pathname === "/"` clause, from when "/"
+ * rendered the board. 1.2 replaced "/" with Home and the exception survived, so
+ * on Home BOTH Home (exact) and Events (stale rule) lit up. The bug was not the
+ * exception itself — it was that an exception buried in an if-chain has nothing
+ * asserting it still describes reality.
+ *
+ * As data it can be checked: the "exactly one active entry per path" test below
+ * fails the moment a rule here overlaps another entry's route.
+ */
+const ALSO_ACTIVE_ON: Partial<Record<string, readonly string[]>> = {
+  // A public profile view IS a profile view.
+  profile: ["/runners"],
+};
+
 export function activeForPath(entry: NavEntry, pathname: string): boolean {
-  if (entry.id === "events") {
-    return pathname === "/" || pathname === "/events" || pathname.startsWith("/events/");
-  }
-  if (entry.id === "profile") {
-    return (
-      pathname === "/profile" ||
-      pathname.startsWith("/profile/") ||
-      pathname === "/runners" ||
-      pathname.startsWith("/runners/")
-    );
+  for (const prefix of ALSO_ACTIVE_ON[entry.id] ?? []) {
+    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return true;
   }
   if (entry.match === "exact") return pathname === entry.route;
   const base = entry.route.endsWith("/") ? entry.route : `${entry.route}/`;

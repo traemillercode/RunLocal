@@ -38,9 +38,12 @@ describe("single nav model (src/lib/nav.ts)", () => {
     // would have been the wrong direction.
     expect(NAV_ENTRIES.find((e) => e.id === "submissions")).toBeUndefined();
   });
-  it("matches Events on / exactly and on /events* detail routes", () => {
+  it("matches Events on /events and its detail routes — NOT on /", () => {
+    // This test previously asserted activeForPath(events, "/") === true, which
+    // encoded the bug: it was correct before 1.2, when "/" rendered the board.
+    // A test can outlive the routing it describes exactly as an exception can.
     const events = NAV_ENTRIES.find((e) => e.id === "events")!;
-    expect(activeForPath(events, "/")).toBe(true);
+    expect(activeForPath(events, "/")).toBe(false);
     expect(activeForPath(events, "/events")).toBe(true);
     expect(activeForPath(events, "/events/some-run")).toBe(true);
     expect(activeForPath(events, "/races")).toBe(false);
@@ -67,5 +70,53 @@ describe("single nav model (src/lib/nav.ts)", () => {
     for (const p of paths) {
       expect(NO_NAV_PATHS.has(p), p).toBe(true);
     }
+  });
+});
+
+describe("exactly one bottom-bar entry is active for any path", () => {
+  /*
+   * A CLASS, not an instance.
+   *
+   * The instance: Events carried a hardcoded `pathname === "/"` clause from
+   * when "/" rendered the board. 1.2 replaced "/" with Home and the exception
+   * survived, so Home lit up two tabs at once.
+   *
+   * The class: any per-entry exception can outlive the routing it described,
+   * and nothing was checking. The profile exception two lines below was the
+   * same shape waiting to rot. This asserts the invariant instead of the case.
+   */
+  const bottom = entriesForSurface("bottom");
+
+  const PATHS = [
+    "/", "/events", "/events/tuesday-tempo", "/events/manage",
+    "/groups", "/groups/ctc", "/groups/ctc/roster",
+    "/training-plan", "/training-summary", "/shoes", "/pace-calculator",
+    "/profile", "/runners/abc", "/my-runs", "/connections", "/messages",
+    "/races", "/routes", "/routes/mkt", "/forum", "/settings", "/notifications",
+  ];
+
+  it("never highlights two tabs at once", () => {
+    const clashes: string[] = [];
+    for (const path of PATHS) {
+      const active = bottom.filter((e) => activeForPath(e, path)).map((e) => e.id);
+      if (active.length > 1) clashes.push(`${path} -> ${active.join(" + ")}`);
+    }
+    expect(clashes).toEqual([]);
+  });
+
+  it("highlights Home on / and nothing else", () => {
+    // The reported bug, kept as a named case because it is the one a user saw.
+    const active = bottom.filter((e) => activeForPath(e, "/")).map((e) => e.id);
+    expect(active).toEqual(["home"]);
+  });
+
+  it("highlights Events on /events and its detail routes, never on /", () => {
+    expect(bottom.filter((e) => activeForPath(e, "/events")).map((e) => e.id)).toEqual(["events"]);
+    expect(bottom.filter((e) => activeForPath(e, "/events/tuesday-tempo")).map((e) => e.id)).toEqual(["events"]);
+  });
+
+  it("keeps the public-profile rule working", () => {
+    // /runners/:id is a profile view and should keep You lit.
+    expect(bottom.filter((e) => activeForPath(e, "/runners/abc")).map((e) => e.id)).toEqual(["profile"]);
   });
 });

@@ -7,6 +7,29 @@
 }
 
 :root {
+  /*
+   * --page-bottom-pad — the ONE answer to "how much room must a page leave
+   * at the bottom" (Visual System Audit 2.1).
+   *
+   * 39 pages each hardcode their own pb-24 / pb-28 / pb-32, which is why the
+   * bottom bar overlaps content on some and leaves a gap on others. Composed
+   * from the real measurements rather than a guess:
+   *
+   *   nav bar        56px  (min-h-14 tabs)
+   *   FAB overhang   28px  (h-14 at top:0, so half protrudes above the bar)
+   *   breathing gap  16px
+   *   safe area      env(safe-area-inset-bottom), 34px on a notched iPhone
+   *
+   * Total ~100px plus safe area, against pages currently reserving 0-128px.
+   * Defined once so changing the nav does not require editing 39 files.
+   */
+  --page-nav-h: 56px;
+  --page-fab-overhang: 28px;
+  --page-bottom-gap: 16px;
+  --page-bottom-pad: calc(
+    var(--page-nav-h) + var(--page-fab-overhang) + var(--page-bottom-gap) + env(safe-area-inset-bottom, 0px)
+  );
+
   --rl-coral: #FF5741;
   --rl-coral-soft: #fff0ec;
   --rl-ink: #14171C;
@@ -166,3 +189,11 @@ input[type="number"]::-webkit-inner-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+
+/*
+ * Applied by the shell, once, instead of per page. A page opts OUT by setting
+ * its own padding-bottom; nothing has to opt in, which is the opposite of the
+ * current arrangement where a page that forgets gets content under the nav.
+ */
+.page-bottom-pad { padding-bottom: var(--page-bottom-pad); }
