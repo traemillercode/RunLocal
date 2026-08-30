@@ -96,7 +96,13 @@ export function CityStatusAdminSection() {
      */
     const r = await api.adminSaveCity(
       { id: city.id, name: city.name, state: city.state, slug: city.slug, status: pending.status },
-      `City status → ${pending.status}`,
+      /*
+       * ASCII arrow. The normaliser in adminRequest would now escape a U+2192
+       * safely, but writing one here would put "&#8594;" in the audit log —
+       * correct, and worse to read than "->". Fix the transport for the class;
+       * do not rely on it for text we control.
+       */
+      `City status -> ${pending.status}`,
     );
     setBusy(false);
     if (!r.ok) { setError(r.error.message); return; }

@@ -366,10 +366,36 @@ export interface AuditEntryView {
 }
 
 /** Consequential admin calls attach an operator reason; routine reads use server-generated audit context. */
+/**
+ * Make a reason safe to put in an HTTP header.
+ *
+ * HTTP header values are ISO-8859-1. A single code point above 0xFF makes
+ * fetch() throw SYNCHRONOUSLY, before a socket is opened — so there is no
+ * request, nothing in the Network tab, and (because the throw is a TypeError)
+ * request()'s catch takes the one branch allowed to blame the connection.
+ *
+ * That is what a `→` in "City status → invite_only" did: the handler ran, it
+ * reached the fetch, and every observable symptom pointed somewhere else.
+ * Confirmed live — same endpoint, same method, only the reason differing:
+ * with the arrow, TypeError; with "->", 200.
+ *
+ * NORMALISED AT THE CHOKEPOINT rather than at that one call site, because every
+ * reason box on the admin page is FREE TEXT. An operator pasting a smart quote
+ * from a doc, or typing an em dash, hits the identical failure with the
+ * identical misleading message. Fixing the arrow alone would leave the class.
+ *
+ * Numeric character references rather than stripping: the audit log should
+ * record what was typed, and a reason silently missing its punctuation is a
+ * worse record than one carrying an escape.
+ */
+export function auditReasonHeader(reason: string): string {
+  return reason.replace(/[^\x20-\x7E\xA0-\xFF]/g, (c) => `&#${c.codePointAt(0)};`);
+}
+
 function adminRequest<T>(path: string, reason: string, init?: RequestInit): Promise<ApiResult<T>> {
   return request<T>(path, {
     ...init,
-    headers: { "x-audit-reason": reason },
+    headers: { "x-audit-reason": auditReasonHeader(reason) },
   });
 }
 
@@ -440,7 +466,7 @@ export function adminSelfieUrl(id: string): string {
 export async function adminExportCsv(query: string, reason: string): Promise<ApiResult<{ blobUrl: string; filename: string }>> {
   try {
     const res = await fetch(`/api/admin/export.csv?q=${encodeURIComponent(query)}`, {
-      headers: { "x-audit-reason": reason },
+      headers: { "x-audit-reason": auditReasonHeader(reason) },
       credentials: "same-origin",
     });
     if (!res.ok) {
@@ -709,41 +735,41 @@ export function getSponsors(cityId: string): Promise<ApiResult<{ sponsors: Spons
   return request(`/api/sponsors?city=${encodeURIComponent(cityId)}`);
 }
 export function adminListSponsors(cityId: string, reason: string): Promise<ApiResult<{ sponsors: AdminSponsorView[] }>> {
-  return request(`/api/admin/sponsors?city=${encodeURIComponent(cityId)}`, { headers: { "x-audit-reason": reason } });
+  return request(`/api/admin/sponsors?city=${encodeURIComponent(cityId)}`, { headers: { "x-audit-reason": auditReasonHeader(reason) } });
 }
 export function adminCreateSponsor(
   input: { cityId: string; tier: "featured" | "standard"; businessName: string; tagline: string; linkUrl: string; logoRef?: string | null; active?: boolean; startDate: string; endDate: string },
   reason: string,
 ): Promise<ApiResult<{ sponsor: AdminSponsorView }>> {
-  return request("/api/admin/sponsors", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify(input) });
+  return request("/api/admin/sponsors", { method: "POST", headers: { "x-audit-reason": auditReasonHeader(reason) }, body: JSON.stringify(input) });
 }
 export function adminUpdateSponsor(
   id: string,
   patch: Partial<{ tier: "featured" | "standard"; businessName: string; tagline: string; linkUrl: string; logoRef: string | null; active: boolean; startDate: string; endDate: string }>,
   reason: string,
 ): Promise<ApiResult<{ sponsor: AdminSponsorView }>> {
-  return request(`/api/admin/sponsors/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "x-audit-reason": reason }, body: JSON.stringify(patch) });
+  return request(`/api/admin/sponsors/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "x-audit-reason": auditReasonHeader(reason) }, body: JSON.stringify(patch) });
 }
 export function adminDeleteSponsor(id: string, reason: string): Promise<ApiResult<{ deleted: true }>> {
-  return request(`/api/admin/sponsors/${encodeURIComponent(id)}`, { method: "DELETE", headers: { "x-audit-reason": reason } });
+  return request(`/api/admin/sponsors/${encodeURIComponent(id)}`, { method: "DELETE", headers: { "x-audit-reason": auditReasonHeader(reason) } });
 }
 export function adminUploadSponsorLogo(photoDataUrl: string, reason: string): Promise<ApiResult<{ logoRef: string }>> {
-  return request("/api/admin/sponsors/logo", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify({ photo: photoDataUrl }) });
+  return request("/api/admin/sponsors/logo", { method: "POST", headers: { "x-audit-reason": auditReasonHeader(reason) }, body: JSON.stringify({ photo: photoDataUrl }) });
 }
 export function adminListGeofenceAllowlist(reason: string): Promise<ApiResult<{ emails: string[] }>> {
-  return request("/api/admin/geofence-allowlist", { headers: { "x-audit-reason": reason } });
+  return request("/api/admin/geofence-allowlist", { headers: { "x-audit-reason": auditReasonHeader(reason) } });
 }
 export function adminAddGeofenceAllowlistEmail(email: string, reason: string): Promise<ApiResult<{ emails: string[] }>> {
-  return request("/api/admin/geofence-allowlist", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify({ email }) });
+  return request("/api/admin/geofence-allowlist", { method: "POST", headers: { "x-audit-reason": auditReasonHeader(reason) }, body: JSON.stringify({ email }) });
 }
 export function adminRemoveGeofenceAllowlistEmail(email: string, reason: string): Promise<ApiResult<{ emails: string[] }>> {
-  return request(`/api/admin/geofence-allowlist/${encodeURIComponent(email)}`, { method: "DELETE", headers: { "x-audit-reason": reason } });
+  return request(`/api/admin/geofence-allowlist/${encodeURIComponent(email)}`, { method: "DELETE", headers: { "x-audit-reason": auditReasonHeader(reason) } });
 }
 export function getSponsorPaymentsStatus(reason = ""): Promise<ApiResult<{ configured: boolean }>> {
   return adminRequest("/api/admin/sponsors/payments-status", reason);
 }
 export function createSponsorCheckoutLink(sponsorId: string, reason: string): Promise<ApiResult<{ url: string }>> {
-  return request("/api/admin/sponsors/checkout", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify({ sponsorId, successUrl: window.location.href, cancelUrl: window.location.href }) });
+  return request("/api/admin/sponsors/checkout", { method: "POST", headers: { "x-audit-reason": auditReasonHeader(reason) }, body: JSON.stringify({ sponsorId, successUrl: window.location.href, cancelUrl: window.location.href }) });
 }
 export interface SponsorPaymentView { id: string; tier: "featured" | "standard"; businessName: string; active: boolean; priceUsd: number; startDate: string; endDate: string; }
 /** Public — no auth. Knowing the id is the authorization (a one-time link sent to one business). */

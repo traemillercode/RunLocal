@@ -84,7 +84,11 @@ describe("client and server agree", () => {
      * single point that can make all 38 wrong.
      */
     const helper = CLIENT.slice(CLIENT.indexOf("function adminRequest"));
-    expect(helper.slice(0, 300)).toContain('"x-audit-reason": reason');
+    // Now normalised on the way out — see tests/header-safe-reasons.test.ts.
+    // The header must still be ATTACHED; what changed is that its value passes
+    // through auditReasonHeader so a non-Latin-1 character cannot make fetch
+    // throw before a socket opens.
+    expect(helper.slice(0, 300)).toContain('"x-audit-reason": auditReasonHeader(reason)');
   });
 
   it("every client call to a reason-required endpoint sends x-audit-reason", () => {

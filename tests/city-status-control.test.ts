@@ -43,7 +43,10 @@ describe("the control sends what saveCity requires", () => {
   it("sends a non-empty audit reason", () => {
     // An empty reason would 400 with reason_required and land in the same
     // catch-all — indistinguishable from a network failure until now.
-    expect(CONTROL).toContain("`City status → ${pending.status}`");
+    // ASCII arrow. A U+2192 here made fetch() throw before opening a socket —
+    // header values are ISO-8859-1 — which produced no request, nothing in the
+    // Network tab, and a "check your connection" message.
+    expect(CONTROL).toContain("`City status -> ${pending.status}`");
   });
 
   it("offers every state in both directions", () => {
