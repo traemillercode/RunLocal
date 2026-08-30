@@ -126,7 +126,7 @@ describe("the eleventh person gets copy, not an error code", () => {
   it("the refusal message is human and says what happens next", async () => {
     const { BETA_FULL_MESSAGE: msg } = await import("../src/server/invitations");
     expect(msg.length).toBeGreaterThan(40);
-    expect(msg.toLowerCase()).toContain("closed beta");
+    expect(msg.toLowerCase()).toContain("private beta"); // was "closed beta" — collapsed into one string with the invitation rejections
     // Must not read as the user's fault — they did nothing wrong.
     for (const blame of ["invalid", "not allowed", "denied", "forbidden"]) {
       expect(msg.toLowerCase()).not.toContain(blame);
@@ -198,5 +198,60 @@ describe("a refused signup leaves nothing behind", () => {
     const code = readCode(new URL("../src/server/api.ts", import.meta.url));
     expect(codeCount(code, "BETA_FULL_MESSAGE")).toBeGreaterThanOrEqual(2);
     expect(code).not.toContain("this week's spots are taken");
+  });
+});
+
+describe("the refusal converts and cannot be used to probe addresses", () => {
+  /*
+   * There were SIX distinct messages for "you cannot sign up" — no invitation,
+   * revoked, already used, expired, wrong code, and cohort full. The
+   * distinctions matter to us and to nobody standing at the door, and they
+   * LEAK: "already used" versus "no invitation found" turns the signup form
+   * into a way to test whether an address was invited.
+   */
+  it("every invitation rejection sends the same message", async () => {
+    const { SIGNUP_CLOSED_MESSAGE, BETA_FULL_MESSAGE } = await import("../src/server/invitations");
+    const src = readCode(new URL("../src/server/invitations.ts", import.meta.url));
+
+    // No rejection may carry a bespoke string.
+    const bespoke = [...src.matchAll(/error: "(invitation_\w+|invalid_token)", message: "([^"]*)"/g)];
+    expect(bespoke.map((m) => `${m[1]}: ${m[2]}`)).toEqual([]);
+
+    // Including the cohort cap — full and uninvited are the same experience
+    // from outside, and distinguishing them leaks how many spots remain.
+    expect(BETA_FULL_MESSAGE).toBe(SIGNUP_CLOSED_MESSAGE);
+  });
+
+  it("the message says what is happening and offers the next step", async () => {
+    /*
+     * "No valid invitation found for that email and city" was a lookup failure
+     * shown at the highest-intent moment in the funnel — someone who has just
+     * typed their email.
+     */
+    const { SIGNUP_CLOSED_MESSAGE: msg } = await import("../src/server/invitations");
+    expect(msg.toLowerCase()).toContain("private beta");
+    expect(msg.toLowerCase()).toContain("columbia");
+    expect(msg.toLowerCase()).toContain("add yourself to the list");
+    // Must not read as the user's fault, and must not name a lookup.
+    for (const blame of ["invalid", "not found", "denied", "incorrect", "expired", "revoked"]) {
+      expect(msg.toLowerCase()).not.toContain(blame);
+    }
+  });
+
+  it("the client treats every closed-signup code identically", () => {
+    // The other half of the same rule: one outcome, one screen, whichever code
+    // arrived. Branching per code client-side would reintroduce the leak.
+    const login = readCode(new URL("../src/pages/LoginPage.tsx", import.meta.url));
+    for (const code of ["invitation_not_found", "invitation_revoked", "invitation_used", "invitation_expired", "invalid_token", "beta_full"]) {
+      expect(login).toContain(`"${code}"`);
+    }
+    expect(login).toContain("SIGNUP_CLOSED_CODES.has(created.error.code)");
+  });
+
+  it("shows the waitlist form inline, with the email carried over", () => {
+    // Not a link elsewhere. Somebody who just typed their address should not
+    // type it again somewhere else.
+    const login = readCode(new URL("../src/pages/LoginPage.tsx", import.meta.url));
+    expect(login).toContain("<WaitlistForm initialEmail={email}");
   });
 });

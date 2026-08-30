@@ -186,22 +186,22 @@ export function validateInvitation(
   const key = email.trim().toLowerCase();
   const rec = db.findInvitation(cityId, key);
   if (!rec) {
-    return { ok: false, status: 403, error: "invitation_not_found", message: "No valid invitation found for that email and city." };
+    return { ok: false, status: 403, error: "invitation_not_found", message: SIGNUP_CLOSED_MESSAGE };
   }
   if (rec.revokedAt) {
-    return { ok: false, status: 403, error: "invitation_revoked", message: "That invitation was revoked and can't be used." };
+    return { ok: false, status: 403, error: "invitation_revoked", message: SIGNUP_CLOSED_MESSAGE };
   }
   if (rec.usedAt) {
-    return { ok: false, status: 409, error: "invitation_used", message: "That invitation was already used." };
+    return { ok: false, status: 409, error: "invitation_used", message: SIGNUP_CLOSED_MESSAGE };
   }
   if (new Date(rec.expiresAt).getTime() <= now.getTime()) {
-    return { ok: false, status: 403, error: "invitation_expired", message: "That invitation has expired." };
+    return { ok: false, status: 403, error: "invitation_expired", message: SIGNUP_CLOSED_MESSAGE };
   }
   const expected = invitationTokenHash(token, rec.salt);
   const a = Buffer.from(expected, "hex");
   const b = Buffer.from(rec.tokenHash, "hex");
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    return { ok: false, status: 403, error: "invalid_token", message: "That invitation code is not correct." };
+    return { ok: false, status: 403, error: "invalid_token", message: SIGNUP_CLOSED_MESSAGE };
   }
   return { ok: true };
 }
@@ -223,22 +223,22 @@ export function redeemInvitation(
   const key = email.trim().toLowerCase();
   const rec = db.findInvitation(cityId, key);
   if (!rec) {
-    return { ok: false, status: 403, error: "invitation_not_found", message: "No valid invitation found for that email and city." };
+    return { ok: false, status: 403, error: "invitation_not_found", message: SIGNUP_CLOSED_MESSAGE };
   }
   if (rec.revokedAt) {
-    return { ok: false, status: 403, error: "invitation_revoked", message: "That invitation was revoked and can't be used." };
+    return { ok: false, status: 403, error: "invitation_revoked", message: SIGNUP_CLOSED_MESSAGE };
   }
   if (rec.usedAt) {
-    return { ok: false, status: 409, error: "invitation_used", message: "That invitation was already used." };
+    return { ok: false, status: 409, error: "invitation_used", message: SIGNUP_CLOSED_MESSAGE };
   }
   if (new Date(rec.expiresAt).getTime() <= now.getTime()) {
-    return { ok: false, status: 403, error: "invitation_expired", message: "That invitation has expired." };
+    return { ok: false, status: 403, error: "invitation_expired", message: SIGNUP_CLOSED_MESSAGE };
   }
   const expected = invitationTokenHash(token, rec.salt);
   const a = Buffer.from(expected, "hex");
   const b = Buffer.from(rec.tokenHash, "hex");
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    return { ok: false, status: 403, error: "invalid_token", message: "That invitation code is not correct." };
+    return { ok: false, status: 403, error: "invalid_token", message: SIGNUP_CLOSED_MESSAGE };
   }
   db.updateInvitation(rec.id, { usedAt: now.toISOString(), usedByAccountId: accountId, token: null });
   return { ok: true };
@@ -301,5 +301,27 @@ export function betaCapReached(db: Db, env: NodeJS.ProcessEnv = process.env): bo
  *
  * Exported so the pre-check and the refusal cannot drift apart.
  */
-export const BETA_FULL_MESSAGE =
-  "Kimbio is in a closed beta while we get things right for Columbia. We're opening up soon — email hello@getkimbio.com and we'll save you a spot.";
+/**
+ * ONE message for every reason a stranger cannot sign up.
+ *
+ * There were five — no invitation, revoked, already used, expired, wrong code —
+ * plus a separate one for the cohort being full. The distinctions matter to us
+ * and to nobody standing in front of the form, and they LEAK: "already used"
+ * versus "no invitation found" turns the signup form into a way to test whether
+ * an address was invited.
+ *
+ * It also has to CONVERT. A stranger who reached this point typed their email,
+ * which is the highest-intent moment in the funnel, and "No valid invitation
+ * found for that email and city" spent it on a lookup failure. The form is
+ * rendered directly beneath this message rather than a link elsewhere —
+ * somebody who just typed their address should not type it again somewhere else.
+ */
+export const SIGNUP_CLOSED_MESSAGE =
+  "Kimbio is in a private beta while we get things right for Columbia. Add yourself to the list and we'll email you the moment we open up.";
+
+/**
+ * The cohort being full and having no invitation are the SAME experience from
+ * outside the door, so they say the same thing. Keeping them distinct served
+ * only us, and distinguishing them would leak how many spots remain.
+ */
+export const BETA_FULL_MESSAGE = SIGNUP_CLOSED_MESSAGE;

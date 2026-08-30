@@ -45,8 +45,13 @@ export function PrivateBetaPage() {
 }
 
 
-function WaitlistForm() {
-  const [email, setEmail] = useState("");
+/**
+ * Exported so the signup form can render it inline on rejection. A stranger who
+ * just typed their address at a signup form should not type it again somewhere
+ * else — that is the whole reason this is a form and not a link.
+ */
+export function WaitlistForm({ initialEmail = "", tone = "dark" }: { initialEmail?: string; tone?: "dark" | "light" } = {}) {
+  const [email, setEmail] = useState(initialEmail);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -69,9 +74,9 @@ function WaitlistForm() {
      * leaks that an address is on the list to anyone who guesses it.
      */
     return (
-      <div className="mt-6 rounded-xl bg-[#1A1E24] p-4 ring-1 ring-white/10">
-        <p className="text-[15px] font-bold text-[#F7F7F5]">You&apos;re on the list.</p>
-        <p className="mt-1 text-[13px] text-[#B5B7BB]">
+      <div className={`mt-4 rounded-xl p-4 ${tone === "dark" ? "bg-[#1A1E24] ring-1 ring-white/10" : "bg-slate-50 ring-1 ring-slate-200"}`}>
+        <p className={`text-[15px] font-bold ${tone === "dark" ? "text-[#F7F7F5]" : "text-slate-900"}`}>You&apos;re on the list.</p>
+        <p className={`mt-1 text-[13px] ${tone === "dark" ? "text-[#B5B7BB]" : "text-slate-600"}`}>
           We&apos;ll email you the moment we open up. Check your spam folder if nothing arrives — we&apos;re a new domain.
         </p>
       </div>
@@ -80,7 +85,7 @@ function WaitlistForm() {
 
   return (
     <div className="mt-6 max-w-sm">
-      <label className="block text-[13px] font-bold text-[#B5B7BB]" htmlFor="wl-email">Email</label>
+      <label className={`block text-[13px] font-bold ${tone === "dark" ? "text-[#B5B7BB]" : "text-slate-600"}`} htmlFor="wl-email">Email</label>
       <input
         id="wl-email"
         type="email"
@@ -89,18 +94,18 @@ function WaitlistForm() {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         placeholder="you@example.com"
-        className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-[#1A1E24] px-3.5 text-[15px] text-[#F7F7F5] outline-none focus:border-[#FF5741]"
+        className={`mt-1 h-11 w-full rounded-xl px-3.5 text-[15px] outline-none ${tone === "dark" ? "border border-white/15 bg-[#1A1E24] text-[#F7F7F5] focus:border-[#FF5741]" : "border border-slate-300 bg-white text-slate-900 focus:border-[#14171C]"}`}
       />
       {/* Optional, and labelled as such — a required name on a waitlist is a
           reason not to bother. */}
-      <label className="mt-3 block text-[13px] font-bold text-[#B5B7BB]" htmlFor="wl-name">Name <span className="font-normal text-[#8A8D93]">(optional)</span></label>
+      <label className={`mt-3 block text-[13px] font-bold ${tone === "dark" ? "text-[#B5B7BB]" : "text-slate-600"}`} htmlFor="wl-name">Name <span className="font-normal text-[#8A8D93]">(optional)</span></label>
       <input
         id="wl-name"
         type="text"
         autoComplete="name"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-[#1A1E24] px-3.5 text-[15px] text-[#F7F7F5] outline-none focus:border-[#FF5741]"
+        className={`mt-1 h-11 w-full rounded-xl px-3.5 text-[15px] outline-none ${tone === "dark" ? "border border-white/15 bg-[#1A1E24] text-[#F7F7F5] focus:border-[#FF5741]" : "border border-slate-300 bg-white text-slate-900 focus:border-[#14171C]"}`}
       />
       {error ? <p className="mt-2 text-[13px] font-semibold text-[#FF8B7A]">{error}</p> : null}
       <button

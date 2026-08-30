@@ -32,6 +32,18 @@ import { getStoredUtm } from "../lib/analytics";
 import { validateBirthdate } from "../lib/birthdate";
 import * as supabase from "../lib/supabase";
 import { captureInviteFromUrl, getStoredInvite, clearStoredInvite } from "../lib/analytics";
+import { WaitlistForm } from "./PrivateBetaPage";
+
+/**
+ * Every reason a stranger cannot sign up during the beta. The server sends ONE
+ * message for all of them so the form cannot be used to test whether an address
+ * was invited; this is the client half of the same rule — one outcome, one
+ * screen, regardless of which code arrived.
+ */
+const SIGNUP_CLOSED_CODES = new Set([
+  "invitation_not_found", "invitation_revoked", "invitation_used",
+  "invitation_expired", "invalid_token", "beta_full",
+]);
 import { normalizeUsername, USERNAME_HINT } from "../lib/username";
 import { normalizeErrorMessage } from "../lib/errors";
 import { CITIES } from "../data/cities";
@@ -143,6 +155,8 @@ export function LoginPage() {
    * explaining it after the fact.
    */
   const [invite, setInvite] = useState<ReturnType<typeof getStoredInvite>>(null);
+  /** Set when the server refuses signup for any beta reason — see SIGNUP_CLOSED_CODES. */
+  const [signupClosed, setSignupClosed] = useState(false);
   useEffect(() => {
     captureInviteFromUrl();
     const stored = getStoredInvite();
@@ -355,6 +369,13 @@ export function LoginPage() {
           setError("That username is already taken — try another.");
         } else if (created.error.code === "invalid_username") {
           setError(created.error.message ?? "Pick a valid username.");
+        } else if (SIGNUP_CLOSED_CODES.has(created.error.code)) {
+          /*
+           * The highest-intent moment in the funnel: they typed their email and
+           * were refused. Rather than a lookup failure, show why and put the
+           * waitlist form right here with the address already filled in.
+           */
+          setSignupClosed(true);
         } else if (created.error.code === "invalid_city" || created.error.code === "city_required") {
           setCityError(created.error.message ?? "Pick a supported city.");
         } else {
@@ -454,6 +475,30 @@ export function LoginPage() {
         </div>
       </div>
     );
+
+  if (signupClosed) {
+    /*
+     * Replaces the form rather than sitting beside it. Leaving a signup form on
+     * screen next to "you cannot sign up" invites a second attempt at something
+     * that cannot work — the dead-end pattern this build has removed repeatedly.
+     *
+     * The email carries over, so the highest-intent moment in the funnel costs
+     * one tap instead of retyping an address they just typed.
+     */
+    return (
+      <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
+        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">Columbia, MO</p>
+          <h1 className="mt-1 text-xl font-extrabold text-slate-900">Kimbio is in a private beta</h1>
+          <p className="mt-2 text-[14px] leading-relaxed text-slate-600">
+            We&apos;re getting things right for Columbia with a small group. Add yourself to the list and
+            we&apos;ll email you the moment we open up.
+          </p>
+          <WaitlistForm initialEmail={email} tone="light" />
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-32 pt-4">
