@@ -20,8 +20,29 @@ export function createSafetyReport(db: Db, reporter: AccountRecord, input: { sub
 export function publicSafetyReport(r: SafetyReportRecord) { return {id:r.id,cityId:r.cityId,contextType:r.contextType,contextId:r.contextId,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,resolvedAt:r.resolvedAt}; }
 
 /** Admin view deliberately omits account records and all verification/contact fields. */
-export function adminSafetyReport(r: SafetyReportRecord) {
-  return { id:r.id, cityId:r.cityId, contextType:r.contextType, contextId:r.contextId, status:r.status, reason:r.reason, createdAt:r.createdAt, updatedAt:r.updatedAt, resolvedAt:r.resolvedAt };
+/**
+ * WHO, WHOM, WHEN, THE TEXT — the four things the architecture doc requires,
+ * and the projection was dropping two of them.
+ *
+ * reporterId and subjectId were stripped, so the queue showed a reason and a
+ * timestamp with no indication who had reported whom. That is not a readable
+ * queue: you cannot suspend someone whose name you do not have, and the whole
+ * point of making reports readable is being able to act on them.
+ *
+ * Names resolved server-side rather than shipping raw ids, because an admin
+ * cross-referencing account ids by hand is the same defect one step removed.
+ * Deleted accounts fall back to the id so a report never becomes unreadable
+ * because someone left.
+ */
+export function adminSafetyReport(r: SafetyReportRecord, db?: Db) {
+  const nameFor = (id: string) => db?.getAccount(id)?.name ?? id;
+  return {
+    id: r.id, cityId: r.cityId, contextType: r.contextType, contextId: r.contextId,
+    status: r.status, reason: r.reason,
+    reporterId: r.reporterId, reporterName: nameFor(r.reporterId),
+    subjectId: r.subjectId, subjectName: nameFor(r.subjectId),
+    createdAt: r.createdAt, updatedAt: r.updatedAt, resolvedAt: r.resolvedAt,
+  };
 }
 const transitions: Record<SafetyReportStatus, SafetyReportStatus[]> = { open:["under_review","dismissed"], under_review:["resolved","dismissed"], resolved:[], dismissed:[] };
 export function listSafetyReportsAdmin(db: Db, ctx: AdminCtx, cityId: string|null, now=new Date()): AdminResult<ReturnType<typeof adminSafetyReport>[]> {
@@ -29,7 +50,7 @@ export function listSafetyReportsAdmin(db: Db, ctx: AdminCtx, cityId: string|nul
   if (!auth.ok) return auth;
   const scope = auth.data.scope.kind === "city" ? auth.data.scope.cityId : cityId;
   if (auth.data.scope.kind === "city" && cityId && cityId !== scope) return {ok:false,status:403,error:"city_scope_denied"};
-  return {ok:true,data:db.listSafetyReports().filter(r=>!scope||r.cityId===scope).map(adminSafetyReport)};
+  return {ok:true,data:db.listSafetyReports().filter(r=>!scope||r.cityId===scope).map((r) => adminSafetyReport(r, db))};
 }
 export function decideSafetyReport(db: Db, ctx: AdminCtx, id: string, status: SafetyReportStatus, now=new Date()): AdminResult<ReturnType<typeof adminSafetyReport>> {
   if (!validReason(ctx.reason)) return {ok:false,status:400,error:"reason_required"};

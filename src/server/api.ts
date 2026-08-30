@@ -4044,7 +4044,40 @@ ${rows.map(([k, v]) => `<tr><td style="color:#5b5f66;vertical-align:top;">${k}</
     else { if (!db.hasAttendance(reporter.id, b.contextId) || !db.hasAttendance(subject.id, b.contextId)) return err(res, { status: 403, error: "invalid_context" }), true; cityId = reporter.cityId; }
     if (!cityId || (db.listSafetyReports().some(r => r.reporterId === reporter.id && r.subjectId === subject.id && r.contextType === b.contextType && r.contextId === b.contextId && r.status !== "dismissed"))) return err(res, { status: 409, error: "duplicate_report" }), true;
     const report = { id: newId(), reporterId: reporter.id, subjectId: subject.id, cityId, contextType: b.contextType as any, contextId: b.contextId, reason: reasonText.slice(0, 500), status: "open" as const, createdAt: now.toISOString(), updatedAt: now.toISOString(), resolvedAt: null };
-    db.addSafetyReport(report); await db.persist(); return ok(res, { report: { id: report.id, status: report.status } }), true;
+    db.addSafetyReport(report);
+    /*
+     * EMAIL, NOT A BADGE. The architecture doc is explicit and it is right: a
+     * report that waits for someone to open /admin is a report nobody read, and
+     * the form implies otherwise. A badge is something you see if you are
+     * already looking; the person who needs to act is asleep.
+     *
+     * Deliberately CONTENT-FREE. The reason text is not in the email — it is
+     * frequently the most sensitive thing anyone will type into Kimbio, and
+     * mail lands in inboxes, on lock screens, and in whatever a client caches.
+     * Subject says a report exists; the queue says what it is.
+     *
+     * Fire-and-forget: a mail failure must not fail the report. Losing the
+     * record would be far worse than losing the alert.
+     */
+    const safetyOwner = db.getAccountByEmail(ownerEmail());
+    void sendEmail({
+      to: ownerEmail(),
+      subject: "Safety report filed on Kimbio",
+      html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#14171C;line-height:1.6;max-width:520px;">
+<p style="font-size:16px;"><strong>A safety report was filed.</strong></p>
+<p style="font-size:15px;">Filed ${new Date(report.createdAt).toISOString()}. The details are in the admin queue — they are deliberately not included here.</p>
+<p style="font-size:15px;"><a href="https://getkimbio.com/admin#safety">Open the safety queue</a></p>
+</div>`,
+    }).catch(() => {});
+    if (safetyOwner) {
+      db.addNotification({
+        id: newId(), accountId: safetyOwner.id, category: "account_alerts",
+        title: "Safety report filed",
+        body: "A safety report needs review.",
+        createdAt: now.toISOString(), readAt: null, link: null,
+      });
+    }
+    await db.persist(); return ok(res, { report: { id: report.id, status: report.status } }), true;
   }
 
   // ---- my appeals (own records only) --------------------------------------

@@ -1968,3 +1968,36 @@ export interface WaitlistEntryView {
 export function listWaitlist(reason = ""): Promise<ApiResult<{ entries: WaitlistEntryView[]; total: number }>> {
   return adminRequest("/api/admin/waitlist", reason);
 }
+
+/* ── Safety reports (admin) ───────────────────────────────────────────────── */
+
+export interface SafetyReportView {
+  id: string;
+  cityId: string;
+  contextType: "join_request" | "event" | "personal_run";
+  contextId: string;
+  status: "open" | "under_review" | "resolved" | "dismissed";
+  reason: string;
+  /** Who reported, and whom. Without these the queue is unactionable. */
+  reporterId: string;
+  reporterName: string;
+  subjectId: string;
+  subjectName: string;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+}
+
+/**
+ * Reports could be FILED and not READ — the endpoint existed with no client
+ * caller, which the architecture doc calls worse than having no reporting at
+ * all, because the form implies someone is looking.
+ */
+export function listSafetyReports(cityId?: string, reason = ""): Promise<ApiResult<{ reports: SafetyReportView[] }>> {
+  return adminRequest(`/api/admin/safety-reports${cityId ? `?city=${encodeURIComponent(cityId)}` : ""}`, reason);
+}
+
+/** Reason REQUIRED — admin.safety_report_resolve is a contested judgement. */
+export function decideSafetyReport(id: string, status: SafetyReportView["status"], reason: string): Promise<ApiResult<{ report: SafetyReportView }>> {
+  return adminRequest(`/api/admin/safety-reports/${encodeURIComponent(id)}`, reason, { method: "POST", body: JSON.stringify({ status }) });
+}

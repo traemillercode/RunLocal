@@ -17,6 +17,7 @@ import { SponsorsAdminSection } from "../components/SponsorsAdminSection";
 import { InvitationsAdminSection } from "../components/InvitationsAdminSection";
 import { WaitlistAdminSection } from "../components/WaitlistAdminSection";
 import { CityStatusAdminSection } from "../components/CityStatusAdminSection";
+import { SafetyReportsAdminSection } from "../components/SafetyReportsAdminSection";
 import { GeofenceAllowlistSection } from "../components/GeofenceAllowlistSection";
 import { PurgeAllSection } from "../components/PurgeAllSection";
 import { AdminTrustSection } from "../components/AdminTrustSection";
@@ -740,6 +741,8 @@ export function AdminPage() {
         Surfaced at the top and ONLY when non-zero — a permanent "0 waiting"
         badge is furniture people stop reading, which defeats the purpose.
       */}
+      {/* FIRST. Everything else on this page can wait a day. */}
+      {authed && <SafetyReportsAdminSection />}
       {authed && pendingCount > 0 ? (
         <a
           href="#pending"
