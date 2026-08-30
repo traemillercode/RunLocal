@@ -132,3 +132,96 @@ describe("newest first", () => {
     expect(db.listWaitlist().map((w) => w.email)).toEqual(["three@x.com", "two@x.com", "one@x.com"]);
   });
 });
+
+describe("the list is readable, not write-only", () => {
+  /*
+   * Part 1 shipped capture with no read path: listWaitlist() existed in the
+   * store and nothing called it over HTTP, so entries landed on the Railway
+   * volume and could not be looked at. Running an ad against a bucket nobody
+   * can open is worse than having no bucket.
+   */
+  async function get(db: Db, headers: Record<string, string> = {}) {
+    const out = { status: 0, body: "" };
+    const res = { writeHead(s: number) { out.status = s; return res; }, setHeader() { return res; }, end(v?: unknown) { if (v !== undefined) out.body += String(v); return res; } } as unknown as ServerResponse;
+    const r = { method: "GET", url: "/api/admin/waitlist", headers: { "x-forwarded-proto": "https", ...headers }, socket: { remoteAddress: "127.0.0.1" },
+      [Symbol.asyncIterator]() { return { next: async () => ({ done: true as const, value: undefined }) }; } } as unknown as IncomingMessage;
+    await apiHandler(r, res, db);
+    return { status: out.status, json: out.body ? JSON.parse(out.body) : {} };
+  }
+
+  it("refuses an unauthenticated read", async () => {
+    const db = createMemoryStore();
+    await call(db, { email: "x@example.com" });
+    const r = await get(db);
+    expect(r.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it("returns entries and a total for an admin", async () => {
+    const { adminLogin, ADMIN_KEY_VAR } = await import("../src/server/admin");
+    process.env[ADMIN_KEY_VAR] = "test-admin-key";
+    const db = createMemoryStore();
+    await call(db, { email: "one@example.com", name: "Casey" });
+    const login = adminLogin(db, "test-admin-key", "198.51.100.7");
+    if (!login.ok) throw new Error("login failed");
+    const r = await get(db, { cookie: `runlocal_admin=${login.data.sessionId}` });
+    expect(r.status).toBe(200);
+    expect(r.json.total).toBe(1);
+    expect(r.json.entries[0].email).toBe("one@example.com");
+  });
+
+  it("needs NO x-audit-reason — reading your own waitlist is not moderation", async () => {
+    /*
+     * The specific mistake this avoids: revoke and minting both sat on the
+     * reason-required side while the client sent no header, so every call
+     * 400'd. admin.waitlist_list is a routine read on the no-reason side.
+     */
+    const { reasonRequiredFor } = await import("../src/server/admin");
+    expect(reasonRequiredFor("admin.waitlist_list")).toBe(false);
+  });
+
+  it("an unexplained read is not audited", async () => {
+    const { adminLogin, ADMIN_KEY_VAR } = await import("../src/server/admin");
+    process.env[ADMIN_KEY_VAR] = "test-admin-key";
+    const db = createMemoryStore();
+    const login = adminLogin(db, "test-admin-key", "198.51.100.7");
+    if (!login.ok) throw new Error("login failed");
+    await get(db, { cookie: `runlocal_admin=${login.data.sessionId}` });
+    expect(db.listAudit(20).some((a) => a.action === "admin.waitlist_list")).toBe(false);
+  });
+});
+
+describe("CSV export escapes correctly", () => {
+  /*
+   * The silent failure mode: a name containing a comma splits the row, and
+   * every column after it shifts. The file still opens, so the corruption is
+   * invisible until someone reads the wrong email address off the wrong row.
+   */
+  const cell = (v: string | null) => {
+    const s = v ?? "";
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  it("quotes a value containing a comma", () => {
+    expect(cell("Smith, Jr.")).toBe('"Smith, Jr."');
+  });
+
+  it("doubles inner quotes", () => {
+    expect(cell('Casey "Speedy" Lee')).toBe('"Casey ""Speedy"" Lee"');
+  });
+
+  it("leaves an ordinary value alone", () => {
+    expect(cell("Casey Lee")).toBe("Casey Lee");
+    expect(cell("runner@example.com")).toBe("runner@example.com");
+  });
+
+  it("renders an absent name as empty, not the string null", () => {
+    expect(cell(null)).toBe("");
+  });
+
+  it("the component uses this escaping rather than a bare join", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../src/components/WaitlistAdminSection.tsx", import.meta.url).pathname, "utf8");
+    expect(src).toContain('/[",\\n]/.test(s)');
+    expect(src).toContain('s.replace(/"/g, \'""\')');
+  });
+});

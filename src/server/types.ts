@@ -220,6 +220,13 @@ export interface CodeRecord {
 }
 
 export type AdminAction =
+  /*
+   * Deliberately NOT in REASON_REQUIRED_ACTIONS: reading your own waitlist is
+   * not a moderation action, and gating it behind a written reason is how
+   * revoke and minting both silently 400'd. It is also a READ, so an
+   * unexplained one is not audited at all.
+   */
+  | "admin.waitlist_list"
   | "admin.login"
   | "admin.search"
   | "admin.view_record"

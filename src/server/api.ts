@@ -4683,6 +4683,25 @@ async function handleAdmin(
   }
 
   // ---- Global Admin: city invitations (audited; token shown once) ---------
+  /*
+   * GET /api/admin/waitlist — owner only.
+   *
+   * listWaitlist() existed in the store from part 1 with no HTTP route, so
+   * entries landed on the Railway volume and could not be looked at. A
+   * write-only list is worse than none: it invites an ad campaign against a
+   * bucket nobody can open.
+   *
+   * Routed through authorizeAdmin with admin.waitlist_list, which is on the
+   * NO-REASON side — reading your own waitlist is not moderation, and gating
+   * it is exactly how revoke and minting both silently 400'd.
+   */
+  if (method === "GET" && url.pathname === "/api/admin/waitlist") {
+    const auth = authorizeAdmin(db, ctx, "admin.waitlist_list", null, now);
+    if (!auth.ok) return sendErr(auth), true;
+    const entries = db.listWaitlist();
+    return ok(res, { entries, total: entries.length }), true;
+  }
+
   if (method === "GET" && url.pathname === "/api/admin/invitations") {
     const cityId = url.searchParams.get("city")?.trim() || null;
     const result = listInvitations(db, ctx, cityId, now);

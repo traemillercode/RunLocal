@@ -189,6 +189,7 @@ export const REASON_REQUIRED_ACTIONS: ReadonlySet<string> = new Set([
 const READ_ONLY_ACTIONS: ReadonlySet<string> = new Set([
   "admin.pending_list", "admin.search", "admin.dashboard", "admin.overview",
   "admin.audit", "admin.content_list", "admin.event_list", "admin.submission_list",
+  "admin.waitlist_list",
   "admin.discussion_list", "admin.trust_list", "admin.appeal_list",
   "admin.safety_report_list", "admin.login",
 ]);

@@ -1888,3 +1888,24 @@ export function joinWaitlist(input: { email: string; name?: string }): Promise<A
   // rather than clicks — it has been captured since launch with nowhere to land.
   return request("/api/waitlist", { method: "POST", body: JSON.stringify({ ...input, ...getStoredUtm() }) });
 }
+
+/* ── Waitlist (admin) ─────────────────────────────────────────────────────── */
+
+export interface WaitlistEntryView {
+  id: string;
+  email: string;
+  name: string | null;
+  source: string | null;
+  createdAt: string;
+  status: "interested" | "invited" | "joined";
+  invitedAt: string | null;
+}
+
+/**
+ * Routed through adminRequest like every other /api/admin call. `reason` is
+ * optional because this is a read — see the audit split. Calling it with plain
+ * request() is the mistake that broke revoke and minting.
+ */
+export function listWaitlist(reason = ""): Promise<ApiResult<{ entries: WaitlistEntryView[]; total: number }>> {
+  return adminRequest("/api/admin/waitlist", reason);
+}

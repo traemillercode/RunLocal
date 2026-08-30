@@ -15,6 +15,7 @@ import { useNavigate } from "react-router-dom";
 import { GlobalAdminSection } from "../components/GlobalAdminSection";
 import { SponsorsAdminSection } from "../components/SponsorsAdminSection";
 import { InvitationsAdminSection } from "../components/InvitationsAdminSection";
+import { WaitlistAdminSection } from "../components/WaitlistAdminSection";
 import { GeofenceAllowlistSection } from "../components/GeofenceAllowlistSection";
 import { PurgeAllSection } from "../components/PurgeAllSection";
 import { AdminTrustSection } from "../components/AdminTrustSection";
@@ -1031,6 +1032,7 @@ export function AdminPage() {
       {authed && !isCityAdmin && <EventCmsSection />}
       {authed && !isCityAdmin && <GlobalAdminSection />}
       {authed && !isCityAdmin && <SponsorsAdminSection cityId="columbia-mo" reason={reason} />}
+      {authed && <WaitlistAdminSection />}
       {authed && <InvitationsAdminSection cityId="columbia-mo" />}
       {authed && !isCityAdmin && <GeofenceAllowlistSection reason={reason} />}
       {isOwner && <PurgeAllSection reason={reason} />}
