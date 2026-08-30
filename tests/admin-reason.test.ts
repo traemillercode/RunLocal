@@ -166,3 +166,41 @@ describe("no admin endpoint is called without the audit header", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("no admin endpoint is added without a client path", () => {
+  /*
+   * FIVE instances of the same defect in one week — invite tokens, audit
+   * reasons, the registry capability field, invitation revoke, and city status.
+   * Each was a correct, tested server capability that nothing could reach, and
+   * the gap is invisible from both ends: server tests pass because the handler
+   * works, client tests pass because nothing calls it.
+   *
+   * This pins the KNOWN set. A new unreachable route fails, which forces the
+   * question "what calls this?" at the moment it is cheapest to answer.
+   */
+  it("the unreachable set has not grown", () => {
+    const server = readCode(new URL("../src/server/api.ts", import.meta.url));
+    const client = readCode(new URL("../src/lib/api.ts", import.meta.url));
+    const routes = new Set<string>();
+    for (const m of server.matchAll(/url\.pathname === "(\/api\/admin\/[^"]+)"/g)) routes.add(m[1]);
+    for (const m of server.matchAll(/\^\\\/api\\\/admin\\\/([a-z-]+)/g)) routes.add(`/api/admin/${m[1]}/*`);
+
+    const KNOWN = new Set([
+      // City-admin surface — the feature phase has not arrived (1.6).
+      "/api/admin/city/audit", "/api/admin/city/dashboard",
+      "/api/admin/cityadmins", "/api/admin/cityadmins/*",
+      // One-off maintenance. Arguably correct to have no UI.
+      "/api/admin/city/submissions/backfill",
+      // THE ONE THAT MATTERS: reports can be filed and cannot be read.
+      // Must close before the city opens — see
+      // docs/audit-2026-08/UNREACHABLE-SERVER-CAPABILITIES.md
+      "/api/admin/safety-reports", "/api/admin/safety-reports/*",
+    ]);
+
+    const unreachable = [...routes].filter((r) => {
+      const base = r.replace("/*", "");
+      return !client.includes(base);
+    });
+    expect(unreachable.filter((r) => !KNOWN.has(r))).toEqual([]);
+  });
+});
