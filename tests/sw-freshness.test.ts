@@ -33,12 +33,31 @@ describe("service worker freshness (root mount)", () => {
     expect(sw).toContain("self.clients.claim()");
   });
 
-  it("only skip-waits in response to an explicit SKIP_WAITING message", () => {
+  it("skip-waits on install AND honours an explicit SKIP_WAITING message", () => {
+    /*
+     * REVERSED, deliberately, and worth recording why rather than quietly
+     * flipping an assertion.
+     *
+     * The original rule — no skipWaiting in install, wait for the banner's
+     * consent instead of hijacking open tabs — was sound reasoning and would
+     * still be defensible. It failed for a reason outside itself: THE BANNER
+     * WAS NEVER MOUNTED. Nothing rendered ServiceWorkerUpdate, so there was no
+     * consent path at all, and a new worker waited until every tab closed.
+     * During a beta that is days, and it is why testing the clone fix took
+     * three rounds.
+     *
+     * The banner is mounted now, so the consent argument is stronger than it
+     * was — but a tester who dismisses or never notices it still runs stale
+     * code and files bugs already fixed. Auto-activation costs a worker swap
+     * mid-session, which can serve mixed assets for one navigation. That is the
+     * cheaper failure.
+     *
+     * Revisit after the beta: with the banner working, consent is the better
+     * default for real users.
+     */
     const sw = read("public/sw.js");
-    // The install handler must not force activation — a new worker waits for
-    // the update banner's user consent instead of hijacking open tabs.
     const install = sw.slice(sw.indexOf('self.addEventListener("install"'), sw.indexOf('self.addEventListener("activate"'));
-    expect(install).not.toContain("skipWaiting");
+    expect(install).toContain("self.skipWaiting();");
     // skipWaiting is gated behind the banner's SKIP_WAITING message.
     const message = sw.slice(sw.indexOf('self.addEventListener("message"'), sw.indexOf('self.addEventListener("fetch"'));
     expect(message).toContain('event.data?.type === "SKIP_WAITING"');
@@ -83,7 +102,7 @@ describe("update banner markup", () => {
   it("exposes accessible status text with Refresh and Dismiss controls", () => {
     const src = read("src/components/ServiceWorkerUpdate.tsx");
     expect(src).toContain('role="status"');
-    expect(src).toContain("A new version is available");
+    expect(src).toContain("A newer version of Kimbio is available");
     expect(src).toContain(">Refresh</button>");
     expect(src).toContain(">Dismiss</button>");
     expect(src).toContain('type="button"');

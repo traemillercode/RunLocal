@@ -72,3 +72,55 @@ describe("API traffic is never intercepted", () => {
     expect(bail).toBeLessThan(firstRespond);
   });
 });
+
+describe("a new worker takes over without closing every tab", () => {
+  /*
+   * Without skipWaiting, a reload is NOT enough: the tab stays alive, the old
+   * worker keeps controlling the page, and the new one sits in `waiting`
+   * indefinitely. That is why testing the clone fix took three rounds, and it
+   * compounds every caching problem — the fix ships, the tester reloads, and
+   * nothing changes.
+   */
+  it("skipWaiting on install and clients.claim on activate", () => {
+    expect(SW).toContain("self.skipWaiting();");
+    expect(SW).toContain("self.clients.claim()");
+    // skipWaiting must be in INSTALL — in activate it is too late to matter.
+    const install = SW.slice(SW.indexOf('addEventListener("install"'), SW.indexOf('addEventListener("activate"'));
+    expect(install).toContain("self.skipWaiting();");
+  });
+
+  it("still honours an explicit SKIP_WAITING message", () => {
+    // The Refresh button posts this. Redundant with skipWaiting on install, and
+    // harmless — it covers a worker that installed before this change shipped.
+    expect(SW).toContain('event.data?.type === "SKIP_WAITING"');
+  });
+});
+
+describe("the client can tell it is running a stale bundle", () => {
+  const UPDATE = readFileSync(new URL("../src/components/ServiceWorkerUpdate.tsx", import.meta.url).pathname, "utf8");
+  const APP = readFileSync(new URL("../src/App.tsx", import.meta.url).pathname, "utf8");
+
+  it("compares its own build against one the server answers fresh", () => {
+    /*
+     * The footer stamp comes from import.meta.env at BUILD time, so a stale
+     * bundle honestly reports its own build — correct, and useless for the one
+     * thing the stamp exists to do. Four rounds today across three reports.
+     */
+    expect(UPDATE).toContain("VITE_BUILD_ID");
+    expect(UPDATE).toContain('fetch("/api/health"');
+    expect(UPDATE).toContain("d.build !== mine");
+  });
+
+  it("does not flag staleness when the server cannot answer", () => {
+    // A server that does not know its build must not make every client think
+    // it is stale, and offline is not stale.
+    expect(UPDATE).toContain("d?.build && d.build !== mine");
+    expect(UPDATE).toContain("/* offline is not stale */");
+  });
+
+  it("is actually mounted", () => {
+    // It was not. Nothing rendered it, which is the second reason the prompt
+    // never appeared — the first being that the cache name never changed.
+    expect(APP).toContain("<ServiceWorkerUpdate />");
+  });
+});

@@ -424,6 +424,18 @@ async function handleApi(
     const supabase = supabaseConfig();
     return ok(res, {
       ok: true,
+      /*
+       * The build the SERVER is running, which is the point.
+       *
+       * The footer stamp comes from import.meta.env at BUILD time, so a stale
+       * bundle honestly reports its own build — correct, and misleading for the
+       * one thing the stamp exists to do: confirm two people are looking at the
+       * same code. It cost four rounds today across three separate reports.
+       *
+       * Read from the environment at request time rather than baked in, so this
+       * value cannot itself go stale. Railway sets RAILWAY_GIT_COMMIT_SHA.
+       */
+      build: (process.env.VITE_BUILD_ID ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? "").slice(0, 12) || null,
       // Supabase email verification provider status — names of missing vars only, never
       // values, and never the anon key itself.
       supabaseConfigured: supabase.configured,

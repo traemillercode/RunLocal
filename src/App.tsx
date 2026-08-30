@@ -6,6 +6,7 @@ import { FeedbackLauncher } from "./components/FeedbackSheet";
 import { shouldBypassGeofence } from "./lib/geofenceBypass";
 import { BottomNav } from "./components/BottomNav";
 import { BuildStamp } from "./components/BuildStamp";
+import { ServiceWorkerUpdate } from "./components/ServiceWorkerUpdate";
 import { CitySheet, Header } from "./components/Header";
 import { DesktopSidebar } from "./components/DesktopSidebar";
 import { CITIES } from "./data/cities";
@@ -238,6 +239,8 @@ function Shell() {
         <div className="mx-auto max-w-md px-4 pb-2 text-center"><BuildStamp /></div>
       ) : null}
       {!noNav ? <BottomNav /> : null}
+      {/* Mounted at last — it existed and nothing rendered it. */}
+      <ServiceWorkerUpdate />
       <TourHost />
       <CitySheet
         open={cityOpen}

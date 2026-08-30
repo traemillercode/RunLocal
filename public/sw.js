@@ -5,6 +5,26 @@ const BASE = new URL("/", self.location.origin).pathname;
 const SHELL = [BASE, `${BASE}index.html`, `${BASE}manifest.webmanifest`, `${BASE}favicon.svg`];
 
 self.addEventListener("install", (event) => {
+  /*
+   * skipWaiting() so a new worker ACTIVATES immediately instead of waiting for
+   * every tab to close.
+   *
+   * Without it, "deploy and reload" is not enough — a reload keeps the tab
+   * alive, so the old worker keeps controlling the page and the new one sits in
+   * `waiting` indefinitely. That is why testing the clone fix took three rounds
+   * of confusion, and it compounds every other caching problem: the fix ships,
+   * the tester reloads, and nothing changes.
+   *
+   * Paired with clients.claim() in activate, which takes over already-open
+   * pages rather than only ones loaded afterwards. Both are needed: skipWaiting
+   * gets the worker activated, claim gets it controlling.
+   *
+   * The tradeoff is a worker swapping under a live page, which can serve mixed
+   * old and new assets for one navigation. Acceptable here — the alternative is
+   * a fix nobody receives until they close every tab, and during a beta that is
+   * days.
+   */
+  self.skipWaiting();
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
 });
 self.addEventListener("activate", (event) => {
