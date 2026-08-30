@@ -59,3 +59,48 @@ describe("no copy was weakened", () => {
     }
   });
 });
+
+describe("the banner is the last surface through the brand system", () => {
+  /*
+   * IT WAS THE WHITE BAND. bg-white/97 pinned at z-60 across the bottom of
+   * every page — five rounds of reports were seeing this, not the footer.
+   * html, body, the footer background and the padding conditional were each a
+   * real cause of a real gap and each was fixed correctly, and the symptom
+   * never moved, because we kept painting the page while an overlay painted
+   * over it.
+   *
+   * The lesson is the measurement, not the fix: elementFromPoint at the bottom
+   * pixel answers "what is actually painting here", which is a different
+   * question from "what should be painting here".
+   */
+  it("is ink, not white", () => {
+    expect(SRC).toContain("bg-[#14161A]/97");
+    expect(SRC).not.toContain("bg-white/97");
+  });
+
+  it("puts coral on Accept only", () => {
+    // One primary action per surface. Accept is it.
+    expect((SRC.match(/#FF5741/g) ?? []).length).toBe(1);
+    const accept = SRC.slice(SRC.indexOf('choose("granted")') - 200, SRC.indexOf('choose("granted")') + 200);
+    expect(accept).toContain("#FF5741");
+  });
+
+  it("keeps Decline equally findable", () => {
+    /*
+     * A visible outline, not a quieter shade of the background. Making the
+     * refusal harder to see than the acceptance is the dark pattern this whole
+     * banner exists to avoid.
+     */
+    const decline = SRC.slice(SRC.indexOf('choose("declined")') - 60, SRC.indexOf('choose("declined")') + 260);
+    expect(decline).toContain("border border-white/25");
+    expect(decline).toContain("h-11");
+  });
+
+  it("the choice persists, so it cannot reappear on every load", () => {
+    // If consent were session-only, that bar would be on every page forever —
+    // which would have looked exactly like the bug that was being chased.
+    const analytics = readFileSync(new URL("../src/lib/analytics.ts", import.meta.url).pathname, "utf8");
+    expect(analytics).toContain("localStorage.setItem(CONSENT_KEY");
+    expect(analytics).not.toContain("sessionStorage.setItem(CONSENT_KEY");
+  });
+});

@@ -28,7 +28,22 @@ export function CookieBanner() {
   };
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-slate-200 bg-white/97 p-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur sm:p-5">
+    /*
+     * INK, not white.
+     *
+     * This was a near-white overlay pinned at z-60 across the bottom of every page — and
+     * it is what five rounds of "white band" reports were actually seeing.
+     * html, body, the footer and the padding were all fixed correctly and the
+     * symptom never moved, because we kept painting the page while an overlay
+     * painted over it.
+     *
+     * It is also the last surface that had not been through the brand system,
+     * and it sits on the one page a stranger is being advertised to. Coral is
+     * on Accept only: it is the single primary action here, and Decline must
+     * stay equally easy to find, which is why it is a visible outline rather
+     * than a quieter shade of the background.
+     */
+    <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-white/10 bg-[#14161A]/97 p-4 shadow-[0_-4px_24px_rgba(0,0,0,0.4)] backdrop-blur sm:p-5">
       <div className="mx-auto flex max-w-3xl flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         {/*
           Two lines by default, with the detail behind an expander.
@@ -45,28 +60,28 @@ export function CookieBanner() {
           overwhelming is not more honest than one they do.
         */}
         <div className="min-w-0">
-          <p className="text-[13px] leading-relaxed text-slate-600">
+          <p className="text-[13px] leading-relaxed text-[#B5B7BB]">
             During the beta we record how the app is used, including an anonymized replay of your session, so we can fix what&apos;s broken.{" "}
             <button
               type="button"
               onClick={() => setDetail((d) => !d)}
               aria-expanded={detail}
-              className="font-bold text-[#14171C] underline underline-offset-2"
+              className="font-bold text-[#F7F7F5] underline underline-offset-2"
             >
               {detail ? "Less" : "What we collect"}
             </button>
           </p>
           {detail ? (
-            <p className="mt-2 text-[13px] leading-relaxed text-slate-600">
+            <p className="mt-2 text-[13px] leading-relaxed text-[#B5B7BB]">
               Which pages you visit, errors you hit, and an anonymized replay of your session. Typing is never recorded. Decline and nothing is collected at all.
             </p>
           ) : null}
         </div>
         <div className="flex shrink-0 gap-2">
-          <button type="button" onClick={() => choose("declined")} className="h-11 rounded-full bg-slate-100 px-4 text-[13px] font-bold text-slate-700 active:bg-slate-200">
+          <button type="button" onClick={() => choose("declined")} className="h-11 rounded-full border border-white/25 px-4 text-[13px] font-bold text-[#F7F7F5] active:bg-white/10">
             Decline
           </button>
-          <button type="button" onClick={() => choose("granted")} className="h-11 rounded-full bg-[#14171C] px-4 text-[13px] font-bold text-white active:opacity-90">
+          <button type="button" onClick={() => choose("granted")} className="h-11 rounded-full bg-[#FF5741] px-4 text-[13px] font-bold text-[#14171C] active:opacity-90">
             Accept
           </button>
         </div>
