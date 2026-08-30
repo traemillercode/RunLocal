@@ -510,6 +510,22 @@ export function LoginPage() {
       )}
       <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
         <h1 className="text-xl font-extrabold">{mode === "login" ? "Log in" : "Create your account"}</h1>
+        {/*
+          A STANDING path to resend, not only one that appears after a failed
+          sign-in. The resend existed in two places and both required you to
+          have just acted — someone who signed up on Tuesday, never saw the
+          email, and came back on Friday had nowhere to go. That cost one tester
+          eight days.
+
+          /confirmation has had a working resend form the whole time and nothing
+          linked to it.
+        */}
+        {mode === "login" ? (
+          <p className="mt-1 text-[12px] text-slate-500">
+            Didn&apos;t get your confirmation email?{" "}
+            <Link to="/confirmation" className="font-bold text-[#FF5741] underline underline-offset-2">Send it again</Link>
+          </p>
+        ) : null}
         <p className="mt-1 text-[13px] text-slate-600">
           {mode === "login"
             ? "Use your email and password. Your Kimbio session is secured by server-side token validation."

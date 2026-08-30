@@ -927,7 +927,19 @@ export function adminSetStatus(
         link: { kind: "verify", id: updated.id },
       });
     }
-    if (status === "verified") {
+    /*
+     * ONLY ON THE TRANSITION. This fired whenever the target status was
+     * "verified", with no check that the account was not already — so approving
+     * an already-approved account re-sent the email. One tester received three
+     * in seven seconds, which is a double-click or a retried request, and
+     * triple sends damage sender reputation. That makes the inbox-placement
+     * problem worse, which is the actual thing hurting the beta.
+     *
+     * `rec` is the pre-update record, so this is a genuine edge check rather
+     * than a re-read of what we just wrote.
+     */
+    const becameVerified = status === "verified" && rec.status !== "verified";
+    if (becameVerified) {
       void sendEmail({ to: updated.email, subject: "You're verified on Kimbio!", html: verifiedEmailHtml(updated.name) }).catch(() => {});
     }
   } catch {
