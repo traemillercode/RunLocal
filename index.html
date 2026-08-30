@@ -21,6 +21,37 @@
       roadmap 2.12, which is where per-route <title> and OG tags belong too.
     -->
     <link rel="canonical" href="https://getkimbio.com/" />
+
+    <!--
+      OPEN GRAPH / TWITTER CARDS.
+
+      There were NONE, so a texted invite link had nothing to render: iMessage,
+      WhatsApp and Slack fall back to scraping the page, hit an empty
+      <div id="root"> because there is no prerendering yet, and show a bare grey
+      box. That reads as a dead link — attached to the one message where you are
+      asking someone to trust you enough to sign up.
+
+      Static and site-wide, which is correct while the landing page is the only
+      public surface. Per-route tags come with prerendering (roadmap 2.12), and
+      belong with it: a per-route og:title is worthless if the crawler still
+      sees an empty root.
+
+      og:image must be an ABSOLUTE url — scrapers do not resolve relative paths.
+    -->
+    <meta property="og:title" content="Kimbio — every group run in Columbia" />
+    <meta property="og:description" content="The pace, the meeting spot, and who's going. One place." />
+    <meta property="og:image" content="https://getkimbio.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Kimbio — every group run in Columbia" />
+    <meta property="og:url" content="https://getkimbio.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Kimbio" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Kimbio — every group run in Columbia" />
+    <meta name="twitter:description" content="The pace, the meeting spot, and who's going. One place." />
+    <meta name="twitter:image" content="https://getkimbio.com/og-image.png" />
+    <meta name="description" content="The pace, the meeting spot, and who's going. Every group run in Columbia, MO — one place." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/icon-180.png" />
