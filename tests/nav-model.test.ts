@@ -221,3 +221,54 @@ describe("the Explore dropdown opens", () => {
     }
   });
 });
+
+describe("sign out and admin stay reachable on both surfaces", () => {
+  /*
+   * Sign out is an ACTION, not a route, so it is deliberately OUTSIDE the
+   * registry — the registry is a route table and forcing an action into it
+   * would distort the model. That decision has a cost: when part 2 rewired the
+   * sidebar to render from FEATURES, anything not in FEATURES could vanish
+   * without a test noticing.
+   *
+   * These are that test. Both surfaces, asserted independently, because the
+   * desktop sidebar is display:none below 1024px — so a mobile user has ONLY
+   * the account menu, and a desktop user reaches for the sidebar.
+   */
+  it("the sidebar renders a sign-out action for a signed-in viewer", async () => {
+    const src = readFileSync(new URL("../src/components/DesktopSidebar.tsx", import.meta.url).pathname, "utf8");
+    expect(src).toContain("Sign out");
+    expect(src).toMatch(/onClick=\{\(\) => void signOut\(\)\}/);
+    // It must be inside the signed-in branch — a sign-out button for a guest
+    // is a control that cannot do anything.
+    const at = src.indexOf("Sign out");
+    expect(src.slice(0, at)).toContain("signedIn ? (");
+  });
+
+  it("the account menu offers Log out for every signed-in role", async () => {
+    const { profileMenuEntries } = await import("../src/lib/accountMenu");
+    for (const status of ["pending", "verified"] as const) {
+      const { entries } = profileMenuEntries({ status: "signed_in", account: { status, isOwner: false } } as never);
+      expect(entries.some((e) => e.key === "logout"), status).toBe(true);
+    }
+  });
+
+  it("the account menu offers Admin to the owner, and to nobody else", async () => {
+    /*
+     * The mobile path to /admin. The registry entry is surfaces:["sidebar"],
+     * and the sidebar does not exist below 1024px — so without this the owner
+     * has no way to reach admin from a phone.
+     */
+    const { profileMenuEntries } = await import("../src/lib/accountMenu");
+    const owner = profileMenuEntries({ status: "signed_in", account: { status: "verified", isOwner: true } } as never);
+    expect(owner.entries.some((e) => e.to === "/admin")).toBe(true);
+
+    const notOwner = profileMenuEntries({ status: "signed_in", account: { status: "verified", isOwner: false } } as never);
+    expect(notOwner.entries.some((e) => e.to === "/admin")).toBe(false);
+  });
+
+  it("the sidebar shows Admin only when the viewer holds the capability", async () => {
+    const { sidebarGroups } = await import("../src/lib/nav");
+    expect(sidebarGroups("verified", { isAdmin: true }).flatMap((g) => g.entries.map((e) => e.id))).toContain("admin");
+    expect(sidebarGroups("verified").flatMap((g) => g.entries.map((e) => e.id))).not.toContain("admin");
+  });
+});
