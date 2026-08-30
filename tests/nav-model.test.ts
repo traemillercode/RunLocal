@@ -272,3 +272,46 @@ describe("sign out and admin stay reachable on both surfaces", () => {
     expect(sidebarGroups("verified").flatMap((g) => g.entries.map((e) => e.id))).not.toContain("admin");
   });
 });
+
+describe("Explore opens on click, and hover does not fight it", () => {
+  const MKT = readFileSync(new URL("../src/pages/MarketingPage.tsx", import.meta.url).pathname, "utf8");
+
+  it("the wrapper has no hover handlers", () => {
+    /*
+     * THE THIRD CAUSE, and I introduced it. Adding onClick to the trigger while
+     * leaving onMouseEnter/onMouseLeave on the wrapper meant: hovering the
+     * button to reach it OPENED the menu, and the click then TOGGLED IT CLOSED.
+     * Net effect nothing, measuring as "15 links before, 15 after" —
+     * indistinguishable from the missing handler it was meant to fix.
+     *
+     * Hover-only also never opens on touch, so click is the pattern that works
+     * everywhere rather than the one that works on a mouse.
+     */
+    const at = MKT.indexOf("marketing-nav-dropdown-wrap");
+    const wrapper = MKT.slice(at - 80, at + 200);
+    expect(wrapper).not.toContain("onMouseEnter");
+    expect(wrapper).not.toContain("onMouseLeave");
+  });
+
+  it("closes on an outside click and on Escape", () => {
+    // Both became necessary once hover no longer closed it, and both are what
+    // anyone expects of a menu.
+    expect(MKT).toContain('document.addEventListener("mousedown", onDown)');
+    expect(MKT).toContain('e.key === "Escape"');
+  });
+
+  it("shows four destinations during the closed beta", () => {
+    /*
+     * Morgan's option 2, and the right one: the items point at pages that are
+     * currently the private-beta page WITH the waitlist form. Someone clicking
+     * Races lands somewhere that explains the situation and gives them a way to
+     * convert — a second path into the waitlist rather than a dead control.
+     *
+     * Hiding Explore entirely would be honest and would leave the header with
+     * no navigation at all on the one surface being advertised.
+     */
+    for (const route of ["/events", "/groups", "/races", "/routes"]) {
+      expect(MKT).toContain(`"${route}":`);
+    }
+  });
+});

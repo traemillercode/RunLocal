@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import * as api from "../lib/api";
 import { BuildStamp } from "../components/BuildStamp";
@@ -121,6 +121,21 @@ function useSignupOpen(): boolean | null {
 function MarketingNav() {
   const signupOpen = useSignupOpen();
   const [exploreOpen, setExploreOpen] = useState(false);
+  const exploreRef = useRef<HTMLDivElement | null>(null);
+  /*
+   * Close on an outside click or Escape — the two ways anyone expects to
+   * dismiss a menu, and both required once hover no longer closes it.
+   */
+  useEffect(() => {
+    if (!exploreOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!exploreRef.current?.contains(e.target as Node)) setExploreOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setExploreOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [exploreOpen]);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -136,7 +151,17 @@ function MarketingNav() {
 
       {/* Desktop: a real dropdown with actual destinations, not just an anchor-scroll link. */}
       <nav aria-label="Marketing navigation" className="marketing-nav marketing-nav-desktop">
-        <div className="marketing-nav-dropdown-wrap" onMouseEnter={() => setExploreOpen(true)} onMouseLeave={() => setExploreOpen(false)}>
+        {/*
+          CLICK ONLY. Hover-to-open and click-to-toggle fought each other: to
+          click the button you must first hover it, which OPENED the menu, and
+          the click then toggled it closed. Net effect nothing — which measured
+          as "15 links before, 15 after" and was indistinguishable from a
+          missing handler. My own click fix created this by leaving the hover
+          handlers in place.
+          Hover-only menus also never open on touch, so click is the pattern
+          that works everywhere rather than the one that works on a mouse.
+        */}
+        <div className="marketing-nav-dropdown-wrap" ref={exploreRef}>
           {/*
             CLICK, not hover only. The trigger had no onClick at all, so the
             menu opened on mouseenter and nothing else — a click did nothing,
