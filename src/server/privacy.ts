@@ -106,3 +106,52 @@ export function canView(db: Db, viewerId: string | null, ownerId: string, field:
 // Re-export the value unions so callers can type privacy payloads without
 // importing types.ts directly.
 export type { AttendanceVisibility, ContentVisibility, ProfileVisibility, SavedEventsVisibility };
+
+/* ── The hidden set ───────────────────────────────────────────────────────── */
+
+/**
+ * Every account that must not appear to this viewer, as one set.
+ *
+ * THE POINT IS THE UNION. Blocked, deleted and suspended collapse into a single
+ * answer, so "she blocked him" is indistinguishable from "she deleted her
+ * account" and from "she was removed" BY CONSTRUCTION — not by remembering to
+ * return matching error strings at each of the sites that could tell them
+ * apart. Six such sites had drifted apart before this existed.
+ *
+ * Resolved once per request and passed down, rather than recomputed per row: a
+ * roster of 40 would otherwise run 40 block lookups, and the cost pressure is
+ * what makes people skip the check.
+ *
+ * NOT A RENDERING FILTER. Every capability that consults identity must consult
+ * this too — messaging, connections-only content, appearing in mutuals. A
+ * hidden person who can still reach her is the suspension bug one layer down:
+ * a flag that changes what you see and not what you can do.
+ */
+export function hiddenFrom(db: Db, viewerId: string | null): ReadonlySet<string> {
+  const hidden = new Set<string>();
+  // Deleted and suspended are hidden from EVERYONE, viewer or not — so a guest
+  // and a member get the same answer, and neither can infer from the other.
+  for (const a of db.listAccounts()) {
+    if (a.deletedAt) hidden.add(a.id);
+    else if (a.suspended && (!a.suspendedUntil || new Date(a.suspendedUntil).getTime() > Date.now())) hidden.add(a.id);
+  }
+  if (viewerId === null) return hidden;
+  // Blocks are bidirectional: isBlocked is true whichever way the row runs, so
+  // she disappears for him AND he disappears for her by default.
+  for (const b of db.listBlocksInvolving(viewerId)) {
+    hidden.add(b.blockerId === viewerId ? b.blockedId : b.blockerId);
+  }
+  return hidden;
+}
+
+/**
+ * Filter a list of things that carry an account id.
+ *
+ * Identity lists only. A COUNT must never be filtered through this — if he sees
+ * 11 where everyone else sees 12, the block is readable and we have made things
+ * worse. Counts are computed identically for every viewer; only names are
+ * removed.
+ */
+export function withoutHidden<T>(rows: readonly T[], hidden: ReadonlySet<string>, idOf: (row: T) => string): T[] {
+  return rows.filter((r) => !hidden.has(idOf(r)));
+}

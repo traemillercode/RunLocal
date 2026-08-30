@@ -829,6 +829,18 @@ export class Db {
   }
   removeBlock(blockerId: string, blockedId: string): void { this.blocks.delete(`${blockerId}:${blockedId}`); }
   listBlocks(blockerId: string): import("./types").BlockRecord[] { return [...this.blocks.values()].filter(b => b.blockerId === blockerId); }
+  /**
+   * Every block touching this account, in EITHER direction.
+   *
+   * listBlocks above is one-directional — it answers "who have I blocked". The
+   * hidden set needs "who is hidden from me", which includes people who blocked
+   * ME: she blocks him, and he must stop seeing her, not merely she him.
+   * Using the one-directional version there would have made blocking protect
+   * the wrong person.
+   */
+  listBlocksInvolving(accountId: string): import("./types").BlockRecord[] {
+    return [...this.blocks.values()].filter(b => b.blockerId === accountId || b.blockedId === accountId);
+  }
   invalidateJoinRequests(a: string, b: string): number { let n=0; for (const r of this.joinRequests.values()) if (((r.requesterId===a&&r.recipientId===b)||(r.requesterId===b&&r.recipientId===a)) && (r.state === "pending" || r.state === "accepted")) { r.state="blocked"; r.updatedAt=new Date().toISOString(); n++; } return n; }
 
   listSafetyReports(): SafetyReportRecord[] { return [...this.safetyReports.values()]; }

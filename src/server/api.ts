@@ -2190,6 +2190,21 @@ async function handleApi(
       // 1:1 — target must be an accepted connection.
       const target = body.accountId;
       if (target === sess.accountId) return err(res, { status: 400, error: "invalid_target", message: "You can't message yourself." }), true;
+      /*
+       * BLOCK CHECKED AT THE CAPABILITY, not only at the connection row.
+       *
+       * This gated on `pair.status === "accepted"` alone. That happens to be
+       * safe today because blockConnection marks the row "removed" — but it is
+       * safe by ACCIDENT: the check is asking "are you connected", and the
+       * question that matters is "may you reach her". If blocking ever moves
+       * from severing the row to hiding it — which is the direction the safety
+       * architecture chose, because severing is visible to him — this line
+       * silently starts letting a blocked person message her.
+       *
+       * A hidden connection must grant nothing. That is the suspension bug one
+       * layer down: a flag that changes what you see and not what you can do.
+       */
+      if (db.isBlocked(sess.accountId, target)) return err(res, { status: 403, error: "not_connected", message: "You can only message accepted connections." }), true;
       const pair = db.getConnectionPair(sess.accountId, target);
       if (!pair || pair.status !== "accepted") return err(res, { status: 403, error: "not_connected", message: "You can only message accepted connections." }), true;
       const convo = db.findOrCreateDirectConversation(sess.accountId, target, now);
