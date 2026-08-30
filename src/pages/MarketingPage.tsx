@@ -7,7 +7,7 @@ import { CITIES } from "../data/cities";
 import { Icon } from "../components/ui";
 import type { IconName } from "../components/ui";
 import { FEATURES, type Feature } from "../lib/features";
-import { isPublicReadPath } from "../lib/geofenceBypass";
+
 
 const city = CITIES.find((item) => item.id === "columbia-mo");
 
@@ -74,9 +74,22 @@ const EXPLORE_BLURBS: Record<string, string> = {
   "/routes": "Real routes runners actually use",
 };
 
+/*
+ * SECOND CAUSE of the broken dropdown, and the one a click fix alone would have
+ * hidden: this filtered on isPublicReadPath, which the closed beta reduced to
+ * nothing. So the menu rendered zero items even when it opened.
+ *
+ * The filter was right when the public set described where a guest could GO.
+ * It no longer does — every destination now leads to the private-beta page,
+ * which is a legitimate place to send someone and explains the situation. The
+ * menu should show what Kimbio HAS; the pages themselves say what is open.
+ *
+ * Still derived from the registry, so a new guest-facing feature appears
+ * automatically. Only the reachability filter is dropped.
+ */
 const EXPLORE_LINKS: { to: string; label: string; icon: IconName; blurb: string }[] = (FEATURES as readonly Feature[])
-  .filter((f) => f.reach.kind === "nav" && f.nav && f.roles.includes("guest") && isPublicReadPath(f.route))
-  .map((f) => ({ to: f.route, label: f.nav!.label, icon: f.nav!.icon, blurb: EXPLORE_BLURBS[f.route] ?? f.summary }));
+  .filter((f) => f.reach.kind === "nav" && f.nav && f.roles.includes("guest") && EXPLORE_BLURBS[f.route] !== undefined)
+  .map((f) => ({ to: f.route, label: f.nav!.label, icon: f.nav!.icon, blurb: EXPLORE_BLURBS[f.route]! }));
 
 /**
  * Is signup open? Driven by the server so the page follows the CMS the moment
@@ -124,7 +137,19 @@ function MarketingNav() {
       {/* Desktop: a real dropdown with actual destinations, not just an anchor-scroll link. */}
       <nav aria-label="Marketing navigation" className="marketing-nav marketing-nav-desktop">
         <div className="marketing-nav-dropdown-wrap" onMouseEnter={() => setExploreOpen(true)} onMouseLeave={() => setExploreOpen(false)}>
-          <button type="button" className="marketing-nav-dropdown-trigger" aria-expanded={exploreOpen} aria-haspopup="true">
+          {/*
+            CLICK, not hover only. The trigger had no onClick at all, so the
+            menu opened on mouseenter and nothing else — a click did nothing,
+            and on touch it could never open. aria-haspopup on a button that
+            does not respond to activation is also a keyboard dead end.
+          */}
+          <button
+            type="button"
+            className="marketing-nav-dropdown-trigger"
+            aria-expanded={exploreOpen}
+            aria-haspopup="true"
+            onClick={() => setExploreOpen((v) => !v)}
+          >
             Explore <Icon name="chevronDown" className="h-3.5 w-3.5" />
           </button>
           {exploreOpen ? (

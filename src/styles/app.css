@@ -243,3 +243,15 @@ input[type="number"] {
  */
 .page-bottom-pad[data-has-nav="true"] { padding-bottom: var(--page-bottom-pad); }
 .page-bottom-pad[data-has-nav="false"] { padding-bottom: 0; }
+
+/* Sidebar groups. The heading is deliberately quiet — it is a wayfinding aid,
+   not a label competing with the destinations under it. */
+.desktop-nav-group + .desktop-nav-group { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(20, 23, 28, 0.08); }
+.desktop-nav-heading {
+  margin: 0 0 6px 12px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9aa0a6;
+}

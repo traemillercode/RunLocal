@@ -179,6 +179,9 @@ export const FEATURES = [
   reach: { kind: "nav" }, nav: { label: "Messages", icon: "messages", surfaces: ["sidebar"] } },
   { id: "conversation", route: "/messages/:conversationId", label: "Conversation", summary: "One conversation.", area: "account", roles: VERIFIED, status: "live",
     reach: { kind: "child", parent: "messages" } },
+  // Stays a child of profile. The desktop sidebar already renders a
+  // notifications link in its account block WITH an unread badge — adding a
+  // registry nav entry would put a second, badge-less copy above it.
   { id: "notifications", route: "/notifications", label: "Notifications", summary: "What's happened since you were last here.", area: "account", roles: SIGNED_IN, status: "live",
     reach: { kind: "child", parent: "profile" } },
   // A real route rather than /profile?section=submissions. The registry does not

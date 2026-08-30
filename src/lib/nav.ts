@@ -128,3 +128,51 @@ export function activeForPath(entry: NavEntry, pathname: string): boolean {
  * sidebar (shared with App.tsx so the shell and the sidebar agree).
  */
 export const NO_NAV_PATHS = new Set(["/landing", "/verify", "/admin", "/login", "/recovery", "/confirmation", "/callback", "/checkin"]);
+
+/* ── Sidebar grouping ─────────────────────────────────────────────────────── */
+
+export interface NavGroup {
+  /** Rendered above the group. Empty string means a divider with no header. */
+  heading: string;
+  entries: readonly NavEntry[];
+}
+
+/**
+ * The sidebar, grouped.
+ *
+ * Thirteen ungrouped items has no hierarchy, which is why it read as a lot —
+ * Strava runs five and Garmin six, and both group. Derived from the registry's
+ * `area` field rather than hand-written, so a new feature lands in the right
+ * group without anyone editing a list.
+ *
+ * "You" is DROPPED on desktop. It is the container for My Runs, Connections and
+ * Messages on mobile, and showing a container beside its own contents is why
+ * the column read as chaotic rather than merely long.
+ *
+ * Admin gets its own trailing group and stays hidden — not greyed — when the
+ * viewer has no capability for it.
+ */
+export function sidebarGroups(role: AccountRole, opts: { isAdmin?: boolean } = {}): readonly NavGroup[] {
+  const entries = entriesForRole("sidebar", role, opts);
+  const byId = (id: string) => entries.find((e) => e.id === id);
+  const pick = (...ids: string[]) => ids.map(byId).filter((e): e is NavEntry => Boolean(e));
+  // "You" is the mobile TAB label — it names the container for My Runs,
+  // Connections and Messages. On desktop those are siblings in their own
+  // groups, so the container name is meaningless and it is just the profile.
+  const relabel = (e: NavEntry): NavEntry => (e.id === "profile" ? { ...e, label: "Profile" } : e);
+
+  const groups: NavGroup[] = [
+    // Ordered within each group by how often a runner reaches for it, not
+    // alphabetically — Home and Events before Races and Routes.
+    { heading: "Discover", entries: pick("home", "events", "groups", "races", "routes") },
+    { heading: "Training", entries: pick("training", "my-runs") },
+    { heading: "Community", entries: pick("forum", "connections", "messages") },
+    // No heading: account plumbing does not need naming, and a header there
+    // would give it the same visual weight as the product itself.
+    // Notifications is NOT here: the sidebar's account block already renders it
+    // with an unread badge, and a registry copy would duplicate it badge-less.
+    { heading: "", entries: pick("profile", "settings").map(relabel) },
+    { heading: "", entries: pick("admin") },
+  ];
+  return groups.filter((g) => g.entries.length > 0);
+}

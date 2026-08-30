@@ -149,3 +149,75 @@ describe("marketing header stays reachable on a long page", () => {
     expect(mainRule).not.toContain("overflow");
   });
 });
+
+describe("the sidebar is grouped, derived from `area`", () => {
+  /*
+   * Thirteen ungrouped entries had no hierarchy, which is why it read as a lot
+   * rather than merely long — Strava runs five and Garmin six, and both group.
+   */
+  it("groups in the specified order", async () => {
+    const { sidebarGroups } = await import("../src/lib/nav");
+    const groups = sidebarGroups("verified", { isAdmin: true });
+    expect(groups.map((g) => g.heading)).toEqual(["Discover", "Training", "Community", "", ""]);
+    expect(groups[0].entries.map((e) => e.label)).toEqual(["Home", "Events", "Groups", "Races", "Routes"]);
+    expect(groups[1].entries.map((e) => e.label)).toEqual(["Training", "My Runs"]);
+    expect(groups[2].entries.map((e) => e.label)).toEqual(["Forum", "Connections", "Messages"]);
+  });
+
+  it("calls it Profile on desktop, not You", async () => {
+    /*
+     * "You" is the mobile TAB label — it names the container for My Runs,
+     * Connections and Messages. On desktop those are siblings in their own
+     * groups, so a container sitting beside its own contents is why the column
+     * read as chaotic.
+     */
+    const { sidebarGroups } = await import("../src/lib/nav");
+    const labels = sidebarGroups("verified").flatMap((g) => g.entries.map((e) => e.label));
+    expect(labels).toContain("Profile");
+    expect(labels).not.toContain("You");
+  });
+
+  it("hides Admin rather than greying it", async () => {
+    const { sidebarGroups } = await import("../src/lib/nav");
+    const without = sidebarGroups("verified").flatMap((g) => g.entries.map((e) => e.id));
+    const with_ = sidebarGroups("verified", { isAdmin: true }).flatMap((g) => g.entries.map((e) => e.id));
+    expect(without).not.toContain("admin");
+    expect(with_).toContain("admin");
+  });
+
+  it("drops an empty group rather than rendering a bare heading", async () => {
+    // A guest has no Training entries; a "TRAINING" header over nothing is
+    // worse than no header.
+    const { sidebarGroups } = await import("../src/lib/nav");
+    const guest = sidebarGroups("guest");
+    expect(guest.every((g) => g.entries.length > 0)).toBe(true);
+    expect(guest.map((g) => g.heading)).not.toContain("Training");
+  });
+});
+
+describe("the Explore dropdown opens", () => {
+  it("the trigger has a click handler, not hover only", () => {
+    /*
+     * It had none — the menu opened on mouseenter and nothing else, so a click
+     * did nothing and touch could never open it. aria-haspopup on a button that
+     * does not respond to activation is also a keyboard dead end.
+     */
+    const src = readFileSync(new URL("../src/pages/MarketingPage.tsx", import.meta.url).pathname, "utf8");
+    const at = src.indexOf("marketing-nav-dropdown-trigger");
+    expect(src.slice(at, at + 400)).toContain("onClick={() => setExploreOpen");
+  });
+
+  it("has destinations to show during the closed beta", () => {
+    /*
+     * SECOND cause, which a click fix alone would have hidden: the list filtered
+     * on isPublicReadPath, which the beta reduced to nothing, so the menu
+     * rendered zero items even when it opened. Every destination now leads to
+     * the private-beta page, which is a legitimate place to send someone.
+     */
+    const src = readFileSync(new URL("../src/pages/MarketingPage.tsx", import.meta.url).pathname, "utf8");
+    expect(src).not.toContain("isPublicReadPath(f.route)");
+    for (const route of ["/events", "/groups", "/races", "/routes"]) {
+      expect(src).toContain(`"${route}":`);
+    }
+  });
+});

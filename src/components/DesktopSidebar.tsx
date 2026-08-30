@@ -3,7 +3,7 @@ import type { City } from "../types";
 import { Icon } from "./ui";
 import { useAccount } from "../state/account";
 import { useNotifications } from "../state/notifications";
-import { activeForPath, entriesForRole, NO_NAV_PATHS } from "../lib/nav";
+import { activeForPath, entriesForRole, sidebarGroups, NO_NAV_PATHS } from "../lib/nav";
 /**
  * Desktop sidebar — entries derived from the single nav model (src/lib/nav.ts)
  * with the SAME activeForPath matcher as the bottom tab bar. Settings lives in
@@ -23,8 +23,15 @@ if (NO_NAV_PATHS.has(location.pathname) || showingMarketing) return null;
   // for /admin, since every verified runner is not an admin.
   const isAdmin = me?.status === "signed_in" && (me.account.isOwner === true || Boolean(me.account.adminCityId));
   const sidebarEntries = entriesForRole("sidebar", role, { isAdmin });
-  const navEntries = sidebarEntries.filter((e) => e.id !== "settings");
   const settingsEntry = sidebarEntries.find((e) => e.id === "settings");
+  /*
+   * Grouped by the registry's `area`, not hand-written. Thirteen ungrouped
+   * items had no hierarchy, which is why the column read as a lot — Strava runs
+   * five and Garmin six, and both group.
+   *
+   * Settings still renders separately at the foot, so it is excluded here.
+   */
+  const groups = sidebarGroups(role, { isAdmin }).map((g) => ({ ...g, entries: g.entries.filter((e) => e.id !== "settings") })).filter((g) => g.entries.length > 0);
   return (
     <aside className="desktop-sidebar" aria-label="Primary navigation">
       <Link to="/" className="desktop-brand" aria-label="Kimbio home">
@@ -46,11 +53,16 @@ if (NO_NAV_PATHS.has(location.pathname) || showingMarketing) return null;
         <Icon name="chevronDown" className="ml-auto h-3.5 w-3.5" />
       </button>
       <nav className="desktop-nav" aria-label="Main" data-tour-target="desktop-nav">
-        {navEntries.map((entry) => (
-          <Link key={entry.id} to={entry.route} className={activeForPath(entry, location.pathname) ? "active" : ""}>
-            <Icon name={entry.icon} className="h-5 w-5" />
-            {entry.label}
-          </Link>
+        {groups.map((group, i) => (
+          <div key={group.heading || `group-${i}`} className="desktop-nav-group">
+            {group.heading ? <p className="desktop-nav-heading">{group.heading}</p> : null}
+            {group.entries.map((entry) => (
+              <Link key={entry.id} to={entry.route} className={activeForPath(entry, location.pathname) ? "active" : ""}>
+                <Icon name={entry.icon} className="h-5 w-5" />
+                {entry.label}
+              </Link>
+            ))}
+          </div>
         ))}
       </nav>
       <div className="desktop-account">
