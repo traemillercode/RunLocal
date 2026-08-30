@@ -5,19 +5,33 @@ import { NotificationsBell } from "./NotificationsBell";
 import { useAccount } from "../state/account";
 import { Chip, Icon } from "./ui";
 import { Sheet } from "./ui";
+import { useEffect, useState } from "react";
+import * as api from "../lib/api";
 import { NO_NAV_PATHS } from "../lib/nav";
 
 /**
- * Always-visible guest CTA in the header. Guests get a clear "Log in"
- * button next to the account avatar so sign-in is reachable on mobile
- * without hunting through menus — and it never sits behind the bottom nav
- * (it lives in the sticky top header). Hidden once a session exists.
- * Purely a link to /login — no client-side role logic.
+ * Guest CTA in the header. Reachable on mobile without hunting through menus,
+ * and it never sits behind the bottom nav since it lives in the sticky header.
+ *
+ * HIDDEN DURING THE CLOSED BETA. The marketing nav was gated for this and the
+ * app header was not, so a signed-out visitor on the private-beta page saw
+ * "Log in" sitting above the text explaining they cannot get in — the dead
+ * affordance the whole beta posture exists to remove, on the exact screen meant
+ * to say the door is shut. /login stays reachable by direct URL for invite
+ * links and the owner.
  */
 function GuestLoginCta() {
   const navigate = useNavigate();
   const { me } = useAccount();
+  const [signupOpen, setSignupOpen] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void api.getSignupStatus("columbia-mo").then((r) => { if (alive) setSignupOpen(r.ok ? r.data.open : false); });
+    return () => { alive = false; };
+  }, []);
   if (me?.status === "signed_in") return null;
+  // Renders only when signup is definitively open — neither state flashes.
+  if (signupOpen !== true) return null;
   return (
     <button
       type="button"

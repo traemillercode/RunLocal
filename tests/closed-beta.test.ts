@@ -99,3 +99,27 @@ describe("Google sees the landing page only", () => {
     }
   });
 });
+
+describe("no login affordance survives anywhere while the beta is closed", () => {
+  /*
+   * Caught by running the flip checks against production rather than trusting
+   * the code: check 1 showed "Log in" in the header ON the private-beta page —
+   * sitting directly above the text explaining the visitor cannot get in.
+   *
+   * The marketing nav was gated for this and the app header was not. Two
+   * separate surfaces, one rule, and only one of them had it.
+   */
+  it("the app header's guest CTA is gated on signup status", () => {
+    const header = readCode(new URL("../src/components/Header.tsx", import.meta.url));
+    expect(header).toContain("getSignupStatus");
+    expect(header).toContain("if (signupOpen !== true) return null;");
+  });
+
+  it("both surfaces gate on the same server answer, not separate flags", () => {
+    // A second switch is a second thing to forget. Both read
+    // /api/signup-status, so flipping the CMS moves them together.
+    const header = readCode(new URL("../src/components/Header.tsx", import.meta.url));
+    const marketing = readCode(new URL("../src/pages/MarketingPage.tsx", import.meta.url));
+    for (const src of [header, marketing]) expect(src).toContain('getSignupStatus("columbia-mo")');
+  });
+});
