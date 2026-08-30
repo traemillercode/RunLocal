@@ -1266,10 +1266,26 @@ async function handleApi(
       const e = cityNotOpenError(status);
       return ok(res, { open: false, reason: e.error, message: e.message }), true;
     }
+    /*
+     * TWO DIFFERENT QUESTIONS, and I had them collapsed into one.
+     *
+     *   open           — can THIS signup proceed? Used by LoginPage before it
+     *                    creates a Supabase user, to avoid orphaning one. An
+     *                    invited person on an invite_only city: yes.
+     *   requiresInvite — can a STRANGER sign up? Used to hide login and signup
+     *                    affordances. On an invite_only city: no.
+     *
+     * Reporting only `open` meant a city flipped to invite_only still said
+     * open:true — correct for the pre-check and wrong for every CTA gated on
+     * it, so the flip would have changed nothing anyone could see.
+     */
+    if (status === "invite_only" && !betaCapReached(db)) {
+      return ok(res, { open: true, requiresInvite: true }), true;
+    }
     if (status === "invite_only" && betaCapReached(db)) {
       return ok(res, { open: false, reason: "beta_full", message: BETA_FULL_MESSAGE }), true;
     }
-    return ok(res, { open: true }), true;
+    return ok(res, { open: true, requiresInvite: false }), true;
   }
 
   if (method === "POST" && url.pathname === "/api/accounts") {

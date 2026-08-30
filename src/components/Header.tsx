@@ -26,7 +26,11 @@ function GuestLoginCta() {
   const [signupOpen, setSignupOpen] = useState<boolean | null>(null);
   useEffect(() => {
     let alive = true;
-    void api.getSignupStatus("columbia-mo").then((r) => { if (alive) setSignupOpen(r.ok ? r.data.open : false); });
+    void api.getSignupStatus("columbia-mo").then((r) => {
+      // Same distinction as the marketing page: `open` is true for an invited
+      // person on an invite_only city, and this button is for strangers.
+      if (alive) setSignupOpen(r.ok ? r.data.open && !r.data.requiresInvite : false);
+    });
     return () => { alive = false; };
   }, []);
   if (me?.status === "signed_in") return null;

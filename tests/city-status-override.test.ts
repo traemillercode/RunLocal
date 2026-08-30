@@ -85,3 +85,46 @@ describe("it cannot quietly become permanent", () => {
     expect(cityStatus(db, "columbia-mo")).toBe("active");
   });
 });
+
+describe("open and requiresInvite are different questions", () => {
+  /*
+   * I had these collapsed into one, and the flip exposed it: a city switched to
+   * invite_only still reported open:true, so every CTA gated on it stayed
+   * visible and the flip changed nothing anyone could see.
+   *
+   *   open           — can THIS signup proceed? An invited person on an
+   *                    invite_only city: YES. LoginPage uses this before
+   *                    creating a Supabase user, to avoid orphaning one.
+   *   requiresInvite — can a STRANGER sign up? On invite_only: NO. The header
+   *                    and marketing CTAs use this.
+   *
+   * Collapsing them breaks one of the two, and which one depends on which
+   * answer you pick.
+   */
+  const SERVER = readFileSync(new URL("../src/server/api.ts", import.meta.url).pathname, "utf8");
+  const LOGIN = readFileSync(new URL("../src/pages/LoginPage.tsx", import.meta.url).pathname, "utf8");
+  const MKT = readFileSync(new URL("../src/pages/MarketingPage.tsx", import.meta.url).pathname, "utf8");
+  const HDR = readFileSync(new URL("../src/components/Header.tsx", import.meta.url).pathname, "utf8");
+
+  it("invite_only reports open:true with requiresInvite:true", () => {
+    expect(SERVER).toContain("return ok(res, { open: true, requiresInvite: true }), true;");
+  });
+
+  it("the marketing page and header hide on requiresInvite", () => {
+    for (const [name, src] of [["marketing", MKT], ["header", HDR]] as const) {
+      expect(src, name).toContain("r.data.open && !r.data.requiresInvite");
+    }
+  });
+
+  it("the LoginPage pre-check does NOT — an invited person must not be blocked", () => {
+    /*
+     * The half that would break if this were gated the same way. The pre-check
+     * exists to stop a refused signup orphaning a Supabase user; blocking an
+     * INVITED person there would make every invite link dead on arrival.
+     */
+    const at = LOGIN.indexOf("api.getSignupStatus(");
+    const check = LOGIN.slice(at, at + 320);
+    expect(check).toContain("!status.data.open");
+    expect(check).not.toContain("requiresInvite");
+  });
+});

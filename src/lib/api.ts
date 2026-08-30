@@ -1857,7 +1857,7 @@ export function getPublicGoingCounts(occurrenceIds: string[]): Promise<ApiResult
  * confirmation email. Without this pre-check a refused signup leaves a Supabase
  * identity with no Kimbio account behind it — an orphan needing manual cleanup.
  */
-export function getSignupStatus(cityId: string): Promise<ApiResult<{ open: boolean; reason?: string; message?: string }>> {
+export function getSignupStatus(cityId: string): Promise<ApiResult<{ open: boolean; requiresInvite?: boolean; reason?: string; message?: string }>> {
   return request(`/api/signup-status?city=${encodeURIComponent(cityId)}`);
 }
 

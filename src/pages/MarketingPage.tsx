@@ -111,7 +111,11 @@ function useSignupOpen(): boolean | null {
   useEffect(() => {
     let alive = true;
     void api.getSignupStatus("columbia-mo").then((r) => {
-      if (alive) setOpen(r.ok ? r.data.open : false);
+      // A stranger can sign up only if signup is open AND does not require an
+      // invitation. `open` alone stays true on an invite_only city, because an
+      // INVITED person can still proceed — which is the right answer to a
+      // different question.
+      if (alive) setOpen(r.ok ? r.data.open && !r.data.requiresInvite : false);
     });
     return () => { alive = false; };
   }, []);

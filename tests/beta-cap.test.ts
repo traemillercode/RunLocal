@@ -94,11 +94,12 @@ describe("the gate applies to SIGN-UP only, never SIGN-IN", () => {
   });
 
   it("the server enforces the cap on account creation, not on session creation", async () => {
-    // Appears twice by design: the /api/signup-status pre-check and the
-    // /api/accounts refusal. Both are signup paths. What matters is that
-    // neither is a session route.
+    // Three by design now: /api/signup-status distinguishes invite_only with
+    // capacity (open, requires an invite) from invite_only that is FULL, and
+    // /api/accounts refuses. All three are signup paths. What matters is that
+    // none is a session route.
     const code = readCode(new URL("../src/server/api.ts", import.meta.url));
-    expect(codeCount(code, "betaCapReached(")).toBe(2);
+    expect(codeCount(code, "betaCapReached(")).toBe(3);
     const statusAt = codeIndexOf(code, 'url.pathname === "/api/signup-status"');
     const accountsAt = codeIndexOf(code, 'url.pathname === "/api/accounts"');
     expect(statusAt).toBeGreaterThan(-1);
