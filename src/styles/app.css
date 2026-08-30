@@ -16,7 +16,6 @@
    * from the real measurements rather than a guess:
    *
    *   nav bar        56px  (min-h-14 tabs)
-   *   FAB overhang   28px  (h-14 at top:0, so half protrudes above the bar)
    *   breathing gap  16px
    *   safe area      env(safe-area-inset-bottom), 34px on a notched iPhone
    *
@@ -24,10 +23,14 @@
    * Defined once so changing the nav does not require editing 39 files.
    */
   --page-nav-h: 56px;
-  --page-fab-overhang: 28px;
+  /* FAB overhang term REMOVED with the FAB itself. It reserved 28px for a
+     floating + that no longer exists — every one of its destinations (Forum
+     compose, route upload, log a run, add solo run) already had its own button
+     on the relevant page, so the FAB was redundant as well as visually
+     colliding with the Events tab. */
   --page-bottom-gap: 16px;
   --page-bottom-pad: calc(
-    var(--page-nav-h) + var(--page-fab-overhang) + var(--page-bottom-gap) + env(safe-area-inset-bottom, 0px)
+    var(--page-nav-h) + var(--page-bottom-gap) + env(safe-area-inset-bottom, 0px)
   );
 
   --rl-coral: #FF5741;

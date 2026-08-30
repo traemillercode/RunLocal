@@ -1,10 +1,9 @@
-import { useState } from "react";
+
 import { Link, useLocation } from "react-router-dom";
 import { Icon } from "./ui";
 import { activeForPath, entriesForRole } from "../lib/nav";
 import { useAccount } from "../state/account";
 import { useUnreadMessagesCount } from "../state/unreadMessages";
-import { CreateMenuSheet } from "./CreateMenuSheet";
 
 /**
  * Mobile bottom tab bar — tabs derived from the single nav model
@@ -26,22 +25,12 @@ export function BottomNav() {
   // disabled — a permanently greyed tab teaches people to ignore the bar.
   const tabs = entriesForRole("bottom", role);
   const unreadMessages = useUnreadMessagesCount();
-  const [createOpen, setCreateOpen] = useState(false);
   return (
     <nav
       aria-label="Primary"
       data-tour-target="bottom-nav"
       className="app-shell-nav fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
     >
-      <button
-        type="button"
-        onClick={() => setCreateOpen(true)}
-        aria-label="Create"
-        style={{ transform: "translate(-50%, -78%)" }}
-        className="absolute left-1/2 top-0 z-10 grid h-14 w-14 place-items-center rounded-full bg-[#FF5741] text-[#14171C] shadow-lg ring-4 ring-white active:scale-95"
-      >
-        <Icon name="plus" className="h-6 w-6" />
-      </button>
       <div
         className="mx-auto grid w-full max-w-md px-1"
         style={{ paddingBottom: "env(safe-area-inset-bottom)", gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
@@ -74,7 +63,6 @@ export function BottomNav() {
           );
         })}
       </div>
-      {createOpen ? <CreateMenuSheet onClose={() => setCreateOpen(false)} /> : null}
     </nav>
   );
 }

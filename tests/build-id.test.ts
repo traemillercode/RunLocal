@@ -110,3 +110,49 @@ describe("the build id is visible and the service worker respects it", () => {
     expect(mkt).toContain("<BuildStamp");
   });
 });
+
+describe("no shipped file carries an unreplaced placeholder", () => {
+  /*
+   * TWO instances of the same defect now: VITE_BUILD_ID and sw.js's
+   * __BUILD_ID__, both supplied only by publish.sh — a script Railway never
+   * runs. Each shipped for weeks looking correct, and the sw.js one pinned
+   * stale shells on every device, which produced three unreproducible bug
+   * reports.
+   *
+   * Cheap structural check rather than a build-output check: a __PLACEHOLDER__
+   * left in a file that ships is the shape of the bug, whatever the token.
+   */
+  it("nothing in public/ contains a __TOKEN__ placeholder", () => {
+    const { readdirSync, readFileSync: rf, statSync } = require("node:fs") as typeof import("node:fs");
+    const { join } = require("node:path") as typeof import("node:path");
+    const dir = new URL("../public", import.meta.url).pathname;
+    const offenders: string[] = [];
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      if (!statSync(full).isFile()) continue;
+      if (!/\.(js|json|webmanifest|html|txt|xml)$/.test(name)) continue;
+      const text = rf(full, "utf8");
+      for (const m of text.matchAll(/__[A-Z][A-Z0-9_]{2,}__/g)) {
+        // sw.js legitimately CONTAINS the token as a substitution target; the
+        // build replaces it. What must not happen is shipping it unreplaced,
+        // which is asserted against dist below.
+        if (name === "sw.js" && m[0] === "__BUILD_ID__") continue;
+        offenders.push(`${name}: ${m[0]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("the attribute the padding rule consumes is emitted by the app", () => {
+    /*
+     * The cheap approximation for the gap I could not close: asserting the CSS
+     * rule works given data-has-nav would pass while the attribute is never
+     * set. This checks the OTHER link — that App.tsx emits it — without
+     * rendering the whole app in a test.
+     */
+    const app = readFileSync(new URL("../src/App.tsx", import.meta.url).pathname, "utf8");
+    const css = readFileSync(new URL("../src/styles/app.css", import.meta.url).pathname, "utf8");
+    expect(app).toContain("data-has-nav=");
+    expect(css).toContain("[data-has-nav=");
+  });
+});

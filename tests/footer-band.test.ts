@@ -72,13 +72,16 @@ describe("bottom padding follows the bottom nav, both directions", () => {
   const APP_CSS = readFileSync(new URL("../src/styles/app.css", import.meta.url).pathname, "utf8");
   const APP_TSX = readFileSync(new URL("../src/App.tsx", import.meta.url).pathname, "utf8");
 
-  it("WITH a bottom nav: reserves nav + FAB overhang + gap + safe area", () => {
+  it("WITH a bottom nav: reserves nav + gap + safe area", () => {
     const rule = /\.page-bottom-pad\[data-has-nav="true"\]\s*\{([^}]*)\}/.exec(APP_CSS)?.[1] ?? "";
     expect(rule).toContain("var(--page-bottom-pad)");
     const token = /--page-bottom-pad:\s*calc\(([^;]*)\)/.exec(APP_CSS)?.[1] ?? "";
-    for (const term of ["--page-nav-h", "--page-fab-overhang", "--page-bottom-gap", "safe-area-inset-bottom"]) {
+    for (const term of ["--page-nav-h", "--page-bottom-gap", "safe-area-inset-bottom"]) {
       expect(token).toContain(term);
     }
+    // The FAB overhang term went with the FAB. Asserted absent so it cannot
+    // creep back and silently reserve 28px for a control that no longer exists.
+    expect(token).not.toContain("--page-fab-overhang");
   });
 
   it("WITHOUT a bottom nav: reserves nothing", () => {
