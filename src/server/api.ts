@@ -45,7 +45,7 @@ import {
   sessionAccount,
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
-import { isOwnerEmail } from "./owner";
+import { isOwnerEmail, ownerEmail } from "./owner";
 import { sendEmail } from "./email";
 import { resolveOccurrence, defaultOccurrenceDate, sameEventId, occurrenceAttendeeCount } from "./occurrences";
 import { publicGroups, publicGroup } from "./groups";
@@ -1501,6 +1501,32 @@ async function handleApi(
       phase: "pending_review",
       lastActivityAt: now.toISOString(),
     });
+    /*
+     * TELL THE OWNER. Nothing did.
+     *
+     * addNotification fired outward to the runner on approve and reject, and
+     * nothing told the person who has to act that a submission had arrived. So
+     * a tester verifying at 10pm waited until someone happened to open /admin —
+     * with the reviewer as the bottleneck in their first ten minutes and no way
+     * to know it.
+     *
+     * Same shape as safety reports: intake exists, no reader. Establishing this
+     * BEFORE auto-verify matters, because auto-verify would have concealed the
+     * gap rather than closed it, and it reopens the moment the city does.
+     */
+    const ownerAccount = db.getAccountByEmail(ownerEmail());
+    if (ownerAccount && ownerAccount.id !== rec.id) {
+      db.addNotification({
+        id: newId(),
+        accountId: ownerAccount.id,
+        category: "account_alerts",
+        title: "Verification waiting for review",
+        body: `${rec.name} submitted a selfie for verification.`,
+        createdAt: now.toISOString(),
+        readAt: null,
+        link: { kind: "verify", id: rec.id },
+      });
+    }
     await db.persist();
     // Explicit pending state — no liveness/match claim. Review is manual.
     return ok(res, { status: "pending_review", message: "Selfie received. Your verification is now in manual review — you'll see a Verified badge once approved." }), true;

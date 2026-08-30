@@ -101,6 +101,7 @@ export function AdminPage() {
 
   // pending queue (owner-only)
   const [pending, setPending] = useState<PendingQueueRow[] | null>(null);
+  const pendingCount = pending?.length ?? 0;
   const [queueError, setQueueError] = useState<string | null>(null);
   const [overview, setOverview] = useState<api.AdminOverview | null>(null);
   const [overviewError, setOverviewError] = useState<string | null>(null);
@@ -334,7 +335,23 @@ export function AdminPage() {
     else setOverviewError(r.error.status === 401 ? "Your admin session expired — sign in again." : r.error.message ?? "Could not load the overview.");
   };
 
+  useEffect(() => {
+    // Only for a full admin: a city admin does not review verifications, and
+    // the request would 403 and set a queue error for a section they never see.
+    if (authed && !isCityAdmin) void loadQueue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, isCityAdmin]);
+
   // ---- owner-only pending queue -----------------------------------------
+  /*
+   * Loaded ON MOUNT, not on demand. The count is the reason: a state you have
+   * to go looking for is a state you do not check — the same lesson as the city
+   * status control sitting 80% down the page.
+   *
+   * Someone verifying at 10pm is blocked until the reviewer happens to open the
+   * right section; showing the number at the top costs one request and removes
+   * the "did anything arrive?" question entirely.
+   */
   const loadQueue = async () => {
     setQueueError(null);
     const r = await api.adminPending();
@@ -719,6 +736,24 @@ export function AdminPage() {
         of the way down between sponsor placements and the waitlist, which is
         far enough to scroll past twice.
       */}
+      {/*
+        Surfaced at the top and ONLY when non-zero — a permanent "0 waiting"
+        badge is furniture people stop reading, which defeats the purpose.
+      */}
+      {authed && pendingCount > 0 ? (
+        <a
+          href="#pending"
+          className="mt-4 flex items-center gap-3 rounded-2xl bg-[#FF5741]/10 px-4 py-3 ring-1 ring-[#FF5741]/30"
+        >
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#FF5741] text-[15px] font-extrabold tabular-nums text-[#14171C]">
+            {pendingCount}
+          </span>
+          <span className="flex-1 text-[14px] font-bold text-[#14171C]">
+            {pendingCount === 1 ? "1 person is waiting to be verified" : `${pendingCount} people are waiting to be verified`}
+          </span>
+          <Icon name="chevronRight" className="h-4 w-4 shrink-0 text-[#14171C]/50" />
+        </a>
+      ) : null}
       {authed && <CityStatusAdminSection />}
       <section id="submissions" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
         <h2 className="text-[15px] font-bold text-slate-900">{isCityAdmin ? "City submission queue" : "Submission queue"}</h2>
