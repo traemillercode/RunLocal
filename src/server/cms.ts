@@ -265,7 +265,41 @@ export function seedCmsCities(db: Db): void {
  * decided server-side; every signup / home-city / submission / content path
  * goes through it so validation is never hardcoded to a specific city.
  */
+/**
+ * TEMPORARY OVERRIDE — remove when the admin city-status control works.
+ *
+ * Format: `CITY_STATUS_OVERRIDE=columbia-mo:invite_only`, comma-separated for
+ * several. Takes precedence over both the store and the seed.
+ *
+ * Why this exists: the control is built and correct and something between the
+ * click and the network is eating the request — currently suspected to be a
+ * browser extension wrapping window.fetch. The beta needs to close tonight
+ * regardless, and there is no shell into the container.
+ *
+ * It is deliberately an ENV VAR rather than a second write path: it changes
+ * nothing in the store, so when the control starts working there is no forked
+ * state to reconcile — just a variable to unset. And it is reversible from the
+ * Railway dashboard by anyone with access, which is a better unflip than the
+ * "none until the control works" that was accepted.
+ *
+ * THE RISK IS THAT IT OUTLIVES ITS REASON. A city whose status comes from an
+ * env var will ignore the control once the control works, which would look like
+ * the control being broken again. A guard asserts it is unset in the default
+ * environment so it cannot quietly become permanent.
+ */
+function statusOverride(id: string, env: NodeJS.ProcessEnv = process.env): CmsCityStatus | null {
+  const raw = env.CITY_STATUS_OVERRIDE?.trim();
+  if (!raw) return null;
+  for (const pair of raw.split(",")) {
+    const [cityId, status] = pair.split(":").map((x) => x.trim());
+    if (cityId === id && CITY_STATUSES.includes(status as CmsCityStatus)) return status as CmsCityStatus;
+  }
+  return null;
+}
+
 export function cityStatus(db: Db, id: string): CmsCityStatus | null {
+  const override = statusOverride(id);
+  if (override) return override;
   const c = db.getCity(id);
   if (c) return c.status;
   const seed = CITIES.find((x) => x.id === id);
@@ -345,5 +379,13 @@ export function publicCities(db: Db): PublicCityRow[] {
       accent: null,
     });
   }
-  return [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
+  /*
+   * The override applies HERE too, not just in cityStatus(). Otherwise the
+   * admin control would show "Open" while signup was actually closed — two
+   * sources disagreeing about one fact is the seed/store split that cost a day,
+   * and there is no reason to rebuild it deliberately.
+   */
+  return [...rows.values()]
+    .map((r) => ({ ...r, status: statusOverride(r.id) ?? r.status }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
