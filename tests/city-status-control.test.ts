@@ -219,3 +219,63 @@ describe("writing a seed city does not fork it", () => {
     expect(cityStatus(db, "columbia-mo")).toBe("active");
   });
 });
+
+describe("the handler cannot fail without saying so", () => {
+  /*
+   * THE CLASS Morgan named: the FAB's "Propose a run", the pending RSVP button,
+   * and this control. All three looked live and did nothing, and all three were
+   * invisible in the Network tab — the first place anyone looks, and the one
+   * place that showed nothing at all.
+   *
+   * The guard he asked for — assert a click produces a fetch — needs jsdom and
+   * @testing-library/react, neither of which is installed. Adding two test
+   * dependencies is not something to do unannounced this late in a session, so
+   * this asserts the property that made the failure INVISIBLE rather than the
+   * behaviour itself: no early return may be silent.
+   *
+   * Weaker than the render test and honest about it. The render test is the
+   * right long-term shape and is worth the dependencies when there is room to
+   * add them deliberately.
+   */
+  it("every early return in apply() sets an error first", () => {
+    const CTRL = readCode(new URL("../src/components/CityStatusAdminSection.tsx", import.meta.url));
+    const start = CTRL.indexOf("const apply = async () => {");
+    const end = CTRL.indexOf("setBusy(true);", start);
+    const preflight = CTRL.slice(start, end);
+
+    /*
+     * Scoped to the ENCLOSING BLOCK, not a character window. My first version
+     * looked back 240 characters, which reached into the PREVIOUS branch and
+     * found its setError — so reintroducing a silent return still passed. A
+     * guard that cannot fail is worse than none, and this one proved it by
+     * not failing when I put the bug back.
+     */
+    const blocks = [...preflight.matchAll(/if \([^)]*\) \{([^}]*)\}/g)].map((m) => m[1]);
+    const returning = blocks.filter((b) => /\breturn;/.test(b));
+    expect(returning.length).toBeGreaterThan(0); // else vacuous
+    for (const b of returning) {
+      expect(b, `an early return with no setError in its own block: ${b.trim().slice(0, 60)}`).toContain("setError(");
+    }
+  });
+
+  it("checks the fields saveCity requires before calling it", () => {
+    // A missing name/state/slug returns invalid_city. Saying which field is
+    // missing turns a permissions-looking failure into a data problem.
+    const CTRL = readCode(new URL("../src/components/CityStatusAdminSection.tsx", import.meta.url));
+    expect(CTRL).toContain('(["name", "state", "slug"] as const).filter');
+    expect(CTRL).toContain("is missing ${missing.join");
+  });
+
+  it("clears any previous error before doing anything else", () => {
+    /*
+     * The symptom that identified this: the error text was STALE. If the
+     * handler had run at all, setError(null) would have cleared it — so the
+     * message staying put was the evidence that nothing executed. Clearing
+     * first means the screen can never show an error from a previous attempt.
+     */
+    const CTRL = readCode(new URL("../src/components/CityStatusAdminSection.tsx", import.meta.url));
+    const start = CTRL.indexOf("const apply = async () => {");
+    const body = CTRL.slice(start, start + 900);
+    expect(body.indexOf("setError(null);")).toBeLessThan(body.indexOf("if (!pending)"));
+  });
+});

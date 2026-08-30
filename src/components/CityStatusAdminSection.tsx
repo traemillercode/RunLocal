@@ -58,11 +58,37 @@ export function CityStatusAdminSection() {
   useEffect(load, [load]);
 
   const apply = async () => {
-    if (!pending) return;
-    const city = cities?.find((c) => c.id === pending.id);
-    if (!city) return;
-    setBusy(true);
+    /*
+     * NO SILENT RETURNS. Both guards below used to `return` with no trace: no
+     * request, no state change, no message — and because setError(null) never
+     * ran, whatever error was already on screen STAYED, which reads as "the
+     * click did nothing and the old error is still true".
+     *
+     * That is the same class as the FAB's "Propose a run" and the pending RSVP
+     * button: a control that looks live and does nothing. The shared shape is a
+     * handler whose failure produces no network event, so it is invisible in
+     * the one place anyone would look.
+     *
+     * Neither branch should be reachable. If either fires, saying so is worth
+     * more than failing quietly.
+     */
     setError(null);
+    if (!pending) {
+      setError("Nothing selected to change. Pick a status and try again.");
+      return;
+    }
+    const city = cities?.find((c) => c.id === pending.id);
+    if (!city) {
+      setError(`Couldn't find ${pending.id} in the loaded city list. Reload the page and try again.`);
+      return;
+    }
+    // saveCity is a full upsert: missing any of these returns invalid_city.
+    const missing = (["name", "state", "slug"] as const).filter((k) => typeof city[k] !== "string" || !city[k]);
+    if (missing.length > 0) {
+      setError(`${city.id} is missing ${missing.join(", ")} — saving would be rejected. This is a data problem, not a permissions one.`);
+      return;
+    }
+    setBusy(true);
     /*
      * saveCity requires name, state and slug — it is a full upsert, not a
      * patch. Sending status alone returns invalid_city, so the existing row is
