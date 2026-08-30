@@ -246,14 +246,19 @@ describe("approve / reject transitions", () => {
     const rec = verified(db, "r@x.com");
     const sub = submitRace(db, rec.id, RACE_INPUT, T0);
     if (!sub.ok) throw new Error("submit failed");
-    // Approve without any reason header succeeds and is audited with the system label.
+    // Approve without a reason header succeeds and IS audited — the write is
+    // recorded even though no justification was given. The reason is now empty
+    // rather than a system-invented label: "Routine submission approval" said
+    // nothing except that the blanket requirement had been worked around, and
+    // a log full of that constant is worth less than a log that is honestly
+    // blank where nobody explained themselves.
     const res = decideSubmission(db, asKeyAdmin(login.data.sessionId, undefined), sub.data.id, "approve", T0);
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(db.getSubmission(sub.data.id)!.status).toBe("approved");
       const audit = db.listAudit(20).find((a) => a.action === "admin.submission_approve");
       expect(audit).toBeDefined();
-      expect(audit!.reason).toBe("Routine submission approval");
+      expect(audit!.reason).toBe("");
     }
     // Reject without a reason header is still refused.
     const sub2 = submitRace(db, rec.id, RACE_INPUT, T0);

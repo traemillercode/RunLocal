@@ -71,8 +71,21 @@ export function validReason(reason: string | undefined): boolean {
 /** Routine reads remain audited, but do not require an operator-entered reason.
  * The audit entry uses the given system label when the operator supplied none
  * (an operator-entered reason, when present, is always kept). */
-export function routineAdminCtx(ctx: AdminCtx, label = "Routine admin read"): AdminCtx {
-  return { ...ctx, reason: ctx.reason?.trim() || label };
+/**
+ * DEPRECATED — now a pass-through.
+ *
+ * This existed solely to satisfy the blanket reason requirement: it INVENTED
+ * the string "Routine admin read" so that listing pending accounts or reading
+ * a dashboard would not be rejected. That fake reason then landed in the audit
+ * log, filling it with a constant that recorded nothing about who decided what.
+ *
+ * With the requirement now per-action, routine reads need no reason and should
+ * not be audited. Kept as a pass-through rather than deleted at 23 call sites
+ * in one commit; those drop it as they are touched.
+ */
+export function routineAdminCtx(ctx: AdminCtx, _label?: string): AdminCtx {
+  void _label;
+  return ctx;
 }
 
 export function keyMatches(input: string, expected: string): boolean {
@@ -90,6 +103,134 @@ export function keyMatches(input: string, expected: string): boolean {
  *  2. The owner's signed-in user session — server-side email rule against
  *     RUN_LOCAL_OWNER_EMAIL. Group Leaders / Verified Runners can never pass.
  */
+
+/**
+ * Which admin actions require a written reason.
+ *
+ * THE DEFECT THIS FIXES: authorizeAdmin / authorizeOwner / authorizeScoped all
+ * demanded x-audit-reason unconditionally, but the client sends it on 11 of 75
+ * calls — so 64 admin operations could never succeed. The tool was unusable AND
+ * the audit trail was empty, which is the worst of both: enforced server-side,
+ * absent client-side.
+ *
+ * The rule is not "audit everything". A reason is worth collecting where the
+ * record MATTERS — a decision that is contested, destructive, or shown to the
+ * person it affects. Demanding one to approve a runner or save a setting is
+ * friction that produces a log full of "ok" and teaches operators to type
+ * anything to get past it, which makes the genuine entries worth less.
+ *
+ * DEFAULT IS NOT REQUIRED. A capability added tomorrow will not silently break
+ * its own UI; it will simply not be audited until someone adds it here. That
+ * direction is deliberate — the failure mode of the old default was an admin
+ * tool that could not be used at all.
+ */
+export const REASON_REQUIRED_ACTIONS: ReadonlySet<string> = new Set([
+  // Rejection copy is SHOWN to the applicant (admin.ts reject path), so the
+  // reason is user-facing, not just a log line.
+  "admin.reject",
+  "admin.submission_reject",
+  "admin.undo_rejection",
+
+  // Destructive: removes or conceals someone else's content or account.
+  "admin.purge",
+  "admin.purge_all",
+  "admin.delete",
+  "admin.suspend",
+  "admin.unsuspend",
+  "admin.content_delete",
+  "admin.content_hide",
+  "admin.content_unhide",
+  "admin.content_archive",
+  "admin.discussion_delete",
+  "admin.submission_remove",
+  "admin.event_hide",
+  "admin.event_unhide",
+  "admin.event_archive",
+  "admin.sponsor_delete",
+  "admin.flag_hide",
+
+  // Contested: a judgement another operator may need to understand or reverse.
+  "admin.appeal_uphold",
+  "admin.appeal_reinstate",
+  "admin.safety_report_resolve",
+  "admin.flag_dismiss",
+  "admin.trust_revoke",
+  "admin.trust_grant",
+  "admin.trust_threshold",
+  "admin.invitation_revoke",
+
+  // Overriding another operator, or changing who can operate.
+  "admin.roles_assign",
+  "admin.city_admin_assign",
+  "admin.city_admin_revoke",
+  "admin.content_edit",
+  "admin.discussion_edit",
+  "admin.forum_post_edit",
+  "admin.submission_edit",
+
+  // Privacy-sensitive reads: looking at someone's identity documents should
+  // leave a record even though nothing is written.
+  "admin.view_selfie",
+  "admin.view_credential_proof",
+  "admin.view_record",
+  "admin.export",
+]);
+
+/**
+ * Reads. Auditing an unexplained one records nothing useful — it was the
+ * invented "Routine admin read" constant filling the log before.
+ * Privacy-sensitive reads (view_selfie, view_credential_proof, export) are
+ * deliberately ABSENT: those are audited precisely because looking is the act.
+ */
+const READ_ONLY_ACTIONS: ReadonlySet<string> = new Set([
+  "admin.pending_list", "admin.search", "admin.dashboard", "admin.overview",
+  "admin.audit", "admin.content_list", "admin.event_list", "admin.submission_list",
+  "admin.discussion_list", "admin.trust_list", "admin.appeal_list",
+  "admin.safety_report_list", "admin.login",
+]);
+
+/** True when this action must carry a written reason. */
+export function reasonRequiredFor(action: string): boolean {
+  return REASON_REQUIRED_ACTIONS.has(action);
+}
+
+
+/**
+ * Write an audit entry only when there is something worth recording.
+ *
+ * Under the old blanket requirement every action carried a reason, so every
+ * action was logged — and routine reads were forced through routineAdminCtx(),
+ * which INVENTED the string "Routine admin read" purely to satisfy the check.
+ * The log therefore filled with a constant that recorded nothing.
+ *
+ * Now: an action that requires a reason is audited with it. A routine action
+ * is audited only if the operator volunteered one. A log of real decisions is
+ * worth more than a log of everything, because the everything version is what
+ * nobody reads.
+ */
+function auditIfMeaningful(
+  db: Db,
+  entry: { admin: string; action: AdminAction; reason: string | undefined; targetId: string | null; ip: string | null; cityId?: string | null; owner?: string | null; change?: unknown },
+  now: Date,
+): void {
+  const reason = (entry.reason ?? "").trim();
+  /*
+   * READS with no reason are not recorded. Everything else always is.
+   *
+   * I conflated two questions on the first attempt — whether a reason is
+   * REQUIRED, and whether the action is AUDITED — and skipped the audit for any
+   * unexplained action not in the required set. That silently stopped recording
+   * writes like admin.race_edit and admin.submission_edit, which is a worse
+   * outcome than the bug being fixed: the audit trail is the thing the reason
+   * requirement exists to serve.
+   *
+   * A write is worth recording even when the operator did not say why — THAT it
+   * happened, by whom, to what. An unexplained read is not.
+   */
+  if (READ_ONLY_ACTIONS.has(entry.action) && reason.length === 0) return;
+  db.appendAudit({ ...entry, reason: reason.slice(0, REASON_MAX) } as Parameters<Db["appendAudit"]>[0], now);
+}
+
 export function authorizeAdmin(
   db: Db,
   ctx: AdminCtx,
@@ -97,7 +238,8 @@ export function authorizeAdmin(
   targetId: string | null,
   now = new Date(),
 ): AdminResult<{ admin: string }> {
-  if (!validReason(ctx.reason)) {
+  // Only for actions where the record matters — see REASON_REQUIRED_ACTIONS.
+  if (reasonRequiredFor(action) && !validReason(ctx.reason)) {
     return {
       ok: false,
       status: 400,
@@ -110,11 +252,12 @@ export function authorizeAdmin(
       return { ok: false, status: 503, error: "admin_unconfigured" };
     }
     const admin = adminEmail();
-    db.appendAudit(
+    auditIfMeaningful(
+      db,
       {
         admin,
         action,
-        reason: ctx.reason!.trim().slice(0, REASON_MAX),
+        reason: ctx.reason,
         targetId,
         ip: ctx.ip,
       },
@@ -125,11 +268,12 @@ export function authorizeAdmin(
   const owner = ownerSessionAccount(db, ctx);
   if (owner) {
     const admin = ownerEmail();
-    db.appendAudit(
+    auditIfMeaningful(
+      db,
       {
         admin,
         action,
-        reason: ctx.reason!.trim().slice(0, REASON_MAX),
+        reason: ctx.reason,
         targetId,
         ip: ctx.ip,
       },
@@ -166,23 +310,24 @@ export function authorizeOwner(
   targetId: string | null,
   now = new Date(),
 ): AdminResult<{ admin: string }> {
-  if (!validReason(ctx.reason)) {
+  if (reasonRequiredFor(action) && !validReason(ctx.reason)) {
     return { ok: false, status: 400, error: "reason_required" };
   }
   if (!ownerSessionAccount(db, ctx)) {
     return { ok: false, status: 401, error: "unauthorized" };
   }
   const admin = ownerEmail();
-  db.appendAudit(
-    {
+  auditIfMeaningful(
+      db,
+      {
       admin,
       action,
-      reason: ctx.reason!.trim().slice(0, REASON_MAX),
+      reason: ctx.reason,
       targetId,
       ip: ctx.ip,
-    },
-    now,
-  );
+      },
+      now,
+    );
   return { ok: true, data: { admin } };
 }
 
@@ -263,7 +408,7 @@ export function authorizeScoped(
   now = new Date(),
   opts: ScopedOptions = {},
 ): AdminResult<Authz> {
-  if (!validReason(ctx.reason)) {
+  if (reasonRequiredFor(action) && !validReason(ctx.reason)) {
     return { ok: false, status: 400, error: "reason_required" };
   }
   // 1) Key admin → global.
@@ -273,14 +418,14 @@ export function authorizeScoped(
       return { ok: false, status: 503, error: "admin_unconfigured" };
     }
     const admin = adminEmail();
-    db.appendAudit({ admin, action, reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId, ip: ctx.ip, cityId: opts.auditCity ?? null, owner: opts.owner ?? null, change: opts.change ?? null }, now);
+    auditIfMeaningful(db, { admin, action, reason: ctx.reason, targetId, ip: ctx.ip, cityId: opts.auditCity ?? null, owner: opts.owner ?? null, change: opts.change ?? null }, now);
     return { ok: true, data: { scope: { kind: "global", cityId: null }, admin, accountId: null } };
   }
   // 2) Owner signed-in session → global.
   const owner = ownerSessionAccount(db, ctx);
   if (owner) {
     const admin = ownerEmail();
-    db.appendAudit({ admin, action, reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId, ip: ctx.ip, cityId: opts.auditCity ?? null, owner: opts.owner ?? null, change: opts.change ?? null }, now);
+    auditIfMeaningful(db, { admin, action, reason: ctx.reason, targetId, ip: ctx.ip, cityId: opts.auditCity ?? null, owner: opts.owner ?? null, change: opts.change ?? null }, now);
     return { ok: true, data: { scope: { kind: "global", cityId: null }, admin, accountId: owner.id } };
   }
   // 3) City Admin signed-in session → exactly one city.
@@ -292,7 +437,7 @@ export function authorizeScoped(
       return { ok: false, status: 403, error: "city_scope_denied", message: "Your admin access is scoped to one city only." };
     }
     const admin = user.email;
-    db.appendAudit({ admin, action, reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId, ip: ctx.ip, cityId: opts.auditCity ?? scopeCity, owner: opts.owner ?? null, change: opts.change ?? null }, now);
+    auditIfMeaningful(db, { admin, action, reason: ctx.reason, targetId, ip: ctx.ip, cityId: opts.auditCity ?? scopeCity, owner: opts.owner ?? null, change: opts.change ?? null }, now);
     return { ok: true, data: { scope: { kind: "city", cityId: scopeCity }, admin, accountId: user.id } };
   }
   return { ok: false, status: 401, error: "unauthorized" };
@@ -411,7 +556,7 @@ export function revokeCityAdmin(
     lastActivityAt: now.toISOString(),
   });
   const cityId = rec.adminCityId!;
-  db.appendAudit({ admin: auth.data.admin, action: "admin.city_admin_revoke", reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId: accountId, ip: ctx.ip, cityId }, now);
+  auditIfMeaningful(db, { admin: auth.data.admin, action: "admin.city_admin_revoke", reason: ctx.reason, targetId: accountId, ip: ctx.ip, cityId }, now);
   return { ok: true, data: { accountId } };
 }
 

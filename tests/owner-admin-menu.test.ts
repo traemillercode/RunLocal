@@ -68,11 +68,26 @@ describe("owner super-admin identity (server-side)", () => {
     expect(r.ok).toBe(true);
   });
 
-  it("owner action without a reason is rejected and not audited", () => {
+  it("a ROUTINE owner action needs no reason, and is not audited", () => {
+    // admin.search is a read. Under the old blanket rule this was rejected
+    // with reason_required, which is why 64 of 75 admin calls could never
+    // succeed. It now proceeds — and writes no audit entry, because an
+    // unexplained routine read records nothing worth keeping.
     const db = createMemoryStore();
     const owner = db.createAccount({ name: "Owner", email: DEFAULT_OWNER_EMAIL });
     const session = db.createSession(owner.id, "198.51.100.7", T0);
     const r = authorizeAdmin(db, ctx(null, session.id), "admin.search", null, T0);
+    expect(r.ok).toBe(true);
+    expect(db.listAudit(10)).toHaveLength(0);
+  });
+
+  it("a DESTRUCTIVE owner action without a reason is still rejected", () => {
+    // The half of the old behaviour worth keeping: where the record matters,
+    // the reason is mandatory and nothing happens without it.
+    const db = createMemoryStore();
+    const owner = db.createAccount({ name: "Owner", email: DEFAULT_OWNER_EMAIL });
+    const session = db.createSession(owner.id, "198.51.100.7", T0);
+    const r = authorizeAdmin(db, ctx(null, session.id), "admin.purge", null, T0);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe("reason_required");
     expect(db.listAudit(10)).toHaveLength(0);
@@ -155,7 +170,13 @@ describe("pending-user admin actions", () => {
       expect(json).not.toContain("203.0.113.9");
       expect(json).not.toContain("loginIps");
     }
-    expect(db.listAudit(10).some((a) => a.action === "admin.pending_list")).toBe(false);
+    // The fixture supplies a real reason ("pending queue review"), so recording
+    // it is correct: a routine read is not REQUIRED to carry one, but an
+    // operator who volunteered a justification should have it kept. What used
+    // to be logged here was the invented constant "Routine admin read", which
+    // recorded nothing — that is now absent when no reason is given.
+    const entry = db.listAudit(10).find((a) => a.action === "admin.pending_list");
+    expect(entry?.reason).toBe("pending queue review");
   });
 
   it("cannot approve a user as Verified without the pending_review verification state", () => {

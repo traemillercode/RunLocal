@@ -70,7 +70,12 @@ describe("submission queue approve is routine (no typed reason)", () => {
     expect(audit).toBeDefined();
     expect(audit!.admin).toBe(DEFAULT_OWNER_EMAIL);
     // The reason field is system-labeled, never empty — the trail stays complete.
-    expect(audit!.reason).toBe("Routine submission approval");
+        // Empty, not a system-invented label. These constants ("Routine approval",
+    // "Routine submission approval") existed only to satisfy the old blanket
+    // reason requirement — they recorded that the workaround had run, not why
+    // anyone decided anything. The write is still audited; the reason is
+    // honestly blank where nobody gave one.
+    expect(audit!.reason).toBe("");
   });
 
   it("keeps an operator-entered reason on the audit entry when one is supplied", () => {
@@ -140,7 +145,12 @@ describe("pending-user approve is routine; reject keeps the applicant-facing rea
     expect(db.getAccount(rec.id)!.status).toBe("verified");
     const audit = db.listAudit(10).find((a) => a.action === "admin.approve" && a.targetId === rec.id);
     expect(audit).toBeDefined();
-    expect(audit!.reason).toBe("Routine approval");
+        // Empty, not a system-invented label. These constants ("Routine approval",
+    // "Routine submission approval") existed only to satisfy the old blanket
+    // reason requirement — they recorded that the workaround had run, not why
+    // anyone decided anything. The write is still audited; the reason is
+    // honestly blank where nobody gave one.
+    expect(audit!.reason).toBe("");
   });
 
   it("reject without a reason is refused; with a reason it lands on the account", () => {

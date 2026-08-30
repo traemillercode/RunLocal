@@ -266,22 +266,27 @@ describe("submission withdrawal", () => {
 });
 
 describe("admin audit-log read is routine (no operator reason)", () => {
-  it("adminAuditLog succeeds with a routine (server-generated) reason", () => {
+  it("adminAuditLog succeeds with no reason, and does not log the read itself", () => {
     const db = createMemoryStore();
     const login = adminLogin(db, KEY, "198.51.100.1");
     expect(login.ok).toBe(true);
     const ctx = { userSessionId: null, adminSessionId: login.ok ? login.data.sessionId : "", ip: "198.51.100.1", reason: undefined as unknown as string };
     const res = adminAuditLog(db, ctx, 10);
     expect(res.ok).toBe(true);
-    // The routine read must succeed WITHOUT an operator reason: the read itself
-    // is audited with the server-generated "Routine admin read" reason, and no
-    // reason-required rejection is raised even though ctx.reason is undefined.
+    /*
+     * The routine read succeeds WITHOUT an operator reason — no
+     * reason_required rejection even though ctx.reason is undefined. That is
+     * the half of the split this test exists to protect.
+     *
+     * It no longer finds ITSELF in the log: reading the audit log is a read,
+     * and an unexplained read is not recorded. It previously appeared carrying
+     * the invented constant "Routine admin read", so the log recorded that
+     * someone had looked and nothing about why — noise that made the genuine
+     * entries harder to find.
+     */
     if (res.ok) {
       expect(Array.isArray(res.data)).toBe(true);
-      const read = res.data.find((a) => a.action === "admin.audit");
-      expect(read).toBeTruthy();
-      expect(read!.reason).toBe("Routine admin read");
-      expect(read!.ip).toBe("198.51.100.1");
+      expect(res.data.find((a) => a.action === "admin.audit")).toBeUndefined();
     }
   });
   it("admin /api/admin/audit works without x-audit-reason (routine read)", async () => {

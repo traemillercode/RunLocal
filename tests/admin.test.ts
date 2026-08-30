@@ -72,7 +72,11 @@ describe("admin authorization", () => {
     if (!login.ok) throw new Error("login failed");
     const r = adminSearch(db, ctx(login.data.sessionId), "jordan", T0);
     expect(r.ok).toBe(true);
-    expect(db.listAudit(10).find((a) => a.action === "admin.search")?.reason).toBe("Routine admin read");
+    // admin.search is a READ with no reason given, so nothing is recorded.
+    // It used to be logged with the invented constant "Routine admin read",
+    // which existed only to satisfy the old blanket requirement and told a
+    // future reader nothing about who decided what.
+    expect(db.listAudit(10).find((a) => a.action === "admin.search")).toBeUndefined();
   });
 
   it("pending queue is owner-only and routine access needs no user reason", () => {
@@ -219,7 +223,12 @@ describe("admin authorization", () => {
       expect(db.getAccount(rec.id)!.status).toBe("verified");
       const audit = db.listAudit(20).find((a) => a.action === "admin.approve" && a.targetId === rec.id);
       expect(audit).toBeDefined();
-      expect(audit!.reason).toBe("Routine approval");
+          // Empty, not a system-invented label. These constants ("Routine approval",
+    // "Routine submission approval") existed only to satisfy the old blanket
+    // reason requirement — they recorded that the workaround had run, not why
+    // anyone decided anything. The write is still audited; the reason is
+    // honestly blank where nobody gave one.
+      expect(audit!.reason).toBe("");
     }
     // An operator-entered reason is kept on the audit entry.
     const rec2 = db.createAccount({ name: "B", email: "b@x.com" });

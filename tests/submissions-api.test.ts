@@ -207,8 +207,12 @@ describe("admin submission queue + decisions over HTTP", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ title: "River 5K", submitterName: "Runner" });
     expect(fake2.body).not.toContain("example.com");
-    // the routine read is still audited with the server-generated reason
-    expect(db.listAudit(10).some((a) => a.action === "admin.submission_list")).toBe(true);
+    // The routine read is NOT audited when no reason is given. It previously
+    // logged a server-generated constant, which recorded that someone loaded a
+    // queue and nothing about why — noise that buried the real decisions. The
+    // APPROVE below still is audited, because a write is worth recording even
+    // unexplained.
+    expect(db.listAudit(10).some((a) => a.action === "admin.submission_list")).toBe(false);
     // approve is routine too: no reason header needed, still audited
     const id = rows[0]!.id;
     const { res: res3, fake: fake3 } = makeRes();
@@ -217,7 +221,12 @@ describe("admin submission queue + decisions over HTTP", () => {
     expect((JSON.parse(fake3.body) as { ok: boolean }).ok).toBe(true);
     const approveAudit = db.listAudit(20).find((a) => a.action === "admin.submission_approve" && a.targetId === id);
     expect(approveAudit).toBeDefined();
-    expect(approveAudit!.reason).toBe("Routine submission approval");
+        // Empty, not a system-invented label. These constants ("Routine approval",
+    // "Routine submission approval") existed only to satisfy the old blanket
+    // reason requirement — they recorded that the workaround had run, not why
+    // anyone decided anything. The write is still audited; the reason is
+    // honestly blank where nobody gave one.
+    expect(approveAudit!.reason).toBe("");
     // ...but a REJECT decision without a reason is still rejected
     const { cookie: cookie2 } = verifiedUser(db, "runner2@example.com");
     const { res: res0, fake: fake0 } = makeRes();

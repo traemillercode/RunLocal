@@ -85,11 +85,22 @@ describe("owner dashboard authorization", () => {
     if (!r.ok) expect(r.error).toBe("unauthorized");
   });
 
-  it("every dashboard action requires a reason and is not audited without one", () => {
+  it("an unauthenticated dashboard read is refused, and audits nothing", () => {
+    /*
+     * Was "every dashboard action requires a reason". The reason requirement is
+     * now per-action (REASON_REQUIRED_ACTIONS): reading the dashboard is
+     * routine and demanding a written justification for it produced a log full
+     * of "ok" while making the tool unusable.
+     *
+     * The call here passes NO credentials, so the honest failure is
+     * `unauthorized`. It previously reported `reason_required` — the missing
+     * reason was checked first and masked the fact that the caller was not an
+     * admin at all, which is a worse error message for the same rejection.
+     */
     const db = createMemoryStore();
     const r = dashboardOverview(db, ctx(null, null), CITY, T0);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe("reason_required");
+    if (!r.ok) expect(r.error).toBe("unauthorized");
     expect(db.listAudit(10)).toHaveLength(0);
   });
 });
