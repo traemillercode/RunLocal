@@ -42,6 +42,33 @@ function downscaleToDataUrl(video: HTMLVideoElement, mirror: boolean): string {
   // mirrored, that would flip any text or scene backwards.
   if (mirror) { ctx.translate(w, 0); ctx.scale(-1, 1); }
   ctx.drawImage(video, 0, 0, w, h);
+
+  /*
+   * REFUSE A BLANK FRAME RATHER THAN RETURN ONE.
+   *
+   * The captured data URL is BOTH the preview and the submitted image — the
+   * same string is rendered at line ~171 and passed to onCapture. So a black
+   * preview is not a display bug: it means verification received a black
+   * selfie, and the runner had no way to tell.
+   *
+   * readyState >= 2 and videoWidth > 0 are not sufficient on every device: the
+   * dimensions are known before the first frame is actually decoded, so the
+   * draw can legitimately produce an empty canvas. Sampling is the only way to
+   * know what actually landed.
+   *
+   * Sparse grid rather than every pixel — a full scan of a 1024px image is
+   * ~4M reads on a phone, and 64 points is plenty to tell "a photo" from
+   * "nothing". Near-black rather than exactly black, since sensor noise in a
+   * dark room is not pure zero.
+   */
+  const sample = ctx.getImageData(0, 0, w, h).data;
+  const step = Math.max(4, Math.floor((w * h) / 64) * 4);
+  let lit = 0;
+  for (let i = 0; i < sample.length; i += step) {
+    if (sample[i] > 12 || sample[i + 1] > 12 || sample[i + 2] > 12) lit++;
+  }
+  if (lit === 0) throw new Error("blank frame");
+
   return canvas.toDataURL("image/jpeg", SELFIE_JPEG_QUALITY);
 }
 
@@ -121,7 +148,12 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo",
 
   const capture = useCallback(() => {
     const video = videoRef.current;
-    if (!video || video.videoWidth === 0 || video.readyState < 2) {
+    /*
+     * currentTime > 0 as well as readyState: dimensions and readyState can both
+     * report ready before the first frame has been presented, which is the
+     * window where drawImage yields a blank canvas.
+     */
+    if (!video || video.videoWidth === 0 || video.readyState < 2 || video.currentTime === 0) {
       setErrorDetail("The camera preview is not ready yet. Please wait a moment and try again.");
       return;
     }
@@ -130,11 +162,18 @@ export function CameraCapture({ onCapture, onCancel, confirmLabel = "Use photo",
       setCapturedUrl(dataUrl);
       setStatus("captured");
       stopTracks();
-    } catch {
+    } catch (e) {
+      // A blank frame is retryable — the camera is working, the timing was off.
+      // Marking it "unavailable" would send someone away from a step they can
+      // complete by pressing the button again.
+      if ((e as Error).message === "blank frame") {
+        setErrorDetail("That photo came out blank. Give the camera a second to focus and try again.");
+        return;
+      }
       setStatus("unavailable");
       setErrorDetail("Could not capture the camera image on this device.");
     }
-  }, [stopTracks]);
+  }, [stopTracks, mirror]);
 
   return (
     <div className="space-y-4">

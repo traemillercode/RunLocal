@@ -109,6 +109,22 @@ function Shell() {
   const [cityOpen, setCityOpen] = useState(false);
   const location = useLocation();
   const noNav = NO_NAV_PATHS.has(location.pathname) || (location.pathname === "/sponsor" || location.pathname.startsWith("/sponsor/"));
+  /*
+   * THE PRIVATE-BETA PAGE IS A DOOR, NOT A SHELL.
+   *
+   * It rendered inside the app chrome, so a stranger on /races saw the message
+   * "Kimbio is in a private beta" beside the full member sidebar — Home,
+   * Events, Races, Routes, Groups, Forum, with an active state on Races and
+   * every link leading back to the same page. That undercuts hiding Log in and
+   * Sign up from the header while rendering an entire app navigation next to
+   * them.
+   *
+   * Returned BEFORE Header, DesktopSidebar and BottomNav so none of them mount.
+   */
+  const showPrivateBeta =
+    me?.status !== "signed_in" && !shouldBypassGeofence({ pathname: location.pathname, signedIn: false });
+  if (showPrivateBeta) return <PrivateBetaPage />;
+
   return (
     <div className="min-h-dvh bg-[#f7f7f5] text-slate-900">
       <Header city={city} onOpenCitySheet={() => setCityOpen(true)} />
@@ -122,9 +138,6 @@ function Shell() {
               not an error (nothing broke). Checked BEFORE the geofence so the
               honest reason wins over the geographic one.
             */}
-            {me?.status !== "signed_in" && !shouldBypassGeofence({ pathname: location.pathname, signedIn: false }) ? (
-              <PrivateBetaPage />
-            ) : (
             <GeofenceGate
               city={city}
               bypass={shouldBypassGeofence({
@@ -212,15 +225,18 @@ function Shell() {
             </Routes>
             </Suspense>
             </GeofenceGate>
-            )}
           </PublicContentProvider>
         </ModeratedProvider>
       </main>
       {/*
-        On every app page, below the content and above the nav. Marketing has
-        its own footer and carries it there.
+        App pages only. Marketing carries its own inside the dark footer — this
+        one rendered there TOO, as a second copy in a light strip below it.
+        Keyed on the same expression as full-bleed so the two cannot disagree
+        about which page is showing.
       */}
-      <div className="mx-auto max-w-md px-4 pb-2 text-center"><BuildStamp /></div>
+      {!(location.pathname === "/" && me?.status !== "signed_in") ? (
+        <div className="mx-auto max-w-md px-4 pb-2 text-center"><BuildStamp /></div>
+      ) : null}
       {!noNav ? <BottomNav /> : null}
       <TourHost />
       <CitySheet
