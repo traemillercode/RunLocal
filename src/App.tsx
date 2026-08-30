@@ -112,7 +112,7 @@ function Shell() {
     <div className="min-h-dvh bg-[#f7f7f5] text-slate-900">
       <Header city={city} onOpenCitySheet={() => setCityOpen(true)} />
       <DesktopSidebar city={city} onOpenCitySheet={() => setCityOpen(true)} />
-<main key={location.pathname} className={`desktop-main page-bottom-pad${location.pathname === "/" && me?.status !== "signed_in" ? " full-bleed" : ""}`}>        <ModeratedProvider cityId={city.id}>
+<main key={location.pathname} data-has-nav={!noNav} className={`desktop-main page-bottom-pad${location.pathname === "/" && me?.status !== "signed_in" ? " full-bleed" : ""}`}>        <ModeratedProvider cityId={city.id}>
           <PublicContentProvider cityId={city.id}>
             {/*
               CLOSED BETA. A signed-out visitor reaching any route that is not

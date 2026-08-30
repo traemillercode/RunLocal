@@ -27,8 +27,11 @@ describe("nothing paper can show on a marketing view", () => {
     expect(rule).toContain("background:#14161a");
   });
 
-  it("cause 2 — no bottom-nav padding is reserved where there is no bottom nav", () => {
-    expect(APP).toContain(".page-bottom-pad:has(.marketing-page)");
+  it("cause 2 — bottom-nav padding is reserved only where a nav exists", () => {
+    // This asserted :has(.marketing-page), which was the WRONG key — the
+    // marketing page does render a bottom nav. See the both-directions block
+    // below; the padding now follows data-has-nav.
+    expect(APP).toContain('.page-bottom-pad[data-has-nav="false"]');
   });
 
   it("cause 3 — the body itself is ink while a marketing page is mounted", () => {
@@ -51,5 +54,49 @@ describe("nothing paper can show on a marketing view", () => {
     for (const rule of [footer, body, page]) {
       expect(rule.toLowerCase().replace(/\s/g, "")).toContain("#14161a");
     }
+  });
+});
+
+describe("bottom padding follows the bottom nav, both directions", () => {
+  /*
+   * BOTH ASSERTIONS, because this flipped once already.
+   *
+   * The first conditional keyed on :has(.marketing-page) — and "/" is NOT in
+   * NO_NAV_PATHS, so the marketing page renders a bottom nav after all. Zeroing
+   * its padding put the bar over the last ~100px of the footer: the same
+   * symptom as the original bug, produced by the fix for it.
+   *
+   * A one-directional test would have passed the whole time. Hence one
+   * assertion each way, as specified.
+   */
+  const APP_CSS = readFileSync(new URL("../src/styles/app.css", import.meta.url).pathname, "utf8");
+  const APP_TSX = readFileSync(new URL("../src/App.tsx", import.meta.url).pathname, "utf8");
+
+  it("WITH a bottom nav: reserves nav + FAB overhang + gap + safe area", () => {
+    const rule = /\.page-bottom-pad\[data-has-nav="true"\]\s*\{([^}]*)\}/.exec(APP_CSS)?.[1] ?? "";
+    expect(rule).toContain("var(--page-bottom-pad)");
+    const token = /--page-bottom-pad:\s*calc\(([^;]*)\)/.exec(APP_CSS)?.[1] ?? "";
+    for (const term of ["--page-nav-h", "--page-fab-overhang", "--page-bottom-gap", "safe-area-inset-bottom"]) {
+      expect(token).toContain(term);
+    }
+  });
+
+  it("WITHOUT a bottom nav: reserves nothing", () => {
+    const rule = /\.page-bottom-pad\[data-has-nav="false"\]\s*\{([^}]*)\}/.exec(APP_CSS)?.[1] ?? "";
+    expect(rule.replace(/\s/g, "")).toContain("padding-bottom:0");
+  });
+
+  it("keys off the SAME value that decides whether the nav renders", () => {
+    /*
+     * The root fix. Keying on the page identity let the two disagree about
+     * whether a bar exists; keying both on `noNav` makes that impossible.
+     */
+    expect(APP_TSX).toContain("data-has-nav={!noNav}");
+    expect(APP_TSX).toContain("{!noNav ? <BottomNav /> : null}");
+  });
+
+  it("does not decide padding by page identity", () => {
+    // The specific mistake, guarded so it cannot come back by the same route.
+    expect(APP_CSS).not.toContain(".page-bottom-pad:has(.marketing-page)");
   });
 });

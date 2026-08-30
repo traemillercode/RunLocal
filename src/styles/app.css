@@ -225,5 +225,18 @@ input[type="number"] {
  * separate bugs producing one white band, which is why it survived four
  * reports: fixing either alone leaves the band.
  */
-.page-bottom-pad { padding-bottom: var(--page-bottom-pad); }
-.page-bottom-pad:has(.marketing-page) { padding-bottom: 0; }
+/*
+ * Keyed on WHETHER THE NAV RENDERS, not on which page it is.
+ *
+ * The first version keyed on :has(.marketing-page), which was wrong in both
+ * directions: "/" is not in NO_NAV_PATHS, so the marketing page DOES render a
+ * bottom nav — and zeroing its padding put the bar over the last ~100px of the
+ * footer. Meanwhile the rule looked correct in isolation, which is why the
+ * regression survived a measurement.
+ *
+ * The shell now sets data-has-nav on <main> from the same `noNav` value that
+ * decides whether <BottomNav> renders, so the padding and the bar cannot
+ * disagree about whether a bar exists.
+ */
+.page-bottom-pad[data-has-nav="true"] { padding-bottom: var(--page-bottom-pad); }
+.page-bottom-pad[data-has-nav="false"] { padding-bottom: 0; }
