@@ -27,7 +27,14 @@ function whenLabel(e: DatedRunEvent): string {
   return `${dow} · ${e.time}`;
 }
 
-export function MarketingLiveBoard({ city }: { city: City }) {
+export function MarketingLiveBoard({ city, linkToEvents = true }: { city: City; linkToEvents?: boolean }) {
+  /*
+   * linkToEvents=false during the closed beta. The board still shows real runs
+   * — that is the proof the community exists, and it is the whole reason the
+   * board is the hero — but "See the full calendar" would send a stranger to
+   * the private-beta page. Showing the runs is honest; offering a door that
+   * opens onto "we're not open" is not.
+   */
   const [canonical, setCanonical] = useState<api.CanonicalEvent[] | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
 
@@ -103,7 +110,7 @@ export function MarketingLiveBoard({ city }: { city: City }) {
             ? `${city.groups.length} local run ${city.groups.length === 1 ? "club" : "clubs"} post their weekly runs here.`
             : "Local run clubs post their weekly runs here."}
         </p>
-        <Link to="/events" className="marketing-text-link">See the full calendar <span aria-hidden="true">→</span></Link>
+        {linkToEvents ? <Link to="/events" className="marketing-text-link">See the full calendar <span aria-hidden="true">→</span></Link> : null}
       </div>
     );
   }
@@ -157,12 +164,14 @@ export function MarketingLiveBoard({ city }: { city: City }) {
       {/* Fewer than three is honest rather than padded — three placeholder
           slots would advertise emptiness the way a half-full leaderboard does. */}
       {weekEvents.length > featured.length ? (
+        linkToEvents ? (
         <Link to="/events" className="marketing-text-link">
           See all {weekEvents.length} runs this week <span aria-hidden="true">→</span>
         </Link>
-      ) : (
+        ) : null
+      ) : linkToEvents ? (
         <Link to="/events" className="marketing-text-link">See the full calendar <span aria-hidden="true">→</span></Link>
-      )}
+      ) : null}
     </div>
   );
 }

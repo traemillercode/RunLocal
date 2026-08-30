@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import * as api from "../lib/api";
 import { MarketingLiveBoard } from "../components/MarketingLiveBoard";
 import { CITIES } from "../data/cities";
 import { Icon } from "../components/ui";
@@ -76,7 +77,35 @@ const EXPLORE_LINKS: { to: string; label: string; icon: IconName; blurb: string 
   .filter((f) => f.reach.kind === "nav" && f.nav && f.roles.includes("guest") && isPublicReadPath(f.route))
   .map((f) => ({ to: f.route, label: f.nav!.label, icon: f.nav!.icon, blurb: EXPLORE_BLURBS[f.route] ?? f.summary }));
 
+/**
+ * Is signup open? Driven by the server so the page follows the CMS the moment
+ * the city is flipped to invite_only — no build flag, nothing to redeploy.
+ * Defaults to open while loading: briefly showing a CTA that disappears beats
+ * briefly telling an invited person the door is shut.
+ */
+function useSignupOpen(): boolean | null {
+  /*
+   * null while loading, and the page renders NEITHER state until it resolves.
+   *
+   * Both defaults are wrong. Defaulting open flashes "Create your account" at a
+   * stranger who cannot have one — on an ad-driven page, that is the worst
+   * possible half-second. Defaulting closed flashes "private beta" at everyone
+   * once the beta opens. Rendering nothing costs one frame of a slightly
+   * shorter hero and tells nobody anything untrue.
+   */
+  const [open, setOpen] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void api.getSignupStatus("columbia-mo").then((r) => {
+      if (alive) setOpen(r.ok ? r.data.open : false);
+    });
+    return () => { alive = false; };
+  }, []);
+  return open;
+}
+
 function MarketingNav() {
+  const signupOpen = useSignupOpen();
   const [exploreOpen, setExploreOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -112,8 +141,17 @@ function MarketingNav() {
           ) : null}
         </div>
         <a href="#how-it-works">How it works</a>
-        <Link to="/login" className="marketing-nav-loglink">Log in</Link>
-        <Link to="/login?mode=signup" className="marketing-nav-cta">Sign up</Link>
+        {/*
+          Hidden, not removed. /login stays reachable by direct URL so invite
+          links (/login?mode=signup&invite=…) still work and the owner can sign
+          in — but a closed beta should not advertise a door that will not open.
+        */}
+        {signupOpen === true ? (
+          <>
+            <Link to="/login" className="marketing-nav-loglink">Log in</Link>
+            <Link to="/login?mode=signup" className="marketing-nav-cta">Sign up</Link>
+          </>
+        ) : null}
       </nav>
 
       {/* Mobile: previously nothing rendered here at all except Sign up - a real hamburger with real destinations instead. */}
@@ -148,8 +186,12 @@ function MarketingNav() {
             <Icon name="spark" className="h-5 w-5" /> How it works
           </a>
           <div className="marketing-mobile-menu-actions">
-            <Link to="/login" onClick={() => setMobileOpen(false)} className="marketing-button marketing-button-light">Log in</Link>
-            <Link to="/login?mode=signup" onClick={() => setMobileOpen(false)} className="marketing-button marketing-button-primary">Sign up</Link>
+            {signupOpen === true ? (
+              <>
+                <Link to="/login" onClick={() => setMobileOpen(false)} className="marketing-button marketing-button-light">Log in</Link>
+                <Link to="/login?mode=signup" onClick={() => setMobileOpen(false)} className="marketing-button marketing-button-primary">Sign up</Link>
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -159,6 +201,8 @@ function MarketingNav() {
 }
 
 export function MarketingPage() {
+  const signupOpen = useSignupOpen();
+
   return (
     <div className="marketing-page">
       <MarketingNav />
@@ -187,18 +231,36 @@ export function MarketingPage() {
             MANY RUNS ARE SCHEDULED: a heavier week would have pushed the CTA
             further down, so the fix is structural rather than a size tweak.
           */}
-          <div className="marketing-actions">
-            <Link to="/login?mode=signup" className="marketing-button marketing-button-primary">Create your account</Link>
-            <Link to="/events" className="marketing-button marketing-button-light">Browse public events <span aria-hidden="true">↗</span></Link>
-          </div>
-          <p className="marketing-note-warm">No login needed to look around.</p>
-          {/* Terms and privacy sit BESIDE the signup action, because that is
-              where consent actually happens and where a reasonable person
-              looks for them — not only in a footer 5,000px below. */}
-          <p className="marketing-consent-line">
-            By creating an account you agree to our <Link to="/legal#terms">Terms</Link> and <Link to="/legal#privacy">Privacy Policy</Link>.
-          </p>
-          {city ? <MarketingLiveBoard city={city} /> : null}
+          {/*
+            During the closed beta a stranger has NO path to an account, and the
+            page says so instead of offering buttons that fail. "Browse public
+            events" goes too — /events is no longer public, so it would land on
+            the private-beta page, which is a dead end dressed as an invitation.
+          */}
+          {signupOpen === true ? (
+            <>
+              <div className="marketing-actions">
+                <Link to="/login?mode=signup" className="marketing-button marketing-button-primary">Create your account</Link>
+                <Link to="/events" className="marketing-button marketing-button-light">Browse public events <span aria-hidden="true">↗</span></Link>
+              </div>
+              <p className="marketing-note-warm">No login needed to look around.</p>
+              <p className="marketing-consent-line">
+                By creating an account you agree to our <Link to="/legal#terms">Terms</Link> and <Link to="/legal#privacy">Privacy Policy</Link>.
+              </p>
+            </>
+          ) : signupOpen === false ? (
+            <div className="marketing-actions">
+              <a href="mailto:hello@getkimbio.com?subject=Kimbio%20beta" className="marketing-button marketing-button-primary">
+                Email us for a spot
+              </a>
+            </div>
+          ) : null}
+          {signupOpen === false ? (
+            <p className="marketing-note-warm">
+              Kimbio is in a private beta with a small group in Columbia. We&apos;re opening up soon.
+            </p>
+          ) : null}
+          {city ? <MarketingLiveBoard city={city} linkToEvents={signupOpen === true} /> : null}
         </section>
 
         <section className="marketing-gallery" aria-labelledby="gallery-title">

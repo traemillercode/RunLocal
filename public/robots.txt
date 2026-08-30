@@ -1,0 +1,16 @@
+# Kimbio — CLOSED BETA.
+#
+# Only the landing page and legal are indexable. Everything else requires a
+# session, so a crawler would reach the private-beta page and index eleven
+# routes of "we're not open yet" as though they were the product.
+#
+# This deliberately narrows the D2 public-read set for the duration of the
+# beta. Restore the fuller set alongside prerendering (roadmap 2.12) — an
+# indexable route is only worth having once a crawler sees content rather than
+# an empty <div id="root">.
+User-agent: *
+Allow: /$
+Allow: /legal
+Disallow: /
+
+Sitemap: https://getkimbio.com/sitemap.xml

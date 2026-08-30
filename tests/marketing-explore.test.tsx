@@ -52,9 +52,16 @@ describe("Explore offers only reachable destinations", () => {
     expect(walled).toEqual([]);
   });
 
-  it("Events points at /events, not at the marketing page itself", () => {
-    expect(html).toContain('href="/events"');
-    // The specific bug: a guest clicking Events reloaded the page they were on.
+  it("never points Events at the marketing page itself", () => {
+    /*
+     * The original bug was Events → "/", which for a guest IS this page, so
+     * clicking it reloaded where you already were.
+     *
+     * The positive half ("/events is offered") no longer holds during the
+     * closed beta — the whole menu is empty because nothing is public. What
+     * survives is the invariant: whatever IS offered must never be the page the
+     * visitor is standing on.
+     */
     const exploreEventsLinksToRoot = /href="\/"[^>]*>\s*(<[^>]*>\s*)*Events/.test(html);
     expect(exploreEventsLinksToRoot).toBe(false);
   });
@@ -78,19 +85,20 @@ describe("Explore offers only reachable destinations", () => {
     .filter((f) => f.reach.kind === "nav" && f.nav && f.roles.includes("guest") && isPublicReadPath(f.route))
     .map((f) => f.route);
 
-  it("derives Groups, which is public and was missing from the hand-written list", () => {
-    expect(derived).toContain("/groups");
+  it("offers nothing during the closed beta, because nothing is public", () => {
+    /*
+     * The derivation filters on isPublicReadPath, and the beta reduces that set
+     * to nothing — so Explore correctly empties rather than offering four links
+     * that all land on the private-beta page.
+     *
+     * That is the derivation earning itself: a hand-written menu would still be
+     * advertising /events today, and someone would have had to remember.
+     */
+    expect(derived).toEqual([]);
   });
 
-  it("derives /events, never the marketing page itself", () => {
-    expect(derived).toContain("/events");
-    expect(derived).not.toContain("/");
-  });
-
-  it("cannot derive a walled destination", () => {
-    expect(derived.length).toBeGreaterThan(0);
+  it("still cannot derive a walled destination", () => {
+    // The invariant survives the set changing size — that is the point of it.
     for (const route of derived) expect(isPublicReadPath(route)).toBe(true);
-    // The specific regression: /forum was offered and is member-only.
-    expect(derived).not.toContain("/forum");
   });
 });

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Landing page and legal only, for the closed beta. Event, group, race and
+  route URLs return the private-beta page to a signed-out crawler, so listing
+  them would advertise a shut door in search results.
+
+  Expand with prerendering (roadmap 2.12), when those routes render real
+  content to a crawler rather than an empty root element.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://getkimbio.com/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://getkimbio.com/legal</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>

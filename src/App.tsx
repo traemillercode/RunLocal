@@ -23,6 +23,7 @@ const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default:
 const EventsPage = lazy(() => import("./pages/EventsPage").then((m) => ({ default: m.EventsPage })));
 import { DiscoverEventsPage } from "./pages/DiscoverEventsPage";
 import { HomePage } from "./pages/HomePage";
+import { PrivateBetaPage } from "./pages/PrivateBetaPage";
 const EventDetailPage = lazy(() => import("./pages/EventDetailPage").then((m) => ({ default: m.EventDetailPage })));
 const ForumPage = lazy(() => import("./pages/ForumPage").then((m) => ({ default: m.ForumPage })));
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
@@ -113,6 +114,16 @@ function Shell() {
       <DesktopSidebar city={city} onOpenCitySheet={() => setCityOpen(true)} />
 <main key={location.pathname} className={`desktop-main page-bottom-pad${location.pathname === "/" && me?.status !== "signed_in" ? " full-bleed" : ""}`}>        <ModeratedProvider cityId={city.id}>
           <PublicContentProvider cityId={city.id}>
+            {/*
+              CLOSED BETA. A signed-out visitor reaching any route that is not
+              public sees the private-beta page — not the geofence wall (which
+              says "wrong place", untrue for someone who followed a link) and
+              not an error (nothing broke). Checked BEFORE the geofence so the
+              honest reason wins over the geographic one.
+            */}
+            {me?.status !== "signed_in" && !shouldBypassGeofence({ pathname: location.pathname, signedIn: false }) ? (
+              <PrivateBetaPage />
+            ) : (
             <GeofenceGate
               city={city}
               bypass={shouldBypassGeofence({
@@ -200,6 +211,7 @@ function Shell() {
             </Routes>
             </Suspense>
             </GeofenceGate>
+            )}
           </PublicContentProvider>
         </ModeratedProvider>
       </main>

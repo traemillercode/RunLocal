@@ -44,11 +44,29 @@ const EXACT_BYPASS = new Set([
  *                   is exactly why this matches prefixes explicitly rather than
  *                   treating everything under /events as public
  */
+/*
+ * ═══ D2 PARTIALLY REVERSED FOR THE CLOSED BETA ═══
+ *
+ * D2 decided event data is public read with gated writes, and item A of this
+ * build implemented it: /events, /groups, /races and /routes all bypassed the
+ * geofence for a signed-out visitor.
+ *
+ * That is right for launch and wrong for a closed beta about to be ADVERTISED.
+ * A stranger arriving from an ad should read the landing page and understand
+ * the door is shut — not browse a half-populated app they cannot join, and not
+ * have Google index eleven routes of it as though the product were open.
+ *
+ * REVERSED, NOT DELETED, and recorded here rather than done silently: the
+ * prefixes below are commented out, not removed, so restoring D2 when the beta
+ * opens is uncommenting a list rather than rediscovering a decision. It goes
+ * back with 2.12, when prerendering makes public routes worth indexing.
+ */
 const PUBLIC_READ_PREFIXES = [
-  "/events",
-  "/groups",
-  "/races",
-  "/routes",
+  // Restore these when the beta opens (D2, roadmap 2.12):
+  // "/events",
+  // "/groups",
+  // "/races",
+  // "/routes",
 ] as const;
 
 /** Paths under a public prefix that are NOT public — write surfaces. */

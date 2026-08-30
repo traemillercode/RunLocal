@@ -16,10 +16,18 @@ describe("public marketing landing page", () => {
     // when the live board became the hero — so it failed for describing a page
     // that no longer existed rather than for anything being wrong. Marketing
     // copy is expected to change; these four are what the page is FOR.
-    expect(html).toContain("Columbia, MO");        // the city is named
-    expect(html).toContain("/events");             // a guest can browse without signing up
-    expect(html).toContain("/login?mode=signup");  // a guest can convert
-    expect(html).toContain("marketing-live-board"); // the board is present (1.4)
+    /*
+     * Two of these were "a guest can browse" and "a guest can convert". Neither
+     * holds during the closed beta and both are correct again when it opens —
+     * the page now renders NEITHER state until /api/signup-status resolves, so
+     * a static render shows the neutral middle.
+     *
+     * What must hold in every mode: the city is named and the board is present.
+     * Those are what the page is FOR, and they do not depend on whether the
+     * door is open.
+     */
+    expect(html).toContain("Columbia, MO");
+    expect(html).toContain("marketing-live-board");
   });
 
   it("never advertises a provider integration that does not exist", () => {

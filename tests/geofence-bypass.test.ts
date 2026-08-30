@@ -13,18 +13,21 @@ import { shouldBypassGeofence, isPublicReadPath } from "../src/lib/geofenceBypas
 const guest = (pathname: string) => shouldBypassGeofence({ pathname, signedIn: false });
 const member = (pathname: string) => shouldBypassGeofence({ pathname, signedIn: true });
 
-describe("D2 public read routes bypass the geofence", () => {
-  it("lets an out-of-area guest browse events, groups, races, and routes", () => {
-    // The reported bug: all four are linked from the marketing page's Explore
-    // menu, and all four bounced an out-of-area visitor back to marketing.
-    for (const p of ["/events", "/groups", "/races", "/routes"]) {
-      expect(guest(p)).toBe(true);
-    }
-  });
-
-  it("extends to detail pages, since a guest who can see the list can see one item", () => {
-    for (const p of ["/events/tuesday-tempo", "/groups/ctc", "/routes/mkt-trail"]) {
-      expect(guest(p)).toBe(true);
+describe("D2 public read is SUSPENDED for the closed beta", () => {
+  /*
+   * These asserted the opposite until the beta flip, and both versions are
+   * correct for their moment. D2 (public read, gated writes) is right for
+   * launch and wrong for a closed beta about to be advertised: a stranger
+   * arriving from an ad should read the landing page and understand the door
+   * is shut, not browse a half-populated app they cannot join.
+   *
+   * The prefixes are COMMENTED OUT in geofenceBypass.ts rather than deleted,
+   * so restoring this is uncommenting a list. It goes back with prerendering
+   * (roadmap 2.12). See tests/closed-beta.test.ts for the posture as a whole.
+   */
+  it("app routes are not public during the beta", () => {
+    for (const p of ["/events", "/groups", "/races", "/routes", "/events/tuesday-tempo", "/groups/ctc"]) {
+      expect(guest(p)).toBe(false);
     }
   });
 });
@@ -42,8 +45,11 @@ describe("write surfaces stay walled, even under a public prefix", () => {
   it("does not leak group management or rosters", () => {
     expect(guest("/groups/ctc/manage")).toBe(false);
     expect(guest("/groups/ctc/roster")).toBe(false);
-    // But the group's public page still is public.
-    expect(guest("/groups/ctc")).toBe(true);
+    // The group's public page is ALSO walled during the beta. The exclusion
+    // below is what still matters when D2 is restored: management and rosters
+    // must stay private even once /groups/:id is public again.
+    expect(isPublicReadPath("/groups/ctc/manage")).toBe(false);
+    expect(isPublicReadPath("/groups/ctc/roster")).toBe(false);
   });
 
   it("keeps personal and member-only surfaces walled", () => {
@@ -119,10 +125,10 @@ describe("public event detail exposes no identities (D2)", () => {
     expect(discussionHandler).toContain("participant_required");
   });
 
-  it("the public going-count endpoint remains the only unauthenticated attendance source", () => {
-    // /api/events/public-summary is counts-only and leak-tested separately.
-    // If a second unauthenticated attendance endpoint ever appears, that test
-    // will not cover it — this is the reminder that it must.
-    expect(isPublicReadPath("/events/tuesday-tempo")).toBe(true);
+  it("event detail is not publicly reachable during the beta", () => {
+    // Was asserting the opposite. /api/events/public-summary is still
+    // counts-only and still leak-tested; what changed is that no signed-out
+    // visitor reaches the page that would consume it.
+    expect(isPublicReadPath("/events/tuesday-tempo")).toBe(false);
   });
 });
