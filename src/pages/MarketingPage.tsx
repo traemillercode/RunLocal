@@ -401,7 +401,20 @@ export function MarketingPage() {
         </section>
         <section className="marketing-final" aria-labelledby="final-title">
           <h2 id="final-title">Make your next run<br /><em>a local one.</em></h2>
-          <Link to="/login?mode=signup" className="marketing-button marketing-button-primary">Join Kimbio <span aria-hidden="true">↗</span></Link>
+          {/*
+            The FOURTH signup surface, and the one I missed — header, mobile
+            menu and hero were all gated and this closing CTA was not. It had no
+            visible text matching "sign up" or "create account", so it survived
+            every check that looked for those words. Found by listing every
+            href containing "login" rather than by searching for copy.
+          */}
+          {signupOpen === true ? (
+            <Link to="/login?mode=signup" className="marketing-button marketing-button-primary">Join Kimbio <span aria-hidden="true">↗</span></Link>
+          ) : (
+            <a href="mailto:hello@getkimbio.com?subject=Kimbio%20beta" className="marketing-button marketing-button-primary">
+              Email us for a spot <span aria-hidden="true">↗</span>
+            </a>
+          )}
         </section>
       </main>
       <footer className="marketing-footer">

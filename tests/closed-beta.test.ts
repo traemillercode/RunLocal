@@ -123,3 +123,26 @@ describe("no login affordance survives anywhere while the beta is closed", () =>
     for (const src of [header, marketing]) expect(src).toContain('getSignupStatus("columbia-mo")');
   });
 });
+
+describe("EVERY signup surface is gated, not the ones with obvious copy", () => {
+  /*
+   * Four surfaces carry a path to signup: the header, the mobile menu, the hero
+   * and the closing CTA. I gated three and missed the fourth, because its text
+   * is "Join Kimbio" — it matched no search for "sign up" or "create account".
+   *
+   * Found by enumerating every href containing "login" on the rendered page
+   * rather than by searching for copy. Asserted the same way here: count the
+   * LINKS, not the words.
+   */
+  it("no /login link renders in the marketing tree without a signupOpen gate", () => {
+    const src = readCode(new URL("../src/pages/MarketingPage.tsx", import.meta.url));
+    const links = [...src.matchAll(/to="\/login[^"]*"/g)];
+    expect(links.length).toBeGreaterThan(0); // else vacuous
+    for (const m of links) {
+      // Each must sit inside a signupOpen === true branch. Look back far enough
+      // to clear the surrounding comment block.
+      const before = src.slice(Math.max(0, m.index! - 900), m.index!);
+      expect(before, `ungated /login link at ${m.index}`).toContain("signupOpen === true");
+    }
+  });
+});
