@@ -81,8 +81,15 @@ function MarketingNav() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <header className="marketing-header">
-      <a href="#top" className="marketing-logo" aria-label="Kimbio home"><span>KIM</span>BIO</a>
+    <div className="marketing-header-sticky">
+      <header className="marketing-header">
+      {/* Icon + wordmark as one lockup. The mark exists (public/favicon.svg — the
+            coral tile with the two-stroke glyph) and appeared on no page, which
+            made the most recognisable brand asset absent from the product. */}
+        <a href="#top" className="marketing-logo-lockup" aria-label="Kimbio home">
+          <img src="/favicon.svg" alt="" className="marketing-logo-mark" width={26} height={26} />
+          <span className="marketing-logo"><span>KIM</span>BIO</span>
+        </a>
 
       {/* Desktop: a real dropdown with actual destinations, not just an anchor-scroll link. */}
       <nav aria-label="Marketing navigation" className="marketing-nav marketing-nav-desktop">
@@ -123,7 +130,10 @@ function MarketingNav() {
       {mobileOpen ? (
         <div className="marketing-mobile-menu" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="marketing-mobile-menu-header">
-            <span className="marketing-logo"><span>KIM</span>BIO</span>
+            <span className="marketing-logo-lockup">
+              <img src="/favicon.svg" alt="" className="marketing-logo-mark" width={26} height={26} />
+              <span className="marketing-logo"><span>KIM</span>BIO</span>
+            </span>
             <button type="button" aria-label="Close menu" onClick={() => setMobileOpen(false)} className="marketing-mobile-menu-close">
               <Icon name="close" className="h-5 w-5" />
             </button>
@@ -144,6 +154,7 @@ function MarketingNav() {
         </div>
       ) : null}
     </header>
+    </div>
   );
 }
 
@@ -166,12 +177,28 @@ export function MarketingPage() {
         <section className="marketing-hero-live" aria-labelledby="hero-title">
           <h1 id="hero-title">People who actually show up.</h1>
           <p className="marketing-lede-warm">Real group runs in Columbia — who's going, where, and when.</p>
-          {city ? <MarketingLiveBoard city={city} /> : null}
+          {/*
+            THE ASK COMES BEFORE THE EVIDENCE.
+            Measured live at 390x844 the CTA sat at top 814 with the cookie
+            banner occupying 692-844 — below the fold AND underneath the banner.
+            Measuring it without the banner said it was clear, which is the
+            combination failing rather than either part.
+            Ordering it above the board also stops the fold depending on HOW
+            MANY RUNS ARE SCHEDULED: a heavier week would have pushed the CTA
+            further down, so the fix is structural rather than a size tweak.
+          */}
           <div className="marketing-actions">
             <Link to="/login?mode=signup" className="marketing-button marketing-button-primary">Create your account</Link>
             <Link to="/events" className="marketing-button marketing-button-light">Browse public events <span aria-hidden="true">↗</span></Link>
           </div>
           <p className="marketing-note-warm">No login needed to look around.</p>
+          {/* Terms and privacy sit BESIDE the signup action, because that is
+              where consent actually happens and where a reasonable person
+              looks for them — not only in a footer 5,000px below. */}
+          <p className="marketing-consent-line">
+            By creating an account you agree to our <Link to="/legal#terms">Terms</Link> and <Link to="/legal#privacy">Privacy Policy</Link>.
+          </p>
+          {city ? <MarketingLiveBoard city={city} /> : null}
         </section>
 
         <section className="marketing-gallery" aria-labelledby="gallery-title">
@@ -267,7 +294,8 @@ export function MarketingPage() {
           <a href="https://facebook.com/getkimbio" target="_blank" rel="noopener noreferrer" aria-label="Kimbio on Facebook">Facebook</a>
           <a href="https://instagram.com/getkimbio" target="_blank" rel="noopener noreferrer" aria-label="Kimbio on Instagram">Instagram</a>
           <Link to="/sponsor">Sponsor Kimbio</Link>
-          <Link to="/legal">Terms &amp; Privacy</Link>
+          <Link to="/legal#terms">Terms</Link>
+          <Link to="/legal#privacy">Privacy</Link>
         </span>
       </footer>
     </div>

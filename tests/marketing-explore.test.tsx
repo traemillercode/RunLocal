@@ -37,9 +37,16 @@ describe("Explore offers only reachable destinations", () => {
       p === "/" ||
       p === "/login" ||
       p.startsWith("/login?") ||
+      // Terms and Privacy are now separate anchored links, and they appear
+      // beside the signup CTA as well as in the footer — consent belongs where
+      // the action is, not only 5,000px below it.
       p === "/legal" ||
+      p.startsWith("/legal#") ||
       p === "/sponsor" ||
-      p.startsWith("/sponsor/");
+      p.startsWith("/sponsor/") ||
+      // Static assets are not destinations. The brand mark is an <img src>,
+      // not somewhere a visitor can be sent.
+      /\.(svg|png|jpe?g|webp|ico)$/.test(p);
 
     const walled = offeredPaths().filter((p) => !allowed(p));
     expect(walled).toEqual([]);

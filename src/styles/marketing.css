@@ -58,13 +58,17 @@
 .marketing-collage-copy .marketing-actions { justify-content: center; }
 @media(min-width: 780px) { .marketing-collage-grid { grid-template-columns: 1.4fr 1fr; align-items: stretch; } .marketing-collage-side { grid-template-columns: 1fr; } .marketing-collage-main { aspect-ratio: auto; } .marketing-collage-side > img { aspect-ratio: auto; height: 100%; } }
 
-.marketing-gallery { max-width: 1180px; margin: auto; padding: 40px 24px 96px; text-align: center; }
-.marketing-gallery h2 { font-size: clamp(28px, 5vw, 44px); font-weight: 800; letter-spacing: -.03em; margin: 8px auto 32px; max-width: 560px; }
+.marketing-gallery { max-width: 1180px; margin: auto; padding: 40px 24px 96px; text-align: left; }
+.marketing-gallery h2 { font-size: clamp(28px, 5vw, 44px); font-weight: 800; letter-spacing: -.03em; margin: 8px 0 32px; max-width: 560px; }
 .marketing-gallery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .marketing-gallery-item { border-radius: 16px; overflow: hidden; position: relative; margin: 0; aspect-ratio: 1/1; }
 .marketing-gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .marketing-gallery-item figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 12px 10px; background: linear-gradient(0deg, rgba(0,0,0,0.75), transparent); color: #fff; font-size: 12px; font-weight: 700; text-align: left; }
-@media(min-width: 700px) { .marketing-gallery-grid { grid-template-columns: repeat(3, 1fr); } }
+/* Was repeat(3, 1fr) with only two images, which computed a phantom third
+   column and left the pair visibly off-axis. auto-fit follows the content, so
+   the grid cannot disagree with how many photos exist — the same class of bug
+   as a hardcoded grid-cols-N beside a variable tab count. */
+@media(min-width: 700px) { .marketing-gallery-grid { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); } }
 
 /* --- Hero v2: centered card over full-bleed photos (Strava-style), fixed
    explicit heights throughout so nothing can silently collapse to zero the
@@ -144,7 +148,10 @@
   max-width: 16ch;
 }
 .marketing-hero-live .marketing-lede-warm { margin: 0 0 30px; max-width: 46ch; }
-.marketing-hero-live .marketing-actions { margin-top: 30px; justify-content: flex-start; }
+.marketing-hero-live .marketing-actions { margin-top: 0; justify-content: flex-start; }
+/* Consent links live next to the signup action, not only in the footer. */
+.marketing-consent-line { margin: 12px 0 26px; font-size: 12px; color: #97999e; }
+.marketing-consent-line a { color: #d5d6d8; text-decoration: underline; text-underline-offset: 2px; }
 
 /* The board IS the product's card: ink surface, coral gutter, no float. */
 .marketing-live-board {
@@ -213,4 +220,32 @@
      96px rail against the title. */
   .marketing-live-item { flex-direction: column; gap: 4px; }
   .marketing-live-when { min-width: 0; }
+}
+
+/* ── Sticky header ─────────────────────────────────────────────────────────
+   The page is ~5,500px and the header was position:static, so from the second
+   screen onward there was no way back and no CTA anywhere. Sticky gives both,
+   and it solves the fold problem from the other direction: a coral CTA is
+   always present regardless of where the hero's own button lands.
+
+   Wrapper is sticky rather than .marketing-header itself, because that element
+   is max-width constrained and centred — sticking it would leave the page
+   showing through either side of it as it travelled. */
+.marketing-header-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(20, 22, 26, 0.92);
+  backdrop-filter: saturate(140%) blur(10px);
+  border-bottom: 1px solid #3a3d42;
+}
+.marketing-header-sticky .marketing-header { border-bottom: 0; }
+
+/* Brand lockup: the icon appears on no page today, which makes the most
+   recognisable asset absent from the product. */
+.marketing-logo-lockup { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; }
+.marketing-logo-mark { height: 26px; width: 26px; border-radius: 7px; display: block; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .marketing-header-sticky { transition: padding 160ms ease; }
 }
