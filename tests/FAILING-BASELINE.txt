@@ -1,0 +1,21 @@
+# Test files with KNOWN failures. CI fails on any change to this list —
+# a new file appearing (something broke) or one disappearing (something was
+# fixed and the baseline was not updated in the same commit).
+#
+# Not a target to reach zero on. These are real, tracked defects; a gate that
+# demanded zero would be red permanently and would therefore be ignored.
+#
+# To update: run `bun run test`, take the FAIL lines, and rewrite this list in
+# the same commit as the change that moved it.
+#
+# 21 individual failures across these 10 files as of this commit.
+tests/asset-quality-gate.test.ts
+tests/cms-admin.test.ts
+tests/copy-truthfulness.test.tsx
+tests/desktop-layout-hardening.test.tsx
+tests/desktop-layout.test.ts
+tests/header-auth.test.tsx
+tests/provider-availability.test.ts
+tests/settings-notifications.test.tsx
+tests/trust-api.test.ts
+tests/username-ui.test.tsx

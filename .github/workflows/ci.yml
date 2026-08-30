@@ -1,0 +1,43 @@
+name: CI
+
+# Every push to the launch branch, and every PR into it. The guards are the
+# point: ~15 structural assertions built over this cycle only ever ran when
+# someone remembered to run them locally, which is most of their value gone.
+on:
+  push:
+    branches: [mvp/columbia-launch]
+  pull_request:
+    branches: [mvp/columbia-launch]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Bun, not Node — the suite runs under Bun locally and a different
+      # runtime would be testing something other than what ships.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - run: bun install --frozen-lockfile
+
+      # Typecheck first: it is the fastest signal and catches the most.
+      - name: Typecheck
+        run: bun run typecheck
+
+      # Tee the output — the baseline check reads it, and a human reading the
+      # log needs it too. `|| true` because a non-zero exit here is EXPECTED:
+      # the suite has known failures, and the baseline check is what decides.
+      - name: Test
+        run: bun run test 2>&1 | tee /tmp/test-output.txt || true
+
+      - name: Compare against the failing baseline
+        run: node scripts/check-baseline.mjs /tmp/test-output.txt
+
+      # Build last: slowest, and a typecheck failure already caught most of
+      # what would break it.
+      - name: Build
+        run: bun run build
