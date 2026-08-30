@@ -64,3 +64,49 @@ describe("build id", () => {
     expect(resolve({ RAILWAY_GIT_COMMIT_SHA: "abc123def456789" })).toHaveLength(12);
   });
 });
+
+describe("the build id is visible and the service worker respects it", () => {
+  /*
+   * THREE bug reports could not be reproduced because the reporter and the
+   * tester were looking at different code with no way to tell. Both halves of
+   * that are fixed here: the id is on screen, and stale shells stop happening.
+   */
+  it("sw.js is stamped at BUILD TIME, not by publish.sh", () => {
+    /*
+     * THE ACTUAL BUG behind the non-reproductions. sw.js shipped
+     * `const BUILD_ID = "__BUILD_ID__"` — a placeholder replaced by publish.sh,
+     * which Railway does not run. So the cache name was the literal string
+     * "runlocal-shell-__BUILD_ID__" on every deploy: it never changed, the
+     * activate handler's cleanup never matched, and a returning visitor kept
+     * their first-visit shell indefinitely.
+     *
+     * Identical to the VITE_BUILD_ID defect — a value supplied only by a script
+     * the deploy platform never executes.
+     */
+    const config = readFileSync(new URL("../vite.config.ts", import.meta.url).pathname, "utf8");
+    expect(config).toContain("kimbio-stamp-sw");
+    expect(config).toContain("__BUILD_ID__");
+    expect(config).toContain("dist/sw.js");
+  });
+
+  it("the cache name derives from the build id, so activate can evict", () => {
+    const sw = readFileSync(new URL("../public/sw.js", import.meta.url).pathname, "utf8");
+    expect(sw).toContain("runlocal-shell-${BUILD_ID}");
+    // The cleanup only works if old cache names differ from the current one.
+    expect(sw).toContain('key.startsWith("runlocal-shell-") && key !== CACHE');
+  });
+
+  it("a stamp component exists and reads the build id", () => {
+    const stamp = readFileSync(new URL("../src/components/BuildStamp.tsx", import.meta.url).pathname, "utf8");
+    expect(stamp).toContain("VITE_BUILD_ID");
+  });
+
+  it("it renders on app pages AND on marketing", () => {
+    // Every page, as asked — a tester is stuck inside the app, not on the
+    // landing page, when they need to read it out.
+    const app = readFileSync(new URL("../src/App.tsx", import.meta.url).pathname, "utf8");
+    const mkt = readFileSync(new URL("../src/pages/MarketingPage.tsx", import.meta.url).pathname, "utf8");
+    expect(app).toContain("<BuildStamp />");
+    expect(mkt).toContain("<BuildStamp");
+  });
+});

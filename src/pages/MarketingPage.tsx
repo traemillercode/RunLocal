@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import * as api from "../lib/api";
+import { BuildStamp } from "../components/BuildStamp";
 import { MarketingLiveBoard } from "../components/MarketingLiveBoard";
 import { CITIES } from "../data/cities";
 import { Icon } from "../components/ui";
@@ -352,6 +353,7 @@ export function MarketingPage() {
       <footer className="marketing-footer">
         <span>KIMBIO</span>
         <span>Columbia, MO · Launch city</span>
+        <BuildStamp className="!text-[#6b6e73]" />
         <span className="marketing-footer-links">
           <a href="https://facebook.com/getkimbio" target="_blank" rel="noopener noreferrer" aria-label="Kimbio on Facebook">Facebook</a>
           <a href="https://instagram.com/getkimbio" target="_blank" rel="noopener noreferrer" aria-label="Kimbio on Instagram">Instagram</a>

@@ -5,6 +5,7 @@ import { installRageClickDetector, useRouteTelemetry } from "./lib/friction";
 import { FeedbackLauncher } from "./components/FeedbackSheet";
 import { shouldBypassGeofence } from "./lib/geofenceBypass";
 import { BottomNav } from "./components/BottomNav";
+import { BuildStamp } from "./components/BuildStamp";
 import { CitySheet, Header } from "./components/Header";
 import { DesktopSidebar } from "./components/DesktopSidebar";
 import { CITIES } from "./data/cities";
@@ -215,6 +216,11 @@ function Shell() {
           </PublicContentProvider>
         </ModeratedProvider>
       </main>
+      {/*
+        On every app page, below the content and above the nav. Marketing has
+        its own footer and carries it there.
+      */}
+      <div className="mx-auto max-w-md px-4 pb-2 text-center"><BuildStamp /></div>
       {!noNav ? <BottomNav /> : null}
       <TourHost />
       <CitySheet

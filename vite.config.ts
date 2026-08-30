@@ -3,6 +3,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { execSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 /**
  * Every deployed bundle must carry a build id. It's the Sentry release, the
@@ -41,7 +43,35 @@ export default defineConfig({
     // guaranteed present in the bundle regardless of how the build was invoked.
     "import.meta.env.VITE_BUILD_ID": JSON.stringify(BUILD_ID),
   },
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    /*
+     * Stamp the service worker with the real build id.
+     *
+     * sw.js shipped `const BUILD_ID = "__BUILD_ID__"` — a placeholder replaced
+     * by publish.sh, which Railway never runs. So the cache name was the
+     * literal string "runlocal-shell-__BUILD_ID__" on EVERY deploy: it never
+     * changed, the activate handler's cleanup never matched anything, and a
+     * returning visitor kept the shell from their first visit indefinitely.
+     *
+     * That is why three reported bugs could not be reproduced. The reporter
+     * always had fresh HTML; a real user had a shell from twelve builds ago.
+     *
+     * Identical defect to VITE_BUILD_ID: a value supplied only by a script the
+     * deploy platform does not execute. Fixed the same way — at build time,
+     * where it cannot be skipped.
+     */
+    {
+      name: "kimbio-stamp-sw",
+      closeBundle() {
+        const swPath = resolve(__dirname, "dist/sw.js");
+        if (!existsSync(swPath)) return;
+        const src = readFileSync(swPath, "utf8");
+        writeFileSync(swPath, src.replace(/__BUILD_ID__/g, BUILD_ID));
+      },
+    },
+  ],
   server: {
     host: "0.0.0.0",
     port: 5173,
