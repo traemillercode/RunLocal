@@ -1,3 +1,4 @@
+import { errorCopy } from "./errorCopy";
 /**
  * Typed client for the Kimbio API (/api/*, same origin).
  *
@@ -16,7 +17,18 @@ export class ApiError extends Error {
     public readonly code: string,
     message?: string,
   ) {
-    super(message ?? code);
+    /*
+     * THE ONE LINE THAT LEAKED CODES TO USERS. This was `message ?? code`, so
+     * any of the server's 189 codes without an explicit message printed its own
+     * name — a signed-out visitor on /groups saw a pink box reading
+     * `sign_in_required`.
+     *
+     * Fixed here rather than at the 47 places that render an error, because a
+     * chokepoint covers a code added tomorrow without touching a page. Pages
+     * convert to richer, action-bearing states as they are touched; this
+     * guarantees none of them can print machine output in the meantime.
+     */
+    super(errorCopy(code, message));
   }
 }
 

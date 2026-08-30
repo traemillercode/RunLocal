@@ -24,8 +24,16 @@ describe("auth error normalization regressions", () => {
 
   it.each([
     ["empty API body", "", "request_failed", "Something went wrong. Please try again."],
-    ["malformed JSON", "{not-json", "invalid_response", "invalid_response"],
-    ["object-valued API message", JSON.stringify({ error: "server_failed", message: {} }), "server_failed", "server_failed"],
+    // These two expected the CODE as the message, which was the leak itself:
+    // ApiError used to do `message ?? code`, so an unmapped code printed its own
+    // name. Both now expect human copy. Note the other three rows in this table
+    // already did — the table was internally inconsistent about whether a code
+    // was acceptable output.
+    // This path supplies its OWN sentence, which beats the generic fallback —
+    // the map fills gaps rather than overriding a handler that said something
+    // specific.
+    ["malformed JSON", "{not-json", "invalid_response", "The server returned an invalid response. Please try again."],
+    ["object-valued API message", JSON.stringify({ error: "server_failed", message: {} }), "server_failed", "Something went wrong. Please try again."],
     ["empty API object", "{}", "request_failed", "Something went wrong. Please try again."],
     ["empty object API message", JSON.stringify({ message: {} }), "request_failed", "Something went wrong. Please try again."],
   ])("normalizes %s without object stringification", async (_label, body, code, message) => {

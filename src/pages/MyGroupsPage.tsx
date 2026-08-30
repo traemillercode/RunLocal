@@ -39,9 +39,20 @@ export function MyGroupsContent() {
   const [led, setLed] = useState<api.LedGroupRow[]>([]);
   const [events, setEvents] = useState<api.CanonicalEvent[]>([]);
   const [error, setError] = useState("");
+  /*
+   * Signed-out is not an ERROR, it is a STATE — and it has an obvious action.
+   * Rendering it as a red box (previously containing the literal string
+   * `sign_in_required`) told the visitor something went wrong and gave them
+   * nowhere to go. Third time this exact dead-end pattern has come up.
+   */
+  const [needsSignIn, setNeedsSignIn] = useState(false);
   const [openingChatFor, setOpeningChatFor] = useState<string | null>(null);
   const load = () => {
-    void api.getMyGroups().then((r) => (r.ok ? setMemberships(r.data.memberships) : setError(r.error.message)));
+    void api.getMyGroups().then((r) => {
+      if (r.ok) { setMemberships(r.data.memberships); return; }
+      if (r.error.code === "sign_in_required") { setNeedsSignIn(true); return; }
+      setError(r.error.message);
+    });
     void api.getMyWaivers().then((r) => r.ok && setWaivers(r.data.waivers));
     if (me) void api.getMyLedGroups().then((r) => r.ok && setLed(r.data.groups));
   };
@@ -62,7 +73,18 @@ export function MyGroupsContent() {
   };
   return <>
     <LedGroupsSection groups={led} />
-    {error ? <p role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p> : memberships.length === 0 ? <div className="mt-6 rounded-2xl bg-white p-5 text-slate-600">You are not a member of any groups yet. Browse the Discover tab to request access.</div> : <div className="mt-6 grid gap-3">{memberships.filter((m) => m.status !== "left" && m.status !== "revoked").map((m) => {
+    {needsSignIn ? (
+      <div className="mt-6 rounded-2xl bg-white p-5 ring-1 ring-slate-200/70">
+        <p className="text-[15px] font-bold text-slate-900">Sign in to see your clubs</p>
+        <p className="mt-1 text-[13px] text-slate-500">Your memberships, waivers and group chats live here.</p>
+        <Link to="/login" className="mt-3 flex h-11 items-center justify-center rounded-xl bg-[#14171C] text-[14px] font-bold text-white">
+          Sign in
+        </Link>
+        <Link to="/groups" className="mt-2 block text-center text-[13px] font-bold text-[#FF5741]">
+          Browse clubs instead →
+        </Link>
+      </div>
+    ) : error ? <p role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p> : memberships.length === 0 ? <div className="mt-6 rounded-2xl bg-white p-5 text-slate-600">You are not a member of any groups yet. Browse the Discover tab to request access.</div> : <div className="mt-6 grid gap-3">{memberships.filter((m) => m.status !== "left" && m.status !== "revoked").map((m) => {
       const nextRun = events.filter((e) => e.groupId === m.groupId && e.status === "published" && !e.hidden).sort((a, b) => a.dayOfWeek - b.dayOfWeek)[0];
       return (
       <div key={m.id} className="rounded-2xl bg-white p-5 shadow-sm border border-neutral-200/80"><Link to={`/groups/${m.groupId}`} className="text-lg font-bold">{m.groupName}</Link><p className="mt-1 text-sm capitalize text-slate-600">Membership: {m.status}</p>
