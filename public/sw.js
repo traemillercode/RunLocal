@@ -17,8 +17,46 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.pathname.startsWith("/uploads/")) return;
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).then((response) => { caches.open(CACHE).then((cache) => cache.put(`${BASE}index.html`, response.clone())); return response; }).catch(() => caches.match(`${BASE}index.html`)));
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          /*
+           * CLONE SYNCHRONOUSLY, BEFORE RETURNING.
+           *
+           * This used to clone INSIDE the caches.open().then() callback. That
+           * callback runs asynchronously — by the time it fires, `return
+           * response` has already handed the body to the browser and it is
+           * spent, so clone() throws "Response body is already used". The throw
+           * is an unhandled rejection inside the worker, and from the page's
+           * side the fetch simply rejects: a real network failure, caused by
+           * the proxy in front of it.
+           *
+           * Shipped 22 August, so it predates today and is a candidate for the
+           * earlier reports that could not be reproduced — a fetch failing
+           * intermittently depending on which paths the worker intercepts looks
+           * exactly like "things aren't showing".
+           */
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(`${BASE}index.html`, copy)).catch(() => {});
+          return response;
+        })
+        .catch(() => caches.match(`${BASE}index.html`)),
+    );
     return;
   }
-  event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => { if (response.ok) caches.open(CACHE).then((cache) => cache.put(request, response.clone())); return response; })));
+  event.respondWith(
+    caches.match(request).then(
+      (cached) =>
+        cached ||
+        fetch(request).then((response) => {
+          // Same ordering rule as the navigate branch above: clone before the
+          // body can be consumed, never inside an async callback.
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
+          }
+          return response;
+        }),
+    ),
+  );
 });

@@ -713,6 +713,13 @@ export function AdminPage() {
       ) : null}
 
       {/* Admin submission queue — owner, key admin, or scoped City Admin */}
+      {/*
+        FIRST, above the pending queue. It is the most consequential switch on
+        the page — it decides whether anyone can join at all — and it was ~80%
+        of the way down between sponsor placements and the waitlist, which is
+        far enough to scroll past twice.
+      */}
+      {authed && <CityStatusAdminSection />}
       <section id="submissions" className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
         <h2 className="text-[15px] font-bold text-slate-900">{isCityAdmin ? "City submission queue" : "Submission queue"}</h2>
         <p className="mt-0.5 text-xs text-slate-500">
@@ -759,6 +766,13 @@ export function AdminPage() {
           </ul>
         )}
       </section>
+
+      {/*
+        FIRST, above everything. It is the most consequential switch on the page
+        — it decides whether anyone can create an account at all — and it was
+        ~80% down between sponsor placements and the waitlist, where it was
+        scrolled past twice.
+      */}
 
       {/* Admin content management — Global Admin (any city) or City Admin
           (server-enforced own city only) */}
@@ -1033,7 +1047,6 @@ export function AdminPage() {
       {authed && !isCityAdmin && <EventCmsSection />}
       {authed && !isCityAdmin && <GlobalAdminSection />}
       {authed && !isCityAdmin && <SponsorsAdminSection cityId="columbia-mo" reason={reason} />}
-      {authed && <CityStatusAdminSection />}
       {authed && <WaitlistAdminSection />}
       {authed && <InvitationsAdminSection cityId="columbia-mo" />}
       {authed && !isCityAdmin && <GeofenceAllowlistSection reason={reason} />}
