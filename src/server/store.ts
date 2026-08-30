@@ -585,8 +585,27 @@ export class Db {
     await rename(tmp, file);
   }
 
-  getNotificationPreferences(accountId: string) { return this.notificationPreferences.get(accountId) ?? { accountId, run_reminders:false, community_updates:false, account_alerts:false, messages:true, updatedAt:this.now().toISOString() }; }
-  setNotificationPreferences(accountId: string, patch: Partial<Pick<import("./types").NotificationPreferenceRecord,"run_reminders"|"community_updates"|"account_alerts"|"messages">>) { const next={...this.getNotificationPreferences(accountId),...patch,accountId,updatedAt:this.now().toISOString()}; this.notificationPreferences.set(accountId,next); return next; }
+  /*
+   * DEFAULTS, and three of four were off.
+   *
+   * account_alerts:false meant an approved invitee was never told they were
+   * approved — the exact moment they are sitting there waiting. The app sent
+   * nothing, the list stayed empty, and the reasonable conclusion is that it is
+   * broken.
+   *
+   * account_alerts is TRANSACTIONAL: approvals, rejections, safety outcomes.
+   * Nobody opts out of being told their verification succeeded, any more than
+   * they opt out of a password reset — offering a toggle implies it is a
+   * preference and it is not. Defaulted true and excluded from the patch
+   * allowlist so it cannot be turned off.
+   *
+   * run_reminders is the highest-retention message an events product has, and a
+   * genuine preference — true by default, toggleable.
+   *
+   * community_updates stays off: it is the one that is actually optional.
+   */
+  getNotificationPreferences(accountId: string) { return this.notificationPreferences.get(accountId) ?? { accountId, run_reminders:true, community_updates:false, account_alerts:true, messages:true, updatedAt:this.now().toISOString() }; }
+  setNotificationPreferences(accountId: string, patch: Partial<Pick<import("./types").NotificationPreferenceRecord,"run_reminders"|"community_updates"|"messages">>) { const next={...this.getNotificationPreferences(accountId),...patch,accountId,account_alerts:true,updatedAt:this.now().toISOString()}; this.notificationPreferences.set(accountId,next); return next; }
   addNotification(notification: import("./types").NotificationRecord) { this.notifications.set(notification.id, notification); return notification; }
   listNotifications(accountId: string) { return [...this.notifications.values()].filter(n=>n.accountId===accountId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
   updateNotification(id: string, accountId: string, patch: {readAt:string|null}) { const n=this.notifications.get(id); if(!n||n.accountId!==accountId)return undefined; n.readAt=patch.readAt; return n; }

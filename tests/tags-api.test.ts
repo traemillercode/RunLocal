@@ -5,7 +5,7 @@
  *
  * Pins: tags lifecycle over HTTP, list visibility with self-hide (hidden rows
  * drop for everyone except the tagged user), self-hide is tagged-user-only
- * (403 for others, 404 unknown), blocked pairs rejected on create and
+ * (403 for others, 404 unknown), blocked pairs rejected as 404 on create and
  * excluded on read, verified-actor gating, canView gating for the Tagged and
  * Activity tabs (show_tagged_content / show_past_activity), and moderation/
  * deletion filtering of the resolved content.
@@ -69,7 +69,7 @@ describe("POST /api/tags", () => {
     expect(db.getTagsForContent("post", postId)).toHaveLength(1);
   });
 
-  it("auth + validation: guest 401, pending actor 403, unknown target 404, self-tag 400, invalid contentType 400, blocked pair 403", async () => {
+  it("auth + validation: guest 401, pending actor 403, unknown target 404, self-tag 400, invalid contentType 400, blocked pair 404", async () => {
     const { db } = setup();
     const a = account(db, "a@example.com");
     const b = account(db, "b@example.com");
@@ -80,16 +80,21 @@ describe("POST /api/tags", () => {
     const pending = db.createAccount({ name: "pending", email: "pending@example.com", cityId: "columbia-mo" });
     const sid = db.createSession(pending.id, "test");
     const pendingCookie = `${SESSION_COOKIE}=${sid.id}`;
-    expect((await call(db, "POST", "/api/tags", { body: { contentType: "post", contentId: postId, taggedUserId: b.id }, cookie: pendingCookie })).status).toBe(403);
+    expect((await call(db, "POST", "/api/tags", { body: { contentType: "post", contentId: postId, taggedUserId: b.id }, cookie: pendingCookie })).status).toBe(403); // pending actor: verified_runner_required, an ACTOR gate and not a block tell
 
     expect((await call(db, "POST", "/api/tags", { body: { contentType: "post", contentId: postId, taggedUserId: "missing-account" }, cookie: a.cookie })).status).toBe(404);
     expect((await call(db, "POST", "/api/tags", { body: { contentType: "post", contentId: postId, taggedUserId: a.id }, cookie: a.cookie })).status).toBe(400);
     expect((await call(db, "POST", "/api/tags", { body: { contentType: "meme", contentId: postId, taggedUserId: b.id }, cookie: a.cookie })).status).toBe(400);
 
-    // blocked pair rejected
+    /*
+     * 404, not 403. Tagging a blocked person must fail exactly like tagging
+     * someone who is not there — a distinct status told the tagger a block
+     * existed, which is the tell the safety architecture forbids.
+     */
+    // blocked pair rejected, indistinguishably from an unknown target
     await call(db, "POST", `/api/connections/${b.id}/block`, { cookie: a.cookie });
-    expect((await call(db, "POST", "/api/tags", { body: { contentType: "post", contentId: postId, taggedUserId: b.id }, cookie: a.cookie })).status).toBe(403);
-    expect((await call(db, "POST", "/api/tags", { body: { contentType: "post", contentId: postId, taggedUserId: a.id }, cookie: b.cookie })).status).toBe(403);
+    expect((await call(db, "POST", "/api/tags", { body: { contentType: "post", contentId: postId, taggedUserId: b.id }, cookie: a.cookie })).status).toBe(404);
+    expect((await call(db, "POST", "/api/tags", { body: { contentType: "post", contentId: postId, taggedUserId: a.id }, cookie: b.cookie })).status).toBe(404);  // blocked in the other direction — same 404, since isBlocked is symmetric
   });
 });
 

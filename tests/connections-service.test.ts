@@ -278,7 +278,14 @@ describe("accept/decline — addressee-only", () => {
     db.addBlock({ blockerId: b, blockedId: a, createdAt: NOW });
     const acc = acceptConnection(db, b, req.connection!.id, new Date(NOW));
     expect(acc.ok).toBe(false);
-    expect(acc.status).toBe("blocked");
+    /*
+     * Was `.toBe("blocked")`. That assertion encoded the leak as correct: it
+     * required the API to TELL a blocked person he was blocked, which is the
+     * one thing the safety architecture forbids. Now indistinguishable from a
+     * target that does not exist.
+     */
+    expect(acc.status).toBe("error");
+    expect(acc.ok === false && acc.error).toBe("not_found");
     expect(db.getConnectionPair(a, b)?.status).toBe("pending"); // unchanged
   });
 });
@@ -315,8 +322,9 @@ describe("blockConnection", () => {
   it("blocked pairs cannot create new requests from either side", () => {
     const { db, a, b } = makeFixture();
     blockConnection(db, a, b, new Date(NOW));
-    expect(requestConnection(db, a, b, new Date(NOW)).status).toBe("blocked");
-    expect(requestConnection(db, b, a, new Date(NOW)).status).toBe("blocked");
+    // Both directions refuse identically, and identically to a missing person.
+    expect(requestConnection(db, a, b, new Date(NOW)).status).toBe("error");
+    expect(requestConnection(db, b, a, new Date(NOW)).status).toBe("error");
   });
 });
 

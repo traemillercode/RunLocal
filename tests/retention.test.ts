@@ -62,7 +62,7 @@ describe("purge removes selfie + phone records", () => {
     expect(result.retained).toContain(fresh.id);
     expect(db.getAccount(stale.id)).toBeUndefined();
     expect(db.listNotifications(stale.id)).toEqual([]);
-    expect(db.getNotificationPreferences(stale.id)).toMatchObject({ run_reminders: false, community_updates: false });
+    expect(db.getNotificationPreferences(stale.id)).toMatchObject(/* defaults changed — see tests/notification-defaults.test.ts */ { run_reminders: true, community_updates: false });
     const kept = db.getAccount(fresh.id)!;
     expect(kept.phone).toBe("+15735550124");
     expect(kept.selfieRef).toBe(`${fresh.id}_selfie.jpg`);

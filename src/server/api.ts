@@ -1198,7 +1198,7 @@ async function handleApi(
   if (url.pathname.startsWith("/api/notifications")) {
     const sess=requireSession(db,cookies); if(!sess) return err(res,{status:401,error:"sign_in_required"}),true;
     if (method === "GET" && url.pathname === "/api/notifications/preferences") return ok(res,{preferences:db.getNotificationPreferences(sess.accountId)}),true;
-    if (method === "PATCH" && url.pathname === "/api/notifications/preferences") { const b=await readJson(req) as Record<string,unknown>; const allowed=["run_reminders","community_updates","account_alerts","messages"] as const; const patch: Record<string,boolean>={}; for(const k of allowed) if(b[k]!==undefined){if(typeof b[k]!=="boolean") return err(res,{status:400,error:"invalid_preferences"}),true; patch[k]=b[k] as boolean;} const preferences=db.setNotificationPreferences(sess.accountId,patch); await db.persist(); return ok(res,{preferences}),true; }
+    if (method === "PATCH" && url.pathname === "/api/notifications/preferences") { const b=await readJson(req) as Record<string,unknown>; /* account_alerts is deliberately absent: transactional, not a preference. */ const allowed=["run_reminders","community_updates","messages"] as const; const patch: Record<string,boolean>={}; for(const k of allowed) if(b[k]!==undefined){if(typeof b[k]!=="boolean") return err(res,{status:400,error:"invalid_preferences"}),true; patch[k]=b[k] as boolean;} const preferences=db.setNotificationPreferences(sess.accountId,patch); await db.persist(); return ok(res,{preferences}),true; }
     if (method === "GET" && url.pathname === "/api/notifications") { const items=db.listNotifications(sess.accountId); return ok(res,{notifications:items,unreadCount:items.filter(n=>!n.readAt).length}),true; }
     if (method === "POST" && url.pathname === "/api/notifications/read-all") { db.markAllNotificationsRead(sess.accountId); await db.persist(); return ok(res,{status:"ok"}),true; }
     const m=/^\/api\/notifications\/([^/]+)\/read$/.exec(url.pathname); if(method==="POST"&&m){ if(!db.updateNotification(m[1],sess.accountId,{readAt:new Date().toISOString()})) return err(res,{status:404,error:"not_found"}),true; await db.persist(); return ok(res,{status:"ok"}),true; }
@@ -2082,7 +2082,22 @@ async function handleApi(
     if(kind==="personal_run"){const run=db.getPersonalRun(context);if(!run||run.accountId!==target||run.deletedAt)return err(res,{status:404,error:"not_found"}),true; contextCity=run.cityId;}
     else { const eid=resolveEventId(db,context), event=eid ? db.getContent(eid) : undefined; if(!event || !db.hasAttendance(s.accountId,eid!)) return err(res,{status:403,error:"event_eligibility_required"}),true; contextCity=event.cityId; }
     if(requester?.cityId !== contextCity || recipient?.cityId !== contextCity || rp.cityId !== contextCity || tp.cityId !== contextCity)return err(res,{status:403,error:"cross_city"}),true;
-    if(db.isBlocked(s.accountId,target))return err(res,{status:403,error:"blocked"}),true;
+    /*
+     * SILENT. This returned 403 "blocked", which told B that A had blocked him
+     * — the one thing the safety architecture says must never happen. He asks
+     * to connect, and the product names the block. A stalker who learns he is
+     * blocked escalates, and often escalates offline.
+     *
+     * Now byte-identical to the not_found two lines above, which is the
+     * ordinary outcome when a target does not exist. He cannot distinguish
+     * "she blocked me" from "no such person" from "she deleted her account",
+     * because the responses are the same response.
+     *
+     * Checked BEFORE the rate limiter deliberately: a blocked requester must
+     * not be able to infer anything from being rate-limited differently, and
+     * he must not consume A's quota either.
+     */
+    if(db.isBlocked(s.accountId,target))return err(res,{status:404,error:"not_found"}),true;
     if (!db.consumeJoinRequestRate(s.accountId, now.getTime(), JOIN_REQUEST_LIMIT, JOIN_REQUEST_WINDOW_MS)) return err(res, { status: 429, error: "rate_limited", message: "Too many join requests. Try again later." }), true;
     if(db.findPendingJoinRequest(s.accountId,target,kind,context))return err(res,{status:409,error:"duplicate_request"}),true;
     const r: import("./types").JoinRequestRecord={id:newId(),requesterId:s.accountId,recipientId:target,contextType:kind,contextId:context,state:"pending",requesterAccepted:false,recipientAccepted:false,createdAt:now.toISOString(),expiresAt:new Date(now.getTime()+7*86400000).toISOString(),updatedAt:now.toISOString()};db.addJoinRequest(r);await db.persist();return ok(res,{request:{id:r.id,state:r.state,contextType:r.contextType,createdAt:r.createdAt,expiresAt:r.expiresAt,updatedAt:r.updatedAt},mutual:false}),true;
@@ -2520,8 +2535,15 @@ async function handleApi(
       if (!target || target.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
       const result = requestConnection(db, sess.accountId, param, now);
       if (!result.ok) {
-        if (result.error === "blocked") return err(res, { status: 403, error: "blocked" }), true;
         if (result.error === "cannot_connect_self") return err(res, { status: 400, error: "cannot_connect_self" }), true;
+        /*
+         * not_found must keep its 404. The block returns not_found so it is
+         * indistinguishable from a missing target — and the route above already
+         * returns 404 for a genuinely missing one. Letting it fall through to
+         * the generic 400 would make the block distinguishable again by status
+         * code alone, which is the whole tell being removed.
+         */
+        if (result.error === "not_found") return err(res, { status: 404, error: "not_found" }), true;
         return err(res, { status: 400, error: result.error ?? "error" }), true;
       }
       await db.persist();
@@ -2530,7 +2552,6 @@ async function handleApi(
     if (action === "accept") {
       const result = acceptConnection(db, sess.accountId, param, now);
       if (!result.ok) {
-        if (result.error === "blocked") return err(res, { status: 403, error: "blocked" }), true;
         if (result.error === "not_pending") return err(res, { status: 409, error: "not_pending" }), true;
         return err(res, { status: 404, error: "not_found" }), true;
       }
@@ -2540,7 +2561,6 @@ async function handleApi(
     if (action === "decline") {
       const result = declineConnection(db, sess.accountId, param, now);
       if (!result.ok) {
-        if (result.error === "blocked") return err(res, { status: 403, error: "blocked" }), true;
         if (result.error === "not_pending") return err(res, { status: 409, error: "not_pending" }), true;
         return err(res, { status: 404, error: "not_found" }), true;
       }
@@ -3607,7 +3627,8 @@ async function handleApi(
     if (taggedUserId === sess.accountId) return err(res, { status: 400, error: "cannot_tag_self" }), true;
     const target = db.getAccount(taggedUserId);
     if (!target || target.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
-    if (db.isBlocked(sess.accountId, taggedUserId)) return err(res, { status: 403, error: "blocked" }), true;
+    // Tagging a blocked person must fail like tagging someone who is not there.
+    if (db.isBlocked(sess.accountId, taggedUserId)) return err(res, { status: 404, error: "not_found" }), true;
     const tag: import("./types").TagRecord = { id: newId(), contentType, contentId, taggedUserId, taggedByUserId: sess.accountId, hiddenByTaggedUser: false, createdAt: now.toISOString() };
     db.addTag(tag);
     await db.persist();

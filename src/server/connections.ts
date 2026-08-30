@@ -41,7 +41,24 @@ export interface ConnectionActionResult {
  */
 export function requestConnection(db: Db, requesterId: string, addresseeId: string, now = new Date()): ConnectionActionResult {
   if (requesterId === addresseeId) return { ok: false, status: "error", error: "cannot_connect_self" };
-  if (db.isBlocked(requesterId, addresseeId)) return { ok: false, status: "blocked", error: "blocked" };
+  /*
+   * A BLOCK MUST HIDE BEHIND AN ORDINARY FAILURE, so there has to be one.
+   *
+   * My first version returned not_found for a block and claimed it matched
+   * "the not_found this function already returns" — it did not. requestConnection
+   * never checked that the target EXISTED, so a request to a made-up id
+   * succeeded. There was nothing for the block to be indistinguishable from,
+   * and a test comparing the two caught it.
+   *
+   * That is its own defect: connection requests could be created against
+   * accounts that do not exist, and against deleted ones.
+   *
+   * Deleted accounts are folded in here too, which is the hiddenFrom principle
+   * arriving early — blocked, deleted and never-existed are one outcome.
+   */
+  const addressee = db.getAccount(addresseeId);
+  if (!addressee || addressee.deletedAt) return { ok: false, status: "error", error: "not_found" };
+  if (db.isBlocked(requesterId, addresseeId)) return { ok: false, status: "error", error: "not_found" };
 
   const existing = db.getConnectionPair(requesterId, addresseeId);
   if (existing) {
@@ -80,7 +97,8 @@ export function acceptConnection(db: Db, accountId: string, requestId: string, n
   const rec = db.listIncomingRequests(accountId).find((r) => r.id === requestId);
   if (!rec) return { ok: false, status: "error", error: "not_found" };
   if (rec.status !== "pending") return { ok: false, status: "error", error: "not_pending" };
-  if (db.isBlocked(accountId, rec.requesterId)) return { ok: false, status: "blocked", error: "blocked" };
+  // Same rule: indistinguishable from a request that is not there.
+  if (db.isBlocked(accountId, rec.requesterId)) return { ok: false, status: "error", error: "not_found" };
   const updated = db.updateConnection(rec.id, { status: "accepted", respondedAt: nowIso(now) });
   return { ok: true, status: "accepted", connection: updated ?? rec };
 }

@@ -133,7 +133,11 @@ describe("connection lifecycle over HTTP", () => {
     expect((await call(db, "POST", `/api/connections/${a.id}/request`, { cookie: a.cookie })).status).toBe(400);
     const b = account(db, "b@example.com");
     await call(db, "POST", `/api/connections/${a.id}/block`, { cookie: b.cookie });
-    expect((await call(db, "POST", `/api/connections/${b.id}/request`, { cookie: a.cookie })).status).toBe(403);
+    /*
+     * 404, not 403. A blocked requester must be unable to distinguish the block
+     * from a target that does not exist — a 403 was the tell.
+     */
+    expect((await call(db, "POST", `/api/connections/${b.id}/request`, { cookie: a.cookie })).status).toBe(404);
     // same-direction duplicate is idempotent (still pending)
     const c = account(db, "c@example.com");
     const r1 = await call(db, "POST", `/api/connections/${c.id}/request`, { cookie: a.cookie });
@@ -151,14 +155,14 @@ describe("connection lifecycle over HTTP", () => {
     expect(db.getConnectionPair(a.id, b.id)?.status).toBe("accepted");
 
     const blk = await call(db, "POST", `/api/connections/${b.id}/block`, { cookie: a.cookie });
+    // Blocking someone succeeds for the person doing the blocking.
     expect(blk.status).toBe(200);
-    expect(blk.body.status).toBe("blocked");
     expect(db.isBlocked(a.id, b.id)).toBe(true);
     expect(db.getConnectionPair(a.id, b.id)?.status).toBe("removed");
     expect((await call(db, "GET", "/api/connections", { cookie: a.cookie })).body.connections).toHaveLength(0);
 
     // blocked pair cannot request from either side
-    expect((await call(db, "POST", `/api/connections/${a.id}/request`, { cookie: b.cookie })).status).toBe(403);
+    expect((await call(db, "POST", `/api/connections/${a.id}/request`, { cookie: b.cookie })).status).toBe(404);
 
     // unblock via the EXISTING single block system
     const un = await call(db, "DELETE", "/api/blocks", { body: { accountId: b.id }, cookie: a.cookie });

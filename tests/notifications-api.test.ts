@@ -23,8 +23,8 @@ describe("notification preferences and inbox API", () => {
     const db = createMemoryStore(); const one = account(db, "one@example.com"); const two = account(db, "two@example.com");
     expect((await call(db, "PATCH", "/api/notifications/preferences", one.cookie, { run_reminders: true })).status).toBe(200);
     expect((await call(db, "GET", "/api/notifications/preferences", one.cookie)).body.preferences).toMatchObject({ run_reminders: true, community_updates: false });
-    expect((await call(db, "GET", "/api/notifications/preferences", two.cookie)).body.preferences).toMatchObject({ run_reminders: false, community_updates: false, account_alerts: false });
-    expect((await call(db, "PATCH", "/api/notifications/preferences", two.cookie, { community_updates: true })).body.preferences).toMatchObject({ run_reminders: false, community_updates: true });
+    expect((await call(db, "GET", "/api/notifications/preferences", two.cookie)).body.preferences).toMatchObject(/* Defaults changed: account_alerts and run_reminders are now ON — an approved invitee was never told. */ { run_reminders: true, community_updates: false, account_alerts: true });
+    expect((await call(db, "PATCH", "/api/notifications/preferences", two.cookie, { community_updates: true })).body.preferences).toMatchObject({ run_reminders: true, community_updates: true });
     expect((await call(db, "GET", "/api/notifications/preferences", one.cookie)).body.preferences.community_updates).toBe(false);
   });
 
@@ -57,10 +57,10 @@ describe("notification preferences and inbox API", () => {
     // Deleted account: notification rows and the preferences record are gone
     // (preferences fall back to synthesized defaults once the record is removed).
     expect(db.listNotifications(one.id)).toEqual([]);
-    expect(db.getNotificationPreferences(one.id)).toMatchObject({ run_reminders: false, community_updates: false, account_alerts: false });
+    expect(db.getNotificationPreferences(one.id)).toMatchObject(/* Defaults changed: account_alerts and run_reminders are now ON — an approved invitee was never told. */ { run_reminders: true, community_updates: false, account_alerts: true });
 
     // Other account: notifications and preferences are untouched.
     expect(db.listNotifications(two.id).map((n) => n.id)).toEqual(["other"]);
-    expect(db.getNotificationPreferences(two.id)).toMatchObject({ run_reminders: false, community_updates: true });
+    expect(db.getNotificationPreferences(two.id)).toMatchObject({ run_reminders: true, community_updates: true });
   });
 });

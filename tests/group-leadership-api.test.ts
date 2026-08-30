@@ -277,7 +277,7 @@ describe("membership-request notification semantics", () => {
     const quietLeader = account(db, "quiet@example.com"); // community_updates OFF (default)
     const requester = account(db, "requester@example.com");
     group(db, "mine", owner.id, [quietLeader.id]);
-    db.setNotificationPreferences(owner.id, { run_reminders: false, community_updates: true, account_alerts: false });
+    db.setNotificationPreferences(owner.id, /* account_alerts is no longer settable — transactional, pinned on. */ { run_reminders: false, community_updates: true });
     await call(db, "POST", "/api/groups/mine/membership", requester.cookie);
     const ownerInbox = db.listNotifications(owner.id);
     expect(ownerInbox).toHaveLength(1);
@@ -297,7 +297,7 @@ describe("membership-request notification semantics", () => {
     const owner = account(db, "owner@example.com");
     const joiner = account(db, "joiner@example.com");
     group(db, "open-g", owner.id, [], "open");
-    db.setNotificationPreferences(owner.id, { run_reminders: false, community_updates: true, account_alerts: false });
+    db.setNotificationPreferences(owner.id, /* account_alerts is no longer settable — transactional, pinned on. */ { run_reminders: false, community_updates: true });
     await call(db, "POST", "/api/groups/open-g/membership", joiner.cookie);
     expect(db.listNotifications(owner.id)).toHaveLength(0);
   });
