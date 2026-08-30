@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { NAV_ENTRIES, entriesForSurface, activeForPath, NO_NAV_PATHS } from "../src/lib/nav";
 
 describe("single nav model (src/lib/nav.ts)", () => {
@@ -118,5 +119,33 @@ describe("exactly one bottom-bar entry is active for any path", () => {
   it("keeps the public-profile rule working", () => {
     // /runners/:id is a profile view and should keep You lit.
     expect(bottom.filter((e) => activeForPath(e, "/runners/abc")).map((e) => e.id)).toEqual(["profile"]);
+  });
+});
+
+describe("marketing header stays reachable on a long page", () => {
+  it("the sticky element is the full-width WRAPPER, not the header itself", () => {
+    /*
+     * Worth asserting because it is genuinely confusing to verify by hand:
+     * getComputedStyle(document.querySelector("header")) returns `static`, and
+     * that is CORRECT — .marketing-header is max-width constrained and centred,
+     * so sticking it directly would leave the page showing through either side
+     * as it travelled. The wrapper is what sticks.
+     */
+    const css = readFileSync(new URL("../src/styles/marketing.css", import.meta.url).pathname, "utf8");
+    const rule = /\.marketing-header-sticky\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(rule).toContain("position: sticky");
+    expect(rule).toContain("top: 0");
+    // And the header inside must NOT also be sticky — two stacking sticky
+    // elements is how you get a header that jumps.
+    const inner = /\.marketing-header\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(inner).not.toContain("position: sticky");
+  });
+
+  it("no ancestor sets an overflow that would silently disable it", () => {
+    // position:sticky fails inside any scroll container, and the failure is
+    // silent — the element simply behaves as static.
+    const app = readFileSync(new URL("../src/styles/app.css", import.meta.url).pathname, "utf8");
+    const mainRule = /\.desktop-main\s*\{([^}]*)\}/.exec(app)?.[1] ?? "";
+    expect(mainRule).not.toContain("overflow");
   });
 });

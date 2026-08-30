@@ -62,7 +62,10 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
    devices) on every mobile view, and reset to 0 once the desktop layout
    hides the bar entirely (see the `.app-shell-nav { display: none }` rule
    below at the 1024px breakpoint). */
-.desktop-main { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+/* Bottom padding comes from --page-bottom-pad on the shell now, so this rule
+   would double it. Removed rather than left additive: 72px was its own guess at
+   the same number, which is the duplication the token exists to end. */
+.desktop-main { }
 /* Messages manages its own full-height chat layout (see .messages-page-root
    below) and needs to compute the bottom-nav clearance itself as part of
    that math — the generic padding here would double up with it and push
