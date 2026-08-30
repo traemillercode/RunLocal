@@ -4095,7 +4095,15 @@ async function handleAdmin(
     return ok(res, result), true;
   }
 
-  if (method === "GET" && url.pathname === "/api/admin/cms/settings") { const a=authorizeAdmin(db,ctx,"admin.cms_settings",null,now); if(!a.ok)return sendErr(a),true; return ok(res,{settings:publicSettings(db),cities:db.listCities(),integrations:integrations(db)}),true; }
+  if (method === "GET" && url.pathname === "/api/admin/cms/settings") { const a=authorizeAdmin(db,ctx,"admin.cms_settings",null,now); if(!a.ok)return sendErr(a),true; /*
+   * publicCities, NOT db.listCities. listCities returns only cities written to
+   * the STORE — and every city is a seed until someone edits it, so Columbia
+   * was absent from the admin overview entirely. The city-status control
+   * therefore had nothing to render for the one city that exists, and the only
+   * way to get a city into the store was to edit it through a control that
+   * could not see it.
+   */
+  return ok(res,{settings:publicSettings(db),cities:publicCities(db),integrations:integrations(db)}),true; }
   if (method === "POST" && url.pathname === "/api/admin/cms/settings") { const body=await readJson(req) as Record<string,unknown>; const r=updateSettings(db,ctx,body as any,now); if(!r.ok)return sendErr(r),true; await db.persist(); return ok(res,r.data),true; }
   if (method === "POST" && url.pathname === "/api/admin/cms/city") { const body=await readJson(req) as any; const r=saveCity(db,ctx,body,now); if(!r.ok)return sendErr(r),true; await db.persist(); return ok(res,r.data),true; }
   if (method === "POST" && url.pathname.startsWith("/api/admin/cms/city/") && url.pathname.endsWith("/deactivate")) { const id=url.pathname.split("/").at(-2)!; const r=deleteCity(db,ctx,id,now); if(!r.ok)return sendErr(r),true; await db.persist(); return ok(res,r.data),true; }

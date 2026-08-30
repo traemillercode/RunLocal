@@ -61,11 +61,44 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
       return { ok: false, error: apiError };
     }
     return { ok: true, data: body as T };
-  } catch {
-    reportApiFailure("network_error", 0, path);
+  } catch (e) {
+    /*
+     * THREE BRANCHES, not one.
+     *
+     * This said "Check your connection" for anything that threw — including a
+     * server that had responded perfectly well. That is the third time a
+     * fallback has hidden a real status, after error codes reaching users and
+     * the "hidden or archived" discussion copy, and it is the most misleading
+     * of the three: it sends someone to check their wifi while the actual
+     * answer was a 400 with a reason.
+     *
+     * 1. No response at all — fetch itself rejected. ONLY this may mention the
+     *    connection.
+     * 2. A response arrived and something downstream threw (a JSON parse on an
+     *    HTML error page, most likely). Report the status, which is the thing
+     *    that identifies it.
+     * 3. Anything else — a genuine bug in this layer, said plainly rather than
+     *    blamed on the network.
+     */
+    const failedToFetch = e instanceof TypeError;
+    if (failedToFetch) {
+      reportApiFailure("network_error", 0, path);
+      return {
+        ok: false,
+        error: new ApiError(0, "network_error", "Could not reach Kimbio. Check your connection and try again."),
+      };
+    }
+    const status = typeof (e as { status?: unknown })?.status === "number" ? (e as { status: number }).status : 0;
+    reportApiFailure("unexpected_response", status, path);
     return {
       ok: false,
-      error: new ApiError(0, "network_error", "Could not reach the Kimbio server. Check your connection."),
+      error: new ApiError(
+        status,
+        "unexpected_response",
+        status > 0
+          ? `The server replied with an unexpected error (${status}). Please try again.`
+          : "Something went wrong handling the response. Please try again.",
+      ),
     };
   }
 }
