@@ -40,6 +40,23 @@
 
 html { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
 body { font-family: var(--font-sans); background-color: #f7f7f5; overscroll-behavior-y: none; }
+
+/*
+ * THE THIRD CAUSE OF THE WHITE BAND, and the one that actually explains why it
+ * survived four reports with two correct diagnoses.
+ *
+ * body is paper (#f7f7f5) for the app. The marketing page paints ink over it
+ * with min-height:100vh — so ANY vertical gap below that block, from any cause,
+ * shows paper. The reported symptom was 100px of --page-bottom-pad; removing
+ * that left 145px from the page simply being shorter than the viewport, and a
+ * footer with no background of its own could not cover either.
+ *
+ * Three independent causes, each producing an identical white band, and fixing
+ * any one alone leaves it. Painting the BODY ink while a marketing page is
+ * mounted removes the class rather than the instance: there is nothing paper
+ * left underneath to show through.
+ */
+body:has(.marketing-page) { background-color: #14161a; }
 input, textarea, select { font-size: 16px; }
 ::selection { background: var(--rl-coral); color: var(--rl-ink); }
 :focus-visible { outline: 3px solid var(--rl-coral); outline-offset: 3px; }
@@ -199,4 +216,14 @@ input[type="number"] {
  * its own padding-bottom; nothing has to opt in, which is the opposite of the
  * current arrangement where a page that forgets gets content under the nav.
  */
+/*
+ * Applied by the shell, but ONLY where a bottom nav exists to clear.
+ *
+ * The marketing page has no bottom bar, so reserving 100px for one left the
+ * body running past the footer — and because .marketing-footer set no
+ * background, the paper-coloured body showed through underneath it. Two
+ * separate bugs producing one white band, which is why it survived four
+ * reports: fixing either alone leaves the band.
+ */
 .page-bottom-pad { padding-bottom: var(--page-bottom-pad); }
+.page-bottom-pad:has(.marketing-page) { padding-bottom: 0; }
