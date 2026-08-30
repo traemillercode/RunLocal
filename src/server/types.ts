@@ -1229,9 +1229,24 @@ export interface CityInvitationRecord {
   cityId: string;
   /** Recipient email — exact (case-insensitive) binding. */
   email: string;
-  /** HMAC-SHA256(token, salt) — the raw token is never stored. */
+  /** HMAC-SHA256(token, salt). Validation always compares against this. */
   tokenHash: string;
   salt: string;
+  /**
+   * The raw token, retained ONLY while the invitation is unredeemed, so the
+   * admin list can reproduce a sendable link.
+   *
+   * Storing a credential is normally wrong, and the hash exists precisely to
+   * avoid it. The trade is deliberate and narrow: these are one-use,
+   * email-bound, 30-day tokens that grant nothing except the right to create an
+   * account with an address the operator already chose. Against that, a link
+   * that cannot be recovered is an invitation that cannot be sent — which is
+   * exactly what happened: three invites minted, all valid, none shareable.
+   *
+   * CLEARED THE MOMENT IT IS REDEEMED OR REVOKED, so a spent token never
+   * lingers. Never included in any payload outside the admin list.
+   */
+  token: string | null;
   createdAt: string;
   /** Global Admin identity that created the invitation (audit trail). */
   createdBy: string;

@@ -260,8 +260,13 @@ export interface AdminOverview {
   queues: { pendingVerification: number; pendingSubmissions: number; openSafetyReports: number; contentNeedingReview: number };
   analytics: { publishedContent: number | null; rsvpTotal: number | null; generatedAt: string; unavailable: boolean };
 }
-export function adminGetOverview(): Promise<ApiResult<AdminOverview>> {
-  return request("/api/admin/overview");
+/**
+ * Routed through adminRequest so the audit header is always attached. `reason`
+ * is optional because these are READS — an unexplained one is not recorded —
+ * but an operator who supplies a justification should have it kept.
+ */
+export function adminGetOverview(reason = ""): Promise<ApiResult<AdminOverview>> {
+  return adminRequest("/api/admin/overview", reason);
 }
 
 export interface AdminSearchRow {
@@ -342,8 +347,8 @@ export function adminLogout(): Promise<ApiResult<{ ok: true }>> {
   return request("/api/admin/logout", { method: "POST" });
 }
 
-export function adminSearch(query: string): Promise<ApiResult<{ results: AdminSearchRow[] }>> {
-  return request(`/api/admin/search?q=${encodeURIComponent(query)}`);
+export function adminSearch(query: string, reason = ""): Promise<ApiResult<{ results: AdminSearchRow[] }>> {
+  return adminRequest(`/api/admin/search?q=${encodeURIComponent(query)}`, reason);
 }
 
 export function adminGetRecord(id: string, reason: string): Promise<ApiResult<{ record: AdminRecordView }>> {
@@ -368,8 +373,8 @@ export function adminAssignRoles(id: string, roles: OpRole[], cityId: string | n
 
 /** Owner-only read: fetch the pending-users queue. Read access is authorized
  * server-side without an audit reason; decisions remain reason-required. */
-export function adminPending(): Promise<ApiResult<{ results: PendingQueueRow[] }>> {
-  return request("/api/admin/pending");
+export function adminPending(reason = ""): Promise<ApiResult<{ results: PendingQueueRow[] }>> {
+  return adminRequest("/api/admin/pending", reason);
 }
 
 export function adminDeleteRecord(id: string, reason: string): Promise<ApiResult<{ ok: true }>> {
@@ -700,8 +705,8 @@ export function adminAddGeofenceAllowlistEmail(email: string, reason: string): P
 export function adminRemoveGeofenceAllowlistEmail(email: string, reason: string): Promise<ApiResult<{ emails: string[] }>> {
   return request(`/api/admin/geofence-allowlist/${encodeURIComponent(email)}`, { method: "DELETE", headers: { "x-audit-reason": reason } });
 }
-export function getSponsorPaymentsStatus(): Promise<ApiResult<{ configured: boolean }>> {
-  return request("/api/admin/sponsors/payments-status");
+export function getSponsorPaymentsStatus(reason = ""): Promise<ApiResult<{ configured: boolean }>> {
+  return adminRequest("/api/admin/sponsors/payments-status", reason);
 }
 export function createSponsorCheckoutLink(sponsorId: string, reason: string): Promise<ApiResult<{ url: string }>> {
   return request("/api/admin/sponsors/checkout", { method: "POST", headers: { "x-audit-reason": reason }, body: JSON.stringify({ sponsorId, successUrl: window.location.href, cancelUrl: window.location.href }) });
@@ -1834,22 +1839,30 @@ export interface InvitationView {
   usedAt: string | null;
   revokedAt: string | null;
   valid: boolean;
+  /** Present only while unredeemed, so the list can rebuild the link. */
+  token: string | null;
 }
 
-export function listInvitations(cityId?: string): Promise<ApiResult<{ invitations: InvitationView[] }>> {
-  return request(`/api/admin/invitations${cityId ? `?city=${encodeURIComponent(cityId)}` : ""}`);
+/**
+ * All three of these route through adminRequest so the audit header is always
+ * present. Written with plain request() first, which is why revoke 400'd and
+ * minting reported a failure it had not had — the reason split changed the
+ * server side and these were never updated to match.
+ */
+export function listInvitations(cityId?: string, reason = "Invitation list"): Promise<ApiResult<{ invitations: InvitationView[] }>> {
+  return adminRequest(`/api/admin/invitations${cityId ? `?city=${encodeURIComponent(cityId)}` : ""}`, reason);
 }
 
 /**
  * Mint an invitation. The raw token is returned ONCE and never again — only its
  * hash is stored — so the caller must surface it immediately or it is lost.
  */
-export function createInvitation(input: { cityId: string; email: string; expiresInDays?: number }): Promise<ApiResult<{ invitation: InvitationView; token: string }>> {
-  return request("/api/admin/invitations", { method: "POST", body: JSON.stringify(input) });
+export function createInvitation(input: { cityId: string; email: string; expiresInDays?: number }, reason = "Invitation created"): Promise<ApiResult<{ invitation: InvitationView; token: string }>> {
+  return adminRequest("/api/admin/invitations", reason, { method: "POST", body: JSON.stringify(input) });
 }
 
-export function revokeInvitation(id: string): Promise<ApiResult<{ invitation: InvitationView }>> {
-  return request(`/api/admin/invitations/${encodeURIComponent(id)}/revoke`, { method: "POST" });
+export function revokeInvitation(id: string, reason = "Invitation revoked"): Promise<ApiResult<{ invitation: InvitationView }>> {
+  return adminRequest(`/api/admin/invitations/${encodeURIComponent(id)}/revoke`, reason, { method: "POST" });
 }
 
 /**

@@ -667,7 +667,7 @@ describe("persistence migration (multi-city fields)", () => {
       // Invitations persist round-trip.
       db.appendInvitation({
         id: "inv1", cityId: STL, email: "x@example.com", tokenHash: "abc", salt: "salt", createdAt: T0.toISOString(),
-        createdBy: ADMIN_EMAIL, expiresAt: "2026-09-01T00:00:00.000Z", usedAt: null, usedByAccountId: null, revokedAt: null, revokedBy: null,
+        createdBy: ADMIN_EMAIL, expiresAt: "2026-09-01T00:00:00.000Z", usedAt: null, usedByAccountId: null, revokedAt: null, revokedBy: null, token: null,
       });
       await db.persist();
       const db2 = new Db({ dataDir: dir });

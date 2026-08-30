@@ -84,10 +84,30 @@ describe("the email mismatch failure is removed, not explained", () => {
 describe("minting surfaces the token exactly once", () => {
   const PANEL = readCode(new URL("../src/components/InvitationsAdminSection.tsx", import.meta.url));
 
-  it("says the link cannot be shown again", () => {
-    // The server stores only a hash. Navigating away before copying means
-    // re-minting, which should be stated rather than discovered.
-    expect(PANEL).toContain("can&apos;t be shown again");
+  it("the link is RECOVERABLE, not one-time", () => {
+    /*
+     * Reversed deliberately. The panel used to warn that the link could not be
+     * shown again, which was true and useless: minting reported a false error
+     * once, and three valid invitations ended up stranded — unshareable, and
+     * un-revokable too because revoke was separately broken. An invite you
+     * cannot send is worth nothing.
+     *
+     * The raw token is now retained while the invitation is unredeemed, so any
+     * open row can reproduce its link. Cleared on redeem and on revoke.
+     */
+    expect(PANEL).not.toContain("can&apos;t be shown again");
+    expect(PANEL).toContain("Copy link");
+  });
+
+  it("offers an existing invitation instead of minting a duplicate", () => {
+    // Two invitations were created for the same person because the first
+    // attempt reported an error it had not had. Re-minting the same address
+    // now surfaces the existing link.
+    expect(PANEL).toContain("i.email === target && i.valid && !i.usedAt && i.token");
+  });
+
+  it("does not label an unused invitation 'Open', which reads as a button", () => {
+    expect(PANEL).toContain('label: "Unused"');
   });
 
   it("renders the URL in a selectable field, not as plain text", () => {

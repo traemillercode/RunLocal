@@ -48,6 +48,8 @@ export interface InvitationView {
   revokedAt: string | null;
   /** True while the invitation can still be redeemed right now. */
   valid: boolean;
+  /** Raw token, present only while unredeemed — lets the list re-copy the link. */
+  token: string | null;
   /** Why it is not valid (for the admin UI); null when valid. */
   invalidReason: "expired" | "used" | "revoked" | null;
 }
@@ -68,6 +70,10 @@ function view(rec: CityInvitationRecord, now = new Date()): InvitationView {
     revokedAt: rec.revokedAt,
     valid: invalidReason === null,
     invalidReason,
+    // Present only while the invitation can still be redeemed, so the admin
+    // list can rebuild a sendable link. Cleared on redeem and on revoke, and
+    // this view is only ever returned to an authorized admin.
+    token: invalidReason === null ? rec.token : null,
   };
 }
 
@@ -107,6 +113,8 @@ export function createInvitation(
     email,
     tokenHash: invitationTokenHash(token, salt),
     salt,
+    // Retained until redeemed or revoked so the link can be re-copied.
+    token,
     createdAt: now.toISOString(),
     createdBy: auth.data.admin,
     expiresAt: new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString(),
@@ -136,7 +144,7 @@ export function revokeInvitation(
   const rec = db.getInvitation(id);
   if (!rec) return { ok: false, status: 404, error: "not_found" };
   if (rec.revokedAt) return { ok: false, status: 409, error: "already_revoked" };
-  const updated = db.updateInvitation(id, { revokedAt: now.toISOString(), revokedBy: auth.data.admin })!;
+  const updated = db.updateInvitation(id, { revokedAt: now.toISOString(), revokedBy: auth.data.admin, token: null })!;
   db.appendAudit(
     { admin: auth.data.admin, action: "admin.invitation_revoke", reason: ctx.reason!.trim().slice(0, REASON_MAX), targetId: id, ip: ctx.ip, cityId: rec.cityId },
     now,
@@ -232,7 +240,7 @@ export function redeemInvitation(
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
     return { ok: false, status: 403, error: "invalid_token", message: "That invitation code is not correct." };
   }
-  db.updateInvitation(rec.id, { usedAt: now.toISOString(), usedByAccountId: accountId });
+  db.updateInvitation(rec.id, { usedAt: now.toISOString(), usedByAccountId: accountId, token: null });
   return { ok: true };
 }
 

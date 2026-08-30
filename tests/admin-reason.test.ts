@@ -29,7 +29,7 @@ describe("the requirement is per-action, not blanket", () => {
   it("destructive and contested actions require one", () => {
     for (const action of [
       "admin.reject", "admin.purge", "admin.suspend", "admin.content_delete",
-      "admin.content_hide", "admin.invitation_revoke", "admin.roles_assign",
+      "admin.content_hide", "admin.roles_assign",
       "admin.appeal_uphold", "admin.trust_revoke",
     ]) {
       expect(reasonRequiredFor(action)).toBe(true);
@@ -112,6 +112,56 @@ describe("client and server agree", () => {
        */
       const sends = body.includes("x-audit-reason") || /adminRequest\s*[<(]/.test(body);
       if (!sends) offenders.push(`${name} takes a reason but never sends x-audit-reason`);
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("no admin endpoint is called without the audit header", () => {
+  /*
+   * THE GUARD THAT WOULD HAVE CAUGHT THE BROKEN REVOKE.
+   *
+   * revokeInvitation was written with plain request() and no headers, while the
+   * server had admin.invitation_revoke on the reason-required side. Every
+   * revoke returned 400 and the X in the admin list did nothing. Minting failed
+   * the same way — it reported an error for a call that had succeeded, which is
+   * how two invitations were created for the same person.
+   *
+   * The earlier version of this guard only looked at functions that TAKE a
+   * reason parameter, so a function that never accepted one in the first place
+   * was invisible to it. That is precisely the shape of the bug. This version
+   * checks the call, not the signature.
+   */
+  const CLIENT_SRC = readCode(new URL("../src/lib/api.ts", import.meta.url));
+
+  it("every /api/admin call goes through adminRequest", () => {
+    const offenders: string[] = [];
+    /*
+     * The lookbehind length matters and got this wrong once: a single-line
+     * `return adminRequest("/api/admin/cms/settings", reason);` puts more than
+     * 14 characters between the match and the word "admin", so the guard
+     * reported two correct calls as violations. A guard that cries wolf is the
+     * kind people delete.
+     */
+    /*
+     * LINE-BASED, deliberately. Three regex attempts at this got it wrong —
+     * a lookbehind on a fixed-width slice reported four CORRECT calls as
+     * violations, because a single-line `return adminRequest(\`/api/admin/...\`)`
+     * puts a variable number of characters before the match. A guard that
+     * cries wolf is the kind people delete, and this one had to be trusted:
+     * it exists because revokeInvitation was written with plain request() and
+     * every revoke silently 400'd.
+     *
+     * Checking the whole line is less clever and actually correct.
+     */
+    for (const line of CLIENT_SRC.split("\n")) {
+      if (!line.includes("/api/admin")) continue;
+      if (!line.includes("request(")) continue;
+      if (line.includes("adminRequest") || line.includes("x-audit-reason")) continue;
+      // Login and logout run BEFORE an admin session exists, so there is no
+      // operator to audit yet.
+      if (line.includes("/api/admin/login") || line.includes("/api/admin/logout")) continue;
+      offenders.push(line.trim().slice(0, 80));
     }
     expect(offenders).toEqual([]);
   });

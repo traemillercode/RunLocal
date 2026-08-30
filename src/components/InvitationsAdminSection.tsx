@@ -36,6 +36,20 @@ export function InvitationsAdminSection({ cityId }: { cityId: string }) {
   const mint = async () => {
     const target = email.trim().toLowerCase();
     if (!target) return;
+    /*
+     * If a usable invitation already exists for this address, surface ITS link
+     * rather than creating a second. Minting reported a false error once and
+     * produced two invitations for the same person; the duplicate was the
+     * user's reasonable response to a lie, so the fix belongs here as well as
+     * in the error handling.
+     */
+    const existing = (rows ?? []).find((i) => i.email === target && i.valid && !i.usedAt && i.token);
+    if (existing) {
+      setMinted({ email: target, url: api.invitationUrl(target, existing.token!) });
+      setCopied(false);
+      setEmail("");
+      return;
+    }
     setBusy(true);
     setError(null);
     const r = await api.createInvitation({ cityId, email: target });
@@ -73,7 +87,7 @@ export function InvitationsAdminSection({ cityId }: { cityId: string }) {
     if (i.usedAt) return { label: "Used", tone: "bg-emerald-100 text-emerald-800" };
     if (i.revokedAt) return { label: "Revoked", tone: "bg-slate-100 text-slate-600" };
     if (!i.valid) return { label: "Expired", tone: "bg-amber-100 text-amber-800" };
-    return { label: "Open", tone: "bg-[#FF5741]/15 text-[#14171C]" };
+    return { label: "Unused", tone: "bg-[#FF5741]/15 text-[#14171C]" };
   };
 
   return (
@@ -111,7 +125,7 @@ export function InvitationsAdminSection({ cityId }: { cityId: string }) {
           {/* Shown once — the server stores only a hash, so navigating away
               before copying means re-minting. Said plainly rather than left to
               be discovered. */}
-          <p className="mt-0.5 text-[12px] text-slate-600">Copy it now. It can&apos;t be shown again.</p>
+          <p className="mt-0.5 text-[12px] text-slate-600">Send this however you like — text, DM, email.</p>
           <div className="mt-2 flex gap-2">
             <input
               readOnly
@@ -124,6 +138,12 @@ export function InvitationsAdminSection({ cityId }: { cityId: string }) {
               {copied ? "Copied" : "Copy"}
             </button>
           </div>
+          {/* Dismissed only on request. It was transient before, so an error
+              during minting — or a refresh — stranded a valid invitation with
+              no way to recover its link. */}
+          <button type="button" onClick={() => setMinted(null)} className="mt-2 h-11 text-[13px] font-bold text-slate-600">
+            Done
+          </button>
         </div>
       ) : null}
 
@@ -147,6 +167,19 @@ export function InvitationsAdminSection({ cityId }: { cityId: string }) {
                 {/* Revoke only where it can do something. A used invitation
                     cannot be un-redeemed, and offering the button would be a
                     control that looks like it works. */}
+                {/* Every unredeemed row can reproduce its link. Previously the
+                    token existed only in the one-time panel, so a refresh left
+                    the invitation valid, unshareable and — because revoke was
+                    also broken — unremovable. */}
+                {i.valid && !i.usedAt && i.token ? (
+                  <button
+                    type="button"
+                    onClick={() => { setMinted({ email: i.email, url: api.invitationUrl(i.email, i.token!) }); setCopied(false); }}
+                    className="h-11 shrink-0 rounded-full px-3 text-[13px] font-bold text-[#FF5741]"
+                  >
+                    Copy link
+                  </button>
+                ) : null}
                 {i.valid && !i.usedAt ? (
                   <button
                     type="button"

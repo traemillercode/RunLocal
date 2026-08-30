@@ -149,6 +149,11 @@ export const REASON_REQUIRED_ACTIONS: ReadonlySet<string> = new Set([
   "admin.sponsor_delete",
   "admin.flag_hide",
 
+  // NOTE: admin.invitation_revoke is deliberately NOT here. Revoking an
+  // unredeemed invitation is undoing your own action, not moderating a person —
+  // nobody is affected and there is no decision to justify. It was on this list
+  // and the client sent no header, so every revoke 400'd and the X did nothing.
+  //
   // Contested: a judgement another operator may need to understand or reverse.
   "admin.appeal_uphold",
   "admin.appeal_reinstate",
@@ -157,7 +162,6 @@ export const REASON_REQUIRED_ACTIONS: ReadonlySet<string> = new Set([
   "admin.trust_revoke",
   "admin.trust_grant",
   "admin.trust_threshold",
-  "admin.invitation_revoke",
 
   // Overriding another operator, or changing who can operate.
   "admin.roles_assign",
