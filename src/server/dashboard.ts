@@ -344,6 +344,20 @@ export function suspendAccount(
     suspensionReason: ctx.reason!.trim().slice(0, REASON_MAX),
     lastActivityAt: now.toISOString(),
   })!;
+  /*
+   * KILL THE LIVE SESSION. Without this, suspension takes effect whenever the
+   * person's cookie happens to expire — which for someone suspended because
+   * they made another runner unsafe is not removal, it is a label.
+   *
+   * requireSession now also rejects a suspended account, so this is belt AND
+   * braces: the check covers a session we do not know about (another device),
+   * and this covers the one we do, immediately.
+   *
+   * INVITATIONS ARE DELIBERATELY UNTOUCHED. A redeemed invitation stays
+   * redeemed — otherwise suspending someone would free a cohort slot and the
+   * cap would drift upward every time.
+   */
+  db.deleteSessionsForAccount(accountId);
   return { ok: true, data: suspensionView(updated) };
 }
 

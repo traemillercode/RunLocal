@@ -398,12 +398,43 @@ function decodeImage(dataUrl: string, minEdge = 64): { ok: true; bytes: Buffer; 
   return { ok: true, bytes, ext };
 }
 
+/**
+ * THE CHOKEPOINT. 137 callers, one check.
+ *
+ * Suspension used to write a flag and change nothing: this returned a valid
+ * session for a suspended account, and exactly ONE of the 137 endpoints
+ * consulted `suspended` afterwards. So a suspended person kept RSVPing,
+ * messaging, posting and joining groups — they were labelled, not removed.
+ *
+ * Rejecting here rather than at 136 call sites is the same shape as fixing the
+ * error copy in the ApiError constructor: an endpoint added tomorrow is covered
+ * without anyone remembering.
+ *
+ * ENFORCED AT THE COOKIE, not here. Rejecting inside requireSession looked like
+ * the right chokepoint and was WRONG: it collapses "suspended" into "not signed
+ * in", so every endpoint that already returned a specific 403 with a reason
+ * started returning a bare 401 instead. Six test files caught it — the
+ * endpoints were more informative than the chokepoint replacing them.
+ *
+ * Instead: the suspend handler deletes the session, and sign-in refuses to
+ * create a new one. A suspended person therefore has no valid cookie at all,
+ * which is the same outcome without discarding the specific errors the
+ * endpoints already produce for the case where one somehow persists.
+ */
 function requireSession(db: Db, cookies: Record<string, string>): { accountId: string; sessionId: string } | null {
   const sid = cookies[SESSION_COOKIE];
   if (!sid) return null;
   const session = db.getSession(sid);
   if (!session || session.accountId === "__admin__") return null;
   return { accountId: session.accountId, sessionId: sid };
+}
+
+/** True while a suspension is in force. An elapsed suspendedUntil is not. */
+export function isCurrentlySuspended(account: { suspended?: boolean; suspendedUntil?: string | null }, now = new Date()): boolean {
+  if (!account.suspended) return false;
+  // No end date means indefinite.
+  if (!account.suspendedUntil) return true;
+  return new Date(account.suspendedUntil).getTime() > now.getTime();
 }
 
 async function handleApi(
@@ -1719,6 +1750,24 @@ async function handleApi(
     // also proves email ownership, so a pending account still on the
     // email-code stage advances straight to the selfie step — the primary
     // flow never shows a six-digit code after the confirmation link.
+    /*
+     * TELL THEM WHY. Signing someone out with a generic failure is worse than
+     * telling them: they assume a bug and keep trying, and the person who was
+     * protected by the suspension is not served by the suspended person
+     * thinking Kimbio is broken.
+     *
+     * Refused BEFORE the session is created, so a suspended account cannot get
+     * a fresh cookie by signing in again.
+     */
+    if (isCurrentlySuspended(rec, now)) {
+      return err(res, {
+        status: 403,
+        error: "suspended",
+        message: rec.suspendedUntil
+          ? `Your Kimbio account is suspended until ${new Date(rec.suspendedUntil).toLocaleDateString("en-US", { month: "long", day: "numeric" })}. Email hello@getkimbio.com if you think this is a mistake.`
+          : "Your Kimbio account is suspended. Email hello@getkimbio.com if you think this is a mistake.",
+      }), true;
+    }
     const patch: Partial<AccountRecord> = { ...linked.patch, lastActivityAt: now.toISOString() };
     if (rec.phase === "email" || rec.phase === "code") patch.phase = "selfie";
     db.updateAccount(rec.id, patch);
