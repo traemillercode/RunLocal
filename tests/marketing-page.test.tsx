@@ -57,7 +57,10 @@ describe("public marketing landing page", () => {
     // would make this fail every Tuesday for no reason.
     expect(html).toContain("marketing-live-board");
 
-    const count = /marketing-live-count[^>]*><strong>(\d+)/.exec(html);
+    // The count is no longer wrapped in <strong> — it is a display-scale
+    // tabular numeral with the unit in a span beside it, so the number is the
+    // first text node inside the element.
+    const count = /marketing-live-count[^>]*>(\d+)/.exec(html);
     expect(count).not.toBeNull();
     expect(Number(count![1])).toBeGreaterThan(0);
 

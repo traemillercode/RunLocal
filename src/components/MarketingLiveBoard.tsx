@@ -115,9 +115,23 @@ export function MarketingLiveBoard({ city }: { city: City }) {
         {/* The counter does more persuasive work than the cards. Both numbers
             are real; goingCount is suppressed rather than shown as 0 when
             nobody has RSVP'd yet, since "0 going" argues against us. */}
+        {/*
+          Runs are the schedule; people are the pitch. The going count sits
+          beside the run count in coral because "34 going" is the sentence that
+          proves a community exists — a run list alone is a calendar.
+          Suppressed rather than shown as 0 when nobody has RSVP'd, for the same
+          reason the competitor's "0.00" fails: a zero argues against us.
+        */}
         <p className="marketing-live-count">
-          <strong>{weekEvents.length}</strong> {weekEvents.length === 1 ? "run" : "runs"} this week
-          {totalGoing > 0 ? <> · <strong>{totalGoing}</strong> going</> : null}
+          {weekEvents.length}
+          <span className="marketing-live-unit"> {weekEvents.length === 1 ? "run" : "runs"} this week</span>
+          {totalGoing > 0 ? (
+            <>
+              <span className="marketing-live-unit"> · </span>
+              <span className="marketing-live-going">{totalGoing}</span>
+              <span className="marketing-live-unit"> going</span>
+            </>
+          ) : null}
         </p>
       </div>
 

@@ -121,80 +121,94 @@
    CTA, and nothing is inserted between the headline and the board, so on a
    phone the proof of activity is the first thing under the title rather than
    sitting below an image. */
+/* ── Live board hero (1.4, restyled) ───────────────────────────────────────
+   Was centred with a white card floating on the dark page — which abandoned
+   the product's own signature (DepartureBoard's hard left rail and tabular
+   numerals) at the one place a stranger meets the brand, and made the board
+   read as a dropped-in widget rather than the hero.
+
+   Now: left-aligned, coral rail as the anchor, ink-on-ink board so it is
+   visibly the same card the app uses. */
 .marketing-hero-live {
-  max-width: 720px;
+  max-width: 1040px;
   margin: 0 auto;
-  padding: 56px 20px 40px;
-  text-align: center;
+  padding: 64px 24px 48px;
+  text-align: left;
 }
 .marketing-hero-live h1 {
-  font-size: clamp(32px, 6vw, 52px);
-  line-height: 1.05;
-  letter-spacing: -0.03em;
+  font-size: clamp(34px, 6.5vw, 60px);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
   font-weight: 800;
-  margin: 0 0 12px;
+  margin: 0 0 14px;
+  max-width: 16ch;
 }
-.marketing-hero-live .marketing-lede-warm { margin: 0 auto 28px; max-width: 44ch; }
-.marketing-hero-live .marketing-actions { margin-top: 28px; justify-content: center; }
+.marketing-hero-live .marketing-lede-warm { margin: 0 0 30px; max-width: 46ch; }
+.marketing-hero-live .marketing-actions { margin-top: 30px; justify-content: flex-start; }
 
+/* The board IS the product's card: ink surface, coral gutter, no float. */
 .marketing-live-board {
   text-align: left;
-  background: #fff;
-  /*
-    .marketing-page sets color:#f7f7f5 for the dark page, and this card is the
-    one white surface on it — so anything not explicitly coloured inherits
-    near-white ON white. The run titles were rendering invisible while the
-    location and distance below them looked fine, purely because those two had
-    explicit colours and the h3 did not. Set the base colour on the card so
-    every descendant inherits an on-white value by default.
-  */
-  color: #14171C;
-  border: 1px solid #E4E4DF;
-  border-radius: 16px;
+  background: #1A1E24;
+  color: #F7F7F5;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  /* The coral rail — DepartureBoard's signature, and the anchor the centred
+     version had no room for. */
+  border-left: 4px solid #FF5741;
+  border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 8px 28px -18px rgba(20, 23, 28, 0.35);
 }
 .marketing-live-header {
-  padding: 16px 18px 12px;
-  border-bottom: 1px solid #E4E4DF;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
+/* The number IS the argument that a community exists, so it is set at display
+   scale with tabular numerals rather than at body size. */
 .marketing-live-count {
-  margin: 4px 0 0;
-  font-size: 20px;
-  letter-spacing: -0.02em;
-  color: #14171C;
+  margin: 6px 0 0;
+  font-size: clamp(30px, 5vw, 44px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
 }
-.marketing-live-count strong { font-weight: 800; font-variant-numeric: tabular-nums; }
+.marketing-live-count .marketing-live-unit {
+  font-size: 0.42em;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: rgba(247, 247, 245, 0.62);
+}
+/* People are the pitch; runs are only the schedule. */
+.marketing-live-going { color: #FF5741; }
 
 .marketing-live-list { list-style: none; margin: 0; padding: 0; }
 .marketing-live-item {
   display: flex;
-  gap: 14px;
-  padding: 14px 18px;
-  border-bottom: 1px solid #F1F1EE;
+  gap: 16px;
+  padding: 15px 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 .marketing-live-item:last-child { border-bottom: 0; }
-/* Ink time rail — the DepartureBoard's signature device, reused so the
-   marketing page and the product read as one system. */
 .marketing-live-when {
-  color: #14171C;
   flex-shrink: 0;
-  min-width: 96px;
+  min-width: 104px;
   font-size: 13px;
   font-weight: 700;
-  color: #14171C;
+  color: #FFFFFF;
   font-variant-numeric: tabular-nums;
 }
-.marketing-live-body h3 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; color: #14171C; }
-.marketing-live-body p { margin: 2px 0 0; font-size: 13px; color: #7A7A72; }
+.marketing-live-body h3 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; color: #FFFFFF; }
+.marketing-live-body p { margin: 2px 0 0; font-size: 13px; color: rgba(247, 247, 245, 0.56); }
 .marketing-live-meta { font-weight: 600; }
-.marketing-live-board .marketing-text-link { display: inline-block; margin: 14px 18px 16px; }
+.marketing-live-board .marketing-text-link { display: inline-block; margin: 16px 22px 18px; color: #FF5741; }
 
-.marketing-live-board-empty { padding: 20px 18px; }
-.marketing-live-empty-line { margin: 6px 0 12px; font-size: 15px; color: #14171C; }
+.marketing-live-board-empty { padding: 22px; }
+.marketing-live-empty-line { margin: 6px 0 12px; font-size: 15px; color: #F7F7F5; }
 
 @media (max-width: 560px) {
-  .marketing-hero-live { padding: 32px 16px 28px; }
+  .marketing-hero-live { padding: 28px 16px 24px; }
+  .marketing-hero-live h1 { max-width: none; }
   /* Stack the time above the run on narrow screens rather than squeezing a
      96px rail against the title. */
   .marketing-live-item { flex-direction: column; gap: 4px; }
