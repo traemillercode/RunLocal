@@ -305,6 +305,7 @@ export class Db {
   private recognitions = new Map<string, import("./types").RecognitionRecord>();
   private attendance = new Map<string, import("./types").AttendanceRecord>();
   private feedback = new Map<string, import("./types").FeedbackRecord>();
+  private waitlist = new Map<string, import("./types").WaitlistEntry>();
   private personalRuns = new Map<string, import("./types").PersonalRunRecord>();
   private matchingPreferences = new Map<string, import("./types").MatchingPreferencesRecord>();
   private joinRequests = new Map<string, import("./types").JoinRequestRecord>();
@@ -445,6 +446,7 @@ export class Db {
       for (const r of parsed.recognitions ?? []) this.recognitions.set(`${r.accountId}:${r.role}`, r);
       for (const a of parsed.attendance ?? []) this.attendance.set(a.id, { ...a, deletedAt: a.deletedAt ?? null, visibilityOverride: a.visibilityOverride ?? "inherit" });
       for (const f of parsed.feedback ?? []) this.feedback.set(f.id, f);
+      for (const w of parsed.waitlist ?? []) this.waitlist.set(w.id, w);
       for (const r of parsed.personalRuns ?? []) this.personalRuns.set(r.id, r);
       for (const p of parsed.matchingPreferences ?? []) this.matchingPreferences.set(p.accountId, p);
       for (const j of parsed.joinRequests ?? []) this.joinRequests.set(j.id, { ...j, requesterAccepted: j.requesterAccepted ?? false, recipientAccepted: j.recipientAccepted ?? false });
@@ -535,6 +537,7 @@ export class Db {
       recognitions: [...this.recognitions.values()],
       attendance: [...this.attendance.values()],
       feedback: [...this.feedback.values()],
+      waitlist: [...this.waitlist.values()],
       personalRuns: [...this.personalRuns.values()],
       matchingPreferences: [...this.matchingPreferences.values()],
       joinRequests: [...this.joinRequests.values()],
@@ -1118,6 +1121,25 @@ export class Db {
 
   // ---- Product feedback (roadmap 0.7) ----------------------------------
   addFeedback(f: import("./types").FeedbackRecord) { this.feedback.set(f.id, f); return f; }
+
+  // ---- Waitlist -------------------------------------------------------
+  /** Existing entry for an address, if any. Email is the natural key. */
+  findWaitlistByEmail(email: string) {
+    const key = email.trim().toLowerCase();
+    return [...this.waitlist.values()].find((w) => w.email === key);
+  }
+  addWaitlistEntry(w: import("./types").WaitlistEntry) { this.waitlist.set(w.id, w); return w; }
+  updateWaitlistEntry(id: string, patch: Partial<import("./types").WaitlistEntry>) {
+    const w = this.waitlist.get(id);
+    if (!w) return undefined;
+    const next = { ...w, ...patch };
+    this.waitlist.set(id, next);
+    return next;
+  }
+  /** Newest first — the admin list wants the most recent signup at the top. */
+  listWaitlist() {
+    return [...this.waitlist.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
   /** Newest first - an admin reading a beta queue wants the latest report at the top. */
   listFeedback(opts?: { category?: import("./types").FeedbackCategory; unresolvedOnly?: boolean }) {
     return [...this.feedback.values()]

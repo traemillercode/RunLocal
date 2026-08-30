@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import * as api from "../lib/api";
 
 /**
  * What a signed-out stranger sees when they reach any app route during the
@@ -28,20 +30,87 @@ export function PrivateBetaPage() {
           It won&apos;t be long.
         </p>
         {/*
-          A mailto rather than a form: hello@ receives now, and a form here
-          would need a table, an endpoint and moderation to hold addresses we
-          have not yet decided what to do with.
+          A real form, not a mailto. A mailto loses everyone who is not on a
+          configured mail client, records nothing, and leaves the next fifty
+          users sitting in an inbox with no list and no way to invite them as a
+          batch.
         */}
-        <a
-          href="mailto:hello@getkimbio.com?subject=Kimbio%20beta"
-          className="mt-6 inline-flex h-11 items-center rounded-xl bg-[#FF5741] px-5 text-[14px] font-bold text-[#14171C]"
-        >
-          Email us for a spot
-        </a>
+        <WaitlistForm />
         <p className="mt-6 text-[13px] text-[#8A8D93]">
           <Link to="/" className="underline underline-offset-2">Back to the homepage</Link>
         </p>
       </div>
+    </div>
+  );
+}
+
+
+function WaitlistForm() {
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!email.trim()) return;
+    setBusy(true);
+    setError(null);
+    const r = await api.joinWaitlist({ email: email.trim(), name: name.trim() || undefined });
+    setBusy(false);
+    if (r.ok) setDone(true);
+    else setError(r.error.message);
+  };
+
+  if (done) {
+    /*
+     * The same message whether they were already on the list or not. Telling
+     * someone "you already signed up" is a correction nobody needs, and it
+     * leaks that an address is on the list to anyone who guesses it.
+     */
+    return (
+      <div className="mt-6 rounded-xl bg-[#1A1E24] p-4 ring-1 ring-white/10">
+        <p className="text-[15px] font-bold text-[#F7F7F5]">You&apos;re on the list.</p>
+        <p className="mt-1 text-[13px] text-[#B5B7BB]">
+          We&apos;ll email you the moment we open up. Check your spam folder if nothing arrives — we&apos;re a new domain.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 max-w-sm">
+      <label className="block text-[13px] font-bold text-[#B5B7BB]" htmlFor="wl-email">Email</label>
+      <input
+        id="wl-email"
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@example.com"
+        className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-[#1A1E24] px-3.5 text-[15px] text-[#F7F7F5] outline-none focus:border-[#FF5741]"
+      />
+      {/* Optional, and labelled as such — a required name on a waitlist is a
+          reason not to bother. */}
+      <label className="mt-3 block text-[13px] font-bold text-[#B5B7BB]" htmlFor="wl-name">Name <span className="font-normal text-[#8A8D93]">(optional)</span></label>
+      <input
+        id="wl-name"
+        type="text"
+        autoComplete="name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="mt-1 h-11 w-full rounded-xl border border-white/15 bg-[#1A1E24] px-3.5 text-[15px] text-[#F7F7F5] outline-none focus:border-[#FF5741]"
+      />
+      {error ? <p className="mt-2 text-[13px] font-semibold text-[#FF8B7A]">{error}</p> : null}
+      <button
+        type="button"
+        onClick={() => void submit()}
+        disabled={busy || !email.trim()}
+        className="mt-4 h-11 w-full rounded-xl bg-[#FF5741] text-[14px] font-bold text-[#14171C] disabled:opacity-40"
+      >
+        {busy ? "Adding you…" : "Tell me when it opens"}
+      </button>
     </div>
   );
 }

@@ -460,6 +460,7 @@ export interface PersistedDb {
   attendance?: AttendanceRecord[];
   /** Optional like every other collection, so a store written before feedback existed hydrates unchanged. */
   feedback?: FeedbackRecord[];
+  waitlist?: WaitlistEntry[];
   personalRuns?: PersonalRunRecord[];
   matchingPreferences?: MatchingPreferencesRecord[];
   joinRequests?: JoinRequestRecord[];
@@ -1472,4 +1473,30 @@ export interface FeedbackRecord {
   createdAt: string;
   /** Set once an admin has dealt with it. Read by the 1.6 queue later. */
   resolvedAt: string | null;
+}
+
+/**
+ * Someone who asked to be told when Kimbio opens.
+ *
+ * The next fifty users. Until now the entire capture mechanism was
+ * "email hello@getkimbio.com", which means they lived in an inbox with no
+ * list, no export, and no way to invite them as a batch.
+ *
+ * `source` carries the UTM the visitor arrived with, so an ad campaign can be
+ * measured against signups rather than against clicks — the data has been
+ * captured since launch and had nowhere to land.
+ */
+export type WaitlistStatus = "interested" | "invited" | "joined";
+
+export interface WaitlistEntry {
+  id: string;
+  /** Lower-cased, and unique — a second submission updates rather than duplicates. */
+  email: string;
+  name: string | null;
+  /** utm_source/medium/campaign at the moment of signup, joined for display. */
+  source: string | null;
+  createdAt: string;
+  status: WaitlistStatus;
+  /** Set when promote-to-invite mints an invitation for this address. */
+  invitedAt: string | null;
 }

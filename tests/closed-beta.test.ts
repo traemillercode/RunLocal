@@ -64,9 +64,12 @@ describe("the owner's access cannot be gated by the flip", () => {
 describe("a stranger sees a real page, not a wall or an error", () => {
   const PAGE = readCode(new URL("../src/pages/PrivateBetaPage.tsx", import.meta.url));
 
-  it("says what is true and offers a way to ask", () => {
+  it("says what is true and captures the person properly", () => {
+    // The mailto is gone: it lost anyone without a configured mail client,
+    // recorded nothing, and left the next fifty users in an inbox with no list.
     expect(PAGE).toContain("private beta");
-    expect(PAGE).toContain("mailto:hello@getkimbio.com");
+    expect(PAGE).toContain("api.joinWaitlist(");
+    expect(PAGE).not.toContain("mailto:");
   });
 
   it("offers no sign-in or signup, which would advertise a shut door", () => {

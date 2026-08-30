@@ -1198,6 +1198,66 @@ async function handleApi(
    * that a beta is full, which is public-facing copy anyway, and nothing about
    * who is in it or how many slots remain.
    */
+  /*
+   * POST /api/waitlist — public. The capture that did not exist.
+   *
+   * Unauthenticated by necessity: the whole point is people who cannot sign up.
+   *
+   * IDEMPOTENT. Someone will submit twice — they will not remember, or the
+   * first attempt will look like it failed. A duplicate returns success without
+   * a second row and without a second email. An error here would read as
+   * rejection, which is the opposite of what a waitlist is for.
+   */
+  if (method === "POST" && url.pathname === "/api/waitlist") {
+    const b = (await readJson(req)) as Record<string, unknown>;
+    const email = typeof b.email === "string" ? b.email.trim().toLowerCase() : "";
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return err(res, { status: 400, error: "invalid_email", message: "That doesn't look like an email address." }), true;
+    }
+    const name = typeof b.name === "string" && b.name.trim() ? b.name.trim().slice(0, 80) : null;
+    const source = ["utm_source", "utm_medium", "utm_campaign"]
+      .map((k) => (typeof b[k] === "string" ? (b[k] as string).trim() : ""))
+      .filter(Boolean)
+      .join(" / ") || null;
+
+    const existing = db.findWaitlistByEmail(email);
+    if (existing) {
+      // Fill in a name if they gave one this time and had not before, but do
+      // not resend or reset their place.
+      if (name && !existing.name) { db.updateWaitlistEntry(existing.id, { name }); await db.persist(); }
+      return ok(res, { ok: true, alreadyOn: true }), true;
+    }
+
+    db.addWaitlistEntry({
+      id: `wl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      email, name, source,
+      createdAt: new Date().toISOString(),
+      status: "interested",
+      invitedAt: null,
+    });
+    await db.persist();
+
+    /*
+     * The first thing anyone receives from Kimbio, and it goes out before any
+     * invite — so it is also the earliest real signal of deliverability, which
+     * matters given the Gmail junk placement and the two .edu addresses that
+     * never confirmed. Fire-and-forget: a mail failure must not fail the
+     * signup, because the record is the thing that matters.
+     */
+    void sendEmail({
+      to: email,
+      from: "Kimbio <hello@getkimbio.com>",
+      subject: "You're on the list",
+      html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#14171C;max-width:520px;line-height:1.6;">
+<p style="font-size:16px;">Thanks for your interest in Kimbio.</p>
+<p style="font-size:16px;">We're in a private beta in Columbia right now, getting it right with a small group. You're on the list — we'll email you the moment we open up.</p>
+<p style="font-size:14px;color:#5b5f66;">— Kimbio</p>
+</div>`,
+    });
+
+    return ok(res, { ok: true, alreadyOn: false }), true;
+  }
+
   if (method === "GET" && url.pathname === "/api/signup-status") {
     const cityId = (url.searchParams.get("city") ?? "").trim();
     const status = cityId ? cityStatus(db, cityId) : null;

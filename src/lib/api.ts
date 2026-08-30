@@ -1,4 +1,5 @@
 import { errorCopy } from "./errorCopy";
+import { getStoredUtm } from "./analytics";
 /**
  * Typed client for the Kimbio API (/api/*, same origin).
  *
@@ -1874,4 +1875,16 @@ export function revokeInvitation(id: string, reason = "Invitation revoked"): Pro
 export function invitationUrl(email: string, token: string): string {
   const base = typeof window !== "undefined" ? window.location.origin : "https://getkimbio.com";
   return `${base}/login?mode=signup&invite=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+}
+
+/**
+ * Join the waitlist. Public — the people who need it cannot sign up.
+ *
+ * Idempotent server-side: a second submission returns ok with alreadyOn: true
+ * rather than an error, because an error on a waitlist form reads as rejection.
+ */
+export function joinWaitlist(input: { email: string; name?: string }): Promise<ApiResult<{ ok: true; alreadyOn: boolean }>> {
+  // UTM travels with the signup so an ad can be measured against signups
+  // rather than clicks — it has been captured since launch with nowhere to land.
+  return request("/api/waitlist", { method: "POST", body: JSON.stringify({ ...input, ...getStoredUtm() }) });
 }
