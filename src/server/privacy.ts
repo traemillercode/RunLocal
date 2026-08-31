@@ -196,3 +196,46 @@ export function blockedPersonLeadsGroupsWithBlocker(db: Db, blockerId: string, b
   }
   return out;
 }
+
+/**
+ * What a block does NOT do, for the specific pair — as one answer.
+ *
+ * There are now two things she has to be told at block time, and there will be
+ * a third. Delivering them as separate notices turns a moment that should
+ * inform her into a queue of alerts she stops reading, so they resolve to one
+ * panel that lists whatever applies.
+ *
+ * INFORMED CONSENT IS THE POINT. She must not discover months later that he
+ * has been reading her posts in the club thread. Knowing lets her post
+ * differently, leave the group, or ask a lead to act — all her call, and none
+ * of them ours to make.
+ */
+export interface BlockCaveat {
+  kind: "shared_group" | "leads_group";
+  groupId: string;
+  groupName: string;
+}
+
+export function blockCaveats(db: Db, blockerId: string, blockedId: string): BlockCaveat[] {
+  const blocked = db.getAccount(blockedId);
+  if (!blocked) return [];
+  const mine = new Set(db.listMemberships(blockerId).filter((m) => m.status === "active").map((m) => m.groupId));
+  if (mine.size === 0) return [];
+  const caveats: BlockCaveat[] = [];
+  for (const m of db.listMemberships(blockedId)) {
+    if (m.status !== "active" || !mine.has(m.groupId)) continue;
+    const group = db.getGroup(m.groupId);
+    if (!group) continue;
+    /*
+     * Leadership is reported INSTEAD of shared membership, not alongside it.
+     * A leader is necessarily a member, and saying both would state the weaker
+     * fact twice — while the leader case is the one that needs a human.
+     */
+    caveats.push({
+      kind: isGroupLead(db, group, blocked) ? "leads_group" : "shared_group",
+      groupId: group.id,
+      groupName: group.name,
+    });
+  }
+  return caveats;
+}

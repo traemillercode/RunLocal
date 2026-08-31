@@ -148,7 +148,7 @@ import {
   requestConnection,
   searchable,
 } from "./connections";
-import { canView, blockedPersonLeadsGroupsWithBlocker, hiddenFrom, withoutHidden } from "./privacy";
+import { canView, blockCaveats, hiddenFrom, withoutHidden } from "./privacy";
 import sharp from "sharp";
 
 /**
@@ -2652,7 +2652,23 @@ async function handleApi(
      * emergency, and it must not read to her as though something happened —
      * she blocked someone, which is a thing she is entitled to do quietly.
      */
-    const ledGroups = blockedPersonLeadsGroupsWithBlocker(db, sess.accountId, param);
+    /*
+     * ONE PANEL, not a queue of alerts. Two things must be said at block time
+     * and there will be a third; separate notices turn a moment that should
+     * inform her into noise she stops reading.
+     *
+     * Returned in the RESPONSE rather than delivered as a notification, because
+     * she is standing there having just blocked someone — that is the moment
+     * the information is useful, and a notification arriving later reads as
+     * "something happened" rather than "here is what you just did".
+     */
+    const caveats = blockCaveats(db, sess.accountId, param);
+    /*
+     * The leader case ALSO escalates to a human, because filtering cannot
+     * remove his powers over her content and that needs a judgement she should
+     * not have to make alone.
+     */
+    const ledGroups = caveats.filter((c) => c.kind === "leads_group");
     if (ledGroups.length > 0) {
       const owner = db.getAccountByEmail(ownerEmail());
       if (owner && owner.id !== sess.accountId) {
@@ -2661,7 +2677,7 @@ async function handleApi(
           accountId: owner.id,
           category: "account_alerts",
           title: "A member blocked a group leader",
-          body: `Someone blocked a leader of ${ledGroups.map((g) => g.name).join(", ")} — a group they are in. Filtering cannot remove a leader's powers over their content.`,
+          body: `Someone blocked a leader of ${ledGroups.map((g) => g.groupName).join(", ")} — a group they are in. Filtering cannot remove a leader's powers over their content.`,
           createdAt: now.toISOString(),
           readAt: null,
           link: { kind: "verify", id: param },
@@ -2669,7 +2685,7 @@ async function handleApi(
       }
     }
     await db.persist();
-    return ok(res, { status: "blocked" }), true;
+    return ok(res, { status: "blocked", caveats }), true;
   }
 
   // ---- coach-athlete relationships (consent-based, scoped per person - not a global role) ----

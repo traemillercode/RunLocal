@@ -1164,8 +1164,22 @@ export function declineConnection(requestId: string): Promise<ApiResult<{ status
 export function removeConnection(accountId: string): Promise<ApiResult<{ status: string }>> {
   return request(`/api/connections/${encodeURIComponent(accountId)}/remove`, { method: "POST" });
 }
+/**
+ * What a block does not do, for this specific pair. Empty in the common case.
+ *
+ * Shown at block time rather than sent later: she is standing there having just
+ * blocked someone, which is when the information is useful. A notification
+ * arriving afterwards reads as "something happened" rather than "here is what
+ * you just did".
+ */
+export interface BlockCaveat {
+  kind: "shared_group" | "leads_group";
+  groupId: string;
+  groupName: string;
+}
+
 /** POST /api/connections/:id/block — writes a block + removes any active row. */
-export function blockConnection(accountId: string): Promise<ApiResult<{ status: string }>> {
+export function blockConnection(accountId: string): Promise<ApiResult<{ status: string; caveats?: BlockCaveat[] }>> {
   return request(`/api/connections/${encodeURIComponent(accountId)}/block`, { method: "POST" });
 }
 /** Unblock via the EXISTING single block system (POST /api/blocks DELETE). */

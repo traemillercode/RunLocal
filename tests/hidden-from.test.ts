@@ -203,7 +203,9 @@ describe("blocking a group leader escalates to a human", () => {
     const api = readCode(new URL("../src/server/api.ts", import.meta.url));
     // Wired into the block action, not merely defined — the sixth instance of
     // "capability exists, nothing calls it" is one I would rather not add.
-    expect(api).toContain("blockedPersonLeadsGroupsWithBlocker(db, sess.accountId, param)");
+    // Superseded by blockCaveats(), which resolves shared-group AND leadership
+    // in one pass — two block-time notices had to become one panel.
+    expect(api).toContain("blockCaveats(db, sess.accountId, param)");
     expect(typeof blockedPersonLeadsGroupsWithBlocker).toBe("function");
   });
 
@@ -213,8 +215,8 @@ describe("blocking a group leader escalates to a human", () => {
      * actionable. "Escalate" is not.
      */
     const src = readCode(new URL("../src/server/privacy.ts", import.meta.url));
-    const at = src.indexOf("export function blockedPersonLeadsGroupsWithBlocker");
-    expect(src.slice(at, at + 200)).toContain("{ id: string; name: string }[]");
+    const at = src.indexOf("export function blockCaveats");
+    expect(src.slice(at, at + 200)).toContain("BlockCaveat[]");
   });
 
   it("notifies without emailing", () => {
