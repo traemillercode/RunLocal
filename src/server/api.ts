@@ -66,7 +66,7 @@ import {
   signViaSession,
 } from "./checkins";
 import { membershipDto, myMemberships, createMembership, canAdministerMembership, getOrCreateGroupChat, syncGroupChatMembership } from "./memberships";
-import { listLedGroups, leaderQueue, assignGroupLeader, removeGroupLeader, transferGroupOwnership, editGroupProfile, notifyLeadersOfMembershipRequest, type GroupProfilePatch } from "./leadership";
+import { listLedGroups, leaderQueue, groupRoster, assignGroupLeader, removeGroupLeader, transferGroupOwnership, editGroupProfile, notifyLeadersOfMembershipRequest, type GroupProfilePatch } from "./leadership";
 import { publicEvents, listAdminEvents, createEvent, editEvent, transitionEvent } from "./events";
 import { eventCapabilities, moderateEvent, editEventPublic } from "./eventModeration";
 import { publicRaces, editRacePublic } from "./races";
@@ -747,6 +747,31 @@ async function handleApi(
     membership.updatedAt=now.toISOString(); membership.decidedAt=now.toISOString(); membership.decidedBy=sess.accountId;
     db.updateMembership(membership.id,membership); db.appendAudit({admin:account?.email ?? "unknown",action:(membershipAction[2] === "leave" ? "group.membership_leave" : membershipAction[2] === "approve" ? "group.membership_approve" : membershipAction[2] === "decline" ? "group.membership_decline" : "group.membership_remove") as import("./types").AdminAction,reason:"Membership lifecycle action",targetId:group.id,ip,cityId:group.cityId});
     syncGroupChatMembership(db, group.id, targetId, membership.status === "active" ? "add" : "remove");
+    /*
+     * TELL THEM. Being removed from a club you thought you were in and finding
+     * out by absence — noticing the runs stopped appearing — is worse than
+     * being told, and it invites them to assume a bug and keep trying.
+     *
+     * Deliberately DIFFERENT from a block, where silence is the entire point. A
+     * block hides one person from another; a removal is a group acting, and a
+     * group that acts should say so. The reason is NOT included: it is in the
+     * audit trail for review, and a removal message is not the place to relay
+     * whatever a leader typed in the moment.
+     *
+     * Not sent when they left of their own accord — they know.
+     */
+    if (membershipAction[2] === "remove" && targetId !== sess.accountId) {
+      db.addNotification({
+        id: newId(),
+        accountId: targetId,
+        category: "account_alerts",
+        title: `You were removed from ${group.name}`,
+        body: "You can ask to join again, or contact the group if you think this was a mistake.",
+        createdAt: now.toISOString(),
+        readAt: null,
+        link: { kind: "group_manage", id: group.id },
+      });
+    }
     await db.persist();
     return ok(res,{membership:membershipDto(db,membership)}),true;
   }
@@ -782,6 +807,20 @@ async function handleApi(
     const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
     const actor = db.getAccount(sess.accountId); if (!actor || actor.deletedAt) return err(res,{status:401,error:"sign_in_required"}),true;
     return ok(res,{pending:leaderQueue(db,actor)}),true;
+  }
+  /*
+   * GET /api/me/leader/roster — active members of every group you lead.
+   *
+   * Did not exist. The manage page rendered approve and decline for PENDING
+   * requests and nothing else, so a club leader could not see who was in their
+   * club. Table stakes for the group product, and separately it blocked a
+   * safety path: "removing him is the club's decision" was unusable because the
+   * club had no surface on which to decide.
+   */
+  if (method === "GET" && url.pathname === "/api/me/leader/roster") {
+    const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
+    const actor = db.getAccount(sess.accountId); if (!actor || actor.deletedAt) return err(res,{status:401,error:"sign_in_required"}),true;
+    return ok(res,{members:groupRoster(db,actor)}),true;
   }
   const leaderAssign = /^\/api\/groups\/([^/]+)\/leaders$/.exec(url.pathname);
   if (leaderAssign && method === "POST") {

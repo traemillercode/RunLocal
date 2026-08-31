@@ -92,6 +92,9 @@ export function GroupProfileForm({
 export function GroupManagePage({ id }: { id: string }) {
   const [row, setRow] = useState<api.LedGroupRow | null | "loading">("loading");
   const [pending, setPending] = useState<api.PendingRequestRow[]>([]);
+  const [members, setMembers] = useState<api.RosterMemberRow[] | null>(null);
+  const [removing, setRemoving] = useState<api.RosterMemberRow | null>(null);
+  const [removeReason, setRemoveReason] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [email, setEmail] = useState("");
@@ -115,6 +118,10 @@ export function GroupManagePage({ id }: { id: string }) {
         }
         void api.getLeaderQueue().then((q) => {
           if (q.ok) setPending(q.data.pending.filter((p) => p.groupId === id));
+        });
+        // Scoped to this group: the endpoint returns every group you lead.
+        void api.getLeaderRoster().then((r) => {
+          if (r.ok) setMembers(r.data.members.filter((m) => m.groupId === id));
         });
       }
     });
@@ -157,6 +164,83 @@ export function GroupManagePage({ id }: { id: string }) {
               </div>
             </div>
           ))}</div>}
+      {/*
+        THE ROSTER. A lead could not see who was in their own club — the page
+        showed pending requests and nothing else. That is table stakes for the
+        group product, and it separately blocked a safety path: "removing him is
+        the club's decision" was unusable because the club had no surface on
+        which to decide.
+      */}
+      <h2 className="mt-8 text-lg font-black">Members</h2>
+      {members === null ? (
+        <p className="mt-3 text-sm text-slate-400">Loading…</p>
+      ) : members.length === 0 ? (
+        <p className="mt-3 rounded-2xl bg-white p-5 text-sm text-slate-500 shadow-sm">No active members yet.</p>
+      ) : (
+        <div className="mt-3 grid gap-3">
+          {members.map((m) => (
+            <div key={m.membershipId} className="flex items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-sm">
+              <div className="min-w-0">
+                <p className="truncate font-bold">
+                  {m.name}{m.username ? ` @${m.username}` : ""}
+                  {m.isLead ? <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">Lead</span> : null}
+                </p>
+                <p className="text-xs text-slate-500">{m.groupName} · joined {new Date(m.joinedAt).toLocaleDateString()}</p>
+              </div>
+              {/*
+                Leads are not removable here. Removing a leader is an ownership
+                act with its own path and its own consequences — offering it
+                beside ordinary removal invites doing it by accident.
+              */}
+              {m.isLead ? null : (
+                <button
+                  className="shrink-0 rounded-lg border border-rose-300 px-3 py-2 text-sm font-bold text-rose-700"
+                  onClick={() => { setRemoving(m); setRemoveReason(""); }}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {removing ? (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 sm:items-center" onClick={() => setRemoving(null)}>
+          <div className="w-full max-w-md rounded-t-2xl bg-white p-5 pb-8 sm:rounded-2xl sm:pb-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-extrabold text-slate-900">Remove {removing.name}?</h3>
+            <p className="mt-1 text-[13px] text-slate-600">
+              They&apos;ll be told they were removed from {removing.groupName}. They can request to join again.
+            </p>
+            {/* Reason required: removal goes on the audited side, and "why" is
+                the thing anyone reviewing this later will need. */}
+            <textarea
+              value={removeReason}
+              onChange={(e) => setRemoveReason(e.target.value)}
+              rows={3}
+              placeholder="Why are you removing them?"
+              className="mt-3 w-full rounded-xl border border-slate-300 p-3 text-[15px] outline-none focus:border-[#14171C]"
+            />
+            <div className="mt-3 flex gap-2">
+              <button className="h-11 flex-1 rounded-xl text-[14px] font-bold text-slate-700 ring-1 ring-slate-300" onClick={() => setRemoving(null)}>
+                Cancel
+              </button>
+              <button
+                className="h-11 flex-1 rounded-xl bg-rose-700 text-[14px] font-bold text-white disabled:opacity-40"
+                disabled={removeReason.trim().length < 5}
+                onClick={() => {
+                  const target = removing;
+                  setRemoving(null);
+                  act(api.updateGroupMembership(target.groupId, "remove", target.accountId), `${target.name} was removed.`);
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <h2 className="mt-8 text-lg font-black">Group profile</h2>
       <div className="mt-3 rounded-2xl bg-white p-5 shadow-sm">
         <GroupProfileForm

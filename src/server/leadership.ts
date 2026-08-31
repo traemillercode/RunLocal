@@ -21,6 +21,7 @@ import type { AccountRecord, AdminAction, GroupModRecord } from "./types";
 import type { Db } from "./store";
 import { newId } from "./store";
 import { hasRole } from "./accountRoles";
+import { isGroupLead } from "./roles";
 import { validReason, REASON_MAX, type AdminResult } from "./admin";
 import {
   canManageGroupLeadership,
@@ -356,4 +357,66 @@ export function notifyLeadersOfMembershipRequest(db: Db, group: GroupModRecord, 
     sent++;
   }
   return sent;
+}
+
+/* ── The roster a lead can actually see ───────────────────────────────────── */
+
+export interface RosterMemberRow {
+  membershipId: string;
+  groupId: string;
+  groupName: string;
+  accountId: string;
+  name: string;
+  username: string | null;
+  profilePhotoUrl: string | null;
+  joinedAt: string;
+  /** Leads cannot be removed through this surface — ownership acts are separate. */
+  isLead: boolean;
+}
+
+/**
+ * Active members of every group this person leads.
+ *
+ * THIS DID NOT EXIST. GroupManagePage rendered approve and decline for PENDING
+ * requests and nothing else, so a club leader could not see who was in their
+ * club — not to remove anyone, not to answer the question at all. Table stakes
+ * for the group product independent of safety.
+ *
+ * It also blocked a safety path: the rule is that removing someone from a club
+ * is the club's decision rather than one a member's block makes for them, and
+ * that rule was unusable because the club had no way to decide anything.
+ *
+ * Deliberately NOT filtered through hiddenFrom. A lead who has blocked someone
+ * still needs to see them in their own roster — that is the surface on which
+ * they would act. Hiding a member from the person responsible for the group
+ * would protect nobody and break the club.
+ */
+export function groupRoster(db: Db, actor: AccountRecord | null | undefined): RosterMemberRow[] {
+  const managed = listLedGroups(db, actor);
+  if (managed.length === 0) return [];
+  const names = new Map(managed.map((g) => [g.groupId, g.groupName] as const));
+  return db
+    .listMemberships()
+    .filter((m) => names.has(m.groupId) && m.status === "active")
+    .map((m) => {
+      const acc = db.getAccount(m.accountId);
+      const group = db.getGroup(m.groupId);
+      return {
+        membershipId: m.id,
+        groupId: m.groupId,
+        groupName: names.get(m.groupId) ?? m.groupId,
+        accountId: m.accountId,
+        // A deleted account keeps its row so the roster count stays honest and
+        // the history survives — the same reason suspension is a status rather
+        // than a deletion.
+        name: acc?.name ?? "Former member",
+        username: acc?.username ?? null,
+        profilePhotoUrl: acc?.profilePhotoRef ? `/uploads/public/${acc.profilePhotoRef}` : null,
+        // decidedAt is when the lead approved them; requestedAt is the
+        // fallback for rows that predate the decision field.
+        joinedAt: m.decidedAt ?? m.requestedAt,
+        isLead: Boolean(group && acc && isGroupLead(db, group, acc)),
+      };
+    })
+    .sort((a, b) => a.groupName.localeCompare(b.groupName) || a.name.localeCompare(b.name));
 }

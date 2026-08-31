@@ -89,16 +89,41 @@ describe("the caveats panel renders what the server returns", () => {
     expect(COMPONENT).toContain('c.kind === "leads_group"');
   });
 
-  it("does not yet tell her to ask a lead", () => {
+  it("now offers all three options, because a lead can act", () => {
     /*
-     * DELIBERATE. "Ask a lead to act" is one of the three options the panel is
-     * meant to give her, and a lead currently cannot see their own roster, let
-     * alone remove anyone. Shipping that copy would tell her to ask someone who
-     * has no way to help.
-     *
-     * Remove this test when the lead-visible roster lands, and add the line.
      */
-    expect(COMPONENT).not.toContain("ask a lead");
-    expect(COMPONENT).not.toContain("contact the group");
+    /*
+     * The absence assertion that used to live here has done its job: it was
+     * there so nobody could add this copy before a lead could see their own
+     * roster, and the roster now exists. All three of her options are real —
+     * post less, leave, or ask a lead to remove them.
+     */
+    expect(COMPONENT).toContain("ask a group lead to");
+  });
+});
+
+describe("there is exactly one blocking implementation", () => {
+  it("no UI calls blockConnection except through SafetyActions", () => {
+    /*
+     * Morgan's point, and the guard above does not cover it: asserting that AT
+     * LEAST ONE renderer exists says nothing about a second, hand-rolled block
+     * button somewhere else — which would miss the caveats panel, the
+     * block-before-report ordering, and the no-confirmation rule, while looking
+     * finished.
+     *
+     * One implementation, many entry points. That is what makes "we fixed
+     * blocking" true everywhere rather than in the place someone remembered.
+     */
+    const offenders = uiSources()
+      .filter((f) => f.name !== "SafetyActions.tsx" && f.src.includes("blockConnection"))
+      .map((f) => f.name);
+    expect(offenders).toEqual([]);
+  });
+
+  it("and it is rendered from more than one surface", () => {
+    // Currently the profile and the expanded attendee list. This is a floor,
+    // not a target — the three deferred entry points raise it later.
+    const renders = uiSources().filter((f) => f.src.includes("<SafetyActions"));
+    expect(renders.length).toBeGreaterThanOrEqual(2);
   });
 });

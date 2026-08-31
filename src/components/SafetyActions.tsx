@@ -105,7 +105,8 @@ export function SafetyActions({
                       ) : (
                         <>
                           You&apos;re both in <strong>{c.groupName}</strong>. They&apos;ll still see what you post in
-                          the club thread.
+                          the club thread. You can post less there, leave the group, or ask a group lead to
+                          remove them.
                         </>
                       )}
                     </li>

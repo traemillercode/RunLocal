@@ -2030,3 +2030,20 @@ export interface OccurrenceAttendee { id: string; name: string; initials: string
 export function getOccurrenceAttendees(occurrenceId: string): Promise<ApiResult<{ attendees: OccurrenceAttendee[] }>> {
   return request(`/api/occurrences/${encodeURIComponent(occurrenceId)}/attendees`);
 }
+
+export interface RosterMemberRow {
+  membershipId: string;
+  groupId: string;
+  groupName: string;
+  accountId: string;
+  name: string;
+  username: string | null;
+  profilePhotoUrl: string | null;
+  joinedAt: string;
+  isLead: boolean;
+}
+
+/** Active members of every group you lead. */
+export function getLeaderRoster(): Promise<ApiResult<{ members: RosterMemberRow[] }>> {
+  return request("/api/me/leader/roster");
+}
