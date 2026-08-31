@@ -39,6 +39,7 @@ import { authorizeScoped } from "./admin";
 import { cityExists } from "./cms";
 import type { ForumSection } from "../types";
 import { CITIES } from "../data/cities";
+import { hiddenFrom } from "./privacy";
 
 export const FORUM_SECTIONS = ["announcements", "community", "qa"] as const;
 export const FORUM_CATEGORIES = ["training", "races", "gear", "routes", "general"] as const;
@@ -175,9 +176,28 @@ export function forumDateLabel(iso: string, now = new Date()): string {
  * so the client can add persisted replies to seed counts).
  */
 export function publicForumPosts(db: Db, cityId: string, actor?: AccountRecord | null, now = db.now()): PublicForumPost[] {
+  /*
+   * THE FORUM IS FILTERED, AND THE GROUP THREAD IS NOT. The difference is exit.
+   *
+   * A club is not a private channel, membership is preserved across a block,
+   * and if she does not want him reading her posts there she can leave the
+   * group. SHE CANNOT LEAVE THE CITY. A city-wide forum is a public square with
+   * no exit, so the group reasoning does not transfer.
+   *
+   * The objection that ruled out filtering the club thread — replies to
+   * nothing, an incoherent conversation — is weaker here. A city feed is a
+   * loose list rather than a shared thread of reference, so a missing post
+   * reads as one that scrolled by.
+   *
+   * Symmetric: her posts hidden from him, his from her. hiddenFrom is
+   * bidirectional and also covers deleted and suspended, so a blocked author is
+   * indistinguishable from one who left.
+   */
+  const hidden = hiddenFrom(db, actor?.id ?? null);
   return db
     .listForumPosts(cityId)
     .filter((f) => f.state === "visible")
+    .filter((f) => !hidden.has(f.authorAccountId))
     .filter((f) => {
       const mod = db.getContent(`post:${f.id}`);
       return !mod?.hidden && !mod?.archived;
