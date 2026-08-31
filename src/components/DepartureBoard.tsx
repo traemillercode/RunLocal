@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { AttendeeListSheet } from "./AttendeeListSheet";
 import type { ReactNode } from "react";
 import { Icon } from "./ui";
 import { useDeadEnd } from "../lib/friction";
@@ -204,12 +205,25 @@ function Metric({ label, value, inverted }: MetricProps) {
 
 interface AvatarStackProps {
   attendees?: Person[];
+  /** Enables the expandable list. Absent on surfaces with no occurrence. */
+  occurrenceId?: string;
   count: number;
   inverted: boolean;
   justJoined: boolean;
 }
 
-function AvatarStack({ attendees, count, inverted, justJoined }: AvatarStackProps) {
+function AvatarStack({ attendees, count, inverted, justJoined, occurrenceId }: AvatarStackProps) {
+  /*
+   * THE DECISION POINT. She is looking at Saturday deciding whether to go, and
+   * his name may be the fifth — past the four the card renders. "12 going" that
+   * cannot be opened is a wall in front of exactly the thing she is checking
+   * for, so the count opens the full visible list.
+   *
+   * Reachable WITHOUT LEAVING THE CARD: navigating to a profile to block
+   * someone means passing through his page, which is the last place she wants
+   * to be.
+   */
+  const [listOpen, setListOpen] = useState(false);
   const ringColor = inverted ? INK_SOFT : "#FFFFFF";
   const shown = (attendees ?? []).slice(0, 4);
   return (
@@ -244,12 +258,25 @@ function AvatarStack({ attendees, count, inverted, justJoined }: AvatarStackProp
           </span>
         ))}
       </div>
-      <span
-        className="ml-2 font-semibold tabular-nums"
-        style={{ fontSize: "12px", color: inverted ? "rgba(255,255,255,0.6)" : "#7A7A72" }}
-      >
-        {count} going
-      </span>
+      {occurrenceId ? (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); setListOpen(true); }}
+          aria-label={`See who's going — ${count} ${count === 1 ? "person" : "people"}`}
+          className="ml-2 font-semibold tabular-nums underline decoration-dotted underline-offset-2"
+          style={{ fontSize: "12px", color: inverted ? "rgba(255,255,255,0.6)" : "#7A7A72" }}
+        >
+          {count} going
+        </button>
+      ) : (
+        <span
+          className="ml-2 font-semibold tabular-nums"
+          style={{ fontSize: "12px", color: inverted ? "rgba(255,255,255,0.6)" : "#7A7A72" }}
+        >
+          {count} going
+        </span>
+      )}
+      {listOpen && occurrenceId ? <AttendeeListSheet occurrenceId={occurrenceId} onClose={() => setListOpen(false)} /> : null}
     </div>
   );
 }
@@ -541,6 +568,9 @@ function BoardRunCard({ event, now, hero, going, pending, onJoin, onLeave, showA
           <div className="flex items-center gap-4">
             <AvatarStack
               attendees={showAttendees ? event.attendees : undefined}
+              // Only when identities are shown at all: a signed-out viewer must
+              // not get an expandable list the card is deliberately withholding.
+              occurrenceId={showAttendees ? event.id : undefined}
               count={event.goingCount + (going ? 1 : 0)}
               inverted={inverted}
               justJoined={going}

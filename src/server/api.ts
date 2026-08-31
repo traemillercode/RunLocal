@@ -3973,6 +3973,46 @@ async function handleApi(
     if (mine.length) await db.persist();
     return ok(res, { rsvped: false, occurrenceId: occ.event ? publicOccurrenceId(occ.event, occ.eventId, occ.runDate) : occ.occurrenceId, runDate: occ.runDate, startsAt: occ.startsAt }), true;
   }
+  /*
+   * GET /api/occurrences/:id/attendees — the full VISIBLE list for one run.
+   *
+   * The board caps attendees at four server-side, which is right for a card and
+   * wrong for the one question the safety architecture is actually about: she
+   * is looking at Saturday, deciding whether to go, and needs to know whether
+   * he is on the list. "and 8 others" that cannot be opened is a wall in front
+   * of exactly the thing she is checking for.
+   *
+   * EXPANDING IS SAFE BECAUSE OF hiddenFrom, not despite the cap. The fixed-cap
+   * rule exists to stop the list length revealing HOW MANY people are hiding;
+   * it is not a limit on how many names a member may see. Anyone hidden from
+   * this viewer — blocked, deleted, suspended, and in future anyone who chose
+   * invisible attendance — is absent from the list AND from its length, so
+   * expanding reveals nothing the cap was protecting.
+   *
+   * The COUNT deliberately still comes from the summary endpoint, unfiltered.
+   * If this list's length were used as the count, a blocked person would see a
+   * smaller number than everyone else and the block would be readable.
+   */
+  /** Shared by the summary and the full list, so the two cannot render a name differently. */
+  const initialsFor = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+  const occAttendees = /^\/api\/occurrences\/([^/]+)\/attendees$/.exec(url.pathname);
+  if (method === "GET" && occAttendees) {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const occurrenceId = decodeURIComponent(occAttendees[1]);
+    const hidden = hiddenFrom(db, sess.accountId);
+    const people = db
+      .listAttendance()
+      // role "rsvp" is a goer; "host" is handled by the card separately. The
+      // deletedAt check matters: archived rows are preserved for audit and must
+      // not resurface as attendees.
+      .filter((a) => a.occurrenceId === occurrenceId && a.role === "rsvp" && !a.deletedAt && !hidden.has(a.accountId))
+      .map((a) => db.getAccount(a.accountId))
+      .filter((acc): acc is NonNullable<typeof acc> => Boolean(acc))
+      .map((acc) => ({ id: acc.id, name: acc.name, initials: initialsFor(acc.name), isHost: false }));
+    return ok(res, { attendees: people }), true;
+  }
+
   // POST /api/events/attendance-summary — bulk per-occurrence host/attendee/goingCount,
   // capped to 4 attendees server-side, for a whole week's board in one call instead of
   // one request per card. Body: { occurrenceIds: string[] } (capped to 100 per call).
@@ -4098,7 +4138,6 @@ ${rows.map(([k, v]) => `<tr><td style="color:#5b5f66;vertical-align:top;">${k}</
     const b = (await readJson(req)) as { occurrenceIds?: unknown };
     const ids = Array.isArray(b.occurrenceIds) ? b.occurrenceIds.filter((x): x is string => typeof x === "string").slice(0, 100) : [];
     const idSet = new Set(ids);
-    const initialsFor = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
     // Once per request. A week's board across 40 attendees would otherwise run
     // 40 block lookups, and that cost is what makes people skip the check.
     const hidden = hiddenFrom(db, s.accountId);

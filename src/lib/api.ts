@@ -2015,3 +2015,18 @@ export function listSafetyReports(cityId?: string, reason = ""): Promise<ApiResu
 export function decideSafetyReport(id: string, status: SafetyReportView["status"], reason: string): Promise<ApiResult<{ report: SafetyReportView }>> {
   return adminRequest(`/api/admin/safety-reports/${encodeURIComponent(id)}`, reason, { method: "POST", body: JSON.stringify({ status }) });
 }
+
+export interface OccurrenceAttendee { id: string; name: string; initials: string; isHost: boolean }
+
+/**
+ * The full VISIBLE attendee list for one run.
+ *
+ * Separate from the board's capped summary because the card wants four names
+ * and she wants to know whether one specific person is going. Filtered through
+ * hiddenFrom server-side, so it never returns someone hidden from this viewer —
+ * and its length is deliberately NOT the going count, which stays unfiltered so
+ * a block cannot be read off a smaller number.
+ */
+export function getOccurrenceAttendees(occurrenceId: string): Promise<ApiResult<{ attendees: OccurrenceAttendee[] }>> {
+  return request(`/api/occurrences/${encodeURIComponent(occurrenceId)}/attendees`);
+}
