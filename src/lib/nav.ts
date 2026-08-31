@@ -241,7 +241,13 @@ export function accordionModel(role: AccountRole, opts: { isAdmin?: boolean } = 
   if (training) {
     sections.push({
       id: "training", label: "Training", icon: training.icon, route: training.route,
-      children: child("my-runs", "shoes", "pace-calculator", "training-summary", "recurring-schedules"),
+      /*
+       * FOUR children, matching the spec. I had six — training-summary and
+       * recurring-schedules as well — and each row is 34px of a viewport that
+       * is already tight. They remain reachable from the Training page itself,
+       * which is what a parent-as-destination is for.
+       */
+      children: child("my-runs", "shoes", "pace-calculator"),
     });
   }
   const forum = byId("forum");
@@ -255,7 +261,21 @@ export function accordionModel(role: AccountRole, opts: { isAdmin?: boolean } = 
   return {
     top: pick("home", "events", "groups", "races", "routes"),
     sections: sections.filter((s) => s.children.length > 0),
-    account: pick("notifications", "profile", "settings").map((e) => (e.id === "profile" ? { ...e, label: "Profile" } : e)),
+    /*
+     * EMPTY, deliberately. The sidebar's account block already renders
+     * Notifications (with an unread badge), Settings and Sign out — the account
+     * chip pattern Strava, Slack and Garmin all use.
+     *
+     * Returning them here too would render each TWICE and cost 92px of nav
+     * rows the block has already budgeted. That is where the height for the
+     * accordion comes from, and it costs nothing structural.
+     *
+     * SIGN OUT IS NOT NESTED under Profile and must not be: it is the control
+     * that vanished silently once, and putting it behind an expander is
+     * strictly worse than the bug that was fixed — a person signing out on a
+     * shared machine should not have to find a chevron.
+     */
+    account: [],
     admin: byId("admin") ?? null,
   };
 }

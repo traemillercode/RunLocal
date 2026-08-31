@@ -315,3 +315,47 @@ describe("Explore opens on click, and hover does not fight it", () => {
     }
   });
 });
+
+describe("Sign out is never behind an expander", () => {
+  /*
+   * THIRD TIME GUARDING SIGN OUT, and each was a different failure: it vanished
+   * when the sidebar was rewired to render from the registry, it fell below the
+   * fold when fifteen rows could not scroll, and nesting it under Profile would
+   * have hidden it behind an interaction instead of below a fold — strictly
+   * worse than the bug that was fixed.
+   *
+   * A person signing out on a shared machine should not have to find a chevron.
+   */
+  it("is not a child of any accordion section", async () => {
+    const { accordionModel } = await import("../src/lib/nav");
+    const model = accordionModel("verified", { isAdmin: true });
+    for (const s of model.sections) {
+      const ids = s.children.map((c) => c.id);
+      expect(ids, `${s.label} must not contain sign out`).not.toContain("signout");
+      expect(ids).not.toContain("settings");
+    }
+  });
+
+  it("lives in the account block, which never collapses and never scrolls", () => {
+    /*
+     * The account chip pattern — Strava, Slack and Garmin all do this. Sign out
+     * stops being a nav row without becoming a submenu child, and the block was
+     * already budgeted at 155px.
+     */
+    const sidebar = readFileSync(new URL("../src/components/DesktopSidebar.tsx", import.meta.url).pathname, "utf8");
+    const at = sidebar.indexOf("Sign out");
+    expect(at).toBeGreaterThan(-1);
+    // Inside .desktop-account, after the nav closes.
+    expect(sidebar.lastIndexOf('<div className="desktop-account">', at)).toBeGreaterThan(sidebar.lastIndexOf("</nav>", at) - 1);
+  });
+
+  it("the model returns no account rows, so nothing renders twice", async () => {
+    /*
+     * Where the 92px came from. Notifications, Settings and Sign out were
+     * ALREADY in the account block; returning them as nav rows too would have
+     * rendered each twice and cost height the block had already budgeted.
+     */
+    const { accordionModel } = await import("../src/lib/nav");
+    expect(accordionModel("verified").account).toEqual([]);
+  });
+});

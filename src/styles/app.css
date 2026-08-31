@@ -133,7 +133,10 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
 
 @media (min-width: 1024px) {
   .desktop-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 50; display: flex; width: 240px; flex-direction: column; border-right: 1px solid #273039; background: #14171c; padding: 28px 18px 20px; color: white; }
-  .desktop-brand { display: flex; align-items: center; gap: 10px; padding: 0 10px 34px; color: white; font-size: 20px; font-weight: 800; letter-spacing: -0.03em; }
+  /* padding-bottom trimmed 34 -> 14. Combined with the nav's margin-top that was
+   62px of vertical between a wordmark and the first row — the cheapest height
+   in the sidebar and it costs nothing structural. */
+.desktop-brand { display: flex; align-items: center; gap: 10px; padding: 0 10px 14px; color: white; font-size: 20px; font-weight: 800; letter-spacing: -0.03em; }
   .desktop-brand img { height: 36px; width: 36px; border-radius: 10px; }
   .desktop-brand b { color: #ff5741; }
   .desktop-city { display: flex; width: fit-content; max-width: 100%; min-height: 44px; align-items: center; gap: 9px; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; background: rgba(255,255,255,.1); padding: 0 12px; text-align: left; font-size: 13px; font-weight: 700; }
@@ -159,7 +162,7 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
  * fewer rows — not a scrollbar absorbing the problem, which is how the original
  * defect hid.
  */
-.desktop-nav { display: grid; gap: 6px; margin-top: 28px; flex: 1 1 auto; align-content: start; }
+.desktop-nav { display: grid; gap: 4px; margin-top: 16px; flex: 1 1 auto; align-content: start; }
 .desktop-nav-section { display: grid; gap: 6px; }
 .desktop-nav-parent { display: flex; align-items: center; }
 .desktop-nav-parent > a { flex: 1 1 auto; }
@@ -174,7 +177,10 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
 .desktop-nav-children { display: grid; gap: 4px; padding-left: 18px; }
 /* Compact: children are subordinate rows, not peers. At the parent's 46px a
    five-item submenu costs 230px, which is most of a short viewport. */
-.desktop-nav-children > a { font-size: 13px; opacity: 0.75; min-height: 0; padding-top: 6px; padding-bottom: 6px; }
+/* Higher specificity than `.desktop-nav a, .desktop-account a`, which sets
+   min-height:46px and is declared later. At the parent's height a six-item
+   submenu costs 276px, which is most of a short viewport. */
+.desktop-nav .desktop-nav-children > a { font-size: 13px; opacity: 0.75; min-height: 34px; }
 .desktop-nav-children > a.active { opacity: 1; }
 /* The account group never scrolls away. Sign out in particular must not depend
    on the viewport being tall enough. */
