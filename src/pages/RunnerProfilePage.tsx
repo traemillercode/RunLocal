@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SafetyActions } from "../components/SafetyActions";
 import { Link, useNavigate } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { TrustedBadge } from "../components/TrustedBadge";
@@ -44,6 +45,10 @@ function initials(name: string): string {
  * rejection reasons, or under-review state.
  */
 export function RunnerProfileHeader({ profile }: { profile: RunnerProfileView }) {
+  // Read here rather than threaded as a prop: every caller of this header would
+  // otherwise have to remember to pass it, and forgetting means the safety
+  // control silently disappears from that surface.
+  const { me } = useAccount();
   return (
     <section className="overflow-hidden rounded-2xl bg-[#14171C] text-white shadow-sm">
       <div className="flex items-center gap-4 p-5">
@@ -58,7 +63,7 @@ export function RunnerProfileHeader({ profile }: { profile: RunnerProfileView })
             {initials(profile.name)}
           </span>
         )}
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-lg font-bold leading-tight">{profile.name}</p>
           {profile.username ? (
             <p className="truncate text-[13px] font-semibold leading-tight text-[#FF5741]">@{profile.username}</p>
@@ -66,6 +71,18 @@ export function RunnerProfileHeader({ profile }: { profile: RunnerProfileView })
           <p className="mt-0.5 text-[13px] text-white/70">
             {profile.cityName ? `Home: ${profile.cityName}` : "Home city: not set"}
           </p>
+        </div>
+        {/*
+          Reachable from the profile, which is where she lands if she goes
+          looking. The whole block system was server-complete and unreachable —
+          every property verified, no user able to invoke any of it.
+          Hidden when she is looking at herself: a block button on your own
+          profile is a control that cannot do anything.
+        */}
+        <div className="ml-auto shrink-0">
+          {me?.status === "signed_in" && me.account.id !== profile.id ? (
+            <SafetyActions accountId={profile.id} displayName={profile.name} />
+          ) : null}
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {profile.isVerified ? <VerifiedBadge /> : null}
             {profile.isTrustedMember ? <TrustedBadge size="sm" /> : null}
