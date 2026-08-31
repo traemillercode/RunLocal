@@ -120,3 +120,62 @@ describe("the capability layer, not just rendering", () => {
     expect(before).toContain("db.isBlocked(sess.accountId, target)");
   });
 });
+
+describe("severing must not leave him anything he held", () => {
+  /*
+   * Sever is the chosen model, and Morgan's argument that hiding buys no
+   * silence is right: filtering her from his connections list drops his visible
+   * count exactly as severing does, so hiding pays a permanent filter for
+   * nothing. Severing also produces a COHERENT story — connection gone plus
+   * profile 404 reads as "she deleted her account", which is the
+   * indistinguishability the doc asks for.
+   *
+   * But severing only works if the row was the ONLY thing granting access.
+   */
+  const API = readCode(new URL("../src/server/api.ts", import.meta.url));
+
+  it("unblocking does not restore the severed connection", () => {
+    // Otherwise the sever leaks into a re-approach: he waits, she relents on
+    // the block, and he is back in her connections without asking.
+    const { db, alice, bob } = fixture();
+    const store = readCode(new URL("../src/server/store.ts", import.meta.url));
+    const fn = store.slice(store.indexOf("removeBlock(blockerId"), store.indexOf("removeBlock(blockerId") + 200);
+    expect(fn).not.toContain("updateConnection");
+    expect(fn).not.toContain("accepted");
+    void alice; void bob; void db;
+  });
+
+  it("a re-request from a blocked person is silent and reaches nothing", async () => {
+    const { db, alice, bob } = fixture();
+    const { requestConnection, blockConnection } = await import("../src/server/connections");
+    expect(requestConnection(db, bob.id, alice.id).ok).toBe(true);
+    blockConnection(db, alice.id, bob.id);
+    const again = requestConnection(db, bob.id, alice.id);
+    expect(again.ok).toBe(false);
+    // Identical to a request to an account that does not exist.
+    if (!again.ok) expect(again.error).toBe("not_found");
+  });
+
+  it("an existing one-to-one conversation stops working after a block", () => {
+    /*
+     * THE HOLE THIS FOUND. Sending a message authorised on
+     * participantIds.includes(sender) alone — membership granted at creation
+     * and never revisited. Blocking severed the connection, removed him from
+     * her lists, and left him messaging her in a thread that already existed.
+     */
+    const at = API.indexOf("db.addMessage(");
+    const before = API.slice(Math.max(0, at - 1200), at);
+    expect(before).toContain("db.isBlocked(sess.accountId, otherParticipant)");
+    // And it must refuse like a missing conversation, not like a block.
+    const guard = before.slice(before.indexOf("otherParticipant"));
+    expect(guard).toContain('error: "not_found"');
+    expect(guard).not.toContain('error: "blocked"');
+  });
+
+  it("leaves group conversations alone", () => {
+    // A club thread is not a private channel to her, and removing him because
+    // one member blocked him is a different decision with different fallout.
+    const at = API.indexOf("db.isBlocked(sess.accountId, otherParticipant)");
+    expect(API.slice(Math.max(0, at - 400), at)).toContain("if (!convo.isGroup)");
+  });
+});

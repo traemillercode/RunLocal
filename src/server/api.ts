@@ -2289,6 +2289,27 @@ async function handleApi(
       await db.writePublicUpload(mediaRef, img.bytes);
     }
     if (!text && !mediaRef) return err(res, { status: 400, error: "empty_message", message: "Write something or attach a photo before sending." }), true;
+    /*
+     * A SEVERED CONNECTION MUST NOT LEAVE HIM IN THE CONVERSATION.
+     *
+     * This authorised on participantIds alone — membership, granted when the
+     * conversation was created and never revisited. So blocking severed the
+     * connection, removed him from her lists, and left him able to keep
+     * messaging her in a thread that already existed.
+     *
+     * Same shape as the messaging-creation hole: a gate asking about
+     * RELATIONSHIP STATE at one moment rather than about PERMISSION now.
+     * Membership is a proxy, and proxies drift.
+     *
+     * One-to-one only: a group conversation is not a private channel to her,
+     * and removing him from a club thread because one member blocked him is a
+     * different decision with different consequences.
+     */
+    if (!convo.isGroup) {
+      const otherParticipant = convo.participantIds.find((id) => id !== sess.accountId);
+      // Identical to a conversation that is not there — he learns nothing.
+      if (otherParticipant && db.isBlocked(sess.accountId, otherParticipant)) return err(res, { status: 404, error: "not_found" }), true;
+    }
     const msg = db.addMessage({ conversationId: convo.id, senderId: sess.accountId, body: text, mediaRef }, now);
     const sender = db.getAccount(sess.accountId);
     const preview = mediaRef ? (text ? `📷 ${text}` : "📷 Sent a photo") : text;
