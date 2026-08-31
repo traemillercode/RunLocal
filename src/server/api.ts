@@ -148,7 +148,7 @@ import {
   requestConnection,
   searchable,
 } from "./connections";
-import { canView } from "./privacy";
+import { canView, blockedPersonLeadsGroupsWithBlocker } from "./privacy";
 import sharp from "sharp";
 
 /**
@@ -2614,6 +2614,39 @@ async function handleApi(
     const target = db.getAccount(param);
     if (!target || target.deletedAt) return err(res, { status: 404, error: "not_found" }), true;
     blockConnection(db, sess.accountId, param, now);
+    /*
+     * ESCALATE IF SHE BLOCKED A LEADER OF A GROUP SHE IS IN.
+     *
+     * A block preserves group membership and grants nothing across it — she
+     * stops appearing in his roster, feed, RSVPs and group-scoped search. That
+     * works because those are identity surfaces, and identity surfaces can be
+     * filtered.
+     *
+     * A LEADER'S POWERS ARE NOT. He can moderate content she posts, sees the
+     * check-in roster by role, and administers her membership. No filter fixes
+     * that without breaking the group for everyone else, and silently stripping
+     * a leader because one member blocked him would be its own kind of wrong.
+     *
+     * So it goes to a human. Notification only, no email: it is not an
+     * emergency, and it must not read to her as though something happened —
+     * she blocked someone, which is a thing she is entitled to do quietly.
+     */
+    const ledGroups = blockedPersonLeadsGroupsWithBlocker(db, sess.accountId, param);
+    if (ledGroups.length > 0) {
+      const owner = db.getAccountByEmail(ownerEmail());
+      if (owner && owner.id !== sess.accountId) {
+        db.addNotification({
+          id: newId(),
+          accountId: owner.id,
+          category: "account_alerts",
+          title: "A member blocked a group leader",
+          body: `Someone blocked a leader of ${ledGroups.map((g) => g.name).join(", ")} — a group they are in. Filtering cannot remove a leader's powers over their content.`,
+          createdAt: now.toISOString(),
+          readAt: null,
+          link: { kind: "verify", id: param },
+        });
+      }
+    }
     await db.persist();
     return ok(res, { status: "blocked" }), true;
   }

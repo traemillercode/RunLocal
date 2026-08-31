@@ -179,3 +179,69 @@ describe("severing must not leave him anything he held", () => {
     expect(API.slice(Math.max(0, at - 400), at)).toContain("if (!convo.isGroup)");
   });
 });
+
+describe("blocking a group leader escalates to a human", () => {
+  /*
+   * THE RULE FOR GROUPS: a block preserves membership and grants nothing.
+   *
+   * A running club is not a private channel. If she blocks him and he is a
+   * Track Club member, removing him from the club is a decision the club should
+   * make, not one her block makes for them. And the reverse is worse — if
+   * blocking cost her the club, she would hesitate to block.
+   *
+   * But co-membership must grant him nothing: not her in the roster, her posts,
+   * her RSVPs, a message path, or group-scoped search.
+   *
+   * THE EXCEPTION IS A LEADER. His powers are not an identity surface — he
+   * moderates content she posts and sees the check-in roster BY ROLE. No filter
+   * removes those without breaking the group for everyone else, and silently
+   * stripping a leader because one member blocked him would be its own wrong.
+   * So it goes to a person.
+   */
+  it("detects when the blocked person leads a group the blocker is in", async () => {
+    const { blockedPersonLeadsGroupsWithBlocker } = await import("../src/server/privacy");
+    const api = readCode(new URL("../src/server/api.ts", import.meta.url));
+    // Wired into the block action, not merely defined — the sixth instance of
+    // "capability exists, nothing calls it" is one I would rather not add.
+    expect(api).toContain("blockedPersonLeadsGroupsWithBlocker(db, sess.accountId, param)");
+    expect(typeof blockedPersonLeadsGroupsWithBlocker).toBe("function");
+  });
+
+  it("returns the groups, not a boolean", () => {
+    /*
+     * "The person she blocked leads Columbia Track Club, which she is in" is
+     * actionable. "Escalate" is not.
+     */
+    const src = readCode(new URL("../src/server/privacy.ts", import.meta.url));
+    const at = src.indexOf("export function blockedPersonLeadsGroupsWithBlocker");
+    expect(src.slice(at, at + 200)).toContain("{ id: string; name: string }[]");
+  });
+
+  it("notifies without emailing", () => {
+    /*
+     * Not an emergency, and it must not read to her as though something
+     * happened — she blocked someone, which she is entitled to do quietly.
+     */
+    const api = readCode(new URL("../src/server/api.ts", import.meta.url));
+    const at = api.indexOf("A member blocked a group leader");
+    expect(at).toBeGreaterThan(-1);
+    const block = api.slice(Math.max(0, at - 600), at + 400);
+    expect(block).toContain("db.addNotification(");
+    expect(block).not.toContain("sendEmail(");
+  });
+
+  it("does not escalate for an ordinary block", async () => {
+    // Else every block escalates and the signal is worthless. Tested with real
+    // accounts and a real block, not by reading the source.
+    const { db, alice, bob } = fixture();
+    const { blockedPersonLeadsGroupsWithBlocker } = await import("../src/server/privacy");
+    db.addBlock({ blockerId: alice.id, blockedId: bob.id, createdAt: new Date().toISOString() } as never);
+    expect(blockedPersonLeadsGroupsWithBlocker(db, alice.id, bob.id)).toEqual([]);
+  });
+
+  it("does not escalate when she is in no groups at all", () => {
+    // The cheap exit, and the common case.
+    const src = readCode(new URL("../src/server/privacy.ts", import.meta.url));
+    expect(src).toContain("if (blockerGroupIds.size === 0) return [];");
+  });
+});

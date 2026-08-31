@@ -29,6 +29,7 @@
  * the write-side validation in `store.setPrivacy`.
  */
 import type { Db } from "./store";
+import { isGroupLead } from "./roles";
 import type { AttendanceVisibility, ContentVisibility, PrivacySettingsRecord, SavedEventsVisibility, ProfileVisibility } from "./types";
 
 export { PRIVACY_DEFAULTS } from "./types";
@@ -154,4 +155,44 @@ export function hiddenFrom(db: Db, viewerId: string | null): ReadonlySet<string>
  */
 export function withoutHidden<T>(rows: readonly T[], hidden: ReadonlySet<string>, idOf: (row: T) => string): T[] {
   return rows.filter((r) => !hidden.has(idOf(r)));
+}
+
+/* ── Blocking a group leader ──────────────────────────────────────────────── */
+
+/**
+ * Does the blocked person LEAD a group the blocker belongs to?
+ *
+ * THE CASE FILTERING CANNOT FIX. The rule for groups is that a block preserves
+ * membership and grants nothing — she stops appearing in his roster, feed,
+ * RSVPs and group-scoped search. That works because those are identity
+ * surfaces, and identity surfaces can be filtered.
+ *
+ * A LEADER'S POWERS ARE NOT AN IDENTITY SURFACE. He can moderate content she
+ * posts, sees the check-in roster by role, and administers her membership.
+ * Filtering cannot remove those without breaking the group for everyone else,
+ * and silently stripping a leader's powers because one member blocked him would
+ * be its own kind of wrong.
+ *
+ * So it escalates to a human instead. This is a safety judgement — whether she
+ * should leave the club, whether he should stop leading, whether something
+ * happened that the club needs to know — and none of those are decisions a
+ * filter can make.
+ *
+ * Deliberately returns the GROUPS rather than a boolean: "the person she
+ * blocked leads Columbia Track Club, which she is in" is actionable, and
+ * "escalate" is not.
+ */
+export function blockedPersonLeadsGroupsWithBlocker(db: Db, blockerId: string, blockedId: string): { id: string; name: string }[] {
+  const blocked = db.getAccount(blockedId);
+  if (!blocked) return [];
+  const blockerGroupIds = new Set(
+    db.listMemberships(blockerId).filter((m) => m.status === "active").map((m) => m.groupId),
+  );
+  if (blockerGroupIds.size === 0) return [];
+  const out: { id: string; name: string }[] = [];
+  for (const groupId of blockerGroupIds) {
+    const group = db.getGroup(groupId);
+    if (group && isGroupLead(db, group, blocked)) out.push({ id: groupId, name: group.name });
+  }
+  return out;
 }
