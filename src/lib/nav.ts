@@ -176,3 +176,97 @@ export function sidebarGroups(role: AccountRole, opts: { isAdmin?: boolean } = {
   ];
   return groups.filter((g) => g.entries.length > 0);
 }
+
+/* ── Accordion sidebar ────────────────────────────────────────────────────── */
+
+export interface NavSection {
+  /** Stable key for the open/closed state. */
+  id: string;
+  label: string;
+  icon: IconName;
+  /** The parent row is itself a destination — clicking the label navigates. */
+  route: string;
+  children: readonly NavEntry[];
+}
+
+export interface AccordionModel {
+  /** Always-visible top-level rows. */
+  top: readonly NavEntry[];
+  /** Expandable groups, one open at a time. */
+  sections: readonly NavSection[];
+  /** Below the divider, never scrolled away. */
+  account: readonly NavEntry[];
+  admin: NavEntry | null;
+}
+
+/**
+ * Nine rows instead of fifteen, and no scroll container.
+ *
+ * ONE GROUP OPEN AT A TIME is what makes overflow structurally impossible
+ * rather than merely tolerated. A max-height with internal scrolling would be
+ * the same defect returning under another name — the sidebar is position:fixed
+ * and does not scroll with the page, so anything below the fold is unreachable.
+ * Expanding Training collapses Community; the row count has a hard ceiling.
+ *
+ * If nine rows plus the largest group ever exceeds a short viewport, that is a
+ * signal the top-level count is wrong, not something to absorb.
+ *
+ * The four orphaned training features — shoes, pace calculator, summary,
+ * recurring schedules — get a front door here for the first time. They have
+ * existed with no nav entry at all.
+ */
+export function accordionModel(role: AccountRole, opts: { isAdmin?: boolean } = {}): AccordionModel {
+  const entries = entriesForRole("sidebar", role, opts);
+  const byId = (id: string) => entries.find((e) => e.id === id);
+  const pick = (...ids: string[]) => ids.map(byId).filter((e): e is NavEntry => Boolean(e));
+  // Children come from the registry by id rather than by area, because area
+  // includes routes that are not navigable children (coach-roster, coaching).
+  const child = (...ids: string[]) =>
+    ids
+      .map((id) => (FEATURES as readonly Feature[]).find((f) => f.id === id))
+      .filter((f): f is Feature => f !== undefined && f.roles.includes(role))
+      .map((f): NavEntry => ({
+        id: f.id,
+        route: f.route,
+        label: f.nav?.label ?? f.label,
+        icon: f.nav?.icon ?? ("chevronRight" as IconName),
+        surfaces: ["sidebar"],
+        // Children are leaf destinations; a prefix match would keep a submenu
+        // row highlighted on unrelated nested routes.
+        match: "exact",
+      }));
+
+  const sections: NavSection[] = [];
+  const training = byId("training");
+  if (training) {
+    sections.push({
+      id: "training", label: "Training", icon: training.icon, route: training.route,
+      children: child("my-runs", "shoes", "pace-calculator", "training-summary", "recurring-schedules"),
+    });
+  }
+  const forum = byId("forum");
+  if (forum) {
+    sections.push({
+      id: "community", label: "Community", icon: forum.icon, route: forum.route,
+      children: child("connections", "messages"),
+    });
+  }
+
+  return {
+    top: pick("home", "events", "groups", "races", "routes"),
+    sections: sections.filter((s) => s.children.length > 0),
+    account: pick("notifications", "profile", "settings").map((e) => (e.id === "profile" ? { ...e, label: "Profile" } : e)),
+    admin: byId("admin") ?? null,
+  };
+}
+
+/** The section containing a path, so the current route's group opens itself. */
+export function sectionForPath(model: AccordionModel, pathname: string): string | null {
+  for (const s of model.sections) {
+    // The parent row is a destination too, so its own route counts as being
+    // inside the section.
+    if (activeForPath({ id: s.id, label: s.label, icon: s.icon, route: s.route, surfaces: ["sidebar"], match: "exact" }, pathname)) return s.id;
+    if (s.children.some((c) => activeForPath(c, pathname))) return s.id;
+  }
+  return null;
+}

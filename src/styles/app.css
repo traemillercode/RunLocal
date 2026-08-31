@@ -150,7 +150,32 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
  * defaults to min-height:auto, which refuses to shrink below its content — so
  * overflow-y:auto alone would still not scroll.
  */
-.desktop-nav { display: grid; gap: 6px; margin-top: 28px; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
+/*
+ * NO SCROLL CONTAINER. overflow-y:auto is deliberately gone.
+ *
+ * The accordion keeps one group open at a time, which caps the row count: ten
+ * collapsed, and at most five more when the largest group is expanded. If that
+ * ever exceeds a short viewport, the top-level count is wrong and the fix is
+ * fewer rows — not a scrollbar absorbing the problem, which is how the original
+ * defect hid.
+ */
+.desktop-nav { display: grid; gap: 6px; margin-top: 28px; flex: 1 1 auto; align-content: start; }
+.desktop-nav-section { display: grid; gap: 6px; }
+.desktop-nav-parent { display: flex; align-items: center; }
+.desktop-nav-parent > a { flex: 1 1 auto; }
+.desktop-nav-chevron {
+  display: grid; place-items: center;
+  width: 32px; height: 32px; flex: 0 0 auto;
+  border-radius: 8px; color: rgba(255, 255, 255, 0.45);
+}
+.desktop-nav-chevron:hover { background: rgba(255, 255, 255, 0.08); color: white; }
+/* Indented and quieter: children are subordinate, and the indent is what makes
+   the hierarchy readable without a second heading style. */
+.desktop-nav-children { display: grid; gap: 4px; padding-left: 18px; }
+/* Compact: children are subordinate rows, not peers. At the parent's 46px a
+   five-item submenu costs 230px, which is most of a short viewport. */
+.desktop-nav-children > a { font-size: 13px; opacity: 0.75; min-height: 0; padding-top: 6px; padding-bottom: 6px; }
+.desktop-nav-children > a.active { opacity: 1; }
 /* The account group never scrolls away. Sign out in particular must not depend
    on the viewport being tall enough. */
 .desktop-account { flex: 0 0 auto; }

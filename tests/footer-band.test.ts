@@ -130,15 +130,21 @@ describe("the sidebar's bottom items stay reachable", () => {
    */
   const CSS = readFileSync(new URL("../src/styles/app.css", import.meta.url).pathname, "utf8");
 
-  it("the nav scrolls rather than overflowing off-screen", () => {
-    const rule = /\.desktop-nav\s*\{([^}]*)\}/.exec(CSS)?.[1] ?? "";
-    expect(rule).toContain("overflow-y: auto");
+  it("the nav does NOT scroll — the accordion caps the row count instead", () => {
     /*
-     * min-height:0 is load-bearing, not decoration. .desktop-sidebar is a flex
-     * column and a flex child defaults to min-height:auto, refusing to shrink
-     * below its content — so overflow-y:auto ALONE would still not scroll.
+     * REVERSED, deliberately. overflow-y:auto was the right fix when fifteen
+     * ungrouped rows could not fit; the accordion replaces it by keeping one
+     * group open at a time, which caps the count structurally.
+     *
+     * A scroll container would now be the original defect returning under
+     * another name: it absorbs the problem instead of signalling it. If the
+     * rows ever exceed a short viewport, the top-level count is wrong.
      */
-    expect(rule).toContain("min-height: 0");
+    const rule = /\.desktop-nav\s*\{([^}]*)\}/.exec(CSS)?.[1] ?? "";
+    expect(rule).not.toContain("overflow-y: auto");
+    // align-content:start keeps rows at their natural height rather than
+    // stretching them to fill, which is what makes the row arithmetic legible.
+    expect(rule).toContain("align-content: start");
   });
 
   it("the account group is pinned outside the scroll area", () => {

@@ -60,10 +60,20 @@ describe("My Runs SSR UI", () => {
     const { entries } = profileMenuEntries({ status: "signed_in", account: { status: "verified" } } as never);
     expect(entries.some((e) => e.to === "/my-runs")).toBe(true);
   });
-  it("renders only one desktop My Runs navigation entry", async () => {
+  it("renders My Runs at most once on desktop — now inside the Training group", async () => {
     const { DesktopSidebar } = await import("../src/components/DesktopSidebar");
     const html = renderToStaticMarkup(<MemoryRouter><DesktopSidebar city={{ id: "columbia-mo", name: "Columbia", state: "MO", live: true, tagline: "", groups: [], events: [], races: [], forum: [] }} onOpenCitySheet={() => {}} /></MemoryRouter>);
-    expect((html.match(/>My Runs</g) ?? []).length).toBe(1);
+    /*
+     * WAS exactly 1, and is now 0 or 1 depending on whether Training is
+     * expanded. My Runs moved from a top-level row into the Training submenu,
+     * which is the point of the accordion — nine rows instead of fifteen, with
+     * the four orphaned training features getting a front door beside it.
+     *
+     * The property worth keeping is that it never appears TWICE: a duplicate
+     * was the original defect this test was written for, and it survives the
+     * move.
+     */
+    expect((html.match(/>My Runs</g) ?? []).length).toBeLessThanOrEqual(1);
   });
 
   it("renders only upcoming runs in the calendar grid; past runs never appear", async () => {
