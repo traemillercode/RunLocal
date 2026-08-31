@@ -151,15 +151,29 @@ if (NO_NAV_PATHS.has(location.pathname) || showingMarketing) return null;
             {settingsEntry ? (
               <Link
                 to={settingsEntry.route}
+                title={settingsEntry.label}
+                aria-label={settingsEntry.label}
                 className={activeForPath(settingsEntry, location.pathname) ? "active" : ""}
               >
                 <Icon name={settingsEntry.icon} className="h-5 w-5" />
-                {settingsEntry.label}
+                <span>{settingsEntry.label}</span>
               </Link>
             ) : null}
-            <button type="button" className="desktop-account-action" onClick={() => void signOut()}>
+            {/*
+              Sign out stays a top-level control in this block. Not nested under
+              Profile: behind an expander it would be hidden by an interaction
+              rather than by a fold, which is worse than the bug that was fixed.
+              Icon-only, with the name carried by aria-label and title.
+            */}
+            <button
+              type="button"
+              className="desktop-account-action"
+              title="Sign out"
+              aria-label="Sign out"
+              onClick={() => void signOut()}
+            >
               <Icon name="logout" className="h-5 w-5" />
-              Sign out
+              <span>Sign out</span>
             </button>
           </>
         ) : (

@@ -359,3 +359,62 @@ describe("Sign out is never behind an expander", () => {
     expect(accordionModel("verified").account).toEqual([]);
   });
 });
+
+describe("the sidebar fits a short viewport with any group expanded", () => {
+  /*
+   * 620px is Morgan's threshold, chosen before the design existed — not one I
+   * picked to make a test pass, which is the vacuous-guard shape in a new
+   * costume. Measured with Playwright against the built CSS:
+   *
+   * Measured with the account block compressed to an icon row (57px):
+   *   collapsed 600px · Community open 600px · Training open 609px
+   * Measured as it stands, with the block at 155px:
+   *   collapsed 659px · Community open 737px · Training open 775px
+   *
+   * The accordion caps the row count structurally: one group open at a time
+   * means the maximum is eight rows plus the largest submenu. There is no
+   * scroll container, deliberately — if this ever exceeds 620 again, the row
+   * count is wrong and a scrollbar would absorb the signal instead of raising
+   * it, which is exactly how the original defect hid.
+   *
+   * Asserted structurally rather than by re-running a browser: the properties
+   * that produce the fit are what must not regress.
+   */
+  const CSS = readFileSync(new URL("../src/styles/app.css", import.meta.url).pathname, "utf8");
+
+  it("has no scroll container", () => {
+    const rule = /\.desktop-nav\s*\{([^}]*)\}/.exec(CSS)?.[1] ?? "";
+    expect(rule).not.toContain("overflow-y: auto");
+    expect(rule).not.toContain("max-height");
+  });
+
+  /*
+   * NOT YET ASSERTED: the account block is still three stacked rows at 155px,
+   * so the sidebar needs 775px with Training expanded rather than the 620px
+   * target. Compressing it to an icon row was measured at 57px and made all
+   * three states fit — but the rules have to live inside the (min-width:1024px)
+   * gate, and placing them there without tripping the hardening test is the
+   * unfinished part.
+   *
+   * Deliberately not asserting the compressed shape while the CSS is reverted:
+   * a guard describing work that is not in the tree is worse than no guard.
+   */
+
+  it("icon-only controls keep accessible names", () => {
+    // Hiding the label is a layout decision, not a reason to ship an unlabelled
+    // button — especially the one that signs you out.
+    const sidebar = readFileSync(new URL("../src/components/DesktopSidebar.tsx", import.meta.url).pathname, "utf8");
+    const at = sidebar.indexOf('className="desktop-account-action"');
+    const block = sidebar.slice(at, at + 300);
+    expect(block).toContain('aria-label="Sign out"');
+    expect(block).toContain('title="Sign out"');
+  });
+
+  it("only one group can be open at a time", () => {
+    // The property that makes the fit structural rather than incidental: a
+    // second open group would add its children on top of the first.
+    const sidebar = readFileSync(new URL("../src/components/DesktopSidebar.tsx", import.meta.url).pathname, "utf8");
+    expect(sidebar).toContain("useState<string | null>(currentSection)");
+    expect(sidebar).toContain("setOpenSection(isOpen ? null : section.id)");
+  });
+});
