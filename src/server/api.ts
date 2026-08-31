@@ -148,7 +148,7 @@ import {
   requestConnection,
   searchable,
 } from "./connections";
-import { canView, blockedPersonLeadsGroupsWithBlocker } from "./privacy";
+import { canView, blockedPersonLeadsGroupsWithBlocker, hiddenFrom, withoutHidden } from "./privacy";
 import sharp from "sharp";
 
 /**
@@ -2015,6 +2015,27 @@ async function handleApi(
   if (runnerMatch && method === "GET") {
     const rec = db.getAccount(runnerMatch[1]);
     if (!rec || !publicRunnerProfile(rec, now)) return err(res, { status: 404, error: "not_found" }), true;
+    /*
+     * BLOCKED PROFILES RETURN 404, byte-identical to the line above.
+     *
+     * There was no block check here at all: a blocked person could load her
+     * profile — name, photo, city, trust tags — which is the single most
+     * valuable page to someone who wants to know about her. The endpoint only
+     * refused for an account that did not exist or was not public.
+     *
+     * hiddenFrom() rather than isBlocked() deliberately: it also covers deleted
+     * and suspended, so all three produce the SAME 404 by construction. That is
+     * what makes "she blocked me" indistinguishable from "she deleted her
+     * account" without anyone matching error strings by hand.
+     *
+     * Resolved after the session because a guest has no blocks — and a guest
+     * must see exactly what a non-blocked member sees, or the difference is
+     * itself the tell.
+     */
+    {
+      const viewer = requireSession(db, cookies);
+      if (hiddenFrom(db, viewer?.accountId ?? null).has(rec.id)) return err(res, { status: 404, error: "not_found" }), true;
+    }
     // Connections & privacy additions: relationship state, mutual count, and
     // whether the owner's show_connections_list setting lets this viewer see
     // the count (guests pass only when the setting is public).
@@ -4062,6 +4083,9 @@ ${rows.map(([k, v]) => `<tr><td style="color:#5b5f66;vertical-align:top;">${k}</
     const ids = Array.isArray(b.occurrenceIds) ? b.occurrenceIds.filter((x): x is string => typeof x === "string").slice(0, 100) : [];
     const idSet = new Set(ids);
     const initialsFor = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+    // Once per request. A week's board across 40 attendees would otherwise run
+    // 40 block lookups, and that cost is what makes people skip the check.
+    const hidden = hiddenFrom(db, s.accountId);
     const byOccurrence = new Map<string, { hostAccountId: string | null; goingAccountIds: string[] }>();
     for (const a of db.listAttendance()) {
       if (!a.occurrenceId || !idSet.has(a.occurrenceId)) continue;
@@ -4074,8 +4098,31 @@ ${rows.map(([k, v]) => `<tr><td style="color:#5b5f66;vertical-align:top;">${k}</
     for (const id of ids) {
       const bucket = byOccurrence.get(id) ?? { hostAccountId: null, goingAccountIds: [] };
       const hostAccount = bucket.hostAccountId ? db.getAccount(bucket.hostAccountId) : undefined;
-      const host = hostAccount && !hostAccount.deletedAt ? { accountId: hostAccount.id, name: hostAccount.name, initials: initialsFor(hostAccount.name) } : null;
-      const attendees = bucket.goingAccountIds
+      /*
+       * The host is an identity too. It already excluded deleted accounts —
+       * hiddenFrom covers that case AND blocked AND suspended, so the three
+       * stop being three separate conditions someone has to remember.
+       *
+       * A hidden host renders as null, which the card already handles: it is
+       * the same state as a run with no host recorded. The run still appears
+       * and the count is unchanged — only the name goes.
+       */
+      const host = hostAccount && !hidden.has(hostAccount.id) ? { accountId: hostAccount.id, name: hostAccount.name, initials: initialsFor(hostAccount.name) } : null;
+      /*
+       * IDENTITIES FILTERED, COUNT UNTOUCHED — and the existing shape makes
+       * that safe rather than delicate.
+       *
+       * goingCount comes from goingAccountIds.length (the FULL list) while
+       * attendees is .slice(0, 4). So the count was already independent of the
+       * names shown, and filtering identities cannot move it: he sees the same
+       * "12 going" everyone else does, with her name absent from the four.
+       *
+       * That is the fixed-cap property arriving for free. The gap between 12
+       * and 4 is explained by the cap, identically whether anyone is hidden or
+       * not — which is exactly why the count must NOT be derived from the
+       * filtered list, and why this filter sits after .length is taken.
+       */
+      const attendees = withoutHidden(bucket.goingAccountIds.map((id) => ({ id })), hidden, (r) => r.id).map((r) => r.id)
         .map((accountId) => db.getAccount(accountId))
         .filter((a): a is import("./types").AccountRecord => !!a && !a.deletedAt)
         .slice(0, 4)
