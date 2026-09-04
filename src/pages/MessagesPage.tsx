@@ -616,6 +616,8 @@ function Thread({ conversationId }: { conversationId: string }) {
   const [safetyDismissed, setSafetyDismissed] = useState(false);
   const [typingNames, setTypingNames] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  /* The thread's own scroll container, so scrolling it never moves the page. */
+  const threadRef = useRef<HTMLDivElement>(null);
   const lastTypingSentRef = useRef(0);
 
   const load = () => {
@@ -625,7 +627,24 @@ function Thread({ conversationId }: { conversationId: string }) {
     });
   };
   useEffect(() => { load(); }, [conversationId]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length]);
+  /*
+   * SCROLL THE CONTAINER, NOT THE PAGE.
+   *
+   * scrollIntoView walks UP the ancestor chain and scrolls every scrollable
+   * parent it finds — including the document. So opening a thread scrolled the
+   * page as well as the message list, which cut off the top of the messages
+   * view and made it drift downward every time a different conversation
+   * loaded. `behavior: "smooth"` turned that into a visible slide rather than a
+   * jump, which is why it read as the page "shifting" rather than as a bug.
+   *
+   * Setting scrollTop on the container it belongs to cannot affect anything
+   * above it.
+   */
+  useEffect(() => {
+    const el = threadRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages.length, conversationId]);
 
   // Typing indicator: polling-based (no push layer here), so "live" means a
   // few seconds of latency, not instant keystroke-by-keystroke. Poll while
@@ -850,7 +869,7 @@ function Thread({ conversationId }: { conversationId: string }) {
         </div>
       ) : null}
 
-      <div className="flex-1 space-y-3 overflow-y-auto py-4">
+      <div ref={threadRef} className="flex-1 space-y-3 overflow-y-auto py-4">
         {messages.map((m) => (
           <MessageBubble key={m.id} msg={m} mine={m.senderId === myId} myId={myId} onReact={(emoji) => react(m.id, emoji)} onEdit={(body) => editMsg(m.id, body)} onDelete={() => deleteMsg(m.id)} />
         ))}

@@ -22,6 +22,9 @@
    * Total ~100px plus safe area, against pages currently reserving 0-128px.
    * Defined once so changing the nav does not require editing 39 files.
    */
+  /* The sticky app header. Measured at 72px; kept as a variable so the chat
+     column and anything else that subtracts it cannot drift from the real one. */
+  --app-header-h: 72px;
   --page-nav-h: 56px;
   /* FAB overhang term REMOVED with the FAB itself. It reserved 28px for a
      floating + that no longer exists — every one of its destinations (Forum
@@ -104,8 +107,24 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
    that math — the generic padding here would double up with it and push
    the composer around. Reset it specifically for that one page. */
 .desktop-main:has(.messages-page-root) { padding-bottom: 0; }
-.messages-page-root { height: calc(100dvh - 4rem - 72px - env(safe-area-inset-bottom)); }
-@media (min-width: 1024px) { .messages-page-root { height: calc(100dvh - 4rem); } }
+/*
+ * MEASURED, NOT ASSUMED. These were hardcoded at 4rem for the header and 72px
+ * for the bottom nav; the header is 72px and the nav is 57px, so the chat
+ * column was 8px too tall and 15px short of the nav at once. Hardcoded pixel
+ * copies of a component's height drift the moment the component changes, and
+ * nothing fails when they do.
+ *
+ * --page-nav-h and --page-bottom-gap already exist and already describe the
+ * bottom bar, so the nav half is now derived rather than duplicated. The header
+ * gets its own variable for the same reason.
+ */
+.messages-page-root {
+  height: calc(
+    100dvh - var(--app-header-h) - var(--page-nav-h) - var(--page-bottom-gap) - env(safe-area-inset-bottom, 0px)
+  );
+}
+/* No bottom nav on desktop — only the header comes off. */
+@media (min-width: 1024px) { .messages-page-root { height: calc(100dvh - var(--app-header-h)); } }
 
 /* Mobile: single pane at a time, toggled by whether a thread is selected —
    both panes exist in the DOM (so the inbox never has to unmount/remount
