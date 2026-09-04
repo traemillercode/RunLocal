@@ -47,6 +47,7 @@ import {
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail, ownerEmail } from "./owner";
 import { AVATAR_STYLES } from "../lib/avatars";
+import { coAttendanceForOccurrence, sharedHistory } from "./sharedHistory";
 import { sendEmail } from "./email";
 import { resolveOccurrence, defaultOccurrenceDate, sameEventId, occurrenceAttendeeCount } from "./occurrences";
 import { publicGroups, publicGroup } from "./groups";
@@ -2151,6 +2152,21 @@ async function handleApi(
     // the count (guests pass only when the setting is public).
     const sess = requireSession(db, cookies);
     const viewerId = sess && !db.getAccount(sess.accountId)?.deletedAt ? sess.accountId : null;
+    /*
+     * SHARED HISTORY, viewer-scoped and never public.
+     *
+     * "You've been at 11 of the same runs" and "Both in Columbia Track Club" is
+     * the fact that makes a stranger a not-stranger — and it is the vetting
+     * mechanism women's running communities already use, repeated shared
+     * activity, made visible rather than left implicit.
+     *
+     * Safe by the shape of the question rather than by a filter: every
+     * occurrence counted is one the VIEWER attended, so it cannot reveal a run
+     * they could not otherwise see. hiddenFrom covers the rest.
+     *
+     * Null for a guest — there is no pair to describe.
+     */
+    const shared = viewerId ? sharedHistory(db, viewerId, rec.id) : null;
     const mutualVisible = canView(db, viewerId, rec.id, "show_connections_list");
     const mutual = mutualVisible && viewerId !== null ? mutualConnections(db, viewerId, rec.id) : [];
     const plan = db.getTrainingPlan(rec.id);
@@ -2160,6 +2176,9 @@ async function handleApi(
         ...publicRunnerProfile(rec, now)!,
         connectionState: connectionState(db, viewerId, rec.id),
         mutualConnectionsCount: mutualVisible ? mutual.length : 0,
+        /* Viewer-scoped pair facts. Null for a guest — there is no pair. */
+        runsTogether: shared?.runsTogether ?? 0,
+        sharedGroups: shared?.groups ?? [],
         mutualVisible,
         trainingPlan: plan ? { planType: plan.planType, customLabel: plan.customLabel, totalWeeks: plan.totalWeeks, currentWeek: currentTrainingWeek(plan, now), linkedRaceName: planRace?.name ?? null } : null,
       },
@@ -4308,11 +4327,36 @@ ${rows.map(([k, v]) => `<tr><td style="color:#5b5f66;vertical-align:top;">${k}</
        * not — which is exactly why the count must NOT be derived from the
        * filtered list, and why this filter sits after .length is taken.
        */
+      /*
+       * SORTED BY WHO YOU HAVE RUN WITH, so the four names shown are the four
+       * you know rather than the first four in insertion order.
+       *
+       * That is the difference between a headcount and a reason to go, and the
+       * card is the exact moment someone decides. "12 going" is a number;
+       * "Casey, Jordan and 10 others" is people.
+       *
+       * The cap does not move and neither does the count — this reorders WHICH
+       * names fill the four, nothing else. Ties keep insertion order, so a
+       * viewer with no shared history sees exactly what they saw before.
+       */
+      const coAttendance = coAttendanceForOccurrence(db, s.accountId, bucket.goingAccountIds);
       const attendees = withoutHidden(bucket.goingAccountIds.map((id) => ({ id })), hidden, (r) => r.id).map((r) => r.id)
+        .sort((a, b) => (coAttendance.get(b) ?? 0) - (coAttendance.get(a) ?? 0))
         .map((accountId) => db.getAccount(accountId))
         .filter((a): a is import("./types").AccountRecord => !!a && !a.deletedAt)
         .slice(0, 4)
-        .map((a) => ({ accountId: a.id, name: a.name, initials: initialsFor(a.name) }));
+        .map((a) => ({
+          accountId: a.id,
+          name: a.name,
+          initials: initialsFor(a.name),
+          /*
+           * Viewer-scoped and never public — the number means nothing without
+           * knowing who is asking. Zero is sent as zero rather than omitted so
+           * the client does not have to distinguish "no history" from "not
+           * computed".
+           */
+          runsWithYou: coAttendance.get(a.id) ?? 0,
+        }));
       summaries[id] = { host, attendees, goingCount: bucket.goingAccountIds.length };
     }
     return ok(res, { summaries }), true;

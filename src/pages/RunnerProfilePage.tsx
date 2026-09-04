@@ -187,6 +187,9 @@ export function RunnerConnectBlock({
   if (viewerRole === "guest") return null;
   const state = profile.connectionState ?? null;
   const mutualCount = profile.mutualVisible === true ? (profile.mutualConnectionsCount ?? 0) : 0;
+  const runsTogether = profile.runsTogether ?? 0;
+  /* Two names read; a list of five is a roster. */
+  const sharedGroupNames = (profile.sharedGroups ?? []).slice(0, 2).map((g) => g.name);
   const base = "mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-full text-sm font-semibold";
   return (
     <div>
@@ -222,6 +225,29 @@ export function RunnerConnectBlock({
           <Icon name="userPlus" className="h-4 w-4" /> {busy ? "Sending…" : "Connect"}
         </button>
       )}
+      {/*
+        SHARED HISTORY — the fact that makes a stranger a not-stranger, and the
+        vetting mechanism women's running communities already use (repeated
+        shared activity) made visible rather than left implicit.
+        Above the mutual-connections line because having RUN with someone is
+        stronger evidence than sharing a contact, and stronger facts go first.
+        Viewer-scoped: it is a statement about a pair and means nothing without
+        knowing who is asking. A guest sees neither.
+      */}
+      {runsTogether > 0 || sharedGroupNames.length > 0 ? (
+        <div className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-center">
+          {runsTogether > 0 ? (
+            <p className="text-[14px] font-bold text-slate-900">
+              You&apos;ve been at {runsTogether} of the same run{runsTogether === 1 ? "" : "s"}
+            </p>
+          ) : null}
+          {sharedGroupNames.length > 0 ? (
+            <p className={`text-[13px] text-slate-600 ${runsTogether > 0 ? "mt-0.5" : ""}`}>
+              Both in {sharedGroupNames.join(" and ")}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {mutualCount > 0 ? (
         <p className="mt-2 text-center text-[13px] font-medium text-slate-500">
           {mutualCount} mutual connection{mutualCount === 1 ? "" : "s"}

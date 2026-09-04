@@ -1095,6 +1095,10 @@ export interface RunnerProfileView {
   /** Relationship of the signed-in viewer to this runner (null for guests). */
   connectionState?: ConnectionState | null;
   /** Shared accepted connections; meaningful only when mutualVisible is true. */
+  /** Occurrences you and this person both attended. Viewer-scoped, never public. */
+  runsTogether?: number;
+  /** Groups you are both active members of. */
+  sharedGroups?: { id: string; name: string }[];
   mutualConnectionsCount?: number;
   /** Whether the runner's show_connections_list lets this viewer see the count. */
   mutualVisible?: boolean;

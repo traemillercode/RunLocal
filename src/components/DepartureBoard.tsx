@@ -17,6 +17,8 @@ import { rsvpEvent } from "../lib/api";
 export type EventType = "track" | "group" | "long" | "trail";
 
 export interface Person {
+  /** Occurrences you and this person both attended. Viewer-scoped. */
+  runsWithYou?: number;
   id: string;
   initials: string;
   tone: number;
@@ -241,6 +243,12 @@ function AvatarStack({ attendees, count, inverted, justJoined, occurrenceId }: A
    * to be.
    */
   const [listOpen, setListOpen] = useState(false);
+  /*
+   * The one person on this run the viewer has run with most. Server-sorted, so
+   * the first attendee with a non-zero count is the strongest — no re-sorting
+   * here, and no work when nobody is shared.
+   */
+  const knownFace = (attendees ?? []).find((p) => (p.runsWithYou ?? 0) > 0) ?? null;
   const ringColor = inverted ? INK_SOFT : "#FFFFFF";
   const shown = (attendees ?? []).slice(0, 4);
   return (
@@ -294,6 +302,29 @@ function AvatarStack({ attendees, count, inverted, justJoined, occurrenceId }: A
         </span>
       )}
       {listOpen && occurrenceId ? <AttendeeListSheet occurrenceId={occurrenceId} onClose={() => setListOpen(false)} /> : null}
+      {/*
+        WHO YOU KNOW, not how many are going. "12 going" is a number; "you've
+        run with Casey 6 times" is a reason — and the card is the moment someone
+        decides whether to show up.
+        Only the strongest single connection is named. A list of everyone you
+        have met is a roster again, and the point is one recognisable person.
+      */}
+      {knownFace ? (
+        <span
+          className="ml-2 truncate font-semibold"
+          style={{ fontSize: "12px", color: inverted ? "rgba(255,255,255,0.7)" : "#5B5F66" }}
+        >
+          {/*
+            Initials, not a name. Person deliberately carries no name — that was
+            the identity-surface decision from the safety work, and widening it
+            here to make a sentence read better would undo it on every card.
+            "You've run with CL 6 times" beside their avatar is legible because
+            the avatar is right there; the list sheet has the full name.
+          */}
+          · you&apos;ve run with {knownFace.initials} {knownFace.runsWithYou}{" "}
+          {knownFace.runsWithYou === 1 ? "time" : "times"}
+        </span>
+      ) : null}
     </div>
   );
 }
