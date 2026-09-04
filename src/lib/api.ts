@@ -2052,3 +2052,20 @@ export interface RosterMemberRow {
 export function getLeaderRoster(): Promise<ApiResult<{ members: RosterMemberRow[] }>> {
   return request("/api/me/leader/roster");
 }
+
+export interface MyCheckinCounts {
+  total: number;
+  groups: { groupId: string; name: string; count: number }[];
+}
+
+/**
+ * Your own lifetime check-in count. Owner-only by design.
+ *
+ * A public run count is a presence signal — "32 with Columbia Track Club" says
+ * how reliably someone attends and which club — so it stays on your own
+ * surfaces. The confirmation gives the number at the moment it changes; this is
+ * the cumulative view where milestones live.
+ */
+export function getMyCheckins(): Promise<ApiResult<MyCheckinCounts>> {
+  return request("/api/me/checkins");
+}

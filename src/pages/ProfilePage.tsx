@@ -446,6 +446,12 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
   const [tagged, setTagged] = useState<RunnerTaggedRow[] | null>(null);
   // Log-a-run composition (verified only) + its gate for unverified profiles.
   const [logRunOpen, setLogRunOpen] = useState(false);
+  const [checkins, setCheckins] = useState<api.MyCheckinCounts | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void api.getMyCheckins().then((r) => { if (alive && r.ok) setCheckins(r.data); });
+    return () => { alive = false; };
+  }, []);
   const [logGateOpen, setLogGateOpen] = useState(false);
 
   const rsvps = useMemo(() => {
@@ -498,6 +504,39 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
       ) : null}
 
       {/* Identity card */}
+      {/*
+        THE CUMULATIVE NUMBER. The confirmation gives it at the moment it
+        changes; this is where it lives between runs, and where a milestone
+        becomes visible before you reach it.
+        OWNER-ONLY. A run count is a presence signal — "32 with Columbia Track
+        Club" says how reliably someone attends and which club — so it renders
+        on your own profile and the endpoint refuses anyone else.
+        Hidden at zero: "0 runs" on a new account is a scoreboard reading
+        nothing, and the first thing it would tell a newcomer is that they are
+        behind.
+      */}
+      {checkins && checkins.total > 0 ? (
+        <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">Runs together</p>
+          <p className="mt-1 text-4xl font-extrabold tabular-nums tracking-tight text-slate-900">
+            {checkins.total}
+            <span className="ml-2 align-middle text-[13px] font-bold text-slate-500">
+              {checkins.total === 1 ? "run checked in" : "runs checked in"}
+            </span>
+          </p>
+          {/* The breakdown only when there is more than one club to break down —
+              "32 · 32 with CTC" is the same fact twice. */}
+          {checkins.groups.length > 1 ? (
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {checkins.groups.map((g) => (
+                <li key={g.groupId} className="rounded-full bg-slate-100 px-3 py-1 text-[12px] font-bold text-slate-700">
+                  {g.count} with {g.name}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
       <section className="mt-4 overflow-hidden rounded-2xl bg-[#14171C] text-white shadow-sm" data-tour-target="profile-header">
         <div className="flex items-center gap-4 p-5">
           {photo ? (

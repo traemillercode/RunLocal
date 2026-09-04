@@ -738,6 +738,30 @@ async function handleApi(
   }
 
 
+  /*
+   * GET /api/me/checkins — your own lifetime count.
+   *
+   * OWNER-ONLY, and that is a safety decision rather than a scoping accident.
+   * A public run count is a presence signal: "32 with Columbia Track Club"
+   * tells someone how reliably she attends and which club, which is the shape
+   * of information the architecture doc keeps owner-only by default.
+   *
+   * The confirmation already gives her the number at the moment it changes.
+   * This is the cumulative view — where milestones live, and the number that
+   * survives changing clubs.
+   */
+  if (method === "GET" && url.pathname === "/api/me/checkins") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const counts = lifetimeCheckins(db, sess.accountId);
+    // Group names resolved here so the client is not left cross-referencing
+    // ids by hand — the same defect that made the safety queue unactionable.
+    const groups = Object.entries(counts.byGroup)
+      .map(([groupId, count]) => ({ groupId, name: db.getGroup(groupId)?.name ?? groupId, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    return ok(res, { total: counts.total, groups }), true;
+  }
+
   if (method === "GET" && url.pathname === "/api/me/groups") {
     const sess = requireSession(db, cookies); if (!sess) return err(res,{status:401,error:"sign_in_required"}),true;
     return ok(res, { memberships: myMemberships(db, sess.accountId) }), true;

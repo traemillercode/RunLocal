@@ -189,3 +189,64 @@ describe("ordinals read correctly", () => {
     expect(body).toContain("rem100 >= 11 && rem100 <= 13");
   });
 });
+
+describe("the cumulative number on the profile is owner-only", () => {
+  const API = readCode(new URL("../src/server/api.ts", import.meta.url));
+  const TRUST = readCode(new URL("../src/server/trust.ts", import.meta.url));
+
+  it("the endpoint reads the SESSION, never a requested account", () => {
+    /*
+     * A run count is a presence signal: "32 with Columbia Track Club" says how
+     * reliably someone attends and which club. That is the shape the
+     * architecture keeps owner-only by default.
+     *
+     * Owner-only BY CONSTRUCTION rather than by a permission check — the
+     * endpoint takes no account parameter, so it cannot be pointed at anyone.
+     * Same property that makes getMyRuns safe.
+     */
+    const at = API.indexOf('url.pathname === "/api/me/checkins"');
+    expect(at).toBeGreaterThan(-1);
+    const handler = API.slice(at, at + 900);
+    expect(handler).toContain("lifetimeCheckins(db, sess.accountId)");
+    expect(handler).not.toMatch(/searchParams\.get|accountId = |runnerId/);
+  });
+
+  it("requires a session", () => {
+    const at = API.indexOf('url.pathname === "/api/me/checkins"');
+    expect(API.slice(at, at + 400)).toContain('error: "sign_in_required"');
+  });
+
+  it("the PUBLIC profile does not carry it", () => {
+    // The assertion that would catch someone adding it to publicRunnerProfile
+    // because it seemed like a nice touch.
+    const fn = TRUST.slice(TRUST.indexOf("export function publicRunnerProfile"));
+    expect(fn.slice(0, 1200)).not.toContain("checkin");
+    expect(fn.slice(0, 1200)).not.toContain("lifetime");
+  });
+
+  it("resolves group names server-side", () => {
+    // An id the client has to cross-reference by hand is the same defect that
+    // made the safety queue readable but unactionable.
+    const at = API.indexOf('url.pathname === "/api/me/checkins"');
+    expect(API.slice(at, at + 900)).toContain("db.getGroup(groupId)?.name ?? groupId");
+  });
+});
+
+describe("the profile hides a zero", () => {
+  const PROFILE = readCode(new URL("../src/pages/ProfilePage.tsx", import.meta.url));
+
+  it("renders nothing until there is a run", () => {
+    /*
+     * "0 runs" on a new account is a scoreboard reading nothing, and the first
+     * thing it would tell a newcomer is that they are behind — the opposite of
+     * what the mechanic is for.
+     */
+    expect(PROFILE).toContain("checkins && checkins.total > 0 ?");
+  });
+
+  it("shows the per-club breakdown only when there is more than one", () => {
+    // "32 · 32 with CTC" is the same fact twice, which is how a number stops
+    // being read.
+    expect(PROFILE).toContain("checkins.groups.length > 1 ?");
+  });
+});
