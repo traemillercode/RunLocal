@@ -216,6 +216,19 @@ export function CheckinPage() {
           if (c?.duplicate) return group ? `You're already checked in for this ${group} run.` : "You're already checked in.";
           const n = c?.groupCount;
           if (!n) return "You're checked in!";
+          /*
+           * THE FIRST ONE IS A BEGINNING, NOT A TALLY.
+           *
+           * "Your 1st run" reads wrong to someone who has been coming since
+           * August — and the copy is what is wrong, not the count. The number
+           * means "runs I checked in to", which is true on day one and true
+           * forever; seeding it from RSVPs would make it mean intentions and
+           * corrupt it at the origin.
+           *
+           * This wording is accurate for a months-long regular AND for an
+           * actual newcomer, which is the only sentence that works for both.
+           */
+          if (n === 1) return "First check-in. This is where your count starts.";
           return group
             ? `That's your ${ordinal(n)} run with ${group}.`
             : `That's your ${ordinal(n)} run.`;

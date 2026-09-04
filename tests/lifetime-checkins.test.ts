@@ -250,3 +250,34 @@ describe("the profile hides a zero", () => {
     expect(PROFILE).toContain("checkins.groups.length > 1 ?");
   });
 });
+
+describe("the first check-in reads as a beginning", () => {
+  const PAGE = readCode(new URL("../src/pages/CheckinPage.tsx", import.meta.url));
+
+  it("does not say 'your 1st run'", () => {
+    /*
+     * The count starts at zero for everyone because it means "runs I checked in
+     * to" — true on day one and true forever. Seeding it from RSVPs would make
+     * it mean INTENTIONS and corrupt it at the origin: RSVP-as-proxy-for-
+     * attended is the same defect shape as leader-recorded-for-attended.
+     *
+     * So the copy carries the difference, not the number. "First check-in. This
+     * is where your count starts." is accurate for someone with months of
+     * history AND for an actual newcomer — the only sentence that works for
+     * both.
+     */
+    expect(PAGE).toContain('if (n === 1) return "First check-in. This is where your count starts.";');
+  });
+
+  it("still counts normally from the second onward", () => {
+    expect(PAGE).toContain("run with ${group}");
+  });
+
+  it("the special case is FIRST, before the ordinal path", () => {
+    // Otherwise "1st" wins and the wording never renders.
+    const first = PAGE.indexOf("First check-in.");
+    const ord = PAGE.indexOf("ordinal(n)");
+    expect(first).toBeGreaterThan(-1);
+    expect(first).toBeLessThan(ord);
+  });
+});

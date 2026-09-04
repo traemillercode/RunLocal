@@ -1,3 +1,4 @@
+import { BirthdateFields } from "../components/BirthdateFields";
 /**
  * Log in / Sign up — primary auth is Supabase email + password.
  *
@@ -561,15 +562,26 @@ export function LoginPage() {
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold">Birthdate (you must be at least 16)</span>
-                <input
-                  type="date"
+                {/*
+                  TYPED, NOT PICKED. type="date" opens a native picker that
+                  starts at the current year, so entering a birth year means
+                  scrolling back three decades — and this is the first field in
+                  the signup flow, so it is the first impression of the product.
+                  Claire hit it immediately.
+
+                  Kept as three separate inputs rather than one free-text field:
+                  a single box needs a format hint, accepts ambiguous input
+                  (03/04/1990 is two dates), and has to be parsed. Three numeric
+                  boxes are unambiguous, and inputMode="numeric" brings up the
+                  number pad rather than a keyboard.
+                */}
+                <BirthdateFields
                   value={birthdate}
-                  onChange={(e) => {
-                    setBirthdate(e.target.value);
+                  onChange={(next) => {
+                    setBirthdate(next);
                     setBirthdateError(null);
                   }}
-                  className={inputCls}
-                  aria-invalid={birthdateError ? true : undefined}
+                  invalid={Boolean(birthdateError)}
                 />
                 {birthdateError ? (
                   <p role="alert" className="mt-1.5 text-xs font-medium text-red-600">
@@ -588,7 +600,19 @@ export function LoginPage() {
                   onChange={(e) => setPhone(e.target.value)}
                   className={inputCls}
                 />
-                <span className="mt-1 block text-[11px] leading-relaxed text-slate-400">Stored privately and never shown publicly. No SMS is ever sent.</span>
+                {/*
+                  A STATED PURPOSE, and no promise never to use it.
+                  "No SMS is ever sent" is the worst version: it is friction
+                  with no payoff, it reads as data collection for its own sake,
+                  and it closes a door we will want open — a run leader needs to
+                  reach people when plans change.
+                  The purpose is real and it is not marketing. Nothing sends SMS
+                  today; the promise is about WHAT it would be used for, not
+                  whether it is used at all.
+                */}
+                <span className="mt-1 block text-[11px] leading-relaxed text-slate-400">
+                  So a run leader can reach you if plans change, and as an emergency contact. Never shown publicly.
+                </span>
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-sm font-semibold">Profile photo (optional)</span>
