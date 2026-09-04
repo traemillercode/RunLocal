@@ -48,6 +48,7 @@ import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from ".
 import { isOwnerEmail, ownerEmail } from "./owner";
 import { AVATAR_STYLES } from "../lib/avatars";
 import { coAttendanceForOccurrence, sharedHistory } from "./sharedHistory";
+import { clubWeek } from "./clubWeek";
 import { sendEmail } from "./email";
 import { resolveOccurrence, defaultOccurrenceDate, sameEventId, occurrenceAttendeeCount } from "./occurrences";
 import { publicGroups, publicGroup } from "./groups";
@@ -798,6 +799,18 @@ async function handleApi(
     db.updateAccount(sess.accountId, { avatarStyle: style });
     await db.persist();
     return ok(res, { avatarStyle: style }), true;
+  }
+
+  /*
+   * GET /api/me/club-week — what your groups did, and what you were part of.
+   *
+   * Reads NOBODY's attendance but the caller's own: the club's number comes
+   * from the schedule, which is already on the board.
+   */
+  if (method === "GET" && url.pathname === "/api/me/club-week") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    return ok(res, { clubs: clubWeek(db, sess.accountId, now) }), true;
   }
 
   if (method === "GET" && url.pathname === "/api/me/checkins") {

@@ -2086,3 +2086,15 @@ export function getMyCheckins(): Promise<ApiResult<MyCheckinCounts>> {
 export function setAvatarStyle(style: string): Promise<ApiResult<{ avatarStyle: string }>> {
   return request("/api/me/avatar", { method: "POST", body: JSON.stringify({ style }) });
 }
+
+export interface ClubWeekRow { groupId: string; groupName: string; runsHeld: number; youWereAt: number }
+
+/**
+ * What your groups did this week and what you were part of.
+ *
+ * The club's number comes from the schedule — already public on the board — and
+ * only your own attendance is read. Nothing here aggregates other people.
+ */
+export function getClubWeek(): Promise<ApiResult<{ clubs: ClubWeekRow[] }>> {
+  return request("/api/me/club-week");
+}

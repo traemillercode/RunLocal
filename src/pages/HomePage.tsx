@@ -48,6 +48,7 @@ export function HomePage({ city }: { city: City }) {
   const [notifications, setNotifications] = useState<api.InAppNotification[]>([]);
   const [plan, setPlan] = useState<api.TrainingPlanView | null>(null);
   const [memberships, setMemberships] = useState<api.MyGroupMembership[]>([]);
+  const [clubs, setClubs] = useState<api.ClubWeekRow[]>([]);
   const [canonical, setCanonical] = useState<api.CanonicalEvent[] | null>(null);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export function HomePage({ city }: { city: City }) {
     void api.getNotifications().then((r) => { if (alive && r.ok) setNotifications(r.data.notifications); });
     void api.getTrainingPlan().then((r) => { if (alive && r.ok) setPlan(r.data.plan); });
     void api.getMyGroups().then((r) => { if (alive && r.ok) setMemberships(r.data.memberships); });
+    void api.getClubWeek().then((r) => { if (alive && r.ok) setClubs(r.data.clubs); });
     void api.getCanonicalEvents(city.id).then((r) => { if (alive && r.ok) setCanonical(r.data.events); });
     return () => { alive = false; };
   }, [city.id]);
@@ -154,6 +156,47 @@ export function HomePage({ city }: { city: City }) {
               <Link to="/events" className="mt-3 inline-block text-[13px] font-bold text-[#FF5741]">Find a run →</Link>
             </section>
           )}
+
+          {/*
+            THE CLUB, NOT THE ACCOUNT. Home was three first-person panels — your
+            next run, your notifications, your training week — which tells you
+            about your account and nothing about the community you joined.
+
+            Not a feed: an aggregate with your participation in it. "Columbia
+            Track Club ran 4 times this week. You were at 2."
+
+            The club's number comes from the SCHEDULE, already public on the
+            board; only your own attendance is read. Nothing here aggregates
+            other people.
+          */}
+          {clubs.length > 0 ? (
+            <section className="mt-7" aria-labelledby="home-clubs">
+              <h2 id="home-clubs" className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">
+                Your clubs this week
+              </h2>
+              <ul className="mt-2 space-y-2">
+                {clubs.map((c) => (
+                  <li key={c.groupId} className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200/70">
+                    <p className="text-[15px] font-bold text-slate-900">
+                      {c.groupName} ran {c.runsHeld} time{c.runsHeld === 1 ? "" : "s"}
+                    </p>
+                    {/*
+                      Stated as participation rather than as a score. "You were
+                      at 2" is a fact; "2 of 4" invites reading it as a ratio
+                      you are failing, which is the competitive framing this
+                      product deliberately avoids.
+                    */}
+                    <p className="mt-0.5 text-[13px] text-slate-600">
+                      {c.youWereAt === 0
+                        ? "You haven't been out with them yet this week."
+                        : `You were at ${c.youWereAt}.`}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
 
           {unread.length > 0 ? (
             <section className="mt-7" aria-labelledby="home-changed">
