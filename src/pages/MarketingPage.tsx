@@ -1,3 +1,4 @@
+import { WaitlistForm } from "./PrivateBetaPage";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
@@ -277,7 +278,34 @@ function MarketingNav() {
                 <Link to="/login" onClick={() => setMobileOpen(false)} className="marketing-button marketing-button-light">Log in</Link>
                 <Link to="/login?mode=signup" onClick={() => setMobileOpen(false)} className="marketing-button marketing-button-primary">Sign up</Link>
               </>
-            ) : null}
+            ) : (
+              /*
+               * THE WAITLIST, OFFERED DIRECTLY. During the beta this block was
+               * empty — the login and signup CTAs are correctly hidden, and
+               * nothing replaced them, so the menu was purely navigational at
+               * exactly the moment navigation leads everywhere and nowhere.
+               *
+               * Every item above leads to the private-beta page, which carries
+               * the same form. Offering it once here removes the detour without
+               * marking each row as gated — a marker per row is clutter that
+               * makes the product look shut, and the destination already
+               * explains itself.
+               */
+              <div>
+                <p className="marketing-mobile-menu-kicker">Not open yet</p>
+                <p className="mt-1 text-[13px] leading-relaxed text-[#B5B7BB]">
+                  Kimbio is in a private beta in Columbia. Add yourself to the list and we&apos;ll email you
+                  the moment we open up.
+                </p>
+                {/*
+                  The real form, not a mailto and not a link to one. A mailto
+                  loses everyone without a configured mail client and records
+                  nothing — that is why the waitlist exists. And a link would
+                  reintroduce the detour this block is here to remove.
+                */}
+                <WaitlistForm tone="dark" />
+              </div>
+            )}
           </div>
         </div>,
         document.body,

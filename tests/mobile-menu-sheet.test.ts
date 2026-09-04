@@ -71,3 +71,53 @@ describe("it behaves like a sheet", () => {
     expect(PAGE).toContain('document.removeEventListener("keydown", onKey);');
   });
 });
+
+describe("the menu is useful during the beta, not just navigational", () => {
+  /*
+   * Every item leads to the private-beta page, which is not four dead ends —
+   * it is four paths into the waitlist. A stranger who taps Races and lands on
+   * "Kimbio is in a private beta" with a form has been given something to do,
+   * not refused.
+   *
+   * But the actions block was EMPTY while the beta is on: the login and signup
+   * CTAs are correctly hidden and nothing replaced them, so the menu was purely
+   * navigational at exactly the moment navigation leads everywhere and nowhere.
+   */
+  it("offers the waitlist when signup is closed", () => {
+    expect(PAGE).toContain('<WaitlistForm tone="dark" />');
+    const at = PAGE.indexOf('<WaitlistForm tone="dark" />');
+    /*
+     * In the signup-CLOSED branch, not shown alongside Sign up. Anchored on the
+     * actions block rather than a character window — the explanatory comment
+     * between the branch and the form is longer than any window I would pick,
+     * and picking one to fit is how a guard stops asserting anything.
+     */
+    const actions = PAGE.indexOf("marketing-mobile-menu-actions");
+    const branch = PAGE.indexOf("signupOpen === true ? (", actions);
+    expect(branch).toBeGreaterThan(-1);
+    expect(branch).toBeLessThan(at);
+  });
+
+  it("uses the real form, not a mailto or a link to one", () => {
+    /*
+     * A mailto loses everyone without a configured mail client and records
+     * nothing — that is why the waitlist exists at all. A link would
+     * reintroduce the detour this block removes.
+     */
+    const at = PAGE.indexOf('<WaitlistForm tone="dark" />');
+    expect(PAGE.slice(Math.max(0, at - 900), at)).not.toContain("mailto:");
+  });
+
+  it("does not mark individual items as beta-gated", () => {
+    /*
+     * A marker per row is clutter that makes the product look shut, and the
+     * destination already explains itself.
+     */
+    const start = PAGE.indexOf("marketing-mobile-menu-item");
+    const end = PAGE.indexOf("marketing-mobile-menu-actions");
+    const items = PAGE.slice(start, end);
+    for (const marker of ["Beta", "Coming soon", "Locked"]) {
+      expect(items).not.toContain(marker);
+    }
+  });
+});
