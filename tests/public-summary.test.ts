@@ -28,7 +28,7 @@ async function call(db: Db, path: string, cookie?: string) {
 }
 function account(db: Db, name: string) {
   const a = db.createAccount({ name, email: `${name.replace(/\s/g, "").toLowerCase()}@example.com`, cityId: "columbia-mo" });
-  db.updateAccount(a.id, { status: "verified" });
+  db.updateAccount(a.id, { status: "verified", avatarStyle: "coral" });
   return a.id;
 }
 

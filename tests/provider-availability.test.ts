@@ -16,7 +16,7 @@ async function call(db: Db, method: string, path: string, options: Options = {})
   await apiHandler(req, res, db);
   return { status: result.status, body: result.body ? JSON.parse(result.body) : {} };
 }
-function user(db: Db, email = "runner@example.com") { const a = db.createAccount({ name: "Runner", email, username: `runner-${Math.random()}` }); db.updateAccount(a.id, { status: "verified" }); return { cookie: `runlocal_sid=${db.createSession(a.id, "198.51.100.23").id}`, id: a.id }; }
+function user(db: Db, email = "runner@example.com") { const a = db.createAccount({ name: "Runner", email, username: `runner-${Math.random()}` }); db.updateAccount(a.id, { status: "verified", avatarStyle: "coral" }); return { cookie: `runlocal_sid=${db.createSession(a.id, "198.51.100.23").id}`, id: a.id }; }
 function admin(db: Db) { return `runlocal_admin=${db.createSession("__admin__", "198.51.100.23").id}`; }
 
 beforeEach(() => { process.env[ADMIN_KEY_VAR] = KEY; process.env[ADMIN_EMAIL_VAR] = "admin@runlocal.app"; });

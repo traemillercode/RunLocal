@@ -120,6 +120,8 @@ export interface PublicAccount {
   rejectionReason?: string | null;
   priorRejectionReason?: string | null;
   profilePhotoUrl: string | null;
+  /** Chosen default avatar, or null when neither photo nor avatar is set. */
+  avatarStyle?: string | null;
 }
 
 export interface MeGuest {

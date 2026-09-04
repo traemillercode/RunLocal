@@ -28,7 +28,7 @@ async function call(db: Db, method: string, path: string, cookie?: string, body?
 }
 function account(db: Db, name: string, cityId = "columbia-mo"): { id: string; cookie: string } {
   const a = db.createAccount({ name, email: `${name.toLowerCase().replace(/\s/g, "")}@example.com`, cityId });
-  db.updateAccount(a.id, { status: "verified" });
+  db.updateAccount(a.id, { status: "verified", avatarStyle: "coral" });
   const s = db.createSession(a.id, "127.0.0.1");
   return { id: a.id, cookie: `${SESSION_COOKIE}=${s.id}` };
 }

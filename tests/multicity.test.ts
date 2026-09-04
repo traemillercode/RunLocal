@@ -75,7 +75,7 @@ function cityAdminCtx(db: Db, cityId: string, reason = "city review", email = "c
 
 function ownerCtx(db: Db, reason = "owner review"): AdminCtx {
   const owner = db.createAccount({ name: "Owner", email: DEFAULT_OWNER_EMAIL });
-  db.updateAccount(owner.id, { status: "verified" });
+  db.updateAccount(owner.id, { status: "verified", avatarStyle: "coral" });
   const session = db.createSession(owner.id, "198.51.100.7", T0);
   return ctx(null, session.id, reason);
 }
@@ -356,13 +356,13 @@ describe("Global Admin city-admin assignment & revocation", () => {
     expect(noAccount.ok).toBe(false);
     if (!noAccount.ok) expect(noAccount.error).toBe("account_not_found");
     const target = db.createAccount({ name: "Pat", email: "pat@example.com" });
-    db.updateAccount(target.id, { status: "verified" });
+    db.updateAccount(target.id, { status: "verified", avatarStyle: "coral" });
     const badCity = assignCityAdmin(db, keyCtx(db), "pat@example.com", "atlantis-zz", T0);
     expect(badCity.ok).toBe(false);
     if (!badCity.ok) expect(badCity.error).toBe("invalid_city");
     // A plain verified runner can never self-assign through the API.
     const runner = db.createAccount({ name: "R", email: "r@example.com" });
-    db.updateAccount(runner.id, { status: "verified" });
+    db.updateAccount(runner.id, { status: "verified", avatarStyle: "coral" });
     const session = db.createSession(runner.id, "198.51.100.7", T0);
     const denied = authorizeScoped(db, ctx(null, session.id, "self assign"), "admin.city_admin_assign", runner.id, T0);
     expect(denied.ok).toBe(false);

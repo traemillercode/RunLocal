@@ -2071,3 +2071,14 @@ export interface MyCheckinCounts {
 export function getMyCheckins(): Promise<ApiResult<MyCheckinCounts>> {
   return request("/api/me/checkins");
 }
+
+/**
+ * Choose a default avatar.
+ *
+ * Separate from the photo upload: different acts, different friction. Either
+ * one satisfies the pre-RSVP requirement — the point is a face on the list, not
+ * a photograph specifically.
+ */
+export function setAvatarStyle(style: string): Promise<ApiResult<{ avatarStyle: string }>> {
+  return request("/api/me/avatar", { method: "POST", body: JSON.stringify({ style }) });
+}

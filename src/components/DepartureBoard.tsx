@@ -1,3 +1,4 @@
+import { AvatarPicker } from "./AvatarPicker";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { AttendeeListSheet } from "./AttendeeListSheet";
 import type { ReactNode } from "react";
@@ -96,7 +97,17 @@ function parseOccurrenceId(occurrenceId: string): { eventId: string; runDate: st
 async function createRsvp(occurrenceId: string): Promise<void> {
   const { eventId, runDate } = parseOccurrenceId(occurrenceId);
   const r = await rsvpEvent(eventId, true, runDate);
-  if (!r.ok) throw new Error(r.error.message ?? "Couldn't RSVP.");
+  if (!r.ok) {
+    /*
+     * The avatar gate is not an error, it is a step. Tagging the thrown value
+     * lets the caller open the picker rather than showing a toast that tells
+     * someone what to do without giving them a way to do it — the dead-end
+     * pattern this build has removed repeatedly.
+     */
+    const err = new Error(r.error.message ?? "Couldn't RSVP.");
+    if (r.error.code === "avatar_required") (err as Error & { needsAvatar?: boolean }).needsAvatar = true;
+    throw err;
+  }
 }
 
 /** Withdraw an RSVP for this occurrence. */
@@ -678,6 +689,10 @@ export default function DepartureBoard({ events, onHostRun, signedIn = true, can
   const [rsvps, setRsvps] = useState<Set<string>>(() => new Set());
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  /* Set when an RSVP is refused for want of a photo or avatar. The occurrence
+     is kept so the RSVP can be retried once a choice is made — an interruption
+     that loses the action is worse than the one it replaced. */
+  const [avatarPromptFor, setAvatarPromptFor] = useState<string | null>(null);
 
   // Board order is always chronological. Sorting a copy keeps the caller's array intact.
   const EVENTS = useMemo(() => [...events].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()), [events]);
@@ -739,6 +754,11 @@ export default function DepartureBoard({ events, onHostRun, signedIn = true, can
         next.delete(event.id);
         return next;
       });
+      // A missing avatar opens the picker instead of a toast.
+      if (e instanceof Error && (e as Error & { needsAvatar?: boolean }).needsAvatar) {
+        setAvatarPromptFor(event.id);
+        return;
+      }
       setToast(e instanceof Error && e.message ? e.message : "Something went wrong saving your RSVP - try again in a moment.");
     } finally {
       setPendingId(null);
@@ -978,6 +998,26 @@ export default function DepartureBoard({ events, onHostRun, signedIn = true, can
         </aside>
       </main>
 
+      {/*
+        The picker rather than a toast. Telling someone what to do without
+        giving them a way to do it is the dead end this build keeps removing.
+        On success the RSVP is retried, so the interruption costs one tap.
+      */}
+      {avatarPromptFor ? (
+        // The board has no account context, and adding one for two initials
+        // is more coupling than this needs. The picker renders a neutral mark
+        // when it has no name: the choice being made is a colour, and the
+        // initials are a preview rather than the point.
+        <AvatarPicker
+          name=""
+          onChosen={() => {
+            const occ = avatarPromptFor;
+            setAvatarPromptFor(null);
+            void createRsvp(occ).catch(() => setToast("Couldn't RSVP — try again."));
+          }}
+          onClose={() => setAvatarPromptFor(null)}
+        />
+      ) : null}
       {/* ── Error toast ───────────────────────────────────────────────── */}
       {toast && (
         <div

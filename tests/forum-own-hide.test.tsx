@@ -52,17 +52,17 @@ const OTHER_CITY = "jefferson-city-mo";
 function setup() {
   const db = createMemoryStore({ now: () => T0 });
   const member = db.createAccount({ name: "Taylor Runner", email: "taylor@example.com", cityId: CITY_ID });
-  db.updateAccount(member.id, { status: "verified" });
+  db.updateAccount(member.id, { status: "verified", avatarStyle: "coral" });
   const other = db.createAccount({ name: "Jordan Lee", email: "jordan@example.com", cityId: CITY_ID });
-  db.updateAccount(other.id, { status: "verified" });
+  db.updateAccount(other.id, { status: "verified", avatarStyle: "coral" });
   // Group Lead: verified, owns a group in the post's city — but is NOT the
   // post author and NOT an admin. Group-lead scope is events/groups; forum
   // posts stay author/admin-only.
   const lead = db.createAccount({ name: "Casey Lead", email: "lead@example.com", cityId: CITY_ID });
-  db.updateAccount(lead.id, { status: "verified" });
+  db.updateAccount(lead.id, { status: "verified", avatarStyle: "coral" });
   db.upsertGroup({ id: "g1", cityId: CITY_ID, name: "Lead Club", ownerId: lead.id, leaderIds: [], membershipMode: "open", rrcaBadge: false, rrcaNote: null, rrcaNoteUpdatedAt: null });
   const owner = db.createAccount({ name: "Trae Owner", email: DEFAULT_OWNER_EMAIL, cityId: CITY_ID });
-  db.updateAccount(owner.id, { status: "verified" });
+  db.updateAccount(owner.id, { status: "verified", avatarStyle: "coral" });
   const cityAdmin = db.createAccount({ name: "City Admin", email: "cityadmin@example.com", cityId: CITY_ID });
   db.updateAccount(cityAdmin.id, { status: "verified", role: "city_admin", adminCityId: CITY_ID });
   const otherCityAdmin = db.createAccount({ name: "Other City Admin", email: "otherca@example.com", cityId: OTHER_CITY });

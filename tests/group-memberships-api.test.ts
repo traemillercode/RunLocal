@@ -30,7 +30,7 @@ describe("group membership authorization and lifecycle", () => {
     const db = createMemoryStore(); const columbia = account(db, "columbia@example.com"); const springfield = account(db, "springfield@example.com", "springfield-mo", "leader");
     group(db, "springfield-group", springfield.a.id, "springfield-mo");
     expect((await call(db, "POST", "/api/groups/springfield-group/membership", {}, columbia.cookie)).result.status).toBe(403);
-    const pending = db.createAccount({ name: "target", email: "target@example.com", cityId: "columbia-mo" }); db.updateAccount(pending.id, { status: "verified" });
+    const pending = db.createAccount({ name: "target", email: "target@example.com", cityId: "columbia-mo" }); db.updateAccount(pending.id, { status: "verified", avatarStyle: "coral" });
     const g = group(db, "columbia-group", columbia.a.id); db.addMembership({ id: "m1", groupId: g.id, accountId: pending.id, cityId: g.cityId, status: "pending", requestedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), decidedAt: null, decidedBy: null });
     expect((await call(db, "POST", "/api/groups/columbia-group/membership/approve", { accountId: pending.id }, springfield.cookie)).result.status).toBe(403);
   });

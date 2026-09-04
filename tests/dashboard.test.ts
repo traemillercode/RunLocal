@@ -36,7 +36,7 @@ function ctx(adminSessionId: string | null, userSessionId?: string | null, reaso
 /** A verified, signed-in owner (kept out of the pending queue). */
 function ownerCtx(db: ReturnType<typeof createMemoryStore>, reason = "dashboard review"): AdminCtx {
   const owner = db.createAccount({ name: "Owner", email: DEFAULT_OWNER_EMAIL });
-  db.updateAccount(owner.id, { status: "verified", verifiedAt: T0.toISOString() });
+  db.updateAccount(owner.id, { status: "verified", avatarStyle: "coral", verifiedAt: T0.toISOString() });
   const session = db.createSession(owner.id, "198.51.100.7", T0);
   return ctx(null, session.id, reason);
 }

@@ -79,11 +79,11 @@ const EVENT = {
 function makeAdminDb(): { db: Db; keyCookie: string; ownerCookie: string; cityCookie: string; runnerCookie: string; runner: { id: string; email: string } } {
   const db = createMemoryStore();
   const owner = db.createAccount({ name: "Owner", email: DEFAULT_OWNER_EMAIL });
-  db.updateAccount(owner.id, { status: "verified" });
+  db.updateAccount(owner.id, { status: "verified", avatarStyle: "coral" });
   const ownerCookie = `runlocal_sid=${db.createSession(owner.id, "198.51.100.10").id}`;
   const keyCookie = `runlocal_admin=${db.createSession("__admin__", "198.51.100.11").id}`;
   const runner = db.createAccount({ name: "Runner", email: "runner@example.com" });
-  db.updateAccount(runner.id, { status: "verified" });
+  db.updateAccount(runner.id, { status: "verified", avatarStyle: "coral" });
   const runnerCookie = `runlocal_sid=${db.createSession(runner.id, "198.51.100.12").id}`;
   const cityAdmin = db.createAccount({ name: "City Admin", email: "city@example.com" });
   db.updateAccount(cityAdmin.id, { status: "verified", role: "city_admin", adminCityId: "columbia-mo" });
@@ -214,7 +214,7 @@ describe("verification freshness: posting without a fresh login", () => {
     const denied = await call(db, "POST", "/api/submissions/race", { body: RACE, cookie });
     expect(denied.status).toBe(403);
     // owner approves server-side while the same session is still live
-    db.updateAccount(pending.id, { status: "verified", verifiedAt: new Date().toISOString() });
+    db.updateAccount(pending.id, { status: "verified", avatarStyle: "coral", verifiedAt: new Date().toISOString() });
     // same session, no relogin, no new cookie: posting now succeeds
     const ok = await call(db, "POST", "/api/submissions/race", { body: RACE, cookie });
     expect(ok.status).toBe(200);
@@ -232,7 +232,7 @@ describe("city-admin grant and the verification funnel", () => {
     const db = createMemoryStore();
     seedCmsCities(db); // city registry — assignCityAdmin validates against it
     const owner = db.createAccount({ name: "Owner", email: DEFAULT_OWNER_EMAIL });
-    db.updateAccount(owner.id, { status: "verified" });
+    db.updateAccount(owner.id, { status: "verified", avatarStyle: "coral" });
     const ownerSession = db.createSession(owner.id, "198.51.100.30");
     const ctx = { userSessionId: ownerSession.id, adminSessionId: null, ip: "198.51.100.30", reason: "granting city admin" };
     const completed = db.createAccount({ name: "Done", email: "done@example.com" });

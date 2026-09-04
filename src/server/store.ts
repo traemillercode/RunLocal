@@ -217,6 +217,8 @@ export interface PublicAccount {
   rejectionReason?: string | null;
   priorRejectionReason?: string | null;
   profilePhotoUrl: string | null;
+  /** Chosen default avatar, or null when neither photo nor avatar is set. */
+  avatarStyle?: string | null;
 }
 
 /**
@@ -269,6 +271,8 @@ export function toPublicAccount(rec: AccountRecord, isOwner = false, db?: Db, no
     /** Shown when this account was previously rejected and has since resubmitted - gives the admin reviewing the new submission full context without it looking like an active rejection. */
     priorRejectionReason: rec.priorRejectionReason ?? null,
     profilePhotoUrl: rec.profilePhotoRef ? `/uploads/public/${rec.profilePhotoRef}` : null,
+    /* Null when neither has been chosen — which is what the RSVP gate reads. */
+    avatarStyle: rec.avatarStyle ?? null,
   };
 }
 

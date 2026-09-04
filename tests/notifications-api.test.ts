@@ -15,7 +15,7 @@ function response() {
   return { res, out };
 }
 async function call(db: Db, method: string, path: string, cookie?: string, body?: unknown) { const { res, out } = response(); await apiHandler(req(method, path, cookie, body), res, db); return { status: out.status, body: JSON.parse(out.body) as Record<string, any> }; }
-function account(db: Db, email: string) { const a = db.createAccount({ name: email, email, cityId: "columbia-mo" }); db.updateAccount(a.id, { status: "verified", verifiedAt: new Date().toISOString() }); const s = db.createSession(a.id, "127.0.0.1"); return { id: a.id, cookie: `runlocal_sid=${s.id}` }; }
+function account(db: Db, email: string) { const a = db.createAccount({ name: email, email, cityId: "columbia-mo" }); db.updateAccount(a.id, { status: "verified", avatarStyle: "coral", verifiedAt: new Date().toISOString() }); const s = db.createSession(a.id, "127.0.0.1"); return { id: a.id, cookie: `runlocal_sid=${s.id}` }; }
 function notification(accountId: string, id: string, readAt: string | null = null): NotificationRecord { return { id, accountId, category: "account_alerts", title: id, body: `Body ${id}`, createdAt: `2026-01-0${id === "one" ? "1" : "2"}T00:00:00.000Z`, readAt }; }
 
 describe("notification preferences and inbox API", () => {

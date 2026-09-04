@@ -23,7 +23,7 @@ function fixture() {
   const her = db.createAccount({ name: "Her", email: "h@x.com", cityId: "columbia-mo" });
   const him = db.createAccount({ name: "Him", email: "hm@x.com", cityId: "columbia-mo" });
   const other = db.createAccount({ name: "Other", email: "o@x.com", cityId: "columbia-mo" });
-  for (const a of [her, him, other]) db.updateAccount(a.id, { status: "verified" });
+  for (const a of [her, him, other]) db.updateAccount(a.id, { status: "verified", avatarStyle: "coral" });
   db.addBlock({ blockerId: her.id, blockedId: him.id, createdAt: new Date().toISOString() } as never);
   return { db, her, him, other };
 }

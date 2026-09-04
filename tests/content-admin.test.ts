@@ -65,11 +65,11 @@ const RACE = {
 function makeAdminDb(): { db: Db; keyCookie: string; ownerCookie: string; cityCookie: string; runnerCookie: string } {
   const db = createMemoryStore();
   const owner = db.createAccount({ name: "Owner", email: DEFAULT_OWNER_EMAIL });
-  db.updateAccount(owner.id, { status: "verified" });
+  db.updateAccount(owner.id, { status: "verified", avatarStyle: "coral" });
   const ownerCookie = `runlocal_sid=${db.createSession(owner.id, "198.51.100.10").id}`;
   const keyCookie = `runlocal_admin=${db.createSession("__admin__", "198.51.100.11").id}`;
   const runner = db.createAccount({ name: "Runner", email: "runner@example.com" });
-  db.updateAccount(runner.id, { status: "verified" });
+  db.updateAccount(runner.id, { status: "verified", avatarStyle: "coral" });
   const runnerCookie = `runlocal_sid=${db.createSession(runner.id, "198.51.100.12").id}`;
   const cityAdmin = db.createAccount({ name: "City Admin", email: "city@example.com" });
   db.updateAccount(cityAdmin.id, { status: "verified", role: "city_admin", adminCityId: "columbia-mo" });

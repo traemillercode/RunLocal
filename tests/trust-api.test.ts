@@ -82,7 +82,7 @@ async function signup(db: Db, email: string, name = "Runner"): Promise<{ id: str
 }
 async function ownerCookie(db: Db): Promise<string> {
   const owner = db.createAccount({ name: "Owner", email: DEFAULT_OWNER_EMAIL });
-  db.updateAccount(owner.id, { status: "verified" });
+  db.updateAccount(owner.id, { status: "verified", avatarStyle: "coral" });
   const s = db.createSession(owner.id, "198.51.100.7");
   return `runlocal_sid=${s.id}`;
 }

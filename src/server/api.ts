@@ -46,6 +46,7 @@ import {
 } from "./admin";
 import { purgeEligible, retentionStatus, deleteAccount as scrubAccount } from "./retention";
 import { isOwnerEmail, ownerEmail } from "./owner";
+import { AVATAR_STYLES } from "../lib/avatars";
 import { sendEmail } from "./email";
 import { resolveOccurrence, defaultOccurrenceDate, sameEventId, occurrenceAttendeeCount } from "./occurrences";
 import { publicGroups, publicGroup } from "./groups";
@@ -750,6 +751,28 @@ async function handleApi(
    * This is the cumulative view — where milestones live, and the number that
    * survives changing clubs.
    */
+  /*
+   * POST /api/me/avatar — choose a default avatar.
+   *
+   * Separate from the photo upload rather than folded into it: they are
+   * different acts with different friction, and an endpoint that accepted
+   * either would have to branch on content type to decide which.
+   */
+  if (method === "POST" && url.pathname === "/api/me/avatar") {
+    const sess = requireSession(db, cookies);
+    if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
+    const body = (await readJson(req)) as { style?: unknown };
+    const style = typeof body.style === "string" ? body.style : "";
+    // Validated against the known set — an arbitrary string would render as a
+    // fallback everywhere and look like a bug rather than a rejected input.
+    if (!AVATAR_STYLES.some((a) => a.id === style)) {
+      return err(res, { status: 400, error: "invalid_avatar" }), true;
+    }
+    db.updateAccount(sess.accountId, { avatarStyle: style });
+    await db.persist();
+    return ok(res, { avatarStyle: style }), true;
+  }
+
   if (method === "GET" && url.pathname === "/api/me/checkins") {
     const sess = requireSession(db, cookies);
     if (!sess) return err(res, { status: 401, error: "sign_in_required" }), true;
@@ -4021,6 +4044,27 @@ async function handleApi(
   if (url.pathname === "/api/events/rsvp" && method === "POST") {
     const s = requireSession(db, cookies); if (!s) return err(res, { status: 401, error: "sign_in_required" }), true;
     const rec = db.getAccount(s.accountId); if (!rec || rec.deletedAt || rec.status !== "verified") return err(res, { status: 403, error: "verified_runner_required" }), true;
+    /*
+     * A FACE BEFORE YOUR NAME GOES ON A LIST, and the gate is HERE rather than
+     * at signup deliberately.
+     *
+     * Signup is friction at the worst moment — the person has not seen the
+     * product yet and every field is a reason to stop. The first RSVP is when
+     * it starts to matter: that is the moment your name appears on a list other
+     * people read while deciding whether to come.
+     *
+     * Satisfied by EITHER a photo or a chosen avatar. Requiring a photograph
+     * would push people toward lying or leaving, and on a product that
+     * publishes where you will be at dawn, "not my face" is a reasonable
+     * position rather than an edge case.
+     */
+    if (!rec.profilePhotoRef && !rec.avatarStyle) {
+      return err(res, {
+        status: 428,
+        error: "avatar_required",
+        message: "Pick a photo or an avatar before your first RSVP — your name goes on a list other runners read.",
+      }), true;
+    }
     const b = await readJson(req) as Record<string, unknown>; const requestedId = typeof b.eventId === "string" ? b.eventId : "";
     const rawId = requestedId.replace(/^event:/, "");
     const known = db.listEvents().find(e => e.id === requestedId || e.id === rawId || e.seedRefId === rawId);

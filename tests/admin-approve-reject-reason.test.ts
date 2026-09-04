@@ -23,7 +23,7 @@ const T0 = new Date("2026-08-03T00:00:00.000Z");
 
 function ownerCtx(db: Db, reason?: string): AdminCtx {
   const owner = db.createAccount({ name: "Owner", email: DEFAULT_OWNER_EMAIL });
-  db.updateAccount(owner.id, { status: "verified", verifiedAt: T0.toISOString() });
+  db.updateAccount(owner.id, { status: "verified", avatarStyle: "coral", verifiedAt: T0.toISOString() });
   const session = db.createSession(owner.id, "198.51.100.7", T0);
   return { adminSessionId: null, userSessionId: session.id, reason, ip: "198.51.100.7" };
 }

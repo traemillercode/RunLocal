@@ -57,7 +57,7 @@ describe("My Runs SSR UI", () => {
     expect(bottom).not.toContain('href="/my-runs"');
 
     const { profileMenuEntries } = await import("../src/lib/accountMenu");
-    const { entries } = profileMenuEntries({ status: "signed_in", account: { status: "verified" } } as never);
+    const { entries } = profileMenuEntries({ status: "signed_in", account: { status: "verified", avatarStyle: "coral" } } as never);
     expect(entries.some((e) => e.to === "/my-runs")).toBe(true);
   });
   it("renders My Runs at most once on desktop — now inside the Training group", async () => {

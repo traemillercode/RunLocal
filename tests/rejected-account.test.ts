@@ -142,7 +142,7 @@ describe("Rejected-account semantics", () => {
     const applicant = pendingApplicant(db, "applicant@example.com");
     // Simulate a previously approved + trusted member whose verification is
     // revoked by rejection: the presentation must be fully cleared.
-    db.updateAccount(applicant.id, { status: "verified", verifiedAt: "2026-08-01T00:00:00.000Z", trustedMember: true, trustedMemberAt: "2026-08-01T00:00:00.000Z" });
+    db.updateAccount(applicant.id, { status: "verified", avatarStyle: "coral", verifiedAt: "2026-08-01T00:00:00.000Z", trustedMember: true, trustedMemberAt: "2026-08-01T00:00:00.000Z" });
     const REJECT_REASON = "Your selfie did not match your photo ID — please reapply with a clearer photo.";
     const r = await call(db, "POST", `/api/admin/records/${applicant.id}/reject`, owner.cookie, { reason: REJECT_REASON }, AUDIT_REASON);
     expect(r.status).toBe(200);

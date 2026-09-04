@@ -22,7 +22,7 @@ function setup() {
   const db = createMemoryStore({ now: () => new Date("2026-08-03T12:00:00.000Z") }); materializeSeedEvents(db, CITIES);
   const event = db.listEvents()[0]!; const date = "2026-08-03"; const occurrence = `event:${event.id}:${date}`;
   const account = db.createAccount({ name: "Runner", email: "runner@example.com", cityId: event.cityId });
-  account.status = "verified"; account.phase = "email";
+  account.status = "verified"; account.phase = "email"; account.avatarStyle = "coral";
   const sid = db.createSession(account.id, "test");
   db.addAttendance({ id: "att", accountId: account.id, eventId: event.id, role: "rsvp", createdAt: new Date().toISOString(), occurrenceId: occurrence, runDate: date, startsAt: `${date}T18:00:00.000Z` });
   return { db, event, occurrence, account, cookie: `${SESSION_COOKIE}=${sid.id}` };
@@ -34,7 +34,7 @@ describe("occurrence discussion request handler", () => {
     const f = setup(); const p = path(f.event.id, f.occurrence);
     expect((await call(f.db, "GET", p)).status).toBe(401);
     f.account.status = "pending"; expect((await call(f.db, "POST", p, { title: "x", body: "hello" }, f.cookie)).status).toBe(403);
-    f.account.status = "verified";
+    f.account.status = "verified"; f.account.avatarStyle = "coral";
     expect((await call(f.db, "GET", path(f.event.id, `event:${f.event.id}:2026-08-10`), undefined, f.cookie)).status).toBe(403);
     expect((await call(f.db, "POST", p, { title: "Thread", body: "hello" }, f.cookie)).status).toBe(200);
     f.account.cityId = "not-the-event-city"; expect((await call(f.db, "GET", p, undefined, f.cookie)).status).toBe(403);
@@ -63,7 +63,7 @@ describe("occurrence discussion request handler", () => {
     const event = db.listEvents()[0]!; const date = "2026-08-03";
     const ref = event.seedRefId ?? event.id;
     const account = db.createAccount({ name: "Runner", email: "runner@example.com", cityId: event.cityId });
-    account.status = "verified";
+    account.status = "verified"; account.avatarStyle = "coral";
     const sid = db.createSession(account.id, "test");
     const cookie = `${SESSION_COOKIE}=${sid.id}`;
     // Real RSVP through the API stores canonical `event:<id>` attendance, which
@@ -77,7 +77,7 @@ describe("occurrence discussion request handler", () => {
     expect((await call(db, "POST", p, { title: "Thread", body: "hello" }, cookie)).status).toBe(200);
     // A verified runner of the same city with NO RSVP is denied.
     const stranger = db.createAccount({ name: "Stranger", email: "s@example.com", cityId: event.cityId });
-    stranger.status = "verified";
+    stranger.status = "verified"; stranger.avatarStyle = "coral";
     const ssid = db.createSession(stranger.id, "test");
     const strangerCookie = `${SESSION_COOKIE}=${ssid.id}`;
     expect((await call(db, "GET", p, undefined, strangerCookie)).status).toBe(403);

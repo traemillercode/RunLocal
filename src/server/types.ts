@@ -115,6 +115,18 @@ export interface AccountRecord {
   /** Filename in uploads/public — the user's chosen public profile photo. */
   profilePhotoRef: string | null;
   /**
+   * A chosen default avatar, for people who do not want their face public.
+   *
+   * THE REQUIREMENT IS A CHOICE, NOT AN UPLOAD. An avatar-less attendee list is
+   * impersonal in a product whose whole point is knowing who is going — but
+   * requiring a photograph would push people toward either lying or leaving.
+   * Picking an avatar is the "chosen presentation over real identity" position:
+   * a real account underneath, whatever face you want on top.
+   *
+   * Null means neither chosen yet, which is what the pre-RSVP gate checks.
+   */
+  avatarStyle?: string | null;
+  /**
    * Supabase Auth user UUID (sub) linked after email OTP verification.
    * Server-side only — never shipped to the client. This is the secure bridge
    * between the Supabase-authenticated email identity and the Kimbio

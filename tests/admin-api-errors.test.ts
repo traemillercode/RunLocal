@@ -31,7 +31,7 @@ describe("owner admin verification HTTP routes", () => {
   it("maps approve action correctly, refreshes state, and serves selfie only to owner", async () => {
     const db = createMemoryStore();
     const owner = db.createAccount({ name: "Owner", email: DEFAULT_OWNER_EMAIL });
-    db.updateAccount(owner.id, { status: "verified" });
+    db.updateAccount(owner.id, { status: "verified", avatarStyle: "coral" });
     const ownerSession = db.createSession(owner.id, "198.51.100.8");
     const target = db.createAccount({ name: "Runner", email: "runner@example.com" });
     db.updateAccount(target.id, { phase: "pending_review", selfieRef: `${target.id}_selfie.jpg` });
@@ -44,14 +44,14 @@ describe("owner admin verification HTTP routes", () => {
     expect(preview.status).toBe(200);
     expect(preview.body).toBe("image-bytes");
     const other = db.createAccount({ name: "Other", email: "other@example.com" });
-    db.updateAccount(other.id, { status: "verified" });
+    db.updateAccount(other.id, { status: "verified", avatarStyle: "coral" });
     const denied = await call(db, "GET", `/api/admin/records/${target.id}/selfie`, `runlocal_sid=${db.createSession(other.id, "198.51.100.9").id}`);
     expect(denied.status).toBe(401);
   });
   it("returns a privacy-safe missing-photo response", async () => {
     const db = createMemoryStore();
     const owner = db.createAccount({ name: "Owner", email: DEFAULT_OWNER_EMAIL });
-    db.updateAccount(owner.id, { status: "verified" });
+    db.updateAccount(owner.id, { status: "verified", avatarStyle: "coral" });
     const cookie = `runlocal_sid=${db.createSession(owner.id, "198.51.100.8").id}`;
     const target = db.createAccount({ name: "Runner", email: "runner@example.com" });
     const missing = await call(db, "GET", `/api/admin/records/${target.id}/selfie`, cookie);

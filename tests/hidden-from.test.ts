@@ -16,7 +16,7 @@ function fixture() {
   const alice = db.createAccount({ name: "Alice", email: "al@x.com", cityId: "columbia-mo" });
   const bob = db.createAccount({ name: "Bob", email: "bo@x.com", cityId: "columbia-mo" });
   const cara = db.createAccount({ name: "Cara", email: "ca@x.com", cityId: "columbia-mo" });
-  for (const a of [alice, bob, cara]) db.updateAccount(a.id, { status: "verified" });
+  for (const a of [alice, bob, cara]) db.updateAccount(a.id, { status: "verified", avatarStyle: "coral" });
   return { db, alice, bob, cara };
 }
 
