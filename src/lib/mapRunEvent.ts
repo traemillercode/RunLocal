@@ -74,6 +74,27 @@ export function mapRunEvent(event: DatedRunEvent, city: City, summary: Attendanc
     paceLow: event.pacePolicy ? PACE_POLICY_LABELS[event.pacePolicy] : "Not stated",
     paceHigh: "",
     detail: event.distanceLabel,
+    /*
+     * NO-DROP AS A FLAG, not prose. It already exists as an enum value; it was
+     * only ever rendered inside a pace label, and clubs also write it into
+     * distanceLabel by hand — "3–5 mi, no-drop pace" is the seeded example.
+     *
+     * It is the single most important thing for someone deciding whether to
+     * show up alone to a run full of strangers, and buried in a distance string
+     * it is invisible at a glance.
+     */
+    noDrop: event.pacePolicy === "no_drop",
+    /*
+     * The human line beside the enum. "All paces" is a claim; "12:00/mi group
+     * led by Dana" is a promise with a person attached.
+     */
+    paceNote: event.paceNote ?? null,
+    /*
+     * When to ARRIVE. The gap between meeting and running is when newcomers
+     * introduce themselves, and someone arriving at the run time has missed
+     * the part that makes them come back.
+     */
+    meetTime: event.meetTime ?? null,
     host,
     attendees,
     goingCount: summary?.goingCount ?? 0,

@@ -383,6 +383,36 @@ export interface RunEventRecord {
    * distanceLabel rather than showing nothing.
    */
   pacePolicy?: PacePolicy | null;
+  /**
+   * Free text beside the enum, not instead of it.
+   *
+   * pacePolicy stays the machine-readable value so filtering keeps working;
+   * this is the human one. "All paces" is a claim — "12:00/mi group led by
+   * Dana" is a promise with a person attached, and that is what converts
+   * someone worried about being dropped.
+   */
+  paceNote?: string | null;
+  /**
+   * When to ARRIVE, distinct from when the run starts.
+   *
+   * Every group run has both — "arrive 5:45, run 6:00" — and we modelled one.
+   * The gap between them is when newcomers introduce themselves, so someone who
+   * arrives at the run time has already missed the part that makes them come
+   * back.
+   *
+   * Optional: a run with no separate meet time simply has none, and records
+   * written before this existed are unchanged.
+   */
+  meetTime?: string | null;
+  /**
+   * "No drop" as a first-class flag rather than prose.
+   *
+   * It currently lives inside distanceLabel as "3-5 mi, no-drop pace", which
+   * makes it unsearchable and easy to miss — and it is the single most
+   * important fact for someone deciding whether to show up alone to a run full
+   * of strangers.
+   */
+  noDrop?: boolean;
   provenance: "seed" | "community" | "admin"; status: "draft" | "approved" | "published" | "hidden" | "archived";
   hidden: boolean; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; archivedAt: string | null;
   /** When set, this occurrence needs at least this many RSVPs before it counts as a confirmed group run rather than a proposal. Undefined/0 = no threshold, always confirmed. */

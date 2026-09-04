@@ -1845,6 +1845,8 @@ export interface RosterRow {
   checkedInAt: string | null;
   checkedInBy: string | null;
   waiver: WaiverState;
+  /** First run with this group. Leader-only — the roster is role-gated. */
+  firstTimeWithGroup: boolean;
 }
 export interface RosterView {
   event: { id: string; title: string; runDate: string; startsAt: string; time: string; location: string; groupId: string; groupName: string; cityId: string };

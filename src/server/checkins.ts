@@ -120,6 +120,8 @@ export interface RosterRow {
   checkedIn: boolean;
   checkedInAt: string | null;
   checkedInBy: string | null;
+  /** First run with THIS group — leader-only, derived from the check-in count. */
+  firstTimeWithGroup: boolean;
   waiver: { status: "not_required" | "unsigned" | "signed" | "expired"; version: number | null; expiresAt: string | null };
 }
 
@@ -143,6 +145,25 @@ export function rosterRows(db: Db, occ: EventOccurrence, now = new Date()): Rost
         checkedIn: Boolean(ci),
         checkedInAt: ci?.checkedInAt ?? null,
         checkedInBy: ci?.checkedInBy ?? null,
+        /*
+         * FIRST TIME WITH THIS GROUP, leader-only.
+         *
+         * A leader who knows someone is new runs the first half-mile
+         * differently, and that is the highest-leverage intervention in club
+         * running. It also feeds the safety model: repeated-attendance vetting
+         * only works if someone notices the FIRST attendance.
+         *
+         * DERIVED, not stored. A stored flag would need setting at RSVP time,
+         * clearing after the run, and would drift the moment either step was
+         * missed — the count already knows. And derived means it is true for
+         * someone who joined months ago and never showed up, which a signup-time
+         * flag would get wrong.
+         *
+         * Scoped to the GROUP, not globally: someone with fifty runs at another
+         * club is still new to this one, and that is what changes how the run
+         * goes.
+         */
+        firstTimeWithGroup: (lifetimeCheckins(db, acct.id).byGroup[ev.groupId] ?? 0) === 0,
         waiver: { status: w.status, version: w.version, expiresAt: w.expiresAt },
       }];
     })

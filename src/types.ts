@@ -93,6 +93,16 @@ export interface RunEvent {
   location: string;
   distanceLabel: string;
   /** How the run treats pace. Null/undefined when the host stated nothing. */
+  /**
+   * Free text beside the enum, not instead of it. pacePolicy stays the
+   * machine-readable value so filtering keeps working; this is the human one.
+   */
+  paceNote?: string | null;
+  /**
+   * When to ARRIVE, when it differs from `time`. The gap between meeting and
+   * running is when newcomers introduce themselves.
+   */
+  meetTime?: string | null;
   pacePolicy?: PacePolicy | null;
   invite: InviteLabel;
   /** External details page (club site etc.), when the host provides one. */

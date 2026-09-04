@@ -20,7 +20,22 @@ export function RosterRowView({ row, busy, onCheckIn, onUndo }: { row: api.Roste
     <li className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate font-bold text-slate-900">{row.name}</p>
+          <p className="flex items-center gap-2 truncate font-bold text-slate-900">
+            <span className="truncate">{row.name}</span>
+            {/*
+              FIRST TIME, and only the leader sees this roster.
+              Not surveillance — a leader who knows someone is new runs the
+              first half-mile differently, and that is the highest-leverage
+              intervention in club running. It also feeds the safety model:
+              repeated-attendance vetting only works if someone notices the
+              first attendance.
+            */}
+            {row.firstTimeWithGroup ? (
+              <span className="shrink-0 rounded-full bg-[#FF5741] px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-[#14171C]">
+                First time
+              </span>
+            ) : null}
+          </p>
           <p className="truncate text-xs text-slate-500">{row.username ? `@${row.username}` : "No username yet"}</p>
           {waiverMissing ? (
             <p className="mt-1.5 text-xs font-semibold text-amber-700">

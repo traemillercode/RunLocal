@@ -44,6 +44,12 @@ export interface RunEvent {
   host: EventHost;
   attendees: Person[];
   goingCount: number;
+  /** No-drop as a flag, not prose buried in `detail`. */
+  noDrop?: boolean;
+  /** The human line beside the pace enum — "12:00/mi group led by Dana". */
+  paceNote?: string | null;
+  /** When to ARRIVE, when it differs from the start time. */
+  meetTime?: string | null;
   /** SVG path string in a "0 0 60 200" viewBox, or null when no route is attached. */
   routePath: string | null;
   /** 0 = free. Anything above routes through Stripe Checkout. */
@@ -543,6 +549,35 @@ function BoardRunCard({ event, now, hero, going, pending, onJoin, onLeave, showA
           >
             {event.name}
           </h3>
+          {/*
+            NO-DROP AS A BADGE. It is the single most important thing for
+            someone deciding whether to show up alone to a run full of
+            strangers, and it lived inside a distance string — "3–5 mi, no-drop
+            pace" — where it is invisible at a glance.
+            Beside the name rather than in the metric row, because it is a
+            reassurance about the run rather than a fact about it.
+          */}
+          {event.noDrop || event.paceNote ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {event.noDrop ? (
+                <span
+                  className="rounded-full px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide"
+                  style={{ background: "#FF5741", color: "#14171C" }}
+                >
+                  No-drop
+                </span>
+              ) : null}
+              {/* The promise with a person attached. */}
+              {event.paceNote ? (
+                <span
+                  className="truncate text-[12px] font-semibold"
+                  style={{ color: inverted ? "rgba(255,255,255,0.75)" : "#5B5F66" }}
+                >
+                  {event.paceNote}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
 
           <div
             className="mt-2 flex items-center gap-1.5"
@@ -552,6 +587,15 @@ function BoardRunCard({ event, now, hero, going, pending, onJoin, onLeave, showA
             <span className="truncate">
               {event.venue} · {event.area}
             </span>
+            {/*
+              ARRIVE TIME AS A QUALIFIER, not a headline. The run time is what
+              someone plans around; the meet time is what stops them missing the
+              part where newcomers introduce themselves. Rendered only when it
+              differs — repeating the start time as "arrive 6:00" is noise.
+            */}
+            {event.meetTime ? (
+              <span className="shrink-0 whitespace-nowrap">· arrive {event.meetTime}</span>
+            ) : null}
           </div>
         </div>
 
