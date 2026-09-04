@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import * as api from "../lib/api";
 import { BuildStamp } from "../components/BuildStamp";
@@ -141,6 +142,25 @@ function MarketingNav() {
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
   }, [exploreOpen]);
   const [mobileOpen, setMobileOpen] = useState(false);
+  /*
+   * BODY SCROLL LOCK and Escape, the other half of "it is a sheet, not a panel".
+   * Without the lock the page scrolls behind an overlay that covers it, which
+   * is disorienting and leaves you somewhere else when the sheet closes.
+   *
+   * The previous value is restored rather than assumed to be "visible" — a
+   * hard-coded restore is how one overlay silently un-does another's lock.
+   */
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMobileOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [mobileOpen]);
 
   return (
     <div className="marketing-header-sticky">
@@ -220,7 +240,18 @@ function MarketingNav() {
         <Icon name="menu" className="h-5 w-5" />
       </button>
 
-      {mobileOpen ? (
+      {/*
+        PORTALLED TO document.body, and this is the whole fix.
+        .marketing-header-sticky has backdrop-filter, which creates a CONTAINING
+        BLOCK for fixed-position descendants. So `position: fixed; inset: 0` on
+        the menu resolved against a 73px header rather than the viewport, and
+        the sheet rendered as a 73px strip with its items overflowing on top of
+        the page — no background behind them, page scrolling underneath.
+        The CSS was correct the whole time. Nothing in the stylesheet was wrong,
+        which is why reading it found nothing; it took walking the ancestor
+        chain for a containing block to see it.
+      */}
+      {mobileOpen ? createPortal(
         <div className="marketing-mobile-menu" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="marketing-mobile-menu-header">
             <span className="marketing-logo-lockup">
@@ -248,7 +279,8 @@ function MarketingNav() {
               </>
             ) : null}
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </header>
     </div>
