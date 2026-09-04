@@ -1666,7 +1666,7 @@ export async function rsvpEvent(eventId: string, rsvp: boolean = true, runDate?:
   }
   return result;
 }
-export interface AttendanceSummaryEntry { host: { accountId: string; name: string; initials: string } | null; attendees: { accountId: string; name: string; initials: string; runsWithYou?: number }[]; goingCount: number; discussionCount?: number; lastDiscussionAt?: string | null; }
+export interface AttendanceSummaryEntry { host: { accountId: string; name: string; initials: string } | null; attendees: { accountId: string; name: string; initials: string; runsWithYou?: number }[]; goingCount: number; discussionCount?: number; lastDiscussionAt?: string | null; otherNewcomers?: number; }
 export function getAttendanceSummary(occurrenceIds: string[]): Promise<ApiResult<{ summaries: Record<string, AttendanceSummaryEntry> }>> {
   return request("/api/events/attendance-summary", { method: "POST", body: JSON.stringify({ occurrenceIds }) });
 }

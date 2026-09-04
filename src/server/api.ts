@@ -49,6 +49,7 @@ import { isOwnerEmail, ownerEmail } from "./owner";
 import { AVATAR_STYLES } from "../lib/avatars";
 import { coAttendanceForOccurrence, sharedHistory } from "./sharedHistory";
 import { clubWeek } from "./clubWeek";
+import { otherNewcomers } from "./sharedHistory";
 import { sendEmail } from "./email";
 import { resolveOccurrence, defaultOccurrenceDate, sameEventId, occurrenceAttendeeCount } from "./occurrences";
 import { publicGroups, publicGroup } from "./groups";
@@ -4338,7 +4339,7 @@ ${rows.map(([k, v]) => `<tr><td style="color:#5b5f66;vertical-align:top;">${k}</
       else bucket.goingAccountIds.push(a.accountId);
       byOccurrence.set(a.occurrenceId, bucket);
     }
-    const summaries: Record<string, { host: { accountId: string; name: string; initials: string } | null; attendees: { accountId: string; name: string; initials: string; runsWithYou: number }[]; goingCount: number; discussionCount: number; lastDiscussionAt: string | null }> = {};
+    const summaries: Record<string, { host: { accountId: string; name: string; initials: string } | null; attendees: { accountId: string; name: string; initials: string; runsWithYou: number }[]; goingCount: number; discussionCount: number; lastDiscussionAt: string | null; otherNewcomers: number }> = {};
     for (const id of ids) {
       const bucket = byOccurrence.get(id) ?? { hostAccountId: null, goingAccountIds: [] };
       const hostAccount = bucket.hostAccountId ? db.getAccount(bucket.hostAccountId) : undefined;
@@ -4411,6 +4412,21 @@ ${rows.map(([k, v]) => `<tr><td style="color:#5b5f66;vertical-align:top;">${k}</
        * A count is not an identity surface: it says a run is active, not who
        * is on it.
        */
+      /*
+       * NEWCOMERS, for a newcomer. Computed per occurrence because the group
+       * differs per run, and gated inside otherNewcomers on all three
+       * constraints — first-timer only, count not names, suppressed below five.
+       */
+      /* Occurrence ids are `${eventId}:${runDate}`, so the event is already in
+         the key — no extra field on the bucket. */
+      const eventIdForRun = id.slice(0, id.lastIndexOf(":"));
+      const groupIdForRun = db.getEvent(eventIdForRun)?.groupId ?? "";
+      const viewerIsNew = groupIdForRun
+        ? (lifetimeCheckins(db, s.accountId).byGroup[groupIdForRun] ?? 0) === 0
+        : false;
+      const newcomers = groupIdForRun
+        ? otherNewcomers(db, s.accountId, groupIdForRun, bucket.goingAccountIds, viewerIsNew)
+        : 0;
       const discussions = db.listDiscussions(id);
       const lastAt = discussions.reduce((acc, d) => (d.createdAt > acc ? d.createdAt : acc), "");
       summaries[id] = {
@@ -4418,6 +4434,8 @@ ${rows.map(([k, v]) => `<tr><td style="color:#5b5f66;vertical-align:top;">${k}</
         attendees,
         goingCount: bucket.goingAccountIds.length,
         discussionCount: discussions.length,
+        /* Zero unless the viewer is new AND there are enough people to hide in. */
+        otherNewcomers: newcomers,
         lastDiscussionAt: lastAt || null,
       };
     }

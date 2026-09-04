@@ -104,6 +104,8 @@ export function mapRunEvent(event: DatedRunEvent, city: City, summary: Attendanc
     /* Metadata only — the content stays behind the RSVP gate. */
     discussionCount: summary?.discussionCount ?? 0,
     lastDiscussionAt: summary?.lastDiscussionAt ?? null,
+    /* Zero unless the viewer is new and the run is big enough to be anonymous. */
+    otherNewcomers: summary?.otherNewcomers ?? 0,
     routePath: null,
     priceCents: 0,
   };

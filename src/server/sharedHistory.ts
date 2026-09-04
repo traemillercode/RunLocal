@@ -1,5 +1,6 @@
 import type { Db } from "./store";
 import { hiddenFrom } from "./privacy";
+import { lifetimeCheckins } from "./checkins";
 
 /**
  * Who you have run with, and how often.
@@ -116,4 +117,49 @@ export function sharedHistory(db: Db, viewerId: string, otherId: string): Shared
     runsTogether: coAttendanceCount(db, viewerId, otherId),
     groups: sharedGroups(db, viewerId, otherId),
   };
+}
+
+/* ── Newcomers on a run ───────────────────────────────────────────────────── */
+
+/**
+ * How many OTHER first-timers are on this run — for a first-timer only.
+ *
+ * "4 people are new to this run too" is the single most reassuring thing you
+ * can tell someone sitting in a car park deciding whether to get out. It is the
+ * runner-facing half of the first-time signal; the leader-facing half is on the
+ * roster.
+ *
+ * THREE CONSTRAINTS, and they are what make an aggregate over other people's
+ * history safe here:
+ *
+ * 1. ONLY A FIRST-TIMER SEES IT. A regular does not need reassurance and has no
+ *    business receiving the group's composition. The number exists to answer
+ *    "will I be the only new person", which is a question only a new person has.
+ *
+ * 2. A COUNT, NEVER NAMES. Who is new is the leader's business — on an attendee
+ *    list it would point at the newcomer for everyone.
+ *
+ * 3. SUPPRESSED BELOW FIVE GOING. At low N composition is inferable: with two
+ *    attendees, "one other is new" identifies that person's history exactly.
+ *    Five is the same floor the architecture uses for counts, for the same
+ *    reason.
+ */
+export function otherNewcomers(
+  db: Db,
+  viewerId: string,
+  groupId: string,
+  attendeeIds: readonly string[],
+  isFirstTimeForViewer: boolean,
+): number {
+  if (!isFirstTimeForViewer) return 0;
+  if (attendeeIds.length < 5) return 0;
+  const hidden = hiddenFrom(db, viewerId);
+  let count = 0;
+  for (const id of attendeeIds) {
+    if (id === viewerId || hidden.has(id)) continue;
+    // First time with THIS group — someone with fifty runs elsewhere is still
+    // new here, which is what makes them a fellow newcomer.
+    if ((lifetimeCheckins(db, id).byGroup[groupId] ?? 0) === 0) count += 1;
+  }
+  return count;
 }

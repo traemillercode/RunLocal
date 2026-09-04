@@ -277,3 +277,96 @@ describe("discussion activity is visible before committing", () => {
     expect(BOARD).toContain("message{event.discussionCount === 1");
   });
 });
+
+describe("newcomers: an aggregate over others, made safe by three constraints", () => {
+  /*
+   * This is the first thing in the product that counts other people's history.
+   * "4 people are new to this run too" is the most reassuring thing you can
+   * tell someone in a car park deciding whether to get out — and it is only
+   * safe because of what it withholds.
+   */
+  function withCheckins(attendees: { id: string; ranBefore: boolean }[]) {
+    const db = createMemoryStore();
+    for (const a of attendees) {
+      db.createAccount({ name: a.id, email: `${a.id}@x.com`, cityId: "columbia-mo" });
+      if (a.ranBefore) {
+        db.addCheckin({
+          id: `ci_${a.id}`, eventId: "event:tue", occurrenceId: "event:tue:2026-07-01",
+          runDate: "2026-07-01", groupId: "ctc", cityId: "columbia-mo", accountId: a.id,
+          checkedInBy: a.id, checkedInAt: new Date().toISOString(), source: "qr",
+        } as never);
+      }
+    }
+    return db;
+  }
+  const six = ["me", "n1", "n2", "n3", "r1", "r2"];
+
+  it("counts other first-timers when the viewer is new", async () => {
+    const { otherNewcomers } = await import("../src/server/sharedHistory");
+    const db = withCheckins([
+      { id: "me", ranBefore: false }, { id: "n1", ranBefore: false }, { id: "n2", ranBefore: false },
+      { id: "n3", ranBefore: false }, { id: "r1", ranBefore: true }, { id: "r2", ranBefore: true },
+    ]);
+    expect(otherNewcomers(db, "me", "ctc", six, true)).toBe(3);
+  });
+
+  it("CONSTRAINT 1 — a regular gets zero, not the composition", async () => {
+    /*
+     * A regular does not need reassurance and has no business receiving the
+     * group's makeup. The number answers "will I be the only new person", which
+     * is a question only a new person has.
+     */
+    const { otherNewcomers } = await import("../src/server/sharedHistory");
+    const db = withCheckins([
+      { id: "me", ranBefore: true }, { id: "n1", ranBefore: false }, { id: "n2", ranBefore: false },
+      { id: "n3", ranBefore: false }, { id: "r1", ranBefore: true }, { id: "r2", ranBefore: true },
+    ]);
+    expect(otherNewcomers(db, "me", "ctc", six, false)).toBe(0);
+  });
+
+  it("CONSTRAINT 3 — suppressed below five going", async () => {
+    /*
+     * At low N composition is inferable: with two attendees, "one other is new"
+     * states that person's history exactly. Five is the same floor the
+     * architecture uses for counts, for the same reason.
+     */
+    const { otherNewcomers } = await import("../src/server/sharedHistory");
+    const four = ["me", "n1", "n2", "r1"];
+    const db = withCheckins([
+      { id: "me", ranBefore: false }, { id: "n1", ranBefore: false },
+      { id: "n2", ranBefore: false }, { id: "r1", ranBefore: true },
+    ]);
+    expect(otherNewcomers(db, "me", "ctc", four, true)).toBe(0);
+  });
+
+  it("CONSTRAINT 2 — the card renders a count and no names", () => {
+    // Who is new is the leader's business. On an attendee list it would point
+    // at the newcomer for everyone.
+    const board = readCode(new URL("../src/components/DepartureBoard.tsx", import.meta.url));
+    expect(board).toContain("{otherNewcomers} others are new to this run too");
+    const at = board.indexOf("others are new to this run too");
+    expect(board.slice(Math.max(0, at - 400), at)).not.toContain("initials");
+  });
+
+  it("excludes hidden people from the count", async () => {
+    // A blocked person must not be counted as a fellow newcomer.
+    const { otherNewcomers } = await import("../src/server/sharedHistory");
+    const db = withCheckins([
+      { id: "me", ranBefore: false }, { id: "n1", ranBefore: false }, { id: "n2", ranBefore: false },
+      { id: "n3", ranBefore: false }, { id: "r1", ranBefore: true }, { id: "r2", ranBefore: true },
+    ]);
+    const meAcc = [...db.listAccounts()].find((a) => a.name === "me")!;
+    const n1 = [...db.listAccounts()].find((a) => a.name === "n1")!;
+    db.addBlock({ blockerId: meAcc.id, blockedId: n1.id, createdAt: new Date().toISOString() } as never);
+    const ids = [meAcc.id, n1.id, "n2", "n3", "r1", "r2"];
+    expect(otherNewcomers(db, meAcc.id, "ctc", ids, true)).toBeLessThan(3);
+  });
+
+  it("takes precedence over the known-face line", () => {
+    // If you have run with someone here you are not new, so the two cannot both
+    // apply — and rendering both would say contradictory things.
+    const board = readCode(new URL("../src/components/DepartureBoard.tsx", import.meta.url));
+    expect(board).toContain("(otherNewcomers ?? 0) > 0 ? (");
+    expect(board.indexOf("otherNewcomers ?? 0) > 0")).toBeLessThan(board.indexOf("knownFace ? ("));
+  });
+});

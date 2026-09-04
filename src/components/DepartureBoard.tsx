@@ -52,6 +52,8 @@ export interface RunEvent {
   /** Run-day discussion activity — count and recency only, never content. */
   discussionCount?: number;
   lastDiscussionAt?: string | null;
+  /** Other first-timers on this run — non-zero only when the viewer is new too. */
+  otherNewcomers?: number;
   /** The human line beside the pace enum — "12:00/mi group led by Dana". */
   paceNote?: string | null;
   /** When to ARRIVE, when it differs from the start time. */
@@ -229,12 +231,14 @@ interface AvatarStackProps {
   attendees?: Person[];
   /** Enables the expandable list. Absent on surfaces with no occurrence. */
   occurrenceId?: string;
+  /** Other first-timers — non-zero only when the viewer is new too. */
+  otherNewcomers?: number;
   count: number;
   inverted: boolean;
   justJoined: boolean;
 }
 
-function AvatarStack({ attendees, count, inverted, justJoined, occurrenceId }: AvatarStackProps) {
+function AvatarStack({ attendees, count, inverted, justJoined, occurrenceId, otherNewcomers }: AvatarStackProps) {
   /*
    * THE DECISION POINT. She is looking at Saturday deciding whether to go, and
    * his name may be the fifth — past the four the card renders. "12 going" that
@@ -312,7 +316,22 @@ function AvatarStack({ attendees, count, inverted, justJoined, occurrenceId }: A
         Only the strongest single connection is named. A list of everyone you
         have met is a roster again, and the point is one recognisable person.
       */}
-      {knownFace ? (
+      {/*
+        FOR A NEWCOMER, and only ever shown to one — the server returns zero to
+        everyone else. "4 people are new to this run too" is the most reassuring
+        thing you can tell someone in a car park deciding whether to get out,
+        and a regular has no business receiving the group's composition.
+        Takes precedence over the known-face line: if you have run with someone
+        here you are not new, so the two cannot both apply.
+      */}
+      {(otherNewcomers ?? 0) > 0 ? (
+        <span
+          className="ml-2 truncate font-semibold"
+          style={{ fontSize: "12px", color: inverted ? "rgba(255,255,255,0.7)" : "#5B5F66" }}
+        >
+          · {otherNewcomers} others are new to this run too
+        </span>
+      ) : knownFace ? (
         <span
           className="ml-2 truncate font-semibold"
           style={{ fontSize: "12px", color: inverted ? "rgba(255,255,255,0.7)" : "#5B5F66" }}
@@ -672,6 +691,7 @@ function BoardRunCard({ event, now, hero, going, pending, onJoin, onLeave, showA
               // Only when identities are shown at all: a signed-out viewer must
               // not get an expandable list the card is deliberately withholding.
               occurrenceId={showAttendees ? event.id : undefined}
+              otherNewcomers={event.otherNewcomers}
               count={event.goingCount + (going ? 1 : 0)}
               inverted={inverted}
               justJoined={going}
