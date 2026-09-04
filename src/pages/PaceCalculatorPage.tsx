@@ -19,11 +19,21 @@ const ZONE_LABELS: Record<string, { label: string; hint: string }> = {
  * and citations.
  */
 export function PaceCalculatorPage() {
+  /*
+   * HOURS, because this was built for a 5K and never extended. The maths always
+   * worked — minutes has no max, so a marathon was enterable as "240" — but
+   * asking someone to convert 3:58:12 into 238 minutes is asking them to do
+   * arithmetic to use a calculator.
+   *
+   * Failing at the half and the full is failing at the two distances people
+   * care most about, which is where a predictor earns its place.
+   */
+  const [hours, setHours] = useState("0");
   const [minutes, setMinutes] = useState("22");
   const [seconds, setSeconds] = useState("00");
   const [distance, setDistance] = useState<"5k" | "10k" | "half_marathon" | "marathon">("5k");
 
-  const knownSeconds = (Number(minutes) || 0) * 60 + (Number(seconds) || 0);
+  const knownSeconds = (Number(hours) || 0) * 3600 + (Number(minutes) || 0) * 60 + (Number(seconds) || 0);
   const knownMiles = { "5k": 3.10686, "10k": 6.21371, half_marathon: 13.10938, marathon: 26.21875 }[distance];
   const valid = knownSeconds > 0;
 
@@ -49,10 +59,16 @@ export function PaceCalculatorPage() {
           ))}
         </div>
         <div className="mt-3 flex items-center gap-2">
+          {/*
+            Hours first, and minutes keeps no max — the two are independent, so
+            someone can still enter 240 minutes if that is how they think about it.
+          */}
+          <input type="number" min="0" max="23" value={hours} onChange={(e) => setHours(e.target.value)} aria-label="Hours" className="h-11 w-16 rounded-[10px] border border-slate-300 px-3 text-center text-lg font-bold tabular-nums outline-none focus:border-[#14171C]" />
+          <span className="text-lg font-bold text-slate-400">:</span>
           <input type="number" min="0" value={minutes} onChange={(e) => setMinutes(e.target.value)} className="h-11 w-20 rounded-lg border border-slate-200 px-3 text-center text-[16px] font-bold outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
           <span className="text-lg font-bold text-slate-400">:</span>
           <input type="number" min="0" max="59" value={seconds} onChange={(e) => setSeconds(e.target.value)} className="h-11 w-20 rounded-lg border border-slate-200 px-3 text-center text-[16px] font-bold outline-none focus:border-[#14171C] focus:ring-2 focus:ring-[#FF5741]/60" />
-          <span className="text-[13px] text-slate-500">min : sec, finish time for a {DISTANCE_LABELS[distance]}</span>
+          <span className="text-[13px] text-slate-500">hr : min : sec, finish time for a {DISTANCE_LABELS[distance]}</span>
         </div>
       </div>
 

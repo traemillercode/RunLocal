@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { localISODate } from "../lib/dates";
 import { Link } from "react-router-dom";
 import * as api from "../lib/api";
 import { useAccount } from "../state/account";
@@ -29,10 +30,25 @@ import type { City } from "../types";
  */
 
 /** "Today · 6:00 PM" — short enough that three rows fit a phone without wrapping. */
+/*
+ * LOCAL DATE PARTS, NOT toISOString().
+ *
+ * `new Date("2026-08-30T00:00:00")` is LOCAL midnight, and toISOString()
+ * converts to UTC — which in Columbia (UTC-5) rolls the date BACKWARDS to the
+ * 29th. So "tomorrow" computed as today, and a run on the 30th read "Today" on
+ * Home while the detail page correctly said "Tomorrow".
+ *
+ * A runner acts on that. It is the one class of bug where being wrong is worse
+ * than showing nothing.
+ *
+ * The fix is to never let a local date pass through a UTC serialiser. Reading
+ * the parts back off the local Date keeps it in the calendar the person is
+ * standing in.
+ */
 function whenLabel(dateISO: string, time: string, today: string): string {
   const tomorrow = new Date(`${today}T00:00:00`);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowISO = tomorrow.toISOString().slice(0, 10);
+  const tomorrowISO = localISODate(tomorrow);
   if (dateISO === today) return `Today · ${time}`;
   if (dateISO === tomorrowISO) return `Tomorrow · ${time}`;
   const d = new Date(`${dateISO}T00:00:00`);
@@ -62,7 +78,9 @@ export function HomePage({ city }: { city: City }) {
     return () => { alive = false; };
   }, [city.id]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  /* Local, not UTC — see localISO. In a negative offset this was yesterday for
+     the last five hours of every day, which shifted every comparison below. */
+  const today = localISODate(new Date());
 
   /** Commitments, soonest first. Past runs belong in My Runs, not on Home. */
   const nextUp = useMemo(
@@ -134,7 +152,7 @@ export function HomePage({ city }: { city: City }) {
               {suggestion ? (
                 <div className="mt-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200/70">
                   <p className="text-[12px] font-bold text-slate-500">
-                    {whenLabel(suggestion.date.toISOString().slice(0, 10), suggestion.time, today)}
+                    {whenLabel(localISODate(suggestion.date), suggestion.time, today)}
                   </p>
                   <p className="mt-0.5 text-[15px] font-bold text-slate-900">{suggestion.title}</p>
                   <p className="mt-0.5 text-[13px] text-slate-500">{suggestion.location} · {suggestion.distanceLabel}</p>

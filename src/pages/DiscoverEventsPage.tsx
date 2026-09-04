@@ -1,3 +1,4 @@
+import { localISODate } from "../lib/dates";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import DepartureBoard from "../components/DepartureBoard";
@@ -58,7 +59,13 @@ export function DiscoverEventsPage({ city }: { city: City }) {
       .filter((e) => e.groupId !== "" && !hidden.has(`event:${bareEventId(e.id)}`) && !occurrenceHasStarted(e, today));
   }, [city, userEvents, canonicalEvents, hidden]);
 
-  const occurrenceIds = useMemo(() => weekEvents.map((e) => occurrenceIdFor(bareEventId(e.id), e.date.toISOString().slice(0, 10))), [weekEvents]);
+  /*
+   * localISODate, and this one is the sharpest of the nine: it builds
+   * OCCURRENCE IDS. A UTC-shifted date does not merely display wrongly — it
+   * asks the server for a different run's attendance, so the card would show
+   * the wrong counts entirely, or none, with nothing to indicate why.
+   */
+  const occurrenceIds = useMemo(() => weekEvents.map((e) => occurrenceIdFor(bareEventId(e.id), localISODate(e.date))), [weekEvents]);
 
   /**
    * PRIVACY BOUNDARY (D2). /events is public, so a signed-out visitor must not

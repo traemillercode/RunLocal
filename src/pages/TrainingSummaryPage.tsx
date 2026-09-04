@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { localISODate } from "../lib/dates";
 import { Link } from "react-router-dom";
 import * as api from "../lib/api";
 import { Icon } from "../components/ui";
@@ -6,7 +7,7 @@ import { Icon } from "../components/ui";
 type ViewMode = "day" | "week" | "month";
 
 function toDateStr(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return localISODate(d);
 }
 function addDays(d: Date, n: number): Date {
   const copy = new Date(d);

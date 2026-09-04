@@ -276,11 +276,56 @@ export function DiscussionPanel({ eventId, occurrenceId, canView, refreshKey = 0
       else setPostError(true);
     });
   };
+  /*
+   * TWO DIFFERENT REASONS, ONE MESSAGE, AND IT DESCRIBED THE WRONG ONE.
+   *
+   * This said the discussion was "unavailable because the run is hidden,
+   * archived, or no longer available" — on a run that was none of those. The
+   * real reason is the GATE: verified, attending, and same city. The copy
+   * described the `missing` case while covering the `denied` one too.
+   *
+   * Telling someone the run is broken when the truth is that they have not
+   * joined it is worse than saying nothing: it sends them looking for a fault
+   * that is not there, and it hides the one action that would work.
+   */
   if (!canView || status === "denied") {
-    return <section className="mt-6 rounded-2xl bg-slate-100 p-5"><h2 className="font-extrabold">Run-day discussion</h2><p className="mt-2 text-sm text-slate-500">Discussion is available to verified runners who RSVP for this occurrence.</p></section>;
+    return (
+      <section className="mt-6 rounded-2xl bg-slate-100 p-5">
+        <h2 className="font-extrabold">Run-day discussion</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Join this run to see the discussion. It opens to everyone who has RSVP’d.
+        </p>
+        {/* The action, not just the reason. A gate that names what would open
+            it and then does not offer it is the dead end this build keeps
+            removing. */}
+        <a href="#rsvp" className="mt-3 inline-flex h-11 items-center rounded-[10px] bg-[#14171C] px-4 text-[13px] font-bold text-white">
+          Join this run
+        </a>
+      </section>
+    );
   }
+  /*
+   * NAMES NO CAUSE, because the client cannot know it.
+   *
+   * The server returns discussion_unavailable for SIX conditions: the event
+   * is missing, the occurrence will not resolve, the canonical id will not
+   * resolve, the event is unpublished, hidden, or archived. The copy named
+   * three of them — so a run that is perfectly live but whose occurrence did
+   * not resolve was told it had been hidden or archived.
+   *
+   * That is the reported bug: "hidden, archived, or no longer available" on a
+   * run that is none of those. The message was not wrong about its branch, it
+   * was wrong to claim a cause at all when it can only observe an outcome.
+   */
   if (status === "missing") {
-    return <section className="mt-6 rounded-2xl bg-slate-100 p-5"><h2 className="font-extrabold">Run-day discussion</h2><p className="mt-2 text-sm text-slate-500">This discussion is unavailable because the run is hidden, archived, or no longer available.</p></section>;
+    return (
+      <section className="mt-6 rounded-2xl bg-slate-100 p-5">
+        <h2 className="font-extrabold">Run-day discussion</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          The discussion for this run isn’t available right now. If the run is still on, try reloading.
+        </p>
+      </section>
+    );
   }
   if (status === "idle" || status === "loading") {
     return <section aria-label="Run-day discussion" className="mt-6 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"><h2 className="font-extrabold">Run-day discussion</h2><p className="mt-3 text-sm text-slate-500">Loading discussion…</p></section>;

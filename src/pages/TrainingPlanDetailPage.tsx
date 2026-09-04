@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { localISODate } from "../lib/dates";
 import { Link } from "react-router-dom";
 import * as api from "../lib/api";
 import { useToast } from "../lib/toast";
@@ -36,7 +37,7 @@ const UNITS_FOR_TYPE: Record<api.TrainingDayWorkoutType, api.TrainingDistanceUni
 };
 
 function toDateStr(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return localISODate(d);
 }
 function startOfMonth(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));

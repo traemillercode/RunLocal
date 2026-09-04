@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { localISODate } from "../lib/dates";
 import { Link, useParams } from "react-router-dom";
 import * as api from "../lib/api";
 import { useToast } from "../lib/toast";
@@ -11,7 +12,12 @@ const COLOR_META: Record<api.WeekColor, string> = {
   green: "bg-emerald-100 text-emerald-800", yellow: "bg-amber-100 text-amber-800", red: "bg-rose-100 text-rose-800",
 };
 
-function toDateStr(d: Date): string { return d.toISOString().slice(0, 10); }
+/*
+ * Local date parts. toISOString() serialises to UTC, so a local date in a
+ * negative offset comes back as the day before for the last hours of every day
+ * — the same defect as HomePage's whenLabel, in a plan that is read by date.
+ */
+const toDateStr = localISODate;
 function addDays(d: Date, n: number): Date { const c = new Date(d); c.setUTCDate(c.getUTCDate() + n); return c; }
 
 /**

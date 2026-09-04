@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { localISODate } from "../lib/dates";
 import { useNavigate } from "react-router-dom";
 import * as api from "../lib/api";
 import { PillButton } from "../components/ui";
@@ -16,7 +17,7 @@ const DAY_RATE = { featured: 25, standard: 10 } as const;
 export function SponsorInquiryPage() {
   const navigate = useNavigate();
   const cityId = "columbia-mo";
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localISODate(new Date());
 
   const [tier, setTier] = useState<"featured" | "standard">("standard");
   const [startDate, setStartDate] = useState(todayStr);

@@ -262,3 +262,22 @@ export function occurrenceHasStarted(event: Pick<DatedRunEvent, "date" | "time">
   if (match[3].toUpperCase() === "AM" && hour === 12) hour = 0;
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, Number(match[2])).getTime() <= now.getTime();
 }
+
+/**
+ * A calendar date in the viewer's own timezone, as YYYY-MM-DD.
+ *
+ * THE ONE PLACE THIS IS DONE, because it was being done in nine and got it
+ * wrong in most of them.
+ *
+ * `new Date(...).toISOString().slice(0, 10)` looks like "the date" and is not:
+ * toISOString serialises to UTC, so in Columbia (UTC-5) the last five hours of
+ * every day report as the day before. Home said "Today" for a run that was
+ * tomorrow — and a runner acts on that, which makes it the one class of bug
+ * where being wrong is worse than showing nothing.
+ *
+ * Reading the parts back off the local Date keeps the answer in the calendar
+ * the person is standing in.
+ */
+export function localISODate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}

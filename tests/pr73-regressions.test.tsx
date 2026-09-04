@@ -58,7 +58,8 @@ describe("PR #73 feed and occurrence regressions", () => {
       </MemoryRouter>,
     );
     expect(notParticipant).toContain("Run-day discussion");
-    expect(notParticipant).toContain("Discussion is available to verified runners who RSVP for this occurrence.");
+    /* Copy changed: names the action rather than restating the rule. */
+    expect(notParticipant).toContain("Join this run to see the discussion");
     expect(notParticipant).not.toContain("Post thread");
     expect(notParticipant).not.toContain("Write a thread");
     expect(notParticipant).not.toContain("hidden, archived, or no longer available");
