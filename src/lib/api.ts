@@ -1666,7 +1666,7 @@ export async function rsvpEvent(eventId: string, rsvp: boolean = true, runDate?:
   }
   return result;
 }
-export interface AttendanceSummaryEntry { host: { accountId: string; name: string; initials: string } | null; attendees: { accountId: string; name: string; initials: string }[]; goingCount: number; }
+export interface AttendanceSummaryEntry { host: { accountId: string; name: string; initials: string } | null; attendees: { accountId: string; name: string; initials: string; runsWithYou?: number }[]; goingCount: number; discussionCount?: number; lastDiscussionAt?: string | null; }
 export function getAttendanceSummary(occurrenceIds: string[]): Promise<ApiResult<{ summaries: Record<string, AttendanceSummaryEntry> }>> {
   return request("/api/events/attendance-summary", { method: "POST", body: JSON.stringify({ occurrenceIds }) });
 }
@@ -1880,7 +1880,7 @@ export const signCheckinWaiver = (token: string) => request<{ signature: { signe
  * groupCount is what the confirmation says, because she just ran with this club
  * and belonging somewhere lands harder than a global statistic.
  */
-export const checkinViaSession = (token: string) => request<{ checkin: { id: string; checkedInAt: string; duplicate: boolean; groupId: string; groupCount: number; lifetimeTotal: number } }>(`/api/checkin/session/${encodeURIComponent(token)}/checkin`, { method: "POST" });
+export const checkinViaSession = (token: string) => request<{ checkin: { id: string; checkedInAt: string; duplicate: boolean; groupId: string; groupCount: number; lifetimeTotal: number; alsoHere?: { name: string; runsTogether: number } } }>(`/api/checkin/session/${encodeURIComponent(token)}/checkin`, { method: "POST" });
 
 // ---- Product feedback (roadmap 0.7) ---------------------------------------
 export type FeedbackCategory = "broken" | "confusing" | "idea" | "praise";

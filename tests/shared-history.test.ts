@@ -201,3 +201,79 @@ describe("the profile shows the pair fact", () => {
     expect(PAGE).toContain("runsTogether > 0 || sharedGroupNames.length > 0 ?");
   });
 });
+
+describe("the mapper carries the pair fact to the card", () => {
+  /*
+   * IT DID NOT, and every server test passed anyway. The summary endpoint
+   * returned runsWithYou, the card declared it, and mapRunEvent built its
+   * Person objects from three fields — so the known-face line would have been
+   * permanently invisible with nothing failing.
+   *
+   * The same shape as "a client path that stops one layer short of a user",
+   * one layer further in: a field that stops one mapper short of the component.
+   */
+  it("Person is built with runsWithYou", () => {
+    const mapper = readCode(new URL("../src/lib/mapRunEvent.ts", import.meta.url));
+    expect(mapper).toContain("runsWithYou: a.runsWithYou ?? 0");
+  });
+});
+
+describe("check-in names a person", () => {
+  const API = readCode(new URL("../src/server/api.ts", import.meta.url));
+  const PAGE = readCode(new URL("../src/pages/CheckinPage.tsx", import.meta.url));
+
+  it("finds the strongest connection on this run, not a list", () => {
+    // "Your 12th with CTC, and your 5th with Casey" is the same data as a tally
+    // and it is about a person. A list of everyone is the record view again.
+    expect(API).toContain("alsoHere: { name: account.name, runsTogether: best }");
+  });
+
+  it("goes through coAttendanceForOccurrence, so hiddenFrom applies", () => {
+    // A blocked person must never be named in a confirmation.
+    const at = API.indexOf("alsoHere:");
+    expect(API.slice(Math.max(0, at - 900), at)).toContain("coAttendanceForOccurrence(db, runner.id, others)");
+  });
+
+  it("omits the field entirely when there is no shared history", () => {
+    // Rather than sending zero and having the client decide — an absent fact
+    // and a fact that is zero are different things.
+    const at = API.indexOf("alsoHere:");
+    expect(API.slice(at, at + 200)).toContain(": {}");
+  });
+
+  it("uses the first name only", () => {
+    // A surname adds nothing to a sentence about someone you have run with
+    // five times.
+    expect(PAGE).toContain("also.name.trim().split(/\\s+/)[0]");
+  });
+});
+
+describe("discussion activity is visible before committing", () => {
+  const API = readCode(new URL("../src/server/api.ts", import.meta.url));
+  const BOARD = readCode(new URL("../src/components/DepartureBoard.tsx", import.meta.url));
+
+  it("sends the count and recency", () => {
+    /*
+     * The discussion was invisible until after RSVP, so the thing that makes a
+     * run feel alive sat behind the decision it should inform.
+     */
+    expect(API).toContain("discussionCount: discussions.length");
+    expect(API).toContain("lastDiscussionAt: lastAt || null");
+  });
+
+  it("sends NO content, author or identity", () => {
+    /*
+     * Metadata only. A count says a run is active; it does not say who is on
+     * it, which is what keeps this off the identity surfaces entirely.
+     */
+    const at = API.indexOf("discussionCount: discussions.length");
+    const block = API.slice(Math.max(0, at - 300), at + 300);
+    expect(block).not.toContain("body");
+    expect(block).not.toContain("authorId");
+  });
+
+  it("renders on the card", () => {
+    expect(BOARD).toContain("event.discussionCount && event.discussionCount > 0");
+    expect(BOARD).toContain("message{event.discussionCount === 1");
+  });
+});

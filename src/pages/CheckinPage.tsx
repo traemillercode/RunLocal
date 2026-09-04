@@ -209,7 +209,9 @@ export function CheckinPage() {
       onSign={() => act("Waiver signed — thanks!", () => api.signCheckinWaiver(token))}
       onCheckin={() =>
         act((data) => {
-          const c = (data as { checkin?: { groupCount?: number; duplicate?: boolean } }).checkin;
+          const c = (data as {
+            checkin?: { groupCount?: number; duplicate?: boolean; alsoHere?: { name: string; runsTogether: number } };
+          }).checkin;
           const group = view?.session.event.groupName;
           // A repeat scan must not claim a new run — the number is the thing
           // that has to be true, and "your 12th" twice would break it.
@@ -229,9 +231,17 @@ export function CheckinPage() {
            * actual newcomer, which is the only sentence that works for both.
            */
           if (n === 1) return "First check-in. This is where your count starts.";
-          return group
-            ? `That's your ${ordinal(n)} run with ${group}.`
-            : `That's your ${ordinal(n)} run.`;
+          const base = group ? `That's your ${ordinal(n)} run with ${group}.` : `That's your ${ordinal(n)} run.`;
+          /*
+           * NAMES A PERSON, not just a tally. Same data, and it is the
+           * difference between a counter and a record of running with people.
+           * First name only — the surname adds nothing to a sentence about
+           * someone you have run with five times.
+           */
+          const also = c?.alsoHere;
+          if (!also) return base;
+          const first = also.name.trim().split(/\s+/)[0];
+          return `${base} And your ${ordinal(also.runsTogether)} with ${first}.`;
         }, () => api.checkinViaSession(token))
       }
       onBack={() => void refresh().then(() => (window.location.hash = "#/"))}

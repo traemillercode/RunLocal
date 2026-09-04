@@ -62,7 +62,10 @@ export function mapRunEvent(event: DatedRunEvent, city: City, summary: Attendanc
   const host = summary?.host
     ? { name: summary.host.name, initials: summary.host.initials }
     : { name: "Community Run", initials: "CR" };
-  const attendees: Person[] = (summary?.attendees ?? []).map((a, i) => ({ id: a.accountId, initials: a.initials, tone: i % TONE_COUNT }));
+  /* runsWithYou carried through — the mapper dropped it, which would have left
+     the known-face line on the card permanently invisible while every server
+     test passed. */
+  const attendees: Person[] = (summary?.attendees ?? []).map((a, i) => ({ id: a.accountId, initials: a.initials, tone: i % TONE_COUNT, runsWithYou: a.runsWithYou ?? 0 }));
 
   return {
     id: occurrenceId,
@@ -98,6 +101,9 @@ export function mapRunEvent(event: DatedRunEvent, city: City, summary: Attendanc
     host,
     attendees,
     goingCount: summary?.goingCount ?? 0,
+    /* Metadata only — the content stays behind the RSVP gate. */
+    discussionCount: summary?.discussionCount ?? 0,
+    lastDiscussionAt: summary?.lastDiscussionAt ?? null,
     routePath: null,
     priceCents: 0,
   };

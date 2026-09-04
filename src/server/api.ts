@@ -732,6 +732,32 @@ async function handleApi(
           groupId: result.record.groupId,
           /* The number for this club, which is what the confirmation says. */
           groupCount: lifetime.byGroup[result.record.groupId] ?? 1,
+          /*
+           * WHO ELSE WAS THERE. "Your 12th run with Columbia Track Club" is a
+           * tally; "your 12th, and your 5th with Casey" is the same data and it
+           * is about a person.
+           *
+           * The strongest single connection on THIS run, not a list — a roster
+           * of everyone you have met is the record view again.
+           *
+           * Computed after the check-in is written, so this run counts. Safe by
+           * the same property as everywhere else: every occurrence counted is
+           * one the viewer attended, and hiddenFrom removes anyone blocked.
+           */
+          ...(() => {
+            const others = db
+              .listAttendance()
+              .filter((a) => a.occurrenceId === result.record.occurrenceId && !a.deletedAt && a.accountId !== runner.id)
+              .map((a) => a.accountId);
+            const shared = coAttendanceForOccurrence(db, runner.id, others);
+            let bestId: string | null = null;
+            let best = 0;
+            for (const [id, n] of shared) if (n > best) { best = n; bestId = id; }
+            const account = bestId ? db.getAccount(bestId) : null;
+            return best > 0 && account
+              ? { alsoHere: { name: account.name, runsTogether: best } }
+              : {};
+          })(),
           lifetimeTotal: lifetime.total,
         },
       }), true;
@@ -4299,7 +4325,7 @@ ${rows.map(([k, v]) => `<tr><td style="color:#5b5f66;vertical-align:top;">${k}</
       else bucket.goingAccountIds.push(a.accountId);
       byOccurrence.set(a.occurrenceId, bucket);
     }
-    const summaries: Record<string, { host: { accountId: string; name: string; initials: string } | null; attendees: { accountId: string; name: string; initials: string }[]; goingCount: number }> = {};
+    const summaries: Record<string, { host: { accountId: string; name: string; initials: string } | null; attendees: { accountId: string; name: string; initials: string; runsWithYou: number }[]; goingCount: number; discussionCount: number; lastDiscussionAt: string | null }> = {};
     for (const id of ids) {
       const bucket = byOccurrence.get(id) ?? { hostAccountId: null, goingAccountIds: [] };
       const hostAccount = bucket.hostAccountId ? db.getAccount(bucket.hostAccountId) : undefined;
@@ -4357,7 +4383,30 @@ ${rows.map(([k, v]) => `<tr><td style="color:#5b5f66;vertical-align:top;">${k}</
            */
           runsWithYou: coAttendance.get(a.id) ?? 0,
         }));
-      summaries[id] = { host, attendees, goingCount: bucket.goingAccountIds.length };
+      /*
+       * DISCUSSION ACTIVITY, BEFORE COMMITTING.
+       *
+       * The run-day discussion exists and is invisible until you have RSVP'd —
+       * so the thing that makes a run feel alive sits behind the decision it
+       * should inform. "3 messages today" is what tells you people are actually
+       * turning up.
+       *
+       * METADATA ONLY. The count and the last-message time; no author, no
+       * body, no identity. Content stays gated exactly as it is now — this
+       * changes what you can see ABOUT the conversation, not what is in it.
+       *
+       * A count is not an identity surface: it says a run is active, not who
+       * is on it.
+       */
+      const discussions = db.listDiscussions(id);
+      const lastAt = discussions.reduce((acc, d) => (d.createdAt > acc ? d.createdAt : acc), "");
+      summaries[id] = {
+        host,
+        attendees,
+        goingCount: bucket.goingAccountIds.length,
+        discussionCount: discussions.length,
+        lastDiscussionAt: lastAt || null,
+      };
     }
     return ok(res, { summaries }), true;
   }

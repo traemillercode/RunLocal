@@ -49,6 +49,9 @@ export interface RunEvent {
   goingCount: number;
   /** No-drop as a flag, not prose buried in `detail`. */
   noDrop?: boolean;
+  /** Run-day discussion activity — count and recency only, never content. */
+  discussionCount?: number;
+  lastDiscussionAt?: string | null;
   /** The human line beside the pace enum — "12:00/mi group led by Dana". */
   paceNote?: string | null;
   /** When to ARRIVE, when it differs from the start time. */
@@ -637,6 +640,18 @@ function BoardRunCard({ event, now, hero, going, pending, onJoin, onLeave, showA
             */}
             {event.meetTime ? (
               <span className="shrink-0 whitespace-nowrap">· arrive {event.meetTime}</span>
+            ) : null}
+            {/*
+              A RUN THAT PEOPLE ARE TALKING ABOUT reads differently from one
+              nobody has mentioned, and that is exactly what someone weighing
+              whether to show up wants to know. The discussion was invisible
+              until after RSVP, which put it behind the decision it informs.
+              Count only — the content stays gated.
+            */}
+            {event.discussionCount && event.discussionCount > 0 ? (
+              <span className="shrink-0 whitespace-nowrap">
+                · {event.discussionCount} message{event.discussionCount === 1 ? "" : "s"}
+              </span>
             ) : null}
           </div>
         </div>
