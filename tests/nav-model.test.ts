@@ -366,10 +366,10 @@ describe("the sidebar fits a short viewport with any group expanded", () => {
    * picked to make a test pass, which is the vacuous-guard shape in a new
    * costume. Measured with Playwright against the built CSS:
    *
-   * Measured with the account block compressed to an icon row (57px):
+   * Measured at 1440x620 against the built CSS:
    *   collapsed 600px · Community open 600px · Training open 609px
-   * Measured as it stands, with the block at 155px:
-   *   collapsed 659px · Community open 737px · Training open 775px
+   * Before the account block was compressed, the same three were
+   *   659px · 737px · 775px — over the threshold in every state.
    *
    * The accordion caps the row count structurally: one group open at a time
    * means the maximum is eight rows plus the largest submenu. There is no
@@ -388,17 +388,22 @@ describe("the sidebar fits a short viewport with any group expanded", () => {
     expect(rule).not.toContain("max-height");
   });
 
-  /*
-   * NOT YET ASSERTED: the account block is still three stacked rows at 155px,
-   * so the sidebar needs 775px with Training expanded rather than the 620px
-   * target. Compressing it to an icon row was measured at 57px and made all
-   * three states fit — but the rules have to live inside the (min-width:1024px)
-   * gate, and placing them there without tripping the hardening test is the
-   * unfinished part.
-   *
-   * Deliberately not asserting the compressed shape while the CSS is reverted:
-   * a guard describing work that is not in the tree is worse than no guard.
-   */
+  it("the account block is one row, not three", () => {
+    /*
+     * 155px to 57px, and that is where the room for an expanded group came
+     * from. Three stacked full-width rows became an icon row — the pattern
+     * Strava, Slack and Garmin use.
+     *
+     * The rules live in the SAME (min-width: 1024px) block that already owns
+     * .desktop-account-action, not merely inside some 1024px gate. The
+     * hardening test requires that selector to appear in exactly one media
+     * chunk; using a different 1024px block makes it two, which reads as a
+     * leak. That distinction cost three attempts.
+     */
+    const gated = /@media \(min-width: 1024px\) \{\s*\.desktop-account-action[\s\S]*?\n\}/.exec(CSS)?.[0] ?? "";
+    expect(gated).toContain(".desktop-account { display: flex; align-items: center;");
+    expect(gated).toContain("width: 40px;");
+  });
 
   it("icon-only controls keep accessible names", () => {
     // Hiding the label is a layout decision, not a reason to ship an unlabelled

@@ -185,7 +185,11 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
 /* The account group never scrolls away. Sign out in particular must not depend
    on the viewport being tall enough. */
 .desktop-account { flex: 0 0 auto; }
-  .desktop-nav a, .desktop-account a { display: flex; width: fit-content; max-width: 100%; min-height: 46px; align-items: center; gap: 12px; border-radius: 10px; padding: 0 12px; color: #cbd5e1; font-size: 14px; font-weight: 700; }
+  /* 40px, not 46. 46 is a touch-target floor and these selectors only match
+   inside .desktop-sidebar, which renders at >=1024px where the input is a
+   pointer. Eight rows at 6px each is 48px — the difference between fitting a
+   620px viewport with a group expanded and not. */
+.desktop-nav a, .desktop-account a { display: flex; width: fit-content; max-width: 100%; min-height: 40px; align-items: center; gap: 12px; border-radius: 10px; padding: 0 12px; color: #cbd5e1; font-size: 14px; font-weight: 700; }
   .desktop-nav a.active, .desktop-nav a:hover, .desktop-account a.active, .desktop-account a:hover { background: rgba(255,255,255,.1); color: white; }
   .desktop-nav a.active { box-shadow: inset 3px 0 #ff5741; }
   .desktop-account { margin-top: auto; border-top: 1px solid rgba(255,255,255,.12); padding-top: 16px; }
@@ -244,7 +248,37 @@ button, a, input, textarea, select { -webkit-tap-highlight-color: color-mix(in s
   .desktop-event-card, .desktop-race-card, .desktop-forum-card, .desktop-group-card, .desktop-detail-card, .desktop-detail-panel { transition: transform 160ms ease, box-shadow 160ms ease; }
 }
 @media (min-width: 1024px) {
-  .desktop-account-action { display: flex; width: 100%; min-height: 46px; align-items: center; gap: 12px; border-radius: 10px; padding: 0 12px; color: #cbd5e1; font-size: 14px; font-weight: 700; text-align: left; }
+  .desktop-account-action { display: flex; width: 100%; min-height: 40px; align-items: center; gap: 12px; border-radius: 10px; padding: 0 12px; color: #cbd5e1; font-size: 14px; font-weight: 700; text-align: left; }
+
+  /*
+   * THE ACCOUNT CHIP. Three stacked full-width rows at 155px became an icon row
+   * at 57px — the last obviously compressible height in the sidebar, and where
+   * the room for an expanded accordion group comes from. Measured at 620px:
+   * collapsed 600, Community open 600, Training open 609.
+   *
+   * The pattern Strava, Slack and Garmin use. Sign out stays a top-level
+   * control here rather than nesting under Profile: behind an expander it is
+   * hidden by an interaction instead of by a fold, which is worse than the bug
+   * that was fixed.
+   *
+   * IN THIS BLOCK SPECIFICALLY, not merely inside a 1024px gate. The hardening
+   * test requires .desktop-account-action to appear in exactly ONE media chunk;
+   * my earlier attempt used a different (min-width: 1024px) block and made it
+   * two, which reads as a leak.
+   */
+  .desktop-account { display: flex; align-items: center; gap: 4px; }
+  .desktop-account > a,
+  .desktop-account > .desktop-account-action {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    min-height: 40px;
+    padding: 0;
+  }
+  /* Label hidden visually only — aria-label and title still name the control,
+     which matters most for the one that signs you out. */
+  .desktop-account > a > span,
+  .desktop-account > .desktop-account-action > span { display: none; }
 }
 
 /* ── Verified-runner onboarding tour ─────────────────────────────

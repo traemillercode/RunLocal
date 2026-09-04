@@ -16,7 +16,7 @@
  *     read or mutate another city's records through any endpoint.
  * Plus public switcher behavior and persistence migration.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -196,10 +196,26 @@ function addPendingSubmission(db: Db, cityId: string, kind: "race" | "group" | "
 }
 
 beforeEach(() => {
+  /*
+   * PIN THE CLOCK. This file creates invitations at T0 (2026-08-03) but the
+   * HTTP handlers validate against `new Date()`, so once real time passed T0
+   * plus the invitation window every invite-only signup test began returning
+   * invitation_expired — on a specific calendar date, with no code change.
+   *
+   * A TIME BOMB, not a regression: it was green when written, went red a month
+   * later, and looked exactly like something we had just broken. It cost a full
+   * bisect through six commits to rule that out.
+   *
+   * Pinning both clocks to the same instant is the fix. Any test that pins one
+   * clock and lets another run free has this shape.
+   */
+  vi.useFakeTimers();
+  vi.setSystemTime(T0);
   process.env[ADMIN_KEY_VAR] = KEY;
   process.env[ADMIN_EMAIL_VAR] = ADMIN_EMAIL;
 });
 afterEach(() => {
+  vi.useRealTimers();
   delete process.env[ADMIN_KEY_VAR];
   delete process.env[ADMIN_EMAIL_VAR];
   delete process.env[OWNER_EMAIL_VAR];
