@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import * as api from "../lib/api";
 import { Icon } from "./ui";
 
@@ -153,10 +153,33 @@ export function InvitationsAdminSection({ cityId }: { cityId: string }) {
         ) : rows.length === 0 ? (
           <li className="rounded-xl bg-slate-50 px-4 py-3 text-[13px] text-slate-500">No invitations yet.</li>
         ) : (
-          rows.map((i) => {
+          rows.map((i, idx) => {
             const s = statusOf(i);
+            /*
+             * "EARLIER" DIVIDER, at the point the list stops being actionable.
+             *
+             * The server sorts unused invitations first, so the boundary is
+             * wherever the first non-actionable row lands — computed from the
+             * data rather than from a count, which means it stays correct when
+             * one is revoked or redeemed without anything being recalculated.
+             *
+             * Nothing is hidden. An invitation revoked last week is still
+             * findable, because "was this address ever invited" is a question
+             * worth being able to answer in six months.
+             */
+            const actionable = (r: typeof i) => !r.usedAt && !r.revokedAt && r.valid;
+            const isFirstEarlier = !actionable(i) && (idx === 0 || actionable(rows[idx - 1]));
             return (
-              <li key={i.id} className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 ring-1 ring-slate-200/70">
+              /* Fragment needs the key, not the children — a bare <> in a map
+                 loses it and React warns on every render. */
+              <Fragment key={i.id}>
+              {isFirstEarlier ? (
+                <li className="flex items-center gap-3 pt-3 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                  <span>Earlier</span>
+                  <span className="h-px flex-1 bg-slate-200" />
+                </li>
+              ) : null}
+              <li className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 ring-1 ring-slate-200/70">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[14px] font-semibold text-slate-900">{i.email}</span>
                   <span className="block text-[12px] text-slate-500">
@@ -191,6 +214,7 @@ export function InvitationsAdminSection({ cityId }: { cityId: string }) {
                   </button>
                 ) : null}
               </li>
+              </Fragment>
             );
           })
         )}

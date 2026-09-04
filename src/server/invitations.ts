@@ -161,11 +161,31 @@ export function listInvitations(
 ): AdminResult<InvitationView[]> {
   const auth = authorizeAdmin(db, ctx, "admin.invitation_create", null, now);
   if (!auth.ok) return auth;
+  /*
+   * SORTED BY WHAT STILL NEEDS DOING, not by when it was made.
+   *
+   * The list filtered by city and sorted newest-first, so a redeemed invite
+   * from three weeks ago sat above an unused one from yesterday and the view
+   * only ever grew. At ten invitations that is untidy; at fifty the two rows
+   * you can act on are lost among the ones you cannot.
+   *
+   * The state is DERIVED, not stored — usedAt, revokedAt and expiresAt already
+   * say everything. A status column would be a fourth representation of the
+   * same three facts, and the one that drifts.
+   *
+   * Unused first, then everything else, each newest-first within its group.
+   * That is the whole change: no filtering, nothing hidden, and an invitation
+   * you revoked last week is still findable.
+   */
   const rows = db
     .listInvitations()
     .filter((i) => !cityId || i.cityId === cityId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map((i) => view(i, now));
+    .map((i) => view(i, now))
+    .sort((a, b) => {
+      const actionable = (r: InvitationView) =>
+        !r.usedAt && !r.revokedAt && new Date(r.expiresAt).getTime() > now.getTime() ? 0 : 1;
+      return actionable(a) - actionable(b) || b.createdAt.localeCompare(a.createdAt);
+    });
   return { ok: true, data: rows };
 }
 

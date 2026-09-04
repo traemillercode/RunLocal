@@ -126,3 +126,73 @@ describe("the discussion says the real reason", () => {
     expect(branch).toContain("isn’t available right now");
   });
 });
+
+describe("the invitation list surfaces what still needs doing", () => {
+  /*
+   * It filtered by city and sorted newest-first, so a redeemed invite from
+   * three weeks ago sat above an unused one from yesterday and the view only
+   * ever grew. At ten that is untidy; at fifty the two rows you can act on are
+   * lost among the ones you cannot.
+   */
+  const SRC = readCode(new URL("../src/server/invitations.ts", import.meta.url));
+  const UI = readCode(new URL("../src/components/InvitationsAdminSection.tsx", import.meta.url));
+
+  it("puts actionable invitations first", async () => {
+    const { createMemoryStore } = await import("../src/server/store");
+    const { listInvitations, createInvitation } = await import("../src/server/invitations");
+    const { ADMIN_KEY_VAR, ADMIN_EMAIL_VAR, adminLogin } = await import("../src/server/admin");
+    const { saveCity } = await import("../src/server/cms");
+    process.env[ADMIN_KEY_VAR] = "k";
+    process.env[ADMIN_EMAIL_VAR] = "a@x.com";
+
+    const db = createMemoryStore();
+    const login = adminLogin(db, "k", "1.1.1.1");
+    if (!login.ok) throw new Error("login");
+    const ctx = { userSessionId: null, adminSessionId: login.data.sessionId, ip: "1.1.1.1", reason: "test" } as never;
+    saveCity(db, ctx, { id: "stl-mo", name: "St. Louis", state: "MO", slug: "stl-mo", status: "invite_only" });
+
+    /*
+     * The REDEEMED one is the NEWER one, deliberately. My first fixture had it
+     * the other way round, so newest-first and actionable-first produced the
+     * same order and the test passed with the sort removed — vacuous, and only
+     * caught by putting the old sort back.
+     */
+    const unused = createInvitation(db, ctx, { cityId: "stl-mo", email: "fresh@x.com" }, new Date("2026-08-01"));
+    const redeemed = createInvitation(db, ctx, { cityId: "stl-mo", email: "old@x.com" }, new Date("2026-08-20"));
+    if (!unused.ok || !redeemed.ok) throw new Error("create");
+    db.updateInvitation(redeemed.data.invitation.id, { usedAt: new Date().toISOString() });
+
+    const rows = listInvitations(db, ctx, "stl-mo", new Date("2026-08-25"));
+    if (!rows.ok) throw new Error("list");
+    // Unused first even though it is OLDER — which is the whole point.
+    expect(rows.data[0].email).toBe("fresh@x.com");
+    expect(rows.data[1].email).toBe("old@x.com");
+  });
+
+  it("derives state rather than storing it", () => {
+    /*
+     * usedAt, revokedAt and expiresAt already say everything. A status column
+     * would be a fourth representation of the same three facts, and the one
+     * that drifts.
+     */
+    expect(SRC).toContain("!r.usedAt && !r.revokedAt && new Date(r.expiresAt).getTime() > now.getTime()");
+  });
+
+  it("hides nothing", () => {
+    /*
+     * An invitation revoked last week stays findable — "was this address ever
+     * invited" is a question worth being able to answer in six months, and it
+     * is the reason clearing is a soft-delete elsewhere too.
+     */
+    const at = SRC.indexOf("const rows = db");
+    const block = SRC.slice(at, at + 700);
+    expect(block).not.toContain("usedAt)");   // no filter on used
+    expect(block).toContain(".filter((i) => !cityId || i.cityId === cityId)");
+  });
+
+  it("the divider is computed from the data, not a count", () => {
+    // So it stays correct when one is revoked or redeemed, with nothing
+    // recalculated.
+    expect(UI).toContain("!actionable(i) && (idx === 0 || actionable(rows[idx - 1]))");
+  });
+});
