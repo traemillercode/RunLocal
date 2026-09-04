@@ -116,6 +116,14 @@ export function CheckinFlowView({
   );
 }
 
+/** 1st, 2nd, 3rd, 11th, 21st — the number is the message, so it has to read right. */
+function ordinal(n: number): string {
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+  const rem10 = n % 10;
+  return `${n}${rem10 === 1 ? "st" : rem10 === 2 ? "nd" : rem10 === 3 ? "rd" : "th"}`;
+}
+
 export function CheckinPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("t") ?? "";
@@ -133,13 +141,22 @@ export function CheckinPage() {
     });
   };
   useEffect(load, [token]);
-  const act = (label: string, run: () => Promise<api.ApiResult<unknown>>) => {
+  /*
+   * THE CONFIRMATION IS THE PRODUCT MOMENT, so the label can depend on what
+   * came back rather than being fixed at the call site. "You're checked in" is
+   * a receipt; "That's your 12th run with Columbia Track Club" is the thing
+   * someone screenshots, and it is the entire retention mechanic in one line.
+   */
+  const act = (
+    label: string | ((data: unknown) => string),
+    run: () => Promise<api.ApiResult<unknown>>,
+  ) => {
     if (busy) return;
     setBusy(true); setNotice("");
     void run().then((r) => {
       setBusy(false);
       if (!r.ok) { setError(r.error.message ?? "That didn't work — try again."); return; }
-      setNotice(label);
+      setNotice(typeof label === "function" ? label(r.data) : label);
       void api.getCheckinSession(token).then((res) => { if (res.ok) setView(res.data); });
     });
   };
@@ -190,7 +207,20 @@ export function CheckinPage() {
       notice={notice}
       onJoin={() => act("You're on the list.", () => api.joinCheckinSession(token))}
       onSign={() => act("Waiver signed — thanks!", () => api.signCheckinWaiver(token))}
-      onCheckin={() => act("You're checked in!", () => api.checkinViaSession(token))}
+      onCheckin={() =>
+        act((data) => {
+          const c = (data as { checkin?: { groupCount?: number; duplicate?: boolean } }).checkin;
+          const group = view?.session.event.groupName;
+          // A repeat scan must not claim a new run — the number is the thing
+          // that has to be true, and "your 12th" twice would break it.
+          if (c?.duplicate) return group ? `You're already checked in for this ${group} run.` : "You're already checked in.";
+          const n = c?.groupCount;
+          if (!n) return "You're checked in!";
+          return group
+            ? `That's your ${ordinal(n)} run with ${group}.`
+            : `That's your ${ordinal(n)} run.`;
+        }, () => api.checkinViaSession(token))
+      }
       onBack={() => void refresh().then(() => (window.location.hash = "#/"))}
     />
   );

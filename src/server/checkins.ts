@@ -319,3 +319,54 @@ export function sessionMeDto(db: Db, session: CheckInQrSession, accountId: strin
 export function signViaSession(db: Db, session: CheckInQrSession, runner: AccountRecord, now = new Date()) {
   return signWaiver(db, session.groupId, runner, now);
 }
+
+/* ── Lifetime check-in count ──────────────────────────────────────────────── */
+
+export interface LifetimeCheckins {
+  /** Every check-in this account has, across all groups and all time. */
+  total: number;
+  /** Per group, keyed by groupId. */
+  byGroup: Record<string, number>;
+}
+
+/**
+ * How many times this runner has shown up.
+ *
+ * THE RETENTION MECHANIC, and the reason it works is that it rewards attending
+ * rather than performing. Someone with 47 runs comes to their 48th because it
+ * is 48. It is also the only number where the newest runner and the veteran are
+ * playing the same game — which is precisely why there is no leaderboard beside
+ * it, and why adding one later would break the thing that makes it work.
+ *
+ * COUNTED FROM CHECK-INS ONLY, not RSVPs. An RSVP is an intention; a check-in
+ * is a record that you were there. Counting intentions would make the number
+ * mean something softer, and the number's whole value is that it is true.
+ *
+ * The consequence is worth stating rather than hiding: everyone starts at zero,
+ * including the runners who have been coming for months. Backfilling from RSVP
+ * history would inflate it with runs nobody confirmed attending.
+ *
+ * DEDUPED ON (accountId, occurrenceId) BY CONSTRUCTION — getCheckin is keyed on
+ * exactly that pair and recordCheckIn returns the existing row rather than
+ * writing a second. So a runner who scans in AND is marked present by a leader
+ * working down the roster counts once. Source is metadata for audit, never part
+ * of the key: the key has to be the thing being counted, which is occurrences
+ * attended.
+ */
+export function lifetimeCheckins(db: Db, accountId: string): LifetimeCheckins {
+  const rows = db.listCheckins(undefined, accountId);
+  const byGroup: Record<string, number> = {};
+  const seen = new Set<string>();
+  for (const c of rows) {
+    /*
+     * Belt and braces on the dedup. The store keys on the pair, so this should
+     * never drop anything — but a count that silently double-counts is
+     * indistinguishable from a correct one until someone notices their number
+     * is wrong, and by then they have stopped trusting it.
+     */
+    if (seen.has(c.occurrenceId)) continue;
+    seen.add(c.occurrenceId);
+    byGroup[c.groupId] = (byGroup[c.groupId] ?? 0) + 1;
+  }
+  return { total: seen.size, byGroup };
+}

@@ -1869,7 +1869,12 @@ export interface CheckinSessionView {
 export const getCheckinSession = (token: string) => request<CheckinSessionView>(`/api/checkin/session/${encodeURIComponent(token)}`);
 export const joinCheckinSession = (token: string) => request<{ rsvped: boolean }>(`/api/checkin/session/${encodeURIComponent(token)}/join`, { method: "POST" });
 export const signCheckinWaiver = (token: string) => request<{ signature: { signedAt: string; expiresAt: string; versionId: string } }>(`/api/checkin/session/${encodeURIComponent(token)}/sign`, { method: "POST" });
-export const checkinViaSession = (token: string) => request<{ checkin: { id: string; checkedInAt: string; duplicate: boolean } }>(`/api/checkin/session/${encodeURIComponent(token)}/checkin`, { method: "POST" });
+/**
+ * The runner's own check-in. Returns the LIFETIME COUNT alongside the record —
+ * groupCount is what the confirmation says, because she just ran with this club
+ * and belonging somewhere lands harder than a global statistic.
+ */
+export const checkinViaSession = (token: string) => request<{ checkin: { id: string; checkedInAt: string; duplicate: boolean; groupId: string; groupCount: number; lifetimeTotal: number } }>(`/api/checkin/session/${encodeURIComponent(token)}/checkin`, { method: "POST" });
 
 // ---- Product feedback (roadmap 0.7) ---------------------------------------
 export type FeedbackCategory = "broken" | "confusing" | "idea" | "praise";

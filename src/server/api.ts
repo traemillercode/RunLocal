@@ -64,6 +64,7 @@ import {
   sessionPublicDto,
   sessionMeDto,
   signViaSession,
+  lifetimeCheckins,
 } from "./checkins";
 import { membershipDto, myMemberships, createMembership, canAdministerMembership, getOrCreateGroupChat, syncGroupChatMembership } from "./memberships";
 import { listLedGroups, leaderQueue, groupRoster, assignGroupLeader, removeGroupLeader, transferGroupOwnership, editGroupProfile, notifyLeadersOfMembershipRequest, type GroupProfilePatch } from "./leadership";
@@ -708,7 +709,30 @@ async function handleApi(
     if (action === "checkin" && method === "POST") {
       const result = checkinViaSession(db, found.session, runner, now);
       await db.persist();
-      return ok(res, { checkin: { id: result.record.id, checkedInAt: result.record.checkedInAt, duplicate: result.duplicate } }), true;
+      /*
+       * THE CONFIRMATION IS THE PRODUCT MOMENT. Someone finishes a run, opens
+       * their phone, and sees a number that went up — that is the thing they
+       * screenshot, and it is worth more than the count itself.
+       *
+       * The GROUP count, not the global one. She just ran with this club, and
+       * "your 12th run with Columbia Track Club" is a statement about belonging
+       * somewhere; a global total at that moment is a statistic and lands flat.
+       * The global number lives on the profile, where cumulative is the point.
+       *
+       * Computed AFTER the write, so it includes the run just recorded.
+       */
+      const lifetime = lifetimeCheckins(db, runner.id);
+      return ok(res, {
+        checkin: {
+          id: result.record.id,
+          checkedInAt: result.record.checkedInAt,
+          duplicate: result.duplicate,
+          groupId: result.record.groupId,
+          /* The number for this club, which is what the confirmation says. */
+          groupCount: lifetime.byGroup[result.record.groupId] ?? 1,
+          lifetimeTotal: lifetime.total,
+        },
+      }), true;
     }
     return err(res, { status: 404, error: "not_found" }), true;
   }
