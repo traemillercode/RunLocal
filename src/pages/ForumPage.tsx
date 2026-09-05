@@ -1090,9 +1090,21 @@ export function ForumPage({ city }: { city: City }) {
         return {
           title: "Delete this post?",
           entity: confirm.title,
-          impact: "This permanently removes the post from public view — there is no restore path. The row and audit trail are preserved.",
+          impact: "This removes the post from the forum. It can't be undone.",
           confirmLabel: "Delete post",
-          requireReason: true,
+          /*
+           * NO REASON REQUIRED.
+           *
+           * A reason is an AUDIT concept — it exists so a moderator acting on
+           * someone else's content leaves a record of why. Demanding one to
+           * delete your own post asks a person to justify themselves to nobody,
+           * and it turns a one-tap action into a form.
+           *
+           * The audit trail still records WHO and WHAT; only the free-text
+           * justification is gone, and it was never meaningful on a self-delete
+           * — the screenshot that prompted this had someone typing "Delete".
+           */
+          requireReason: false,
         };
       case "report_post":
         return {
@@ -1159,7 +1171,19 @@ export function ForumPage({ city }: { city: City }) {
       : action.kind === "restore_own_post" ? api.setForumPostHidden(action.postId, false)
       : action.kind === "hide_post" ? api.adminTransitionContent(`post:${action.postId}`, "hide", reason)
       : action.kind === "restore_post" ? api.adminTransitionContent(`post:${action.postId}`, "restore", reason)
-      : action.kind === "delete_post" ? api.adminTransitionContent(`post:${action.postId}`, "delete", reason)
+      /*
+       * THE AUTHOR ENDPOINT, not the moderation one.
+       *
+       * This went through adminTransitionContent against `post:<id>` — a
+       * content-registry row that only exists for posts the server serves. Seed
+       * posts have no such row, so the call returned not_found and surfaced as
+       * "That's not here" on a post plainly on screen. The seed posts are gone
+       * now, but the routing was wrong regardless: deleting your own post is
+       * not a moderation action and should not need the moderation path.
+       *
+       * deleteForumPost is author-only on the server and needs no reason.
+       */
+      : action.kind === "delete_post" ? api.deleteForumPost(action.postId)
       : action.kind === "report_post" ? api.flagContent("post", action.postId, reason)
       : action.kind === "pin_post" ? api.pinForumPost(action.postId, true)
       : action.kind === "unpin_post" ? api.pinForumPost(action.postId, false)
@@ -1345,6 +1369,23 @@ export function ForumPage({ city }: { city: City }) {
         </div>
       ) : null}
 
+      {/*
+        AN HONEST EMPTY STATE. The forum had nine seed posts written by "Kimbio
+        Team" and now has none, which is correct — but an empty list with no
+        explanation reads as broken rather than as early, and that is the
+        difference between a tester reporting a bug and a tester having an
+        opinion.
+        Says what goes here and offers the action, rather than apologising.
+      */}
+      {posts.length === 0 ? (
+        <div className="mt-4 rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200/70">
+          <p className="text-[15px] font-bold text-slate-900">Nothing here yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-[13px] leading-relaxed text-slate-600">
+            This is where Columbia runners ask about routes, find people to run with, and sort out
+            weekend plans. Be the first.
+          </p>
+        </div>
+      ) : null}
       <ul className="mt-4 space-y-3">
         {posts.map((p) => {
           const expanded = openThreadId === p.id;
