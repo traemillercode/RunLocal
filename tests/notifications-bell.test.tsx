@@ -56,6 +56,8 @@ function notificationsState(patch: Partial<NotificationsState> = {}): Notificati
     refresh: async () => {},
     markRead: async () => {},
     markAllRead: async () => {},
+    dismiss: async () => {},
+    clearRead: async () => {},
     ...patch,
   };
 }

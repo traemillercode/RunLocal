@@ -2098,3 +2098,17 @@ export interface ClubWeekRow { groupId: string; groupName: string; runsHeld: num
 export function getClubWeek(): Promise<ApiResult<{ clubs: ClubWeekRow[] }>> {
   return request("/api/me/club-week");
 }
+
+/**
+ * Remove one notification. A delete, not a flag — a notification is a nudge,
+ * not a record, and the thing it points at still exists.
+ */
+export const dismissNotification = (id: string) =>
+  request<{ removed: boolean }>(`/api/notifications/${encodeURIComponent(id)}`, { method: "DELETE" });
+
+/**
+ * Clear everything already read. Never clears unread: that is the queue, and it
+ * is the one state that cannot be recovered by looking somewhere else.
+ */
+export const clearReadNotifications = () =>
+  request<{ removed: number }>("/api/notifications/clear-read", { method: "POST" });

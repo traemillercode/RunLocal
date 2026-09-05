@@ -66,6 +66,8 @@ function notificationsState(patch: Partial<NotificationsState> = {}): Notificati
     refresh: async () => {},
     markRead: async () => {},
     markAllRead: async () => {},
+    dismiss: async () => {},
+    clearRead: async () => {},
     ...patch,
   };
 }
@@ -76,7 +78,7 @@ describe("notification center body (UI)", () => {
   it("renders the empty state with honest opt-in copy, not invented events", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <NotificationsCenter notifications={[]} unreadCount={0} loading={false} error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} />
+        <NotificationsCenter notifications={[]} unreadCount={0} loading={false} error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} onDismiss={noop} onClearRead={noop} />
       </MemoryRouter>,
     );
     expect(html).toContain("No notifications yet");
@@ -94,7 +96,7 @@ describe("notification center body (UI)", () => {
     const items = [notification("one", null), notification("two", "2026-08-02T00:00:00.000Z")];
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <NotificationsCenter notifications={items} unreadCount={1} loading={false} error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} />
+        <NotificationsCenter notifications={items} unreadCount={1} loading={false} error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} onDismiss={noop} onClearRead={noop} />
       </MemoryRouter>,
     );
     expect(html).toContain("Discussion activity one");
@@ -106,13 +108,20 @@ describe("notification center body (UI)", () => {
     expect(html).toContain('aria-label="Discussion activity two (read)"');
     // Timestamps render for both rows (locale-independent marker check).
     expect((html.match(/aria-label=/g) ?? []).length).toBeGreaterThanOrEqual(2);
-    expect((html.match(/text-\[11px\]/g) ?? []).length).toBe(2);
+    /*
+     * Counts the TIMESTAMP class, not every use of text-[11px]. The old
+     * assertion counted the size alone as a proxy for "a timestamp", and the
+     * "Earlier" divider — which is also 11px — made it three. A proxy that
+     * matches anything sharing a font size breaks the moment anything else on
+     * the page is that size, which says nothing about timestamps.
+     */
+    expect((html.match(/text-\[11px\] text-slate-400/g) ?? []).length).toBe(2);
   });
 
   it("disables Mark all read when nothing is unread", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <NotificationsCenter notifications={[notification("one", "2026-08-02T00:00:00.000Z")]} unreadCount={0} loading={false} error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} />
+        <NotificationsCenter notifications={[notification("one", "2026-08-02T00:00:00.000Z")]} unreadCount={0} loading={false} error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} onDismiss={noop} onClearRead={noop} />
       </MemoryRouter>,
     );
     expect(html).toContain("Mark all read");
@@ -122,7 +131,7 @@ describe("notification center body (UI)", () => {
   it("shows a loading state before the first fetch resolves", () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <NotificationsCenter notifications={[]} unreadCount={0} loading error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} />
+        <NotificationsCenter notifications={[]} unreadCount={0} loading error={null} onRefresh={noop} onMarkRead={noop} onMarkAllRead={noop} onDismiss={noop} onClearRead={noop} />
       </MemoryRouter>,
     );
     expect(html).toContain("Loading notifications…");

@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 /**
  * Notifications center — the signed-in user's private in-app notification
  * inbox at /notifications.
@@ -20,7 +21,7 @@ import { Icon } from "../components/ui";
 
 export function NotificationsPage() {
   const { me } = useAccount();
-  const { notifications, unreadCount, loading, error, refresh, markRead, markAllRead } = useNotifications();
+  const { notifications, unreadCount, loading, error, refresh, markRead, markAllRead, dismiss, clearRead } = useNotifications();
   if (me?.status !== "signed_in") {
     return (
       <Page>
@@ -44,6 +45,8 @@ export function NotificationsPage() {
       onRefresh={() => void refresh()}
       onMarkRead={(id) => void markRead(id)}
       onMarkAllRead={() => void markAllRead()}
+      onDismiss={(id) => void dismiss(id)}
+      onClearRead={() => void clearRead()}
     />
   );
 }
@@ -56,6 +59,8 @@ export function NotificationsCenter({
   error,
   onRefresh,
   onMarkRead,
+  onDismiss,
+  onClearRead,
   onMarkAllRead,
 }: {
   notifications: api.InAppNotification[];
@@ -65,6 +70,8 @@ export function NotificationsCenter({
   onRefresh: () => void;
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
+  onDismiss: (id: string) => void;
+  onClearRead: () => void;
 }) {
   const navigate = useNavigate();
   return (
@@ -74,6 +81,17 @@ export function NotificationsCenter({
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Notifications</h1>
           <p className="mt-1 text-sm text-slate-500">Only you can see these.</p>
         </div>
+        {/*
+          CLEAR READ, never clear all. Unread is the queue; clearing it would
+          discard the one thing the person has not seen, which is the only state
+          that cannot be recovered by looking somewhere else.
+          Shown only when there is something read to clear.
+        */}
+        {notifications.some((n) => n.readAt) ? (
+          <button type="button" onClick={onClearRead} className="text-[13px] font-bold text-slate-500">
+            Clear read
+          </button>
+        ) : null}
         <button
           type="button"
           disabled={unreadCount === 0}
@@ -97,8 +115,23 @@ export function NotificationsCenter({
       {!loading && !error && notifications.length === 0 ? <EmptyState /> : null}
       {notifications.length > 0 ? (
         <ul className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
-          {notifications.map((n) => (
-            <li key={n.id} className={n.readAt ? "" : "bg-orange-50/70"}>
+          {notifications.map((n, idx) => {
+            /*
+             * READ COLLAPSES UNDER "EARLIER". Unread is the queue and belongs at
+             * the top; read is history and should stop competing with it.
+             * The boundary is computed from the data rather than a count, so it
+             * stays correct as items are read or dismissed.
+             */
+            const isFirstRead = Boolean(n.readAt) && (idx === 0 || !notifications[idx - 1].readAt);
+            return (
+            <Fragment key={n.id}>
+            {isFirstRead ? (
+              <li className="flex items-center gap-3 bg-slate-50 px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                <span>Earlier</span>
+                <span className="h-px flex-1 bg-slate-200" />
+              </li>
+            ) : null}
+            <li className={n.readAt ? "" : "bg-orange-50/70"}>
               <button
                 type="button"
                 onClick={() => {
@@ -122,8 +155,23 @@ export function NotificationsCenter({
                 </span>
                 {notificationLinkPath(n.link) ? <Icon name="chevronRight" className="mt-1.5 h-4 w-4 shrink-0 text-slate-300" /> : null}
               </button>
+              {/*
+                DISMISS, beside the row rather than behind a swipe. A swipe is
+                undiscoverable on desktop and unforgiving on a phone, and this
+                is destructive.
+              */}
+              <button
+                type="button"
+                onClick={() => onDismiss(n.id)}
+                aria-label={`Dismiss: ${n.title}`}
+                className="grid h-11 w-11 shrink-0 place-items-center text-slate-300 hover:text-slate-600"
+              >
+                <span aria-hidden="true" className="text-[16px] leading-none">×</span>
+              </button>
             </li>
-          ))}
+            </Fragment>
+            );
+          })}
         </ul>
       ) : null}
     </Page>

@@ -1351,6 +1351,36 @@ async function handleApi(
     if (method === "GET" && url.pathname === "/api/notifications/preferences") return ok(res,{preferences:db.getNotificationPreferences(sess.accountId)}),true;
     if (method === "PATCH" && url.pathname === "/api/notifications/preferences") { const b=await readJson(req) as Record<string,unknown>; /* account_alerts is deliberately absent: transactional, not a preference. */ const allowed=["run_reminders","community_updates","messages"] as const; const patch: Record<string,boolean>={}; for(const k of allowed) if(b[k]!==undefined){if(typeof b[k]!=="boolean") return err(res,{status:400,error:"invalid_preferences"}),true; patch[k]=b[k] as boolean;} const preferences=db.setNotificationPreferences(sess.accountId,patch); await db.persist(); return ok(res,{preferences}),true; }
     if (method === "GET" && url.pathname === "/api/notifications") { const items=db.listNotifications(sess.accountId); return ok(res,{notifications:items,unreadCount:items.filter(n=>!n.readAt).length}),true; }
+    /*
+     * AN INBOX THAT ONLY ACCUMULATES STOPS BEING READ, which makes every
+     * notification we send worth less. Reading one marked it read and left it
+     * there forever; there was no way to remove anything.
+     *
+     * DISMISS IS A DELETE, not a flag. A "dismissed" column would be a third
+     * state beside read/unread that every query then has to remember — and a
+     * notification is a nudge, not a record. The thing it points at still
+     * exists; the audit trail is on the action, not on the telling.
+     */
+    const dismissOne = /^\/api\/notifications\/([^/]+)$/.exec(url.pathname);
+    if (method === "DELETE" && dismissOne) {
+      if (!db.deleteNotification(dismissOne[1], sess.accountId)) {
+        // 404 rather than 403 for someone else's notification: whether an id
+        // exists is not information a stranger should get either.
+        return err(res, { status: 404, error: "not_found" }), true;
+      }
+      await db.persist();
+      return ok(res, { removed: true }), true;
+    }
+    /*
+     * CLEAR READ, never clear all. Unread is the queue; clearing it would throw
+     * away the thing the person has not seen, which is the one state that
+     * cannot be recovered by looking somewhere else.
+     */
+    if (method === "POST" && url.pathname === "/api/notifications/clear-read") {
+      const removed = db.clearReadNotifications(sess.accountId);
+      await db.persist();
+      return ok(res, { removed }), true;
+    }
     if (method === "POST" && url.pathname === "/api/notifications/read-all") { db.markAllNotificationsRead(sess.accountId); await db.persist(); return ok(res,{status:"ok"}),true; }
     const m=/^\/api\/notifications\/([^/]+)\/read$/.exec(url.pathname); if(method==="POST"&&m){ if(!db.updateNotification(m[1],sess.accountId,{readAt:new Date().toISOString()})) return err(res,{status:404,error:"not_found"}),true; await db.persist(); return ok(res,{status:"ok"}),true; }
   }

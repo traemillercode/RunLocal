@@ -22,6 +22,8 @@ export interface NotificationsState {
   refresh: () => Promise<void>;
   markRead: (id: string) => Promise<void>;
   markAllRead: () => Promise<void>;
+  dismiss: (id: string) => Promise<void>;
+  clearRead: () => Promise<void>;
 }
 
 const NotificationsContext = createContext<NotificationsState>({
@@ -32,6 +34,8 @@ const NotificationsContext = createContext<NotificationsState>({
   refresh: async () => {},
   markRead: async () => {},
   markAllRead: async () => {},
+  dismiss: async () => {},
+  clearRead: async () => {},
 });
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
@@ -117,9 +121,33 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     setUnreadCount(0);
   }, []);
 
+  /*
+   * Optimistic, and it removes the row rather than flagging it. A dismissed
+   * notification that stays on screen until a refetch reads as a broken button.
+   */
+  const dismiss = useCallback(async (id: string) => {
+    const removed = notifications.find((n) => n.id === id);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    if (removed && !removed.readAt) setUnreadCount((c) => Math.max(0, (c ?? 0) - 1));
+    const result = await api.dismissNotification(id);
+    // Put it back if the server refused — silently losing something the person
+    // can still act on is worse than the row reappearing.
+    if (!result.ok && removed) {
+      setNotifications((prev) => [removed, ...prev]);
+      if (!removed.readAt) setUnreadCount((c) => (c ?? 0) + 1);
+    }
+  }, [notifications]);
+
+  const clearRead = useCallback(async () => {
+    const result = await api.clearReadNotifications();
+    if (!result.ok) return;
+    // Unread survives, which is the whole point of "clear read".
+    setNotifications((prev) => prev.filter((n) => !n.readAt));
+  }, []);
+
   const value = useMemo(
-    () => ({ notifications, unreadCount, loading, error, refresh, markRead, markAllRead }),
-    [notifications, unreadCount, loading, error, refresh, markRead, markAllRead],
+    () => ({ notifications, unreadCount, loading, error, refresh, markRead, markAllRead, dismiss, clearRead }),
+    [notifications, unreadCount, loading, error, refresh, markRead, markAllRead, dismiss, clearRead],
   );
 
   return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>;

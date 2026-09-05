@@ -613,6 +613,25 @@ export class Db {
   addNotification(notification: import("./types").NotificationRecord) { this.notifications.set(notification.id, notification); return notification; }
   listNotifications(accountId: string) { return [...this.notifications.values()].filter(n=>n.accountId===accountId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
   updateNotification(id: string, accountId: string, patch: {readAt:string|null}) { const n=this.notifications.get(id); if(!n||n.accountId!==accountId)return undefined; n.readAt=patch.readAt; return n; }
+  /** Remove one, and only if it belongs to this account. */
+  deleteNotification(id: string, accountId: string): boolean {
+    const n = this.notifications.get(id);
+    if (!n || n.accountId !== accountId) return false;
+    this.notifications.delete(id);
+    return true;
+  }
+  /**
+   * Remove every READ notification for this account. Unread is deliberately
+   * untouched — it is the queue, and it is the one state that cannot be
+   * recovered by looking somewhere else.
+   */
+  clearReadNotifications(accountId: string): number {
+    let removed = 0;
+    for (const [id, n] of this.notifications) {
+      if (n.accountId === accountId && n.readAt) { this.notifications.delete(id); removed += 1; }
+    }
+    return removed;
+  }
   markAllNotificationsRead(accountId:string) { const at=this.now().toISOString(); for(const n of this.notifications.values()) if(n.accountId===accountId)n.readAt=at; }
   /** Remove every notification row for an account (account deletion / purge — no orphaned private data). */
   deleteNotificationsForAccount(accountId: string): void {
