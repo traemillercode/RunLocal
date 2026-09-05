@@ -337,7 +337,24 @@ export function betaCapReached(db: Db, env: NodeJS.ProcessEnv = process.env): bo
  * somebody who just typed their address should not type it again somewhere else.
  */
 export const SIGNUP_CLOSED_MESSAGE =
-  "Kimbio is in a private beta while we get things right for Columbia. Add yourself to the list and we'll email you the moment we open up.";
+  /*
+   * ONE SENTENCE ADDED, and it is the difference between a dead end and a way
+   * through for an invited person.
+   *
+   * The message is deliberately identical for every refusal so a stranger
+   * cannot probe whether an address is invited. That is still true — but it
+   * left someone who WAS invited with nothing to do. The common failure is not
+   * a wrong address: the email is read-only and prefilled when the link is
+   * used. It is someone who read the email, then typed getkimbio.com directly
+   * a day later, arriving with no token at all.
+   *
+   * "If you were invited, open the link in your invitation email" tells a
+   * stranger nothing — "private beta" already says invitations exist — and
+   * tells an invited person the one thing that fixes it.
+   */
+  "Kimbio is in a private beta while we get things right for Columbia. " +
+  "If you were invited, open the link in your invitation email — it signs you in directly. " +
+  "Otherwise add yourself to the list and we'll email you the moment we open up.";
 
 /**
  * The cohort being full and having no invitation are the SAME experience from
