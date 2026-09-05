@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Avatar } from "../components/Avatar";
 import { Link, useLocation } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
 import { TrustedBadge } from "../components/TrustedBadge";
@@ -25,14 +26,8 @@ import {
 } from "./RunnerProfilePage";
 import type { PublicActivityCard, RunnerActivityRow, RunnerTaggedRow } from "../lib/api";
 
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("") || "R";
-}
+/* initials() lived here and in six other files. It is now avatarInitials in
+   lib/avatars, used by the one Avatar component. */
 
 const KIND_LABELS: Record<string, string> = { race: "Race", group: "Group", event: "Independent run" };
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
@@ -539,13 +534,12 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
       ) : null}
       <section className="mt-4 overflow-hidden rounded-2xl bg-[#14171C] text-white shadow-sm" data-tour-target="profile-header">
         <div className="flex items-center gap-4 p-5">
-          {photo ? (
-            <img src={photo} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover ring-2 ring-white/20" />
-          ) : (
-            <span className="grid h-16 w-16 shrink-0 place-items-center rounded-[10px] bg-[#FF5741] text-xl font-extrabold text-[#14171C]">
-              {initials(name)}
-            </span>
-          )}
+          {/*
+            One Avatar, so the face follows the person. This was a hand-rolled
+            photo-or-initials pair that did not know about avatarStyle — someone
+            who picked an avatar saw it in the picker and nowhere else.
+          */}
+          <Avatar name={name} photoUrl={photo} avatarStyle={me?.status === "signed_in" ? me.account.avatarStyle : null} size="lg" className="ring-2 ring-white/20" />
           <div className="min-w-0">
             <p className="truncate text-lg font-bold leading-tight">{name}</p>
             {signedIn?.username ? (

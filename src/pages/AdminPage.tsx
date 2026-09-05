@@ -16,6 +16,7 @@ import { GlobalAdminSection } from "../components/GlobalAdminSection";
 import { SponsorsAdminSection } from "../components/SponsorsAdminSection";
 import { InvitationsAdminSection } from "../components/InvitationsAdminSection";
 import { WaitlistAdminSection } from "../components/WaitlistAdminSection";
+import { PurgeSection } from "../components/PurgeSection";
 import { CityStatusAdminSection } from "../components/CityStatusAdminSection";
 import { SafetyReportsAdminSection } from "../components/SafetyReportsAdminSection";
 import { GeofenceAllowlistSection } from "../components/GeofenceAllowlistSection";
@@ -1088,6 +1089,8 @@ export function AdminPage() {
       {authed && <WaitlistAdminSection />}
       {authed && <InvitationsAdminSection cityId="columbia-mo" />}
       {authed && !isCityAdmin && <GeofenceAllowlistSection reason={reason} />}
+      {/* Owner-only: clearing test data is not a city-admin capability. */}
+      {authed && !isCityAdmin && <PurgeSection reason={reason} />}
       {isOwner && <PurgeAllSection reason={reason} />}
       {/* Global Admin — community trust & credentials (audited) */}
       {authed && !isCityAdmin && <AdminTrustSection />}
