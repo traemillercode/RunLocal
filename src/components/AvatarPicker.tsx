@@ -1,6 +1,7 @@
 import { useState } from "react";
 import * as api from "../lib/api";
 import { AVATAR_STYLES, avatarInitials } from "../lib/avatars";
+import { Button } from "./Button";
 
 /**
  * Pick a photo or an avatar, shown when the first RSVP is refused.
@@ -78,14 +79,22 @@ export function AvatarPicker({
 
         {error ? <p className="mt-3 text-[13px] font-semibold text-rose-600">{error}</p> : null}
 
-        <button
-          type="button"
+        {/*
+          FIRST CONSUMER of the shared Button, and chosen deliberately: it has a
+          loading state, a disabled state and a primary treatment, so it
+          exercises the three things the component actually owns.
+          The verb stays here — "Saving…" is information; the ellipsis
+          convention is not.
+        */}
+        <Button
+          variant="primary"
+          loading={busy}
+          disabled={!selected}
           onClick={() => void save()}
-          disabled={!selected || busy}
-          className="mt-4 h-11 w-full rounded-xl bg-[#FF5741] text-[14px] font-bold text-[#14171C] disabled:opacity-40"
+          className="mt-4 w-full"
         >
           {busy ? "Saving…" : "Use this"}
-        </button>
+        </Button>
         {/*
           A photo is the other half of the same choice, not a better version of
           it — so it is a peer link rather than a primary action above the
