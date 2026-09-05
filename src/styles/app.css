@@ -4,6 +4,42 @@
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --color-ink: #14171C;
   --color-volt: #FF5741;
+
+  /* ── Type scale ─────────────────────────────────────────────────────────
+   * MEASURED, NOT INVENTED. 973 arbitrary font sizes across the app resolve
+   * to SIX values plus two accidents — 17px used once and 18px twice, which
+   * are almost certainly typos for 16 and 20 rather than decisions.
+   *
+   * So this is a naming exercise. The scale already exists and has been
+   * consistent for months; it just had no names, which is why every new
+   * component re-derives it from whatever was nearby.
+   *
+   * Named by ROLE rather than size, because "text-meta" survives a decision to
+   * make metadata 12px and "text-11" does not.
+   */
+  --text-meta: 11px;      /* timestamps, badges, kickers — 210 uses */
+  --text-caption: 12px;   /* secondary lines under a title — 141 uses */
+  --text-body: 13px;      /* the workhorse — 374 uses, more than a third */
+  --text-body-lg: 14px;   /* emphasis within body copy — 107 uses */
+  --text-subhead: 15px;   /* card titles, list item names — 100 uses */
+  --text-title: 16px;     /* section headings — 38 uses */
+
+  /* ── Radius ─────────────────────────────────────────────────────────────
+   * rounded-[10px] appears 61 times as an ARBITRARY value — more than
+   * rounded-md and rounded-3xl combined — which makes it a token nobody named.
+   * It is the control radius: buttons and inputs.
+   */
+  --radius-control: 10px; /* buttons, inputs — 61 uses as rounded-[10px] */
+
+  /* ── Elevation ──────────────────────────────────────────────────────────
+   * NOT FIVE SHADOWS. 131 of 140 uses are shadow-sm; the other nine are
+   * 2xl (4), lg (3) and md (2), spread across unrelated components.
+   *
+   * So elevation is effectively ONE value plus stragglers, and the design
+   * decision is whether the stragglers are intentional. Recorded here rather
+   * than tokenised, because naming five levels would invent a system that does
+   * not exist and invite people to use it.
+   */
 }
 
 :root {
