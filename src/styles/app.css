@@ -24,6 +24,45 @@
   --text-subhead: 15px;   /* card titles, list item names — 100 uses */
   --text-title: 16px;     /* section headings — 38 uses */
 
+  /* ── Display type ───────────────────────────────────────────────────────
+   * THE APP HAS NONE, and that is the single biggest reason it reads as
+   * unfinished.
+   *
+   * Measured across both scales: 615 of 737 named-class uses are 12px or 14px,
+   * and only seven uses in the whole application exceed 24px. Nothing is loud,
+   * so nothing is important, so every screen is a wall of grey text at one
+   * weight.
+   *
+   * Contrast is what reads as designed. Strava spans ~17px between a run title
+   * and its metadata with clear roles; Kimbio's app UI has a 2px range across
+   * 83% of its content.
+   *
+   * These two are the answer, and the rule that uses them is per-screen: ONE
+   * THING IS THE ANSWER TO WHY YOU OPENED THIS PAGE, and it is visibly larger
+   * than everything else. The run title on an event card, the number on a
+   * check-in confirmation, what's next on Home.
+   */
+  --text-headline: 22px;  /* card titles — the thing you scan for */
+  --text-display: 34px;   /* the one number, the page's answer */
+
+  /* ── Motion ─────────────────────────────────────────────────────────────
+   * ~47 motion uses across 42 pages: nothing responds to being pressed,
+   * nothing acknowledges a state change, nothing moves when content arrives.
+   *
+   * Static is not neutral — it reads as unfinished. But the fix is NOT
+   * fade-up-on-scroll, which is itself the most recognisable template
+   * signature there is and makes every section feel identical.
+   *
+   * Three rules these encode:
+   *   Things move because STATE CHANGED, not because they appeared.
+   *   Nothing animates on scroll.
+   *   Fast, and one easing. Over 300ms in an app UI reads as a website.
+   */
+  --m-fast: 120ms;        /* state change — press, hover, toggle */
+  --m-base: 200ms;        /* overlays — sheets, dropdowns */
+  --m-slow: 320ms;        /* page transitions, used sparingly */
+  --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+
   /* ── Radius ─────────────────────────────────────────────────────────────
    * rounded-[10px] appears 61 times as an ARBITRARY value — more than
    * rounded-md and rounded-3xl combined — which makes it a token nobody named.

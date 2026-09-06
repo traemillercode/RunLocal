@@ -102,7 +102,23 @@ export function Button({
       aria-busy={loading || undefined}
       className={[
         "inline-flex shrink-0 items-center justify-center gap-2 rounded-[10px] font-bold",
-        "transition-colors disabled:opacity-40 disabled:pointer-events-none",
+        /*
+         * PRESSED, and this is where "everything feels responsive" comes from
+         * for one change: 311 buttons route through here eventually, so a
+         * single press state reaches all of them.
+         *
+         * scale-[0.97] on :active, not on hover — the thing that moves is the
+         * one you are touching, and it moves because state changed rather than
+         * because it appeared. 120ms because anything slower reads as a
+         * website rather than a tool.
+         *
+         * transition-[transform,background-color] rather than transition-all:
+         * `all` animates properties you did not mean to, including layout ones,
+         * which is how a press becomes a reflow.
+         */
+        "transition-[transform,background-color] duration-[120ms] active:scale-[0.97]",
+        "motion-reduce:transition-none motion-reduce:active:scale-100",
+        "disabled:opacity-40 disabled:pointer-events-none",
         /* A visible focus ring on EVERY variant. Ghost is the largest group at
            147 and has no fill, so without this the keyboard user cannot see
            where they are on nearly half the controls in the product. */

@@ -62,7 +62,22 @@ export function CheckinFlowView({
           <p className="mt-1.5 text-sm font-medium text-white/75">{formatTime(session.event.startsAt)} · {session.event.location}</p>
         </div>
         <div className="space-y-4 p-5">
-          {notice ? <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">{notice}</p> : null}
+          {/*
+            THE PRODUCT MOMENT, and it was rendered at body size in a green box.
+            "That's your 12th run with Columbia Track Club" is the thing someone
+            screenshots, and it was 14px — the same size as a form label.
+            One thing on this screen is the answer to why you opened it. This is
+            that thing, so it is display type.
+          */}
+          {notice ? (
+            <p
+              role="status"
+              className="rounded-2xl bg-[#14171C] px-5 py-6 font-extrabold leading-tight tracking-tight text-white"
+              style={{ fontSize: "var(--text-headline)" }}
+            >
+              {notice}
+            </p>
+          ) : null}
           <section aria-label="Join">
             <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Join</h2>
             {me?.rsvped ? (
