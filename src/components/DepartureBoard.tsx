@@ -265,7 +265,7 @@ function AvatarStack({ attendees, count, inverted, justJoined, occurrenceId, oth
           <span
             className="kb-anim relative flex h-7 w-7 items-center justify-center rounded-full bg-[#FF5741] font-bold text-[#14171C]"
             style={{
-              fontSize: "10px",
+              fontSize: "11px",
               boxShadow: `0 0 0 2px ${ringColor}`,
               animation: `kbSpringIn 420ms ${SPRING} both`,
               zIndex: 5,
@@ -279,7 +279,7 @@ function AvatarStack({ attendees, count, inverted, justJoined, occurrenceId, oth
             key={p.id}
             className="relative flex h-7 w-7 items-center justify-center rounded-full font-semibold text-white"
             style={{
-              fontSize: "10px",
+              fontSize: "11px",
               background: TONES[p.tone],
               boxShadow: `0 0 0 2px ${ringColor}`,
               marginLeft: i === 0 && !justJoined ? 0 : -8,
@@ -379,7 +379,7 @@ function RouteSliver({ path, inverted }: RouteSliverProps) {
       </svg>
       <span
         className="absolute bottom-2 left-2 font-bold uppercase"
-        style={{ fontSize: "9px", letterSpacing: "0.16em", color: "rgba(255,255,255,0.45)" }}
+        style={{ fontSize: "11px", letterSpacing: "0.16em", color: "rgba(255,255,255,0.45)" }}
       >
         Route
       </span>
@@ -563,24 +563,37 @@ function BoardRunCard({ event, now, hero, going, pending, onJoin, onLeave, showA
           animation: imminent ? "kbPulse 2s ease-in-out infinite" : "none",
         }}
       >
+        {/*
+          TIME WINS ON THE BOARD. The date was 28-34px and the time 13-15px —
+          the loudest thing was which day, and the quietest was the thing people
+          actually filter on.
+          Someone scanning a week is deciding whether they are free, and 6am and
+          6pm are different answers to that. Someone who already knows which run
+          it is has tapped through to the detail page, where the TITLE wins
+          instead. Same content, different hierarchy, because the two surfaces
+          answer different questions.
+          The sizes are genuinely different rather than close: two elements
+          within a few px of each other compete, and competing is what "no
+          hierarchy" looks like from the inside — it just has bigger text.
+        */}
         <span
           className="font-bold uppercase"
-          style={{ fontSize: "10px", letterSpacing: "0.18em", color: gutterMuted }}
+          style={{ fontSize: "11px", letterSpacing: "0.18em", color: gutterMuted }}
         >
-          {dowFmt.format(event.startsAt)}
+          {dowFmt.format(event.startsAt)} {event.startsAt.getDate()}
         </span>
         <span
           className="font-extrabold tabular-nums leading-none"
-          style={{ fontSize: hero ? "34px" : "28px", letterSpacing: "-0.04em" }}
-        >
-          {event.startsAt.getDate()}
-        </span>
-        <span
-          className="font-bold tabular-nums leading-none"
-          style={{ fontSize: hero ? "15px" : "13px", letterSpacing: "-0.02em" }}
+          style={{ fontSize: hero ? "var(--text-display)" : "28px", letterSpacing: "-0.04em" }}
         >
           {clock}
-          <span style={{ fontSize: "9px", marginLeft: 2, color: gutterMuted }}>{meridiem}</span>
+          {/*
+            11px, not 9px. The meridiem was below the readability floor and got
+            there as an INLINE STYLE, which the accessibility guard does not see
+            — it matches Tailwind classes. A floor that only covers one of the
+            two ways to set a size is half a floor.
+          */}
+          <span style={{ fontSize: "11px", marginLeft: 2, color: gutterMuted }}>{meridiem}</span>
         </span>
       </div>
 
@@ -593,7 +606,7 @@ function BoardRunCard({ event, now, hero, going, pending, onJoin, onLeave, showA
               <span
                 className="rounded-full bg-[#FF5741] px-2 py-0.5 font-bold uppercase text-[#14171C]"
                 style={{
-                  fontSize: "10px",
+                  fontSize: "11px",
                   letterSpacing: "0.12em",
                 }}
               >
@@ -715,7 +728,7 @@ function BoardRunCard({ event, now, hero, going, pending, onJoin, onLeave, showA
         >
           <span
             className="flex h-5 w-5 items-center justify-center rounded font-bold text-white"
-            style={{ fontSize: "9px", background: inverted ? "rgba(255,255,255,0.2)" : INK }}
+            style={{ fontSize: "11px", background: inverted ? "rgba(255,255,255,0.2)" : INK }}
           >
             {event.host.initials}
           </span>

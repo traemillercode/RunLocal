@@ -138,7 +138,22 @@ export function EventDetailView({
               </Chip>
             ) : null}
           </p>
-          <h1 className="mt-2 text-2xl font-extrabold leading-tight tracking-tight">{event.title}</h1>
+          {/*
+            TITLE WINS HERE, and it is the inverse of the board on purpose.
+            On the board the time is loudest, because someone scanning a week is
+            filtering on whether they are free. By the time you are on this page
+            you already know which run it is and you are reading about THIS one,
+            so the title is the answer to why you opened it.
+            Same content, different hierarchy across two surfaces. That will
+            look inconsistent to anyone who assumes consistency means identical
+            — it is the opposite: each surface answers its own question.
+          */}
+          <h1
+            className="mt-2 font-extrabold leading-tight tracking-tight"
+            style={{ fontSize: "var(--text-display)" }}
+          >
+            {event.title}
+          </h1>
           {group ? (
             <p className="mt-1.5 text-sm font-medium text-white/75">
               {group.name}
