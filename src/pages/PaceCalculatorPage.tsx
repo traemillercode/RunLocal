@@ -49,7 +49,7 @@ export function PaceCalculatorPage() {
       <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">What should I run?</h1>
       <p className="mt-1 text-sm text-slate-500">Enter a real race result and get predicted times at other distances, plus real training paces — using Riegel's formula and Jack Daniels' published training-zone percentages, not a guess.</p>
 
-      <div className="mt-5 rounded-2xl bg-white p-4 ring-1 ring-slate-200/70">
+      <div className="mt-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
         <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-slate-500">A recent race result</p>
         <div className="flex flex-wrap gap-1.5">
           {(["5k", "10k", "half_marathon", "marathon"] as const).map((d) => (

@@ -34,7 +34,7 @@ export function CoachRosterPage() {
       ) : (
         <div className="mt-5 space-y-2">
           {athletes.map((a) => (
-            <Link key={a.relationshipId} to={`/coach-roster/${a.athleteId}`} className="flex items-center justify-between rounded-2xl bg-white p-4 ring-1 ring-slate-200/70 active:bg-slate-50">
+            <Link key={a.relationshipId} to={`/coach-roster/${a.athleteId}`} className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70 active:bg-slate-50">
               <div className="min-w-0">
                 <p className="text-[15px] font-bold text-slate-900">{a.athleteName}</p>
                 <p className="text-[12px] text-slate-500">Runs: {a.runColor} · Strength: {a.strengthColor}</p>

@@ -74,7 +74,7 @@ export function MyGroupsContent() {
   return <>
     <LedGroupsSection groups={led} />
     {needsSignIn ? (
-      <div className="mt-6 rounded-2xl bg-white p-5 ring-1 ring-slate-200/70">
+      <div className="mt-6 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
         <p className="text-[15px] font-bold text-slate-900">Sign in to see your clubs</p>
         <p className="mt-1 text-[13px] text-slate-500">Your memberships, waivers and group chats live here.</p>
         <Link to="/login" className="mt-3 flex h-11 items-center justify-center rounded-xl bg-[#14171C] text-[14px] font-bold text-white">

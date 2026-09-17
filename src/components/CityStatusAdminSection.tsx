@@ -127,7 +127,7 @@ export function CityStatusAdminSection() {
             const confirming = pending?.id === city.id;
             const next = confirming ? STATUS_COPY[pending.status] : null;
             return (
-              <li key={city.id} className="rounded-2xl bg-white p-4 ring-1 ring-slate-200/70">
+              <li key={city.id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-[15px] font-bold text-slate-900">{city.name}, {city.state}</span>
                   {/* Current status, prominent — otherwise the only way to know

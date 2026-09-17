@@ -45,6 +45,30 @@ describe("0.11 leg 1 — nothing below the 11px readability floor", () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  it("no INLINE fontSize below 11px either", () => {
+    /*
+     * THE GAP THIS GUARD HAD FOR WEEKS, and it read as complete the whole time.
+     *
+     * It matched Tailwind classes only, so `style={{ fontSize: "9px" }}` walked
+     * straight past it — and six sub-floor sizes were hiding behind that,
+     * including the meridiem on the board card, which is the single smallest
+     * piece of text in the product and sits beside the loudest.
+     *
+     * A floor covering one of the two ways to set a size is HALF A FLOOR, and
+     * the half it missed is the one people reach for when no utility class
+     * exists for the value they want — which is precisely when someone is
+     * picking a number by eye.
+     */
+    const offenders: string[] = [];
+    for (const f of files) {
+      readFileSync(f, "utf8").split("\n").forEach((line, i) => {
+        const m = /fontSize:\s*"(\d+)px"/.exec(line);
+        if (m && Number(m[1]) < 11) offenders.push(`${rel(f)}:${i + 1} ${m[0]}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe("0.11 leg 2 — touch targets meet the 44px minimum", () => {

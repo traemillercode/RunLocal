@@ -13,7 +13,7 @@
  * the review's central finding appearing on the first page of the sweep.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 const HOME = readFileSync(new URL("../src/pages/HomePage.tsx", import.meta.url).pathname, "utf8");
 
@@ -60,34 +60,43 @@ describe("Home has an answer", () => {
   });
 });
 
-describe("the shadowless card is recorded, not flattened", () => {
-  it("Home's cards are left as they are", () => {
+describe("the shadowless card was drift, and is closed", () => {
+  it("no card omits shadow-sm", () => {
     /*
-     * A FINDING RATHER THAN A CONVERSION, and this is the decision Trae has to
-     * make rather than me.
+     * ASKED AND ANSWERED. I held this open as a visual decision I could not
+     * evaluate: 57 cards with shadow-sm, 14 across 10 files without, no
+     * semantic pattern.
      *
-     * The card recipe splits: 57 uses carry `shadow-sm`, 14 across 10 files do
-     * not. Home's three are in the shadowless group, and the ten files show no
-     * semantic pattern — PaceCalculator, MyGroups, PastEvents, CoachRoster,
-     * TrainingSummary and the rest. It reads as two people with two habits.
+     * Trae's reasoning settles it from Stage 1, and it is better than my
+     * hesitation. Elevation was deliberately NOT tokenised because 131 of 140
+     * shadow uses are the same one — which means shadow-sm is not a LEVEL in a
+     * system, it is what a card looks like. So 14 without it are 14 that missed
+     * the default.
      *
-     * Converting them to Card would ADD a shadow to Home. Adding a `flat`
-     * option to Card would invent the elevation system that Stage 1
-     * deliberately did not name, on the evidence that 131 of 140 shadow uses
-     * are the same one.
-     *
-     * Either choice is a visual decision I cannot evaluate from source, so the
-     * cards stay and the split is written down. This test exists to keep the
-     * question open rather than to enforce an answer.
+     * Normalising does not invent an elevation system; it applies the single
+     * default consistently. A `flat` variant is what would invent one, because
+     * flat immediately raises the question of what sits above it.
      */
-    expect(HOME).toContain("rounded-2xl bg-white p-4 ring-1 ring-slate-200/70");
+    const offenders: string[] = [];
+    for (const dir of ["../src/pages", "../src/components"]) {
+      const path = new URL(dir, import.meta.url).pathname;
+      for (const f of readdirSync(path).filter((x) => x.endsWith(".tsx"))) {
+        const src = readFileSync(`${path}/${f}`, "utf8");
+        if (/rounded-2xl bg-white p-\d+ ring-1/.test(src)) offenders.push(f);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
-  it("Card still assumes the majority form", () => {
-    // 57 of 71. If the shadowless form ever becomes the majority, Card is wrong
-    // and that is worth noticing rather than absorbing.
+  it("Card carries the default, and the dominance guard still holds", () => {
+    // The Stage 1 guard asserting shadow-sm dominates is what keeps this from
+    // quietly becoming a system: if the spread ever returns, that fires.
     const card = readFileSync(new URL("../src/components/Card.tsx", import.meta.url).pathname, "utf8");
     expect(card).toContain("shadow-sm");
+    /* No flat VARIANT — matched on the prop shape, not the word, because
+       "flattened" appears in Card's own comment explaining why the densities
+       were kept. A substring check on a common word reads the wrong thing. */
+    expect(card).not.toMatch(/flat:\s*"/);
   });
 });
 

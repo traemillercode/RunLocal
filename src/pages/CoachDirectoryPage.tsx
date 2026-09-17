@@ -37,7 +37,7 @@ export function CoachDirectoryPage() {
       ) : (
         <div className="mt-5 space-y-3">
           {coaches.map((c) => (
-            <div key={c.accountId} className="rounded-2xl bg-white p-4 ring-1 ring-slate-200/70">
+            <div key={c.accountId} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
               <div className="flex items-center gap-1.5">
                 <Link to={`/runners/${c.username ?? c.accountId}`} className="text-[15px] font-bold text-slate-900 hover:underline">{c.name}</Link>
                 {c.isVerifiedCoach ? (

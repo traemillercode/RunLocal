@@ -49,7 +49,7 @@ export function RecurrenceManagementPage() {
             editingId === r.id ? (
               <RecurrenceEditor key={r.id} recurrence={r} onSaved={(_updated, count) => { load(); setEditingId(null); toast(`Updated — ${count} day${count === 1 ? "" : "s"} regenerated.`, "success"); }} onCancel={() => setEditingId(null)} />
             ) : (
-              <div key={r.id} className="rounded-2xl bg-white p-4 ring-1 ring-slate-200/70">
+              <div key={r.id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
                 <p className="text-[14px] font-bold text-slate-900">{r.title || r.workoutType} {r.distanceValue != null ? `— ${r.distanceValue} ${r.distanceUnit}` : ""}</p>
                 <p className="mt-0.5 text-[12px] text-slate-500">
                   {r.daysOfWeek.map((d) => DAY_LABELS[d]).join("/")} · {new Date(`${r.startDate}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })} – {new Date(`${r.endDate}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}

@@ -148,11 +148,11 @@ export function TrainingSummaryPage() {
       ) : (
         <>
           <div className="mt-5 grid grid-cols-2 gap-2">
-            <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200/70">
+            <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
               <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Planned</p>
               <p className="mt-0.5 text-2xl font-extrabold text-slate-900">{summary.totals.plannedMiles} mi</p>
             </div>
-            <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200/70">
+            <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
               <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Actually logged</p>
               <p className="mt-0.5 text-2xl font-extrabold text-slate-900">{summary.totals.loggedMiles} mi</p>
             </div>

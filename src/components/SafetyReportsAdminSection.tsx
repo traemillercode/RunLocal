@@ -88,7 +88,7 @@ export function SafetyReportsAdminSection() {
             const s = STATE[r.status];
             const options = NEXT[r.status];
             return (
-              <li key={r.id} className="rounded-2xl bg-white p-4 ring-1 ring-slate-200/70">
+              <li key={r.id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
                 <div className="flex items-start justify-between gap-3">
                   <span className="text-[12px] font-bold text-slate-500">
                     {new Date(r.createdAt).toLocaleString()} · {r.contextType.replace(/_/g, " ")}

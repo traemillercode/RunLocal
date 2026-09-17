@@ -23,8 +23,8 @@ export function PastEventsPage({ city }: { city: City }) {
       <ProfileCompletionBanner />
       {events.length === 0 && races.length === 0 ? <p className="mt-8 rounded-2xl bg-white p-6 text-center text-sm text-slate-500 ring-1 ring-slate-200/70">No past events yet.</p> : null}
       <ul className="mt-4 space-y-3">
-        {events.map((event) => <li key={event.id} className="rounded-2xl bg-white p-4 ring-1 ring-slate-200/70"><h2 className="font-bold">{event.title}</h2><p className="mt-1 text-sm text-slate-500">{event.date} · {event.time} · {event.location}</p></li>)}
-        {races.map((race) => <li key={race.id} className="rounded-2xl bg-white p-4 ring-1 ring-slate-200/70"><h2 className="font-bold">{race.name}</h2><p className="mt-1 text-sm text-slate-500">{formatRaceDate(race.date)} · {race.location}</p></li>)}
+        {events.map((event) => <li key={event.id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70"><h2 className="font-bold">{event.title}</h2><p className="mt-1 text-sm text-slate-500">{event.date} · {event.time} · {event.location}</p></li>)}
+        {races.map((race) => <li key={race.id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70"><h2 className="font-bold">{race.name}</h2><p className="mt-1 text-sm text-slate-500">{formatRaceDate(race.date)} · {race.location}</p></li>)}
       </ul>
     </div>
   );

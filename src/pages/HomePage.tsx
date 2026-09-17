@@ -125,7 +125,7 @@ export function HomePage({ city }: { city: City }) {
                   <li key={run.id}>
                     <Link
                       to={run.kind === "solo" ? "/my-runs" : `/events/${encodeURIComponent(run.eventId)}`}
-                      className="block rounded-2xl bg-white p-4 ring-1 ring-slate-200/70 transition-shadow duration-[120ms] hover:shadow-sm"
+                      className="block rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70 transition-shadow duration-[120ms] hover:shadow-sm"
                     >
                       {/*
                         WHEN is the answer on Home, and only for the first row.
@@ -173,7 +173,7 @@ export function HomePage({ city }: { city: City }) {
               <h2 id="home-next" className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">Next up</h2>
               <p className="mt-2 text-[15px] text-slate-600">You haven&apos;t RSVP&apos;d to anything yet.</p>
               {suggestion ? (
-                <div className="mt-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200/70">
+                <div className="mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
                   <p className="text-[12px] font-bold text-slate-500">
                     {whenLabel(localISODate(suggestion.date), suggestion.time, today)}
                   </p>
@@ -269,7 +269,7 @@ export function HomePage({ city }: { city: City }) {
           {plan ? (
             <section className="mt-7" aria-labelledby="home-plan">
               <h2 id="home-plan" className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">This week</h2>
-              <Link to="/training-plan" className="mt-2 block rounded-2xl bg-white p-4 ring-1 ring-slate-200/70">
+              <Link to="/training-plan" className="mt-2 block rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
                 <p className="text-[15px] font-bold text-slate-900">Week {plan.currentWeek} of {plan.totalWeeks}</p>
                 <p className="mt-0.5 text-[13px] text-slate-500">{plan.customLabel ?? plan.planType.replace(/_/g, " ")}</p>
               </Link>
