@@ -121,14 +121,37 @@ export function HomePage({ city }: { city: City }) {
             <section className="mt-6" aria-labelledby="home-next">
               <h2 id="home-next" className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">Next up</h2>
               <ul className="mt-2 space-y-2">
-                {nextUp.map((run) => (
+                {nextUp.map((run, idx) => (
                   <li key={run.id}>
                     <Link
                       to={run.kind === "solo" ? "/my-runs" : `/events/${encodeURIComponent(run.eventId)}`}
-                      className="block rounded-2xl bg-white p-4 ring-1 ring-slate-200/70"
+                      className="block rounded-2xl bg-white p-4 ring-1 ring-slate-200/70 transition-shadow duration-[120ms] hover:shadow-sm"
                     >
-                      <p className="text-[12px] font-bold text-slate-500">{whenLabel(run.runDate ?? run.date, run.time, today)}</p>
-                      <p className="mt-0.5 text-[15px] font-bold text-slate-900">{run.title}</p>
+                      {/*
+                        WHEN is the answer on Home, and only for the first row.
+                        Every element on this page was 15px or smaller, so six
+                        sections with identical 11px kickers ranked nothing —
+                        which is why it reads as a wall rather than a screen.
+                        The question Home answers is "when is my next run". You
+                        already know WHICH run: you RSVP'd. That is the inverse
+                        of the board, where the time is loud because you are
+                        still choosing, and of the detail page, where the title
+                        is loud because you have already chosen.
+                        ONLY THE FIRST ROW. Three display-sized times compete
+                        and none of them wins, which is the same failure the
+                        board card had before its hierarchy was settled.
+                      */}
+                      {idx === 0 ? (
+                        <p
+                          className="font-extrabold tabular-nums leading-none tracking-tight text-slate-900"
+                          style={{ fontSize: "var(--text-headline)" }}
+                        >
+                          {whenLabel(run.runDate ?? run.date, run.time, today)}
+                        </p>
+                      ) : (
+                        <p className="text-[12px] font-bold text-slate-500">{whenLabel(run.runDate ?? run.date, run.time, today)}</p>
+                      )}
+                      <p className={`mt-0.5 font-bold text-slate-900 ${idx === 0 ? "text-[14px]" : "text-[15px]"}`}>{run.title}</p>
                       <p className="mt-0.5 text-[13px] text-slate-500">{run.location}</p>
                     </Link>
                   </li>
