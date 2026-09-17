@@ -194,7 +194,13 @@ export function HomePage({ city }: { city: City }) {
               </h2>
               <ul className="mt-2 space-y-2">
                 {clubs.map((c) => (
-                  <li key={c.groupId} className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200/70">
+                  <li
+                    key={c.groupId}
+                    /* Railed: these are YOUR clubs, which is the relationship
+                       the rail states. A club you are not in would not carry
+                       it. */
+                    className="rail rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200/70"
+                  >
                     <p className="text-[15px] font-bold text-slate-900">
                       {c.groupName} ran {c.runsHeld} time{c.runsHeld === 1 ? "" : "s"}
                     </p>

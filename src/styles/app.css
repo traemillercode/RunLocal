@@ -443,3 +443,38 @@ input[type="number"] {
   text-transform: uppercase;
   color: #9aa0a6;
 }
+
+/* ── The coral rail ─────────────────────────────────────────────────────────
+ * THE MOST DISTINCTIVE DEVICE IN THE PRODUCT, and it was on three surfaces.
+ *
+ * It already existed as `.desktop-nav a.active` (3px inset), the marketing
+ * live-board (4px border-left) and DepartureBoard's gutter, which floods coral
+ * when you are going. Naming it is what lets it spread without becoming
+ * decoration.
+ *
+ * IT HAS A MEANING, and extending it means applying the meaning rather than
+ * the colour. Read across the three existing uses:
+ *
+ *   active nav       — you are HERE
+ *   going gutter     — you are ATTENDING this
+ *   marketing board  — this is the live thing
+ *
+ * So: the coral edge marks the item that CONCERNS THE VIEWER. Not "important",
+ * not "new", not "accent" — there is a relationship between this person and
+ * this row, and the rail is where it is stated.
+ *
+ * That rules things out, which is the point. A section heading does not get a
+ * rail. A primary button does not get a rail. Anything that would carry it for
+ * everyone equally is decoration, and decoration applied uniformly is the
+ * template look the rail exists to avoid.
+ *
+ * 3px, inset rather than border, so it does not change the box size and can be
+ * added to an existing row without reflowing it.
+ */
+.rail {
+  box-shadow: inset 3px 0 var(--color-volt, #FF5741);
+}
+/* On ink surfaces the rail is the only coral, so it carries more weight. */
+.rail-strong {
+  box-shadow: inset 4px 0 var(--color-volt, #FF5741);
+}

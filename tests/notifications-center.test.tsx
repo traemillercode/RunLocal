@@ -103,7 +103,15 @@ describe("notification center body (UI)", () => {
     expect(html).toContain("Discussion activity two");
     expect(html).toContain("Someone added to run one.");
     // Unread rows are highlighted; the row announces its read state.
-    expect(html).toContain("bg-orange-50/70");
+    /*
+     * Was bg-orange-50/70 — the unread treatment is now the RAIL plus a lighter
+     * wash. The rail is what states the relationship; the wash at /70 was
+     * competing with the text it sat behind.
+     * Asserts the rail rather than the opacity, because the opacity was never
+     * the point and pinning it is how a test starts encoding a treatment
+     * instead of a behaviour.
+     */
+    expect(html).toContain("rail");
     expect(html).toContain('aria-label="Discussion activity one (unread)"');
     expect(html).toContain('aria-label="Discussion activity two (read)"');
     // Timestamps render for both rows (locale-independent marker check).

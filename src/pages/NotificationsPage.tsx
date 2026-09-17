@@ -131,7 +131,17 @@ export function NotificationsCenter({
                 <span className="h-px flex-1 bg-slate-200" />
               </li>
             ) : null}
-            <li className={n.readAt ? "" : "bg-orange-50/70"}>
+            {/*
+              THE RAIL, replacing an orange wash.
+              Unread is a relationship — this row concerns you and you have not
+              dealt with it — which is exactly what the rail means everywhere
+              else: active nav is where you are, the coral gutter is a run you
+              are attending.
+              A tinted background says "different"; the rail says "yours". And a
+              wash across a whole row competes with the text in it, which is
+              why unread notifications read as noisy rather than as marked.
+            */}
+            <li className={n.readAt ? "" : "rail bg-orange-50/40"}>
               <button
                 type="button"
                 onClick={() => {
