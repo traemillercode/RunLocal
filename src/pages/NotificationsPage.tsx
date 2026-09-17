@@ -88,7 +88,7 @@ export function NotificationsCenter({
           Shown only when there is something read to clear.
         */}
         {notifications.some((n) => n.readAt) ? (
-          <button type="button" onClick={onClearRead} className="text-[13px] font-bold text-slate-500">
+          <button type="button" onClick={onClearRead} className="min-h-11 text-[13px] font-bold text-slate-500 underline decoration-transparent underline-offset-2 transition-[color,text-decoration-color] duration-[120ms] hover:text-slate-800 hover:decoration-slate-800 active:opacity-70">
             Clear read
           </button>
         ) : null}
