@@ -35,10 +35,22 @@ export function Sheet({ open, onClose, title, subtitle, children }: SheetProps) 
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
+    /*
+     * RESTORES THE PREVIOUS VALUE, not "".
+     *
+     * A hard-coded restore is how one overlay silently un-does another's lock:
+     * open a sheet from inside a sheet, close the inner one, and the outer one
+     * is left with a scrollable page underneath it.
+     *
+     * The same defect was fixed in the marketing mobile menu earlier and this
+     * copy was missed — which is the cost of six overlays reinventing the
+     * behaviour instead of one owning it.
+     */
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousOverflow;
     };
   }, [open, onClose]);
 

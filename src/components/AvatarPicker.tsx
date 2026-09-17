@@ -1,6 +1,7 @@
 import { useState } from "react";
 import * as api from "../lib/api";
 import { AVATAR_STYLES, avatarInitials } from "../lib/avatars";
+import { Sheet } from "./ui";
 import { Button } from "./Button";
 
 /**
@@ -46,9 +47,18 @@ export function AvatarPicker({
   const initials = name.trim() ? avatarInitials(name) : "\u2022";
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
-      <div className="w-full max-w-md rounded-t-2xl bg-white p-5 pb-8 sm:rounded-2xl sm:pb-5" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-extrabold text-slate-900">Pick how you show up</h2>
+    /*
+     * USES THE SHARED SHEET, which already had all six behaviours — Escape,
+     * body scroll lock, backdrop dismiss, focus trap, focus return and
+     * aria-modal — while this hand-rolled overlay had exactly one.
+     *
+     * Seven overlays in the product reinvented this. Two used the real one.
+     * Building a Sheet was on the Stage 2 list; the work turned out to be
+     * ADOPTING the Sheet that existed, which is the twelfth instance of a
+     * correct implementation nothing reached for.
+     */
+    <Sheet open onClose={onClose} title="Pick how you show up">
+      <div>
         {/*
           States the reason rather than the rule. "Required before RSVP" is a
           policy; "other runners see this when deciding whether to come" is why
@@ -107,6 +117,6 @@ export function AvatarPicker({
           Upload a photo instead
         </a>
       </div>
-    </div>
+    </Sheet>
   );
 }
