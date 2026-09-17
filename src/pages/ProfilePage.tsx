@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Metric } from "../components/Metric";
 import { Avatar } from "../components/Avatar";
 import { Link, useLocation } from "react-router-dom";
 import { VerifiedBadge } from "../components/VerifiedBadge";
@@ -512,13 +513,18 @@ export function ProfilePage({ city, store }: { city: City; store: AppStore }) {
       */}
       {checkins && checkins.total > 0 ? (
         <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF5741]">Runs together</p>
-          <p className="mt-1 text-4xl font-extrabold tabular-nums tracking-tight text-slate-900">
-            {checkins.total}
-            <span className="ml-2 align-middle text-[13px] font-bold text-slate-500">
-              {checkins.total === 1 ? "run checked in" : "runs checked in"}
-            </span>
-          </p>
+          {/*
+            The shared Metric, which was private to DepartureBoard while this
+            and 42 other files hand-rolled the same quiet-label/loud-value pair.
+            `display` because the count IS the answer to why someone opened
+            their own profile — it is the one number on the screen.
+          */}
+          <Metric
+            label="Runs together"
+            value={checkins.total}
+            suffix={checkins.total === 1 ? "run checked in" : "runs checked in"}
+            size="display"
+          />
           {/* The breakdown only when there is more than one club to break down —
               "32 · 32 with CTC" is the same fact twice. */}
           {checkins.groups.length > 1 ? (

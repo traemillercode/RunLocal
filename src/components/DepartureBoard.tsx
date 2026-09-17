@@ -1,3 +1,4 @@
+import { Metric as SharedMetric } from "./Metric";
 import { AvatarPicker } from "./AvatarPicker";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { AttendeeListSheet } from "./AttendeeListSheet";
@@ -208,23 +209,19 @@ interface MetricProps {
   inverted: boolean;
 }
 
+/*
+ * DELEGATES to the shared Metric rather than keeping a second copy.
+ *
+ * This implementation was the original and the good one — 43 other files
+ * hand-rolled the same quiet-label/loud-value pair because it was private to
+ * this component. Extracting it and leaving this copy behind would have made
+ * two implementations of the strongest device in the product, which is how the
+ * seven-overlay problem started.
+ *
+ * The local signature is kept so the call sites below do not change.
+ */
 function Metric({ label, value, inverted }: MetricProps) {
-  const muted = inverted ? "rgba(255,255,255,0.55)" : "#7A7A72";
-  return (
-    <div className="flex flex-col gap-0.5 pr-5">
-      <Kicker color={muted}>{label}</Kicker>
-      <span
-        className="font-extrabold tabular-nums"
-        style={{
-          fontSize: "15px",
-          letterSpacing: "-0.015em",
-          color: inverted ? "#FFFFFF" : INK,
-        }}
-      >
-        {value}
-      </span>
-    </div>
-  );
+  return <SharedMetric label={label} value={value} inverted={inverted} className="pr-5" />;
 }
 
 interface AvatarStackProps {
