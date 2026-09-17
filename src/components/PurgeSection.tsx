@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Card } from "./Card";
 import * as api from "../lib/api";
 import { Button } from "./Button";
 
@@ -60,8 +61,14 @@ export function PurgeSection({ reason }: { reason: string }) {
     setDone(`Purged ${r.data.purged} past-retention record${r.data.purged === 1 ? "" : "s"}; ${r.data.retained} retained.`);
   };
 
+  /*
+   * The shared Card. This hand-rolled the recipe — one of 52 places that did.
+   * The rose ring is kept via className rather than becoming a variant: it
+   * marks the only destructive panel in the product, and a "danger" card
+   * variant would invite a second.
+   */
   return (
-    <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-rose-200">
+    <Card as="section" className="mt-4 ring-rose-200">
       <h2 className="text-[15px] font-extrabold text-slate-900">Clear test data</h2>
       <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
         Deletes every account except the owner, with everything attached to them — runs, check-ins,
@@ -130,6 +137,6 @@ export function PurgeSection({ reason }: { reason: string }) {
           {busy ? "Purging…" : "Purge past-retention"}
         </Button>
       </div>
-    </section>
+    </Card>
   );
 }

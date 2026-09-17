@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Card } from "../components/Card";
 import { Link, useSearchParams } from "react-router-dom";
 import { HomeCityBanner } from "../components/HomeCityBanner";
 import { ProfileCompletionBanner } from "../components/ProfileCompletionBanner";
@@ -1378,13 +1379,13 @@ export function ForumPage({ city }: { city: City }) {
         Says what goes here and offers the action, rather than apologising.
       */}
       {posts.length === 0 ? (
-        <div className="mt-4 rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200/70">
+        <Card density="generous" className="mt-4 text-center">
           <p className="text-[15px] font-bold text-slate-900">Nothing here yet</p>
           <p className="mx-auto mt-1 max-w-sm text-[13px] leading-relaxed text-slate-600">
             This is where Columbia runners ask about routes, find people to run with, and sort out
             weekend plans. Be the first.
           </p>
-        </div>
+        </Card>
       ) : null}
       <ul className="mt-4 space-y-3">
         {posts.map((p) => {
