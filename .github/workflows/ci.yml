@@ -41,3 +41,22 @@ jobs:
       # what would break it.
       - name: Build
         run: bun run build
+
+  # Separate job: it sets the system clock, so it must not share a runner with
+  # anything else. Not required to pass for a merge — a time bomb is a warning
+  # about the future, not a broken build today — but it is loud when it fires.
+  time-bombs:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      # Finds tests that fail on a CALENDAR DATE rather than a code change.
+      # Three such bombs have shipped: two cost a bisect each to rule out
+      # recent work, because a time bomb looks exactly like something you just
+      # broke.
+      - name: Check for time bombs
+        run: sudo -E env "PATH=$PATH" bash scripts/check-time-bombs.sh

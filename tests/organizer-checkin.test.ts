@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   canManageCheckins, resolveManagedOccurrence, rosterRows, leaderCheckin, leaderUndoCheckin,
   createQrSession, findSessionByToken, validSessionOccurrence, joinViaSession, checkinViaSession,
@@ -29,6 +29,32 @@ function occ(db: ReturnType<typeof createMemoryStore>, eventId: string, runDate 
 function rsvp(db: ReturnType<typeof createMemoryStore>, runner: AccountRecord, o: ReturnType<typeof occ>, date: string) {
   db.addAttendance({ id: `att-${runner.id}`, accountId: runner.id, eventId: o.eventId, role: "rsvp", createdAt: "2026-01-01T00:00:00.000Z", occurrenceId: o.occurrenceId, runDate: date, startsAt: o.startsAt });
 }
+
+/*
+ * ONE CLOCK, PINNED — and this took two attempts.
+ *
+ * The test signs a waiver, opens a QR session and checks in at five timestamps
+ * five minutes apart on 2026-01-06. Internally consistent. But the waiver
+ * VERSION was created at a separate fixed instant, and signature validity is
+ * checked against that version's window — so once real time passed the window,
+ * a freshly signed waiver read as "expired" and the mobile flow failed.
+ *
+ * MY FIRST FIX MADE THE WAIVER VERSION RELATIVE TO NOW, which is worse: the
+ * version then postdated the signing, and I had reproduced the exact two-clock
+ * defect I was fixing — one thing pinned, another running free. Same shape as
+ * multicity, introduced by the person who had just fixed multicity.
+ *
+ * Pinning the system clock is the answer when timestamps are interdependent.
+ * Relative dates are for fixtures testing a RELATIONSHIP to today ("filters out
+ * past races"); a fixed instant is for a sequence that must hold together.
+ */
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-01-06T08:00:00Z"));
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("organizer check-in", () => {
   it("enforces group ownership + same-city scope for leader access", () => {
@@ -75,7 +101,7 @@ describe("organizer check-in", () => {
     const runner = account(db, "runner", "columbia-mo");
     db.updateAccount(runner.id, { username: "runner1" });
     rsvp(db, runner, o, date);
-    createWaiverVersion(db, g, leader, "terms", new Date("2026-01-01T00:00:00Z"));
+    createWaiverVersion(db, g, leader, "terms", new Date("2026-01-06T00:00:00Z"));
     const rows = rosterRows(db, o);
     expect(rows).toHaveLength(1);
     const row = rows[0];
@@ -130,7 +156,7 @@ describe("organizer check-in", () => {
     const date = "2026-01-06";
     const o = occ(db, e, date);
     const runner = account(db, "runner", "columbia-mo");
-    createWaiverVersion(db, g, leader, "terms", new Date("2026-01-01T00:00:00Z"));
+    createWaiverVersion(db, g, leader, "terms", new Date("2026-01-06T00:00:00Z"));
     const created = createQrSession(db, g, o, leader, new Date("2026-01-06T08:00:00Z"));
     const found = findSessionByToken(db, created.token, new Date("2026-01-06T08:30:00Z"))!;
     expect(joinViaSession(db, found.session, runner)).toEqual({ rsvped: true });

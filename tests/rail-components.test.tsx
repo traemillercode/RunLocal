@@ -6,6 +6,13 @@ import { ForumRail, upcomingGroupRunRows } from "../src/pages/ForumPage";
 import type { City } from "../src/types";
 
 // 2026-08-10 is a Monday. dayOfWeek 0 = Monday in the app's convention.
+/** A date offset from today, so "future" and "past" stay true as time passes. */
+function daysFromNow(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 const CITY = {
   id: "columbia-mo",
   name: "Columbia",
@@ -14,9 +21,24 @@ const CITY = {
     { id: "e1", groupId: "g1", title: "Monday Social", dayOfWeek: 0, time: "6:00 PM", location: "Flat Branch", distanceLabel: "3 mi", invite: "Open to all", externalUrl: null },
     { id: "e2", groupId: "", title: "Tempo Run", dayOfWeek: 4, time: "5:30 AM", location: "MKT Trail", distanceLabel: "5 mi", invite: "Open to all", externalUrl: null },
   ],
+  /*
+   * RELATIVE DATES, not fixed ones.
+   *
+   * This fixture had "Show-Me Half" on 2026-09-12 as the FUTURE race and a
+   * "Past 5K" on 2026-01-01 as the past one. 2026-09-12 was future when the
+   * test was written and is now behind us, so the assertion that the upcoming
+   * race renders started failing on a calendar date with no code change.
+   *
+   * Third time bomb in this suite — multicity pinned one clock and let another
+   * run free; this one hardcoded a date that only meant "future" for a while.
+   *
+   * The test is about the RELATIONSHIP to now ("filters out past races"), so
+   * the fixture expresses that relationship instead of a moment. A date thirty
+   * days out is future forever.
+   */
   races: [
-    { id: "r1", name: "Show-Me Half", distance: "Half", date: "2026-09-12", location: "Downtown", registrationUrl: null, description: "" },
-    { id: "r2", name: "Past 5K", distance: "5K", date: "2026-01-01", location: "Old", registrationUrl: null, description: "" },
+    { id: "r1", name: "Show-Me Half", distance: "Half", date: daysFromNow(30), location: "Downtown", registrationUrl: null, description: "" },
+    { id: "r2", name: "Past 5K", distance: "5K", date: daysFromNow(-60), location: "Old", registrationUrl: null, description: "" },
   ],
   groups: [],
 } as unknown as City;
